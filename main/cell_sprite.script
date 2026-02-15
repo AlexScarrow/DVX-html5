@@ -32,6 +32,10 @@ function on_message(self, message_id, message, sender)
 		if message.animation then
 			sprite.play_flipbook("#cell_sprite", message.animation)
 		end
+	elseif message_id == hash("set_tint") then
+		if message.tint then
+			go.set("#cell_sprite", "tint", message.tint)
+		end
 	end
 	-- Add message-handling code here
 	-- Learn more: https://defold.com/manuals/message-passing/

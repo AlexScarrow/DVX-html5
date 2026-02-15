@@ -28,6 +28,10 @@ local SCREEN_HEIGHT = 720
 local visual_scale = 1 -- Keep visuals in the same unit space as world_grid
 local cell_objects = {}
 local tile_objects = {}
+local COLOR_DEFAULT = vmath.vector4(1, 1, 1, 1)
+local COLOR_PATH = vmath.vector4(1, 1, 0.35, 1)
+local COLOR_START = vmath.vector4(0.3, 1, 0.3, 1)
+local COLOR_END = vmath.vector4(1, 0.35, 0.35, 1)
 
 
 
@@ -648,6 +652,57 @@ function handle_cell_click(action, camera_pos, zoom)
     return nil
 end
 
+local function reset_cell_tint(cell_id)
+    local go_id = cell_objects[cell_id]
+    if go_id then
+        msg.post(msg.url(nil, go_id, "cell_sprite1"), "set_tint", { tint = COLOR_DEFAULT })
+    end
+end
+
+local function apply_cell_tint(cell_id, tint_color)
+    local go_id = cell_objects[cell_id]
+    if go_id then
+        msg.post(msg.url(nil, go_id, "cell_sprite1"), "set_tint", { tint = tint_color })
+    end
+end
+
+local function clear_path_visuals(self)
+    if self.path_highlight_cells then
+        for _, cell_id in ipairs(self.path_highlight_cells) do
+            reset_cell_tint(cell_id)
+        end
+    end
+    self.path_highlight_cells = {}
+end
+
+local function print_path_debug(path, total_cost)
+    local ids = {}
+    for i, cell_id in ipairs(path) do
+        ids[i] = tostring(cell_id)
+    end
+    print("Path found:")
+    print("  Steps: " .. #path)
+    print("  Cost: " .. total_cost)
+    print("  Route: " .. table.concat(ids, " -> "))
+end
+
+local function highlight_path(self, path)
+    clear_path_visuals(self)
+    self.path_highlight_cells = {}
+
+    for _, cell_id in ipairs(path) do
+        apply_cell_tint(cell_id, COLOR_PATH)
+        table.insert(self.path_highlight_cells, cell_id)
+    end
+
+    if #path >= 1 then
+        apply_cell_tint(path[1], COLOR_START)
+    end
+    if #path >= 2 then
+        apply_cell_tint(path[#path], COLOR_END)
+    end
+end
+
 
     -- =============================================================================
     -- VISUAL RENDERING
@@ -655,6 +710,8 @@ end
 
     function spawn_visuals(self)
         print("Creating visual representation...")
+        local spawned_count = 0
+        cell_objects = {}
 
         -- Spawn tile sprites first (background)
 --         local selected_level = self.level_library[1]
@@ -692,13 +749,11 @@ end
                     animation = "cell_down_wall"
                 end
                
-                --local id = factory.create("#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
-
-                local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
-                local pos = vmath.vector3(x, y, 0)
                 local id = factory.create("/cell_factory#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
                 if id then
                     msg.post(msg.url(nil, id, "cell_sprite1"), "set_animation", {animation = hash(animation)})
+                    cell_objects[cell.idNumber] = id
+                    spawned_count = spawned_count + 1
                 end
 
                 
@@ -713,7 +768,7 @@ end
             end
         end
 
-        print("Spawned " .. #cell_objects .. " cells")
+        print("Spawned " .. spawned_count .. " cells")
     end--of spawn visuals fn
 
 
@@ -775,6 +830,8 @@ function init(self)
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
+    self.selected_start_cell = nil
+    self.path_highlight_cells = {}
 
     print("=== Initialization Complete ===")
 
@@ -804,13 +861,43 @@ function on_input(self, action_id, action)
             local clicked_cell_id = handle_cell_click(action, self.camera_pos, self.camera_zoom)
             if clicked_cell_id then
                 local cell = self.world_grid[clicked_cell_id]
-                print("Cell Info:")
-                print("  TileID: " .. tostring(cell.tileID))
-                print("  Light: " .. cell.lightValue)
-                print("  Move Cost: " .. cell.moveValue)
-                print("  Cover: " .. cell.coverValue)
-                print("  Access Right: " .. tostring(cell.accessRight))
-                print("  Access Down: " .. tostring(cell.accessDown))
+                if cell.tileID == hash("empty") then
+                    print("Clicked VOID cell. Select a valid cell.")
+                    return
+                end
+
+                if not self.selected_start_cell then
+                    clear_path_visuals(self)
+                    self.selected_start_cell = clicked_cell_id
+                    apply_cell_tint(clicked_cell_id, COLOR_START)
+                    table.insert(self.path_highlight_cells, clicked_cell_id)
+                    print("Start cell selected: " .. clicked_cell_id .. ". Click destination cell.")
+                else
+                    local start_id = self.selected_start_cell
+                    local end_id = clicked_cell_id
+
+                    if start_id == end_id then
+                        clear_path_visuals(self)
+                        self.selected_start_cell = nil
+                        print("Selection canceled (same start/destination cell).")
+                        return
+                    end
+
+                    local path, total_cost = find_path(self.world_grid, start_id, end_id, nil)
+                    if path then
+                        print_path_debug(path, total_cost)
+                        highlight_path(self, path)
+                    else
+                        clear_path_visuals(self)
+                        apply_cell_tint(start_id, COLOR_START)
+                        table.insert(self.path_highlight_cells, start_id)
+                        apply_cell_tint(end_id, COLOR_END)
+                        table.insert(self.path_highlight_cells, end_id)
+                        print("No valid path from " .. start_id .. " to " .. end_id)
+                    end
+
+                    self.selected_start_cell = nil
+                end
             end
         end
     elseif action_id == hash("zoom_in") then

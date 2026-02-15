@@ -25,7 +25,7 @@ local SCREEN_HEIGHT = 720
 
 
 -- Visual rendering
-local visual_scale = 2--0.15  -- Scale everything down to fit screen
+local visual_scale = 1 -- Keep visuals in the same unit space as world_grid
 local cell_objects = {}
 local tile_objects = {}
 
@@ -161,15 +161,15 @@ end
 
 -- Convert grid coordinates to world position (center of cell)
 function coords_to_world_pos(x_cell, y_cell)
-    local x_pos = (x_cell - 1) * CELL_WIDTH
-    local y_pos = (y_cell - 1) * CELL_HEIGHT
+    local x_pos = (x_cell - 1) * CELL_WIDTH + (CELL_WIDTH * 0.5)
+    local y_pos = (y_cell - 1) * CELL_HEIGHT + (CELL_HEIGHT * 0.5)
     return x_pos, y_pos
 end
 
 -- Convert world position to grid coordinates
 function world_pos_to_coords(x_pos, y_pos)
-    local x_cell = math.floor(x_pos / CELL_WIDTH) + 1
-    local y_cell = math.floor(y_pos / CELL_HEIGHT) + 1
+    local x_cell = math.floor((x_pos - (CELL_WIDTH * 0.5)) / CELL_WIDTH) + 1
+    local y_cell = math.floor((y_pos - (CELL_HEIGHT * 0.5)) / CELL_HEIGHT) + 1
     return x_cell, y_cell
 end
 
@@ -663,9 +663,8 @@ end
         -- Spawn cell sprites (foreground debug grid)
         for _, cell in ipairs(self.world_grid) do
             print("making visual cell")
-            if cell.tileID ~= "empty" then  -- Only spawn cells that are part of tiles
-                local x = (cell.xCell - 1) * CELL_WIDTH * visual_scale
-                local y = (cell.yCell - 1) * CELL_HEIGHT * visual_scale
+            if cell.tileID ~= hash("empty") then  -- Only spawn cells that are part of tiles
+                local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
                 local pos = vmath.vector3(x, y, 0)
 
                 -- Determine animation
@@ -704,6 +703,7 @@ end
 
 function init(self)
     print("=== DERPLES VS XENOS - Initializing ===")
+    print("Chat GPT is here")
 
     -- Initialize edge lists for boundary checking
     initialize_edge_lists()

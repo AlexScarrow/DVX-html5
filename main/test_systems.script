@@ -1,0 +1,141 @@
+--[[
+    EXAMPLE TEST SCRIPT
+    Demonstrates how to use the game systems:
+    - Creating characters
+    - Pathfinding
+    - Movement
+    - Combat
+
+    You can attach this to a game object to test functionality
+]]
+
+local character_module = require "main.character"
+
+function init(self)
+    print("\n=== RUNNING GAME SYSTEM TESTS ===\n")
+
+    -- Get reference to world grid from main game script
+    -- In a real implementation, you'd pass this through messages
+    -- For now, this is just demonstration code
+
+    self.test_mode = true
+end
+
+-- Example test function you can call manually
+function test_pathfinding(world_grid)
+    print("--- Testing Pathfinding ---")
+
+    -- Find path from cell 1 to cell 225 (bottom-left to top-right)
+    local start_id = 1
+    local end_id = 225
+    local max_ap = 20
+
+    -- Note: You'd need to require the pathfinding functions from game.script
+    -- This is just pseudocode showing the concept
+
+    print(string.format("Finding path from cell %d to cell %d (max AP: %d)",
+        start_id, end_id, max_ap))
+
+    -- local path, cost = find_path(world_grid, start_id, end_id, max_ap)
+
+    -- if path then
+    --     print("Path found! Length: " .. #path .. " cells, Cost: " .. cost .. " AP")
+    --     print("Path: " .. table.concat(path, " -> "))
+    -- else
+    --     print("No path found or path too expensive")
+    -- end
+end
+
+-- Example test for character system
+function test_character_system(world_grid)
+    print("\n--- Testing Character System ---")
+
+    -- Create test characters
+    local sarge = character_module.create_derple("sarge", 57)  -- Cell at approximately (12, 4)
+    local alien = character_module.create_alien("drone", 62)    -- Cell at approximately (2, 5)
+
+    print("\nCreated characters:")
+    print(string.format("  %s at cell %d: %d/%d HP, %d AP",
+        sarge.type, sarge.cell_id, sarge.hp, sarge.max_hp, sarge.action_points))
+    print(string.format("  %s at cell %d: %d/%d HP, %d AP",
+        alien.type, alien.cell_id, alien.hp, alien.max_hp, alien.action_points))
+
+    -- Mark cells as occupied
+    world_grid[sarge.cell_id].isOccupied = hash("sarge")
+    world_grid[alien.cell_id].isOccupied = hash("alien")
+
+    -- Test movement
+    print("\n--- Testing Movement ---")
+    -- In real code, you'd calculate a path here
+    local example_path = {57, 58, 59}  -- Move 2 cells to the right
+    local success = character_module.move_character(sarge, example_path, world_grid)
+    print("Movement success: " .. tostring(success))
+
+    -- Test combat
+    print("\n--- Testing Combat ---")
+    -- Note: Characters need to be in range for this to work
+    -- local success, damage = character_module.attack(sarge, alien, world_grid)
+    -- print(string.format("Attack result: %s, Damage: %s", tostring(success), tostring(damage)))
+
+    -- Test healing
+    print("\n--- Testing Healing ---")
+    sarge.hp = 5  -- Simulate damage
+    local heal_success, heal_amount = character_module.use_medkit(sarge)
+    print(string.format("Heal success: %s, Amount: %s",
+        tostring(heal_success), tostring(heal_amount or 0)))
+
+    -- Test turn reset
+    print("\n--- Testing Turn Reset ---")
+    character_module.reset_turn(sarge)
+end
+
+-- Example of how to integrate into game loop
+function example_turn_sequence(world_grid, derples, aliens)
+    print("\n=== PLAYER TURN ===")
+
+    for _, derple in ipairs(derples) do
+        if character_module.can_act(derple) then
+            print("\nActive character: " .. derple.type)
+
+            -- 1. Player selects character and destination
+            -- 2. Calculate path
+            -- 3. Move if possible
+            -- 4. Check for targets in range
+            -- 5. Allow attack or other actions
+            -- 6. Continue until action points exhausted
+        end
+    end
+
+    print("\n=== ALIEN TURN ===")
+
+    for _, alien in ipairs(aliens) do
+        if character_module.can_act(alien) then
+            print("\nActive alien: " .. alien.type)
+
+            -- Simple AI:
+            -- 1. Find nearest derple
+            -- 2. Move towards them
+            -- 3. Attack if in range
+            -- 4. Continue until action points exhausted
+        end
+    end
+
+    print("\n=== END OF TURN ===")
+
+    -- Reset all characters for next turn
+    for _, derple in ipairs(derples) do
+        character_module.reset_turn(derple)
+    end
+
+    for _, alien in ipairs(aliens) do
+        character_module.reset_turn(alien)
+    end
+end
+
+function update(self, dt)
+    -- Game loop here
+end
+
+function on_message(self, message_id, message, sender)
+    -- Handle messages
+end

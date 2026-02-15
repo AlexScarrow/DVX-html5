@@ -1,0 +1,18 @@
+images {
+  image: "/assets/images/cell_open.png"
+}
+images {
+  image: "/assets/images/cell_right_wall.png"
+}
+images {
+  image: "/assets/images/cell_down_wall.png"
+}
+images {
+  image: "/assets/images/cell_right_down_wall.png"
+}
+images {
+  image: "/assets/images/cell_void.png"
+}
+margin: 0
+extrude_borders: 0
+inner_padding: 0

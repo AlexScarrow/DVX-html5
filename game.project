@@ -1,0 +1,33 @@
+[project]
+title = Derples vs Xenos
+version = 1.0
+dependencies = 
+
+[bootstrap]
+main_collection = /main/main.collectionc
+
+[input]
+game_binding = /input/game.input_bindingc
+use_accelerometer = 0
+
+[display]
+width = 1280
+height = 720
+high_dpi = 1
+
+[render]
+clear_color_red = 0.1
+clear_color_green = 0.1
+clear_color_blue = 0.1
+clear_color_alpha = 1
+
+[physics]
+scale = 0.02
+debug = 0
+
+[script]
+shared_state = 1
+
+[sprite]
+max_count = 1000
+

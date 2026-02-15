@@ -1,0 +1,12 @@
+images {
+  image: "/assets/images/tile_corridor.png"
+}
+images {
+  image: "/assets/images/tile_canteen.png"
+}
+images {
+  image: "/assets/images/tile_armoury.png"
+}
+margin: 0
+extrude_borders: 0
+inner_padding: 0

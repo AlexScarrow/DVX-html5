@@ -1,0 +1,43 @@
+{
+  :code {
+    :find {
+      :term "set_anim"
+    }
+  }
+  :workflow {
+    :recent-files [
+      [
+        "/input/game.input_binding"
+        :cljfx-form-view
+      ]
+      [
+        "/assets/tiles.atlas"
+        :scene
+      ]
+      [
+        "/game.project"
+        :cljfx-form-view
+      ]
+      [
+        "/main/main.collection"
+        :scene
+      ]
+      [
+        "/assets/cells.atlas"
+        :scene
+      ]
+      [
+        "/main/cell_sprite.script"
+        :code
+      ]
+      [
+        "/main/cell.go"
+        :scene
+      ]
+      [
+        "/main/game.script"
+        :code
+      ]
+    ]
+  }
+}

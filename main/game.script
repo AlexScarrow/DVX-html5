@@ -160,18 +160,32 @@ function id_to_coords(cell_id)
 end
 
 -- Convert grid coordinates to world position (center of cell)
+
 function coords_to_world_pos(x_cell, y_cell)
     local x_pos = (x_cell - 1) * CELL_WIDTH + (CELL_WIDTH * 0.5)
     local y_pos = (y_cell - 1) * CELL_HEIGHT + (CELL_HEIGHT * 0.5)
     return x_pos, y_pos
 end
 
--- Convert world position to grid coordinates
 function world_pos_to_coords(x_pos, y_pos)
-    local x_cell = math.floor((x_pos - (CELL_WIDTH * 0.5)) / CELL_WIDTH) + 1
-    local y_cell = math.floor((y_pos - (CELL_HEIGHT * 0.5)) / CELL_HEIGHT) + 1
+    local x_cell = math.floor(x_pos / CELL_WIDTH) + 1
+    local y_cell = math.floor(y_pos / CELL_HEIGHT) + 1
     return x_cell, y_cell
 end
+-- function coords_to_world_pos(x_cell, y_cell)
+--     local x_pos = (x_cell - 1) * CELL_WIDTH --+ (CELL_WIDTH * 0.5)
+--     local y_pos = (y_cell - 1) * CELL_HEIGHT-- + (CELL_HEIGHT * 0.5)
+--     return x_pos, y_pos
+-- end
+-- 
+-- -- Convert world position to grid coordinates
+-- function world_pos_to_coords(x_pos, y_pos)
+--     local x_cell = math.floor(x_pos / CELL_WIDTH) + 1
+--     local y_cell = math.floor(y_pos / CELL_HEIGHT) + 1
+--     -- local x_cell = math.floor((x_pos - (CELL_WIDTH * 0.5)) / CELL_WIDTH) + 1
+--     -- local y_cell = math.floor((y_pos - (CELL_HEIGHT * 0.5)) / CELL_HEIGHT) + 1
+--     return x_cell, y_cell
+-- end
 
 -- =============================================================================
 -- ADJACENT CELL HELPERS
@@ -664,6 +678,7 @@ end
         for _, cell in ipairs(self.world_grid) do
             print("making visual cell")
             if cell.tileID ~= hash("empty") then  -- Only spawn cells that are part of tiles
+            --if true then  -- spawn ALL CELLS!
                 local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
                 local pos = vmath.vector3(x, y, 0)
 
@@ -678,14 +693,23 @@ end
                 end
                
                 --local id = factory.create("#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
+
+                local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
+                local pos = vmath.vector3(x, y, 0)
                 local id = factory.create("/cell_factory#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
                 if id then
-                    print("alex",id)
                     msg.post(msg.url(nil, id, "cell_sprite"), "set_animation", {animation = hash(animation)})
-                   
-
-                    cell_objects[cell.idNumber] = id
                 end
+
+                
+--                 local id = factory.create("/cell_factory#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
+--                 if id then
+--                     print("alex",id)
+--                     msg.post(msg.url(nil, id, "cell_sprite"), "set_animation", {animation = hash(animation)})
+--                    
+-- 
+--                     cell_objects[cell.idNumber] = id
+--                 end
             end
         end
 
@@ -704,6 +728,8 @@ end
 function init(self)
     print("=== DERPLES VS XENOS - Initializing ===")
     print("Chat GPT is here")
+
+   
 
     -- Initialize edge lists for boundary checking
     initialize_edge_lists()
@@ -729,10 +755,16 @@ function init(self)
     print("Level baked down to worldGrid")
 
     -- Camera setup
-    self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 0)
+    self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     self.camera_zoom = 1.0
     self.camera_min_zoom = 0.5
     self.camera_max_zoom = 2.0
+
+    --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
+    --go.set_position(self.camera_pos, "/camera")
+
+    -- Keep the actual camera GO aligned with the world center
+    go.set_position(self.camera_pos, "/camera")
 
     -- Enable input
     msg.post(".", "acquire_input_focus")

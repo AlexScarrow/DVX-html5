@@ -698,7 +698,7 @@ end
                 local pos = vmath.vector3(x, y, 0)
                 local id = factory.create("/cell_factory#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
                 if id then
-                    msg.post(msg.url(nil, id, "cell_sprite"), "set_animation", {animation = hash(animation)})
+                    msg.post(msg.url(nil, id, "cell_sprite1"), "set_animation", {animation = hash(animation)})
                 end
 
                 

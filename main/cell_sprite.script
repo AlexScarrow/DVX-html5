@@ -29,7 +29,9 @@ end
 function on_message(self, message_id, message, sender)
 	if message_id == hash("set_animation") then
 		print("cell_sprite script on message fn called")
-
+		if message.animation then
+			sprite.play_flipbook("#cell_sprite", message.animation)
+		end
 	end
 	-- Add message-handling code here
 	-- Learn more: https://defold.com/manuals/message-passing/

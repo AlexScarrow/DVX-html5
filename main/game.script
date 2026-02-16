@@ -47,6 +47,7 @@ local UNIT_CLICK_SELECT_RADIUS = 45
 local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2 }
 local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
 local UNIT_SELECTED_PULSE_SPEED = 4
+local VERTICAL_MOVE_AP_COST = 3
 local UI_PANEL_X = 170
 local UI_PANEL_Y = 370
 local UI_PANEL_W = 300
@@ -321,6 +322,22 @@ function get_adjacent_cell(cell_id, direction)
     return adjacent_id
 end
 
+local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
+    local from_cell = world_grid[from_cell_id]
+    local to_cell = world_grid[to_cell_id]
+    if not from_cell or not to_cell then
+        return math.huge
+    end
+
+    -- Vertical transitions are always a flat ladder cost.
+    if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
+        return VERTICAL_MOVE_AP_COST
+    end
+
+    -- Horizontal transitions use destination cell's moveValue.
+    return to_cell.moveValue
+end
+
 -- Get all valid adjacent cells (4-directional)
 function get_neighbors(cell_id, world_grid, movement_profile, path_context)
     local neighbors = {}
@@ -355,7 +372,7 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
                 end
 
                 if can_access then
-                    table.insert(neighbors, { id = adj_id, cost = cell.moveValue })
+                    table.insert(neighbors, { id = adj_id, cost = get_step_move_cost(world_grid, cell_id, adj_id) })
                 end
             end
         end
@@ -491,7 +508,7 @@ function create_tile_library()
     --     --              1 2 3
     corridor.cells[1].accessDown = false 
     corridor.cells[2].accessDown = false
-    corridor.cells[2].moveValue = 3
+    --corridor.cells[2].moveValue = 3
     corridor.cells[3].accessDown = false
     corridor.cells[3].accessRight = false 
     corridor.cells[4].accessDown = false
@@ -722,7 +739,7 @@ function find_path(world_grid, start_id, end_id, max_action_points, movement_pro
             -- Calculate total cost
             local total_cost = 0
             for i = 2, #path do
-                total_cost = total_cost + world_grid[path[i]].moveValue
+                total_cost = total_cost + get_step_move_cost(world_grid, path[i - 1], path[i])
             end
 
             if max_action_points and total_cost > max_action_points then
@@ -1609,8 +1626,8 @@ local function update_single_unit_movement(self, unit, dt)
     end
 
     local target_x, target_y = get_unit_world_pos_in_cell(self, unit, target_cell_id)
-    local target_cost = self.world_grid[target_cell_id].moveValue
-    if target_cost >= unit.current_ap then
+    local target_cost = get_step_move_cost(self.world_grid, unit.cell_id, target_cell_id)
+    if target_cost > unit.current_ap then
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0

@@ -1,0 +1,6 @@
+images {
+  image: "/assets/images/derple_ui_panel.png"
+}
+margin: 0
+extrude_borders: 0
+inner_padding: 0

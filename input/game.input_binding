@@ -10,6 +10,10 @@ key_trigger {
   input: KEY_MINUS
   action: "zoom_out"
 }
+key_trigger {
+  input: KEY_N
+  action: "next_turn"
+}
 mouse_trigger {
   input: MOUSE_BUTTON_1
   action: "touch"

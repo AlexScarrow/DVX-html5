@@ -41,8 +41,10 @@ local HUMAN_VISUAL_SCALE = 0.35
 local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 38
 local HUMAN_PINGPONG_AMPLITUDE = 0.18
 local HUMAN_PINGPONG_SPEED = 7
+local HUMAN_MAX_ACTION_POINTS = 5
 local HUMAN_TINT_DEFAULT = vmath.vector4(1, 1, 1, 1)
 local HUMAN_TINT_SELECTED = vmath.vector4(0.7, 1, 1, 1)
+local HUMAN_TINT_NO_AP = vmath.vector4(1, 0.35, 0.35, 1)
 
 
 
@@ -885,15 +887,39 @@ local function find_first_walkable_cell(world_grid)
 end
 
 local function set_human_selected_visual(is_selected)
-    local tint = HUMAN_TINT_DEFAULT
-    if is_selected then
-        tint = HUMAN_TINT_SELECTED
+    if not is_selected then
+        return
     end
-    go.set("/human#sprite", "tint", tint)
+    go.set("/human#sprite", "tint", HUMAN_TINT_SELECTED)
 end
 
 local function set_human_scale(scale_x, scale_y)
     go.set_scale(vmath.vector3(scale_x, scale_y, 1), "/human")
+end
+
+local function update_human_visual_state(self)
+    if self.human_current_ap and self.human_current_ap <= 0 then
+        go.set("/human#sprite", "tint", HUMAN_TINT_NO_AP)
+    elseif self.human_is_selected then
+        go.set("/human#sprite", "tint", HUMAN_TINT_SELECTED)
+    else
+        go.set("/human#sprite", "tint", HUMAN_TINT_DEFAULT)
+    end
+end
+
+local function update_human_ap_debug_label(self)
+    if self.last_debug_ap ~= self.human_current_ap then
+        print("Human AP: " .. tostring(self.human_current_ap))
+        self.last_debug_ap = self.human_current_ap
+    end
+end
+
+local function next_turn_reset_human_ap(self)
+    self.human_current_ap = HUMAN_MAX_ACTION_POINTS
+    self.human_is_selected = false
+    update_human_visual_state(self)
+    update_human_ap_debug_label(self)
+    print("Next turn: human AP restored to " .. HUMAN_MAX_ACTION_POINTS)
 end
 
 local function get_human_world_pos_for_cell(cell)
@@ -929,10 +955,12 @@ local function spawn_human_unit(self)
     self.human_move_path = nil
     self.human_move_path_index = 0
     self.human_anim_phase = 0
+    self.human_current_ap = HUMAN_MAX_ACTION_POINTS
 
     move_human_to_cell(self, spawn_cell_id)
     set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
-    set_human_selected_visual(false)
+    update_human_visual_state(self)
+    update_human_ap_debug_label(self)
     print("Human spawned on cell: " .. spawn_cell_id)
 end
 
@@ -965,6 +993,18 @@ local function update_human_movement(self, dt)
     end
 
     local target_x, target_y = get_human_world_pos_for_cell(self.world_grid[target_cell_id])
+    local target_cost = self.world_grid[target_cell_id].moveValue
+    if target_cost >= self.human_current_ap then
+        self.human_is_moving = false
+        self.human_move_path = nil
+        self.human_move_path_index = 0
+        set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        print("Human stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. self.human_current_ap .. ")")
+        update_human_visual_state(self)
+        update_human_ap_debug_label(self)
+        return
+    end
+
     local current_pos = go.get_position("/human")
     local dx = target_x - current_pos.x
     local dy = target_y - current_pos.y
@@ -984,7 +1024,9 @@ local function update_human_movement(self, dt)
 
     if distance <= step then
         go.set_position(vmath.vector3(target_x, target_y, 0.5), "/human")
+        self.human_current_ap = self.human_current_ap - target_cost
         move_human_to_cell(self, target_cell_id)
+        update_human_ap_debug_label(self)
         self.human_move_path_index = self.human_move_path_index + 1
 
         if self.human_move_path_index > #self.human_move_path then
@@ -993,6 +1035,7 @@ local function update_human_movement(self, dt)
             self.human_move_path_index = 0
             set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
             print("Human move complete on cell: " .. self.human_cell_id)
+            update_human_visual_state(self)
         end
     else
         local nx = current_pos.x + (dx / distance) * step
@@ -1013,7 +1056,7 @@ local function handle_human_click_flow(self, clicked_cell_id)
 
     if clicked_cell_id == self.human_cell_id then
         self.human_is_selected = not self.human_is_selected
-        set_human_selected_visual(self.human_is_selected)
+        update_human_visual_state(self)
         self.selected_start_cell = nil
         if self.human_is_selected then
             print("Human selected. Click destination cell.")
@@ -1024,6 +1067,13 @@ local function handle_human_click_flow(self, clicked_cell_id)
     end
 
     if self.human_is_selected then
+        if self.human_current_ap <= 0 then
+            print("Human has no AP. Click next turn to refresh.")
+            self.human_is_selected = false
+            update_human_visual_state(self)
+            return true
+        end
+
         if not is_walkable_cell(self.world_grid, clicked_cell_id) then
             print("Destination is VOID. Choose a valid destination.")
             return true
@@ -1040,7 +1090,7 @@ local function handle_human_click_flow(self, clicked_cell_id)
         end
 
         self.human_is_selected = false
-        set_human_selected_visual(false)
+        update_human_visual_state(self)
         return true
     end
 
@@ -1245,6 +1295,7 @@ end
 
 function update(self, dt)
     update_human_movement(self, dt)
+    update_human_ap_debug_label(self)
 
     if not self.is_panning then
         local speed = math.sqrt(self.pan_velocity_x * self.pan_velocity_x + self.pan_velocity_y * self.pan_velocity_y)
@@ -1335,6 +1386,8 @@ function on_input(self, action_id, action)
         local focus_x = action.x or (SCREEN_WIDTH * 0.5)
         local focus_y = action.y or (SCREEN_HEIGHT * 0.5)
         zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
+    elseif action_id == hash("next_turn") and action.pressed then
+        next_turn_reset_human_ap(self)
     end
 end
 
@@ -1343,5 +1396,7 @@ end
 -- =============================================================================
 
 function on_message(self, message_id, message, sender)
-    -- Handle messages
+    if message_id == hash("next_turn") then
+        next_turn_reset_human_ap(self)
+    end
 end

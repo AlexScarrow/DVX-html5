@@ -460,6 +460,13 @@ end
 
 -- =============================================================================
 -- TILE LIBRARY
+--  ===========  ==  ==          =======
+--      ==       ==  ==          ==
+--      ==       ==  ==          ==
+--      ==       ==  ==          ====
+--      ==       ==  ==          ==
+--      ==       ==  ==          ==
+--      ==       ==  ==========  =======
 -- =============================================================================
 --[[
     Pre-defined tiles that can be placed in level designs
@@ -482,8 +489,18 @@ function create_tile_library()
     --     -- Cell layout: 7 8 9
     --     --              4 5 6
     --     --              1 2 3
-    corridor.cells[4].accessRight = false  -- Wall on right of cell 4
-    corridor.cells[6].accessRight = false  -- Wall on right of cell 6
+    corridor.cells[1].accessDown = false 
+    corridor.cells[2].accessDown = false
+    corridor.cells[2].moveValue = 3
+    corridor.cells[3].accessDown = false
+    corridor.cells[3].accessRight = false 
+    corridor.cells[4].accessDown = false
+    corridor.cells[6].accessDown = false
+    corridor.cells[7].accessDown = false
+    corridor.cells[8].accessDown = false 
+    corridor.cells[9].accessRight = false 
+    --corridor.cells[4].accessRight = false  -- Wall on right of cell 4
+    --corridor.cells[6].accessRight = false  -- Wall on right of cell 6
 
     library["corridor"] = corridor
 
@@ -499,6 +516,11 @@ function create_tile_library()
     --     -- Cell layout: 7 8 9
     --     --              4 5 6
     --     --              1 2 3
+    canteen.cells[1].accessDown = false  -- Wall on right of cell 4
+    canteen.cells[1].accessRight = false  -- Wall on right of cell 4
+    canteen.cells[2].accessDown = false  -- Wall on right of cell 4
+    --canteen.cells[3].accessDown = false  -- Wall on right of cell 4
+    canteen.cells[3].accessRight = false  -- Wall on right of cell 4
     canteen.cells[4].accessRight = false  -- Wall on right of cell 4
     canteen.cells[6].accessRight = false  -- Wall on right of cell 6
     canteen.cells[2].accessDown = false   -- Wall on bottom of cell 2
@@ -538,6 +560,12 @@ end
 
 -- =============================================================================
 -- LEVEL DESIGN
+-- ==       ======  ==          ==  ========  ==
+-- ==       ==       ==        ==   ==        ==
+-- ==       ==        ==      ==    ====      ==
+-- ==       =====      ==    ==     ==        ==
+-- ==       ==          ==  ==      ==        ==
+-- =======  ======       ====       ========  ==========
 -- =============================================================================
 --[[
     Level designs specify which tiles to place where on the worldGrid
@@ -550,6 +578,8 @@ function create_level_library()
 
     -- Example Level 1
     levels[1] = {
+        { x = 11, y = 11, tile = "corridor" },
+        { x = 8, y = 11, tile = "canteen" },
         { x = 8, y = 8, tile = "canteen" },
         { x = 11, y = 8, tile = "corridor" },
         { x = 5, y = 8, tile = "armoury" }
@@ -1790,7 +1820,7 @@ end
         local spawned_count = 0
         cell_objects = {}
 
-        -- Spawn tile sprites first (background)
+--         --Spawn tile sprites first (background)
 --         local selected_level = self.level_library[1]
 -- 
 --         for _, placement in ipairs(selected_level) do

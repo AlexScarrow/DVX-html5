@@ -42,9 +42,26 @@ local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 38
 local HUMAN_PINGPONG_AMPLITUDE = 0.18
 local HUMAN_PINGPONG_SPEED = 7
 local HUMAN_MAX_ACTION_POINTS = 5
-local HUMAN_TINT_DEFAULT = vmath.vector4(1, 1, 1, 1)
-local HUMAN_TINT_SELECTED = vmath.vector4(0.7, 1, 1, 1)
-local HUMAN_TINT_NO_AP = vmath.vector4(1, 0.35, 0.35, 1)
+local HUMAN_STACK_SPACING_X = 36
+local UNIT_CLICK_SELECT_RADIUS = 45
+local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2 }
+local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
+local UNIT_SELECTED_PULSE_SPEED = 4
+local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
+local HUMAN_TINT_TECHIE = vmath.vector4(0.45, 0.7, 1, 1)
+local HUMAN_TINT_MEDIC = vmath.vector4(1, 0.45, 0.45, 1)
+local HUMAN_TINT_GUNNER = vmath.vector4(0.7, 0.7, 0.7, 1)
+local HUMAN_TINT_NO_AP = vmath.vector4(0.7, 0.1, 0.1, 1)
+local UNIT_CLASS_SARGE = "sarge"
+local UNIT_CLASS_TECHIE = "techie"
+local UNIT_CLASS_MEDIC = "medic"
+local UNIT_CLASS_GUNNER = "gunner"
+local CLASS_ROLE_HOOKS = {
+    [UNIT_CLASS_SARGE] = { can_donate_ap = true, can_fix = false, can_heal = false, heavy_weapon = false },
+    [UNIT_CLASS_TECHIE] = { can_donate_ap = false, can_fix = true, can_heal = false, heavy_weapon = false },
+    [UNIT_CLASS_MEDIC] = { can_donate_ap = false, can_fix = false, can_heal = true, heavy_weapon = false },
+    [UNIT_CLASS_GUNNER] = { can_donate_ap = false, can_fix = false, can_heal = false, heavy_weapon = true }
+}
 
 
 
@@ -877,6 +894,277 @@ local function is_walkable_cell(world_grid, cell_id)
     return cell and cell.tileID ~= hash("empty")
 end
 
+local function create_squad_units()
+    return {
+        sarge = {
+            id = "sarge",
+            class_id = UNIT_CLASS_SARGE,
+            display_name = "Sarge",
+            max_ap = HUMAN_MAX_ACTION_POINTS,
+            current_ap = HUMAN_MAX_ACTION_POINTS,
+            command_points = 0,
+            max_command_points = 10,
+            cell_id = nil,
+            is_selected = false,
+            is_moving = false,
+            move_path = nil,
+            move_path_index = 0,
+            anim_phase = 0,
+            go_path = "/human",
+            sprite_path = "/human#sprite",
+            occupancy_hash = hash("human_sarge")
+        },
+        techie = {
+            id = "techie",
+            class_id = UNIT_CLASS_TECHIE,
+            display_name = "Techie",
+            max_ap = HUMAN_MAX_ACTION_POINTS,
+            current_ap = HUMAN_MAX_ACTION_POINTS,
+            command_points = 0,
+            max_command_points = 0,
+            cell_id = nil,
+            is_selected = false,
+            is_moving = false,
+            move_path = nil,
+            move_path_index = 0,
+            anim_phase = 0,
+            go_path = "/techie",
+            sprite_path = "/techie#sprite",
+            occupancy_hash = hash("human_techie")
+        },
+        medic = {
+            id = "medic",
+            class_id = UNIT_CLASS_MEDIC,
+            display_name = "Medic",
+            max_ap = HUMAN_MAX_ACTION_POINTS,
+            current_ap = HUMAN_MAX_ACTION_POINTS,
+            command_points = 0,
+            max_command_points = 0,
+            cell_id = nil,
+            is_selected = false,
+            is_moving = false,
+            move_path = nil,
+            move_path_index = 0,
+            anim_phase = 0,
+            go_path = "/medic",
+            sprite_path = "/medic#sprite",
+            occupancy_hash = hash("human_medic")
+        },
+        gunner = {
+            id = "gunner",
+            class_id = UNIT_CLASS_GUNNER,
+            display_name = "Gunner",
+            max_ap = HUMAN_MAX_ACTION_POINTS,
+            current_ap = HUMAN_MAX_ACTION_POINTS,
+            command_points = 0,
+            max_command_points = 0,
+            cell_id = nil,
+            is_selected = false,
+            is_moving = false,
+            move_path = nil,
+            move_path_index = 0,
+            anim_phase = 0,
+            go_path = "/gunner",
+            sprite_path = "/gunner#sprite",
+            occupancy_hash = hash("human_gunner")
+        }
+    }
+end
+
+local function get_controlled_unit(self)
+    if not self.squad_units or not self.controlled_unit_id then
+        return nil
+    end
+    return self.squad_units[self.controlled_unit_id]
+end
+
+local function get_unit_by_id(self, unit_id)
+    if not self.squad_units or not unit_id then
+        return nil
+    end
+    return self.squad_units[unit_id]
+end
+
+local function get_unit_on_cell(self, cell_id)
+    if not self.squad_units then
+        return nil
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit.cell_id == cell_id then
+            return unit
+        end
+    end
+    return nil
+end
+
+local function get_units_on_cell(self, cell_id)
+    local units = {}
+    if not self.squad_units then
+        return units
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit.cell_id == cell_id then
+            table.insert(units, unit)
+        end
+    end
+    return units
+end
+
+local function get_spawn_order_unit_id_list()
+    return { "sarge", "techie", "medic", "gunner" }
+end
+
+local function sort_units_by_spawn_order(units)
+    local order = { sarge = 1, techie = 2, medic = 3, gunner = 4 }
+    table.sort(units, function(a, b)
+        return (order[a.id] or 99) < (order[b.id] or 99)
+    end)
+end
+
+local function ensure_cell_slot_assignment(self, unit, cell_id)
+    if not unit or not cell_id then
+        return 1
+    end
+
+    self.cell_slot_assignments = self.cell_slot_assignments or {}
+    self.cell_slot_assignments[cell_id] = self.cell_slot_assignments[cell_id] or {}
+    local assignment = self.cell_slot_assignments[cell_id]
+
+    if assignment[unit.id] then
+        return assignment[unit.id]
+    end
+
+    local used = {}
+    for _, slot_index in pairs(assignment) do
+        used[slot_index] = true
+    end
+
+    local selected_slot = 1
+    for i = 1, #CELL_SLOT_OFFSETS_X do
+        if not used[i] then
+            selected_slot = i
+            break
+        end
+    end
+
+    assignment[unit.id] = selected_slot
+    return selected_slot
+end
+
+local function clear_cell_slot_assignment(self, unit, cell_id)
+    if not unit or not cell_id or not self.cell_slot_assignments then
+        return
+    end
+    local assignment = self.cell_slot_assignments[cell_id]
+    if assignment then
+        assignment[unit.id] = nil
+    end
+end
+
+local function cell_has_any_unit_except(self, cell_id, except_unit_id)
+    if not self.squad_units then
+        return false
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit.id ~= except_unit_id and unit.cell_id == cell_id then
+            return true
+        end
+    end
+    return false
+end
+
+local function deselect_all_units(self)
+    if not self.squad_units then
+        return
+    end
+    for _, unit in pairs(self.squad_units) do
+        unit.is_selected = false
+    end
+end
+
+local function any_unit_is_moving(self)
+    if not self.squad_units then
+        return false
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit.is_moving then
+            return true
+        end
+    end
+    return false
+end
+
+local function unit_has_role(unit, role_key)
+    if not unit then
+        return false
+    end
+    local role = CLASS_ROLE_HOOKS[unit.class_id]
+    return role and role[role_key] == true
+end
+
+local function get_unit_base_tint(unit)
+    if not unit then
+        return vmath.vector4(1, 1, 1, 1)
+    end
+    if unit.class_id == UNIT_CLASS_SARGE then
+        return HUMAN_TINT_SARGE
+    elseif unit.class_id == UNIT_CLASS_TECHIE then
+        return HUMAN_TINT_TECHIE
+    elseif unit.class_id == UNIT_CLASS_MEDIC then
+        return HUMAN_TINT_MEDIC
+    elseif unit.class_id == UNIT_CLASS_GUNNER then
+        return HUMAN_TINT_GUNNER
+    end
+    return vmath.vector4(1, 1, 1, 1)
+end
+
+local function get_selected_tint(base_tint)
+    return vmath.vector4(
+        math.min(base_tint.x + 0.2, 1),
+        math.min(base_tint.y + 0.2, 1),
+        math.min(base_tint.z + 0.2, 1),
+        1
+    )
+end
+
+-- FUTURE GAMEPLAY HOOKS (role-gated actions)
+local function can_donate_ap(unit)
+    return unit_has_role(unit, "can_donate_ap")
+end
+
+local function can_fix(unit)
+    return unit_has_role(unit, "can_fix")
+end
+
+local function can_heal(unit)
+    return unit_has_role(unit, "can_heal")
+end
+
+local function has_heavy_weapon(unit)
+    return unit_has_role(unit, "heavy_weapon")
+end
+
+local function print_squad_debug_overview(self)
+    if not self.squad_units then
+        return
+    end
+
+    print("=== SQUAD DEBUG (UI placeholder in console) ===")
+    for _, unit in pairs(self.squad_units) do
+        print(string.format(
+            "  %s class=%s AP=%d/%d roles{donate=%s fix=%s heal=%s heavy=%s}",
+            unit.display_name,
+            unit.class_id,
+            unit.current_ap,
+            unit.max_ap,
+            tostring(unit_has_role(unit, "can_donate_ap")),
+            tostring(unit_has_role(unit, "can_fix")),
+            tostring(unit_has_role(unit, "can_heal")),
+            tostring(unit_has_role(unit, "heavy_weapon"))
+        ))
+    end
+end
+
 local function find_first_walkable_cell(world_grid)
     for cell_id, cell in ipairs(world_grid) do
         if cell.tileID ~= hash("empty") then
@@ -886,40 +1174,85 @@ local function find_first_walkable_cell(world_grid)
     return nil
 end
 
-local function set_human_selected_visual(is_selected)
-    if not is_selected then
-        return
+local function set_unit_scale(unit, scale_x, scale_y)
+    if unit and unit.go_path then
+        go.set_scale(vmath.vector3(scale_x, scale_y, 1), unit.go_path)
     end
-    go.set("/human#sprite", "tint", HUMAN_TINT_SELECTED)
-end
-
-local function set_human_scale(scale_x, scale_y)
-    go.set_scale(vmath.vector3(scale_x, scale_y, 1), "/human")
 end
 
 local function update_human_visual_state(self)
-    if self.human_current_ap and self.human_current_ap <= 0 then
-        go.set("/human#sprite", "tint", HUMAN_TINT_NO_AP)
-    elseif self.human_is_selected then
-        go.set("/human#sprite", "tint", HUMAN_TINT_SELECTED)
-    else
-        go.set("/human#sprite", "tint", HUMAN_TINT_DEFAULT)
+    if not self.squad_units then
+        return
+    end
+
+    for _, unit in pairs(self.squad_units) do
+        if unit.sprite_path then
+            if unit.current_ap <= 0 then
+                go.set(unit.sprite_path, "tint", HUMAN_TINT_NO_AP)
+            else
+                local base_tint = get_unit_base_tint(unit)
+                if unit.is_selected then
+                    go.set(unit.sprite_path, "tint", get_selected_tint(base_tint))
+                else
+                    go.set(unit.sprite_path, "tint", base_tint)
+                end
+            end
+        end
+    end
+end
+
+local function update_selected_unit_pulse(self, dt)
+    if not self.squad_units then
+        return
+    end
+
+    for _, unit in pairs(self.squad_units) do
+        if unit.go_path and not unit.is_moving then
+            if unit.is_selected and unit.current_ap > 0 then
+                unit.select_pulse_phase = (unit.select_pulse_phase or 0) + (dt * UNIT_SELECTED_PULSE_SPEED * math.pi * 2)
+                local pulse = 1 + UNIT_SELECTED_PULSE_AMPLITUDE * math.sin(unit.select_pulse_phase)
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE * pulse, HUMAN_VISUAL_SCALE * pulse)
+            else
+                unit.select_pulse_phase = 0
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            end
+        end
     end
 end
 
 local function update_human_ap_debug_label(self)
-    if self.last_debug_ap ~= self.human_current_ap then
-        print("Human AP: " .. tostring(self.human_current_ap))
-        self.last_debug_ap = self.human_current_ap
+    local unit = get_controlled_unit(self)
+    if not unit then
+        return
+    end
+
+    self.last_debug_ap_by_unit = self.last_debug_ap_by_unit or {}
+    if self.last_debug_ap_by_unit[unit.id] ~= unit.current_ap then
+        print(string.format("UI DEBUG | %s AP: %d/%d", unit.display_name, unit.current_ap, unit.max_ap))
+        self.last_debug_ap_by_unit[unit.id] = unit.current_ap
     end
 end
 
 local function next_turn_reset_human_ap(self)
-    self.human_current_ap = HUMAN_MAX_ACTION_POINTS
-    self.human_is_selected = false
+    if not self.squad_units then
+        return
+    end
+
+    for _, unit in pairs(self.squad_units) do
+        unit.current_ap = unit.max_ap
+        unit.is_selected = false
+    end
+
+    -- Future hook: Sarge command points increase by 1/turn (max 10).
+    local sarge = self.squad_units.sarge
+    if sarge then
+        sarge.command_points = math.min(sarge.max_command_points, (sarge.command_points or 0) + 1)
+        print("UI DEBUG | Sarge Command Points: " .. sarge.command_points)
+    end
+
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
-    print("Next turn: human AP restored to " .. HUMAN_MAX_ACTION_POINTS)
+    print("Next turn: squad AP restored")
 end
 
 local function get_human_world_pos_for_cell(cell)
@@ -929,90 +1262,142 @@ local function get_human_world_pos_for_cell(cell)
     return x, y
 end
 
-local function move_human_to_cell(self, cell_id)
-    local old_cell_id = self.human_cell_id
-    if old_cell_id and self.world_grid[old_cell_id] then
+local function get_unit_world_pos_in_cell(self, unit, cell_id)
+    local base_x, base_y = get_human_world_pos_for_cell(self.world_grid[cell_id])
+    local slot_index = ensure_cell_slot_assignment(self, unit, cell_id)
+    local slot_offset = CELL_SLOT_OFFSETS_X[slot_index] or 0
+    return base_x + (slot_offset * HUMAN_STACK_SPACING_X), base_y
+end
+
+local function refresh_unit_positions_in_cell(self, cell_id)
+    if not cell_id then
+        return
+    end
+    local units_in_cell = get_units_on_cell(self, cell_id)
+    sort_units_by_spawn_order(units_in_cell)
+    for _, unit in ipairs(units_in_cell) do
+        if unit.go_path then
+            local x, y = get_unit_world_pos_in_cell(self, unit, cell_id)
+            go.set_position(vmath.vector3(x, y, 0.5), unit.go_path)
+        end
+    end
+end
+
+local function move_human_to_cell(self, unit, cell_id)
+    if not unit then
+        return
+    end
+
+    local old_cell_id = unit.cell_id
+    clear_cell_slot_assignment(self, unit, old_cell_id)
+    if old_cell_id and self.world_grid[old_cell_id] and not cell_has_any_unit_except(self, old_cell_id, unit.id) then
         self.world_grid[old_cell_id].isOccupied = hash("empty")
     end
 
-    self.human_cell_id = cell_id
-    self.world_grid[cell_id].isOccupied = hash("human")
+    unit.cell_id = cell_id
+    self.world_grid[cell_id].isOccupied = unit.occupancy_hash
+    ensure_cell_slot_assignment(self, unit, cell_id)
 
-    local x, y = get_human_world_pos_for_cell(self.world_grid[cell_id])
-    go.set_position(vmath.vector3(x, y, 0.5), "/human")
+    refresh_unit_positions_in_cell(self, old_cell_id)
+    refresh_unit_positions_in_cell(self, cell_id)
 end
 
 local function spawn_human_unit(self)
-    local spawn_cell_id = find_first_walkable_cell(self.world_grid)
-    if not spawn_cell_id then
-        print("No walkable cell found for human spawn.")
+    if not self.squad_units then
+        print("No squad units available for spawn.")
         return
     end
 
-    self.human_cell_id = nil
-    self.human_is_selected = false
-    self.human_is_moving = false
-    self.human_move_path = nil
-    self.human_move_path_index = 0
-    self.human_anim_phase = 0
-    self.human_current_ap = HUMAN_MAX_ACTION_POINTS
+    local spawn_cells = {}
+    for cell_id, cell in ipairs(self.world_grid) do
+        if cell.tileID ~= hash("empty") then
+            table.insert(spawn_cells, cell_id)
+        end
+    end
 
-    move_human_to_cell(self, spawn_cell_id)
-    set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+    if #spawn_cells < 4 then
+        print("Not enough walkable cells to spawn the full squad.")
+        return
+    end
+
+    self.cell_slot_assignments = {}
+
+    local spawn_order = get_spawn_order_unit_id_list()
+    for i, unit_id in ipairs(spawn_order) do
+        local unit = self.squad_units[unit_id]
+        if unit then
+            unit.cell_id = nil
+            unit.is_selected = false
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+            unit.anim_phase = 0
+            unit.current_ap = unit.max_ap
+
+            move_human_to_cell(self, unit, spawn_cells[i])
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            print(unit.display_name .. " spawned on cell: " .. spawn_cells[i])
+        end
+    end
+
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
-    print("Human spawned on cell: " .. spawn_cell_id)
 end
 
 local function begin_human_path_move(self, path)
-    if not path or #path < 2 then
-        self.human_is_moving = false
-        self.human_move_path = nil
-        self.human_move_path_index = 0
+    local unit = get_controlled_unit(self)
+    if not unit then
         return
     end
 
-    self.human_is_moving = true
-    self.human_move_path = path
-    self.human_move_path_index = 2 -- first element is current cell
-    self.human_anim_phase = 0
+    if not path or #path < 2 then
+        unit.is_moving = false
+        unit.move_path = nil
+        unit.move_path_index = 0
+        return
+    end
+
+    unit.is_moving = true
+    unit.move_path = path
+    unit.move_path_index = 2 -- first element is current cell
+    unit.anim_phase = 0
 end
 
-local function update_human_movement(self, dt)
-    if not self.human_is_moving or not self.human_move_path then
+local function update_single_unit_movement(self, unit, dt)
+    if not unit or not unit.is_moving or not unit.move_path then
         return
     end
 
-    local target_cell_id = self.human_move_path[self.human_move_path_index]
+    local target_cell_id = unit.move_path[unit.move_path_index]
     if not target_cell_id then
-        self.human_is_moving = false
-        self.human_move_path = nil
-        self.human_move_path_index = 0
-        set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        unit.is_moving = false
+        unit.move_path = nil
+        unit.move_path_index = 0
+        set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         return
     end
 
-    local target_x, target_y = get_human_world_pos_for_cell(self.world_grid[target_cell_id])
+    local target_x, target_y = get_unit_world_pos_in_cell(self, unit, target_cell_id)
     local target_cost = self.world_grid[target_cell_id].moveValue
-    if target_cost >= self.human_current_ap then
-        self.human_is_moving = false
-        self.human_move_path = nil
-        self.human_move_path_index = 0
-        set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
-        print("Human stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. self.human_current_ap .. ")")
+    if target_cost >= unit.current_ap then
+        unit.is_moving = false
+        unit.move_path = nil
+        unit.move_path_index = 0
+        set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        print(unit.display_name .. " stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. unit.current_ap .. ")")
         update_human_visual_state(self)
         update_human_ap_debug_label(self)
         return
     end
 
-    local current_pos = go.get_position("/human")
+    local current_pos = go.get_position(unit.go_path)
     local dx = target_x - current_pos.x
     local dy = target_y - current_pos.y
     local distance = math.sqrt(dx * dx + dy * dy)
     local step = HUMAN_MOVE_SPEED * dt
 
-    self.human_anim_phase = (self.human_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
-    local ping = math.sin(self.human_anim_phase)
+    unit.anim_phase = (unit.anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+    local ping = math.sin(unit.anim_phase)
     local scale_x = HUMAN_VISUAL_SCALE
     local scale_y = HUMAN_VISUAL_SCALE
     if math.abs(dx) >= math.abs(dy) then
@@ -1020,56 +1405,102 @@ local function update_human_movement(self, dt)
     else
         scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
     end
-    set_human_scale(scale_x, scale_y)
+    set_unit_scale(unit, scale_x, scale_y)
 
     if distance <= step then
-        go.set_position(vmath.vector3(target_x, target_y, 0.5), "/human")
-        self.human_current_ap = self.human_current_ap - target_cost
-        move_human_to_cell(self, target_cell_id)
+        go.set_position(vmath.vector3(target_x, target_y, 0.5), unit.go_path)
+        unit.current_ap = unit.current_ap - target_cost
+        move_human_to_cell(self, unit, target_cell_id)
         update_human_ap_debug_label(self)
-        self.human_move_path_index = self.human_move_path_index + 1
+        unit.move_path_index = unit.move_path_index + 1
 
-        if self.human_move_path_index > #self.human_move_path then
-            self.human_is_moving = false
-            self.human_move_path = nil
-            self.human_move_path_index = 0
-            set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
-            print("Human move complete on cell: " .. self.human_cell_id)
+        if unit.move_path_index > #unit.move_path then
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
             update_human_visual_state(self)
         end
     else
         local nx = current_pos.x + (dx / distance) * step
         local ny = current_pos.y + (dy / distance) * step
-        go.set_position(vmath.vector3(nx, ny, 0.5), "/human")
+        go.set_position(vmath.vector3(nx, ny, 0.5), unit.go_path)
     end
 end
 
-local function handle_human_click_flow(self, clicked_cell_id)
-    if not self.human_cell_id then
+local function update_human_movement(self, dt)
+    if not self.squad_units then
+        return
+    end
+    for _, unit in pairs(self.squad_units) do
+        update_single_unit_movement(self, unit, dt)
+    end
+end
+
+local function get_clicked_unit_in_cell(self, cell_id, world_x, world_y)
+    local units_in_cell = get_units_on_cell(self, cell_id)
+    if #units_in_cell == 0 then
+        return nil
+    end
+
+    local best_unit = nil
+    local best_dist = math.huge
+    for _, unit in ipairs(units_in_cell) do
+        if unit.go_path then
+            local pos = go.get_position(unit.go_path)
+            local dx = pos.x - world_x
+            local dy = pos.y - world_y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            if dist < best_dist then
+                best_dist = dist
+                best_unit = unit
+            end
+        end
+    end
+
+    if best_dist <= UNIT_CLICK_SELECT_RADIUS then
+        return best_unit
+    end
+    return nil
+end
+
+local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
+    local unit = get_controlled_unit(self)
+    if not unit or not unit.cell_id then
         return false
     end
 
-    if self.human_is_moving then
-        print("Human is moving. Wait for movement to finish.")
-        return true
-    end
-
-    if clicked_cell_id == self.human_cell_id then
-        self.human_is_selected = not self.human_is_selected
+    local clicked_unit = get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y)
+    if clicked_unit then
+        if clicked_unit.is_moving then
+            print(clicked_unit.display_name .. " is already moving.")
+            return true
+        end
+        if self.controlled_unit_id == clicked_unit.id and clicked_unit.is_selected then
+            clicked_unit.is_selected = false
+            print(clicked_unit.display_name .. " deselected.")
+        else
+            self.controlled_unit_id = clicked_unit.id
+            deselect_all_units(self)
+            clicked_unit.is_selected = true
+            print(clicked_unit.display_name .. " selected. Click destination cell.")
+        end
         update_human_visual_state(self)
         self.selected_start_cell = nil
-        if self.human_is_selected then
-            print("Human selected. Click destination cell.")
-        else
-            print("Human deselected.")
-        end
+        update_human_ap_debug_label(self)
         return true
     end
 
-    if self.human_is_selected then
-        if self.human_current_ap <= 0 then
-            print("Human has no AP. Click next turn to refresh.")
-            self.human_is_selected = false
+    unit = get_controlled_unit(self)
+    if unit.is_selected then
+        if unit.is_moving then
+            print(unit.display_name .. " is already moving.")
+            return true
+        end
+        if unit.current_ap <= 0 then
+            print(unit.display_name .. " has no AP. Click next turn to refresh.")
+            unit.is_selected = false
             update_human_visual_state(self)
             return true
         end
@@ -1079,17 +1510,17 @@ local function handle_human_click_flow(self, clicked_cell_id)
             return true
         end
 
-        local path, total_cost = find_path(self.world_grid, self.human_cell_id, clicked_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        local path, total_cost = find_path(self.world_grid, unit.cell_id, clicked_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
         if path then
-            print("Human route selected:")
+            print(unit.display_name .. " route selected:")
             print_path_debug(path, total_cost)
             highlight_path(self, path)
             begin_human_path_move(self, path)
         else
-            print("No path found for human to cell: " .. clicked_cell_id)
+            print("No path found for " .. unit.display_name .. " to cell: " .. clicked_cell_id)
         end
 
-        self.human_is_selected = false
+        unit.is_selected = false
         update_human_visual_state(self)
         return true
     end
@@ -1279,6 +1710,9 @@ function init(self)
     spawn_visuals(self)
     self.selected_start_cell = nil
     self.path_highlight_cells = {}
+    self.squad_units = create_squad_units()
+    self.controlled_unit_id = "sarge"
+    print_squad_debug_overview(self)
     spawn_human_unit(self)
 
     print("=== Initialization Complete ===")
@@ -1295,6 +1729,7 @@ end
 
 function update(self, dt)
     update_human_movement(self, dt)
+    update_selected_unit_pulse(self, dt)
     update_human_ap_debug_label(self)
 
     if not self.is_panning then
@@ -1333,9 +1768,10 @@ function on_input(self, action_id, action)
             self.pan_velocity_y = 0
         elseif action.released then
             if not self.did_drag then
+                local world_x, world_y = screen_to_world(action.x, action.y, self.camera_pos, self.camera_zoom)
                 local clicked_cell_id = handle_cell_click(action, self.camera_pos, self.camera_zoom)
                 if clicked_cell_id then
-                    local handled_by_human = handle_human_click_flow(self, clicked_cell_id)
+                    local handled_by_human = handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     if not handled_by_human then
                         process_cell_selection(self, clicked_cell_id)
                     end

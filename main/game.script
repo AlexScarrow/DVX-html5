@@ -36,6 +36,13 @@ local COLOR_START = vmath.vector4(0.3, 1, 0.3, 1)
 local COLOR_END = vmath.vector4(1, 0.35, 0.35, 1)
 local CAMERA_EDGE_PADDING_X = CELL_WIDTH * 0.5
 local CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
+local HUMAN_MOVE_SPEED = 250
+local HUMAN_VISUAL_SCALE = 0.35
+local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 38
+local HUMAN_PINGPONG_AMPLITUDE = 0.18
+local HUMAN_PINGPONG_SPEED = 7
+local HUMAN_TINT_DEFAULT = vmath.vector4(1, 1, 1, 1)
+local HUMAN_TINT_SELECTED = vmath.vector4(0.7, 1, 1, 1)
 
 
 
@@ -863,6 +870,183 @@ local function zoom_camera_at_screen_point(self, target_zoom, screen_x, screen_y
     apply_camera_transform(self)
 end
 
+local function is_walkable_cell(world_grid, cell_id)
+    local cell = world_grid[cell_id]
+    return cell and cell.tileID ~= hash("empty")
+end
+
+local function find_first_walkable_cell(world_grid)
+    for cell_id, cell in ipairs(world_grid) do
+        if cell.tileID ~= hash("empty") then
+            return cell_id
+        end
+    end
+    return nil
+end
+
+local function set_human_selected_visual(is_selected)
+    local tint = HUMAN_TINT_DEFAULT
+    if is_selected then
+        tint = HUMAN_TINT_SELECTED
+    end
+    go.set("/human#sprite", "tint", tint)
+end
+
+local function set_human_scale(scale_x, scale_y)
+    go.set_scale(vmath.vector3(scale_x, scale_y, 1), "/human")
+end
+
+local function get_human_world_pos_for_cell(cell)
+    local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
+    -- Keep feet near the floor: 10px above each cell's bottom boundary.
+    y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+    return x, y
+end
+
+local function move_human_to_cell(self, cell_id)
+    local old_cell_id = self.human_cell_id
+    if old_cell_id and self.world_grid[old_cell_id] then
+        self.world_grid[old_cell_id].isOccupied = hash("empty")
+    end
+
+    self.human_cell_id = cell_id
+    self.world_grid[cell_id].isOccupied = hash("human")
+
+    local x, y = get_human_world_pos_for_cell(self.world_grid[cell_id])
+    go.set_position(vmath.vector3(x, y, 0.5), "/human")
+end
+
+local function spawn_human_unit(self)
+    local spawn_cell_id = find_first_walkable_cell(self.world_grid)
+    if not spawn_cell_id then
+        print("No walkable cell found for human spawn.")
+        return
+    end
+
+    self.human_cell_id = nil
+    self.human_is_selected = false
+    self.human_is_moving = false
+    self.human_move_path = nil
+    self.human_move_path_index = 0
+    self.human_anim_phase = 0
+
+    move_human_to_cell(self, spawn_cell_id)
+    set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+    set_human_selected_visual(false)
+    print("Human spawned on cell: " .. spawn_cell_id)
+end
+
+local function begin_human_path_move(self, path)
+    if not path or #path < 2 then
+        self.human_is_moving = false
+        self.human_move_path = nil
+        self.human_move_path_index = 0
+        return
+    end
+
+    self.human_is_moving = true
+    self.human_move_path = path
+    self.human_move_path_index = 2 -- first element is current cell
+    self.human_anim_phase = 0
+end
+
+local function update_human_movement(self, dt)
+    if not self.human_is_moving or not self.human_move_path then
+        return
+    end
+
+    local target_cell_id = self.human_move_path[self.human_move_path_index]
+    if not target_cell_id then
+        self.human_is_moving = false
+        self.human_move_path = nil
+        self.human_move_path_index = 0
+        set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        return
+    end
+
+    local target_x, target_y = get_human_world_pos_for_cell(self.world_grid[target_cell_id])
+    local current_pos = go.get_position("/human")
+    local dx = target_x - current_pos.x
+    local dy = target_y - current_pos.y
+    local distance = math.sqrt(dx * dx + dy * dy)
+    local step = HUMAN_MOVE_SPEED * dt
+
+    self.human_anim_phase = (self.human_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+    local ping = math.sin(self.human_anim_phase)
+    local scale_x = HUMAN_VISUAL_SCALE
+    local scale_y = HUMAN_VISUAL_SCALE
+    if math.abs(dx) >= math.abs(dy) then
+        scale_x = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+    else
+        scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+    end
+    set_human_scale(scale_x, scale_y)
+
+    if distance <= step then
+        go.set_position(vmath.vector3(target_x, target_y, 0.5), "/human")
+        move_human_to_cell(self, target_cell_id)
+        self.human_move_path_index = self.human_move_path_index + 1
+
+        if self.human_move_path_index > #self.human_move_path then
+            self.human_is_moving = false
+            self.human_move_path = nil
+            self.human_move_path_index = 0
+            set_human_scale(HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            print("Human move complete on cell: " .. self.human_cell_id)
+        end
+    else
+        local nx = current_pos.x + (dx / distance) * step
+        local ny = current_pos.y + (dy / distance) * step
+        go.set_position(vmath.vector3(nx, ny, 0.5), "/human")
+    end
+end
+
+local function handle_human_click_flow(self, clicked_cell_id)
+    if not self.human_cell_id then
+        return false
+    end
+
+    if self.human_is_moving then
+        print("Human is moving. Wait for movement to finish.")
+        return true
+    end
+
+    if clicked_cell_id == self.human_cell_id then
+        self.human_is_selected = not self.human_is_selected
+        set_human_selected_visual(self.human_is_selected)
+        self.selected_start_cell = nil
+        if self.human_is_selected then
+            print("Human selected. Click destination cell.")
+        else
+            print("Human deselected.")
+        end
+        return true
+    end
+
+    if self.human_is_selected then
+        if not is_walkable_cell(self.world_grid, clicked_cell_id) then
+            print("Destination is VOID. Choose a valid destination.")
+            return true
+        end
+
+        local path, total_cost = find_path(self.world_grid, self.human_cell_id, clicked_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        if path then
+            print("Human route selected:")
+            print_path_debug(path, total_cost)
+            highlight_path(self, path)
+            begin_human_path_move(self, path)
+        else
+            print("No path found for human to cell: " .. clicked_cell_id)
+        end
+
+        self.human_is_selected = false
+        set_human_selected_visual(false)
+        return true
+    end
+
+    return false
+end
+
 local function process_cell_selection(self, clicked_cell_id)
     local cell = self.world_grid[clicked_cell_id]
     if cell.tileID == hash("empty") then
@@ -1045,6 +1229,7 @@ function init(self)
     spawn_visuals(self)
     self.selected_start_cell = nil
     self.path_highlight_cells = {}
+    spawn_human_unit(self)
 
     print("=== Initialization Complete ===")
 
@@ -1059,6 +1244,8 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    update_human_movement(self, dt)
+
     if not self.is_panning then
         local speed = math.sqrt(self.pan_velocity_x * self.pan_velocity_x + self.pan_velocity_y * self.pan_velocity_y)
         if speed > self.pan_inertia_min_speed then
@@ -1097,7 +1284,10 @@ function on_input(self, action_id, action)
             if not self.did_drag then
                 local clicked_cell_id = handle_cell_click(action, self.camera_pos, self.camera_zoom)
                 if clicked_cell_id then
-                    process_cell_selection(self, clicked_cell_id)
+                    local handled_by_human = handle_human_click_flow(self, clicked_cell_id)
+                    if not handled_by_human then
+                        process_cell_selection(self, clicked_cell_id)
+                    end
                 end
             end
             self.is_panning = false

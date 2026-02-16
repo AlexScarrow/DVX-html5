@@ -28,10 +28,14 @@ local SCREEN_HEIGHT = 720
 local visual_scale = 1 -- Keep visuals in the same unit space as world_grid
 local cell_objects = {}
 local tile_objects = {}
+local MOVEMENT_PROFILE_HUMAN = "human"
+local MOVEMENT_PROFILE_ALIEN_VENT = "alien_vent"
 local COLOR_DEFAULT = vmath.vector4(1, 1, 1, 1)
 local COLOR_PATH = vmath.vector4(1, 1, 0.35, 1)
 local COLOR_START = vmath.vector4(0.3, 1, 0.3, 1)
 local COLOR_END = vmath.vector4(1, 0.35, 0.35, 1)
+local CAMERA_EDGE_PADDING_X = CELL_WIDTH * 0.5
+local CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
 
 
 
@@ -260,9 +264,10 @@ function get_adjacent_cell(cell_id, direction)
 end
 
 -- Get all valid adjacent cells (4-directional)
-function get_neighbors(cell_id, world_grid)
+function get_neighbors(cell_id, world_grid, movement_profile, path_context)
     local neighbors = {}
     local directions = {"right", "left", "up", "down"}
+    movement_profile = movement_profile or MOVEMENT_PROFILE_HUMAN
 
     for _, dir in ipairs(directions) do
         local adj_id = get_adjacent_cell(cell_id, dir)
@@ -298,7 +303,101 @@ function get_neighbors(cell_id, world_grid)
         end
     end
 
+    -- FUTURE HOOK (not active yet):
+    -- For alien vent-capable pathfinding, append additional neighbor edges here.
+    -- That lets aliens choose either:
+    -- 1) regular cell-to-cell movement (already in neighbors table), or
+    -- 2) vent transition edges (once implemented).
+    --
+    -- Example future use:
+    -- if movement_profile == MOVEMENT_PROFILE_ALIEN_VENT then
+    --     local vent_neighbors = get_vent_neighbors_for_path(cell_id, world_grid, path_context)
+    --     for _, vent_neighbor in ipairs(vent_neighbors) do
+    --         table.insert(neighbors, vent_neighbor)
+    --     end
+    -- end
+
     return neighbors
+end
+
+-- =============================================================================
+-- FUTURE: VENT PATHFINDING HOOKS (SCaffold ONLY, NOT ACTIVE YET)
+-- =============================================================================
+--[[
+    Design intent:
+    - Humans use normal adjacency edges only.
+    - Aliens can use normal edges + optional vent transition edges.
+    - Techie can "seal" vents so alien vent graph updates dynamically.
+]]
+
+local function object_is_vent(obj)
+    return obj and obj.name == hash("vent")
+end
+
+local function cell_has_active_vent(cell)
+    if not cell then
+        return false
+    end
+
+    local candidates = { cell.object1, cell.object2, cell.object3 }
+    for _, obj in ipairs(candidates) do
+        if object_is_vent(obj) then
+            -- Future rule: treat sealed vents as inactive.
+            -- Expected schema later: obj.isSealed == true/false
+            if obj.isSealed ~= true then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function get_active_vent_cell_ids(world_grid)
+    local vent_cells = {}
+    for cell_id, cell in ipairs(world_grid) do
+        if cell_has_active_vent(cell) then
+            table.insert(vent_cells, cell_id)
+        end
+    end
+    return vent_cells
+end
+
+local function manhattan_distance_by_id(from_id, to_id)
+    local x1, y1 = id_to_coords(from_id)
+    local x2, y2 = id_to_coords(to_id)
+    return math.abs(x2 - x1) + math.abs(y2 - y1)
+end
+
+local function get_nearest_active_vent(from_cell_id, world_grid)
+    local vents = get_active_vent_cell_ids(world_grid)
+    local nearest_id = nil
+    local best_dist = math.huge
+
+    for _, vent_id in ipairs(vents) do
+        if vent_id ~= from_cell_id then
+            local d = manhattan_distance_by_id(from_cell_id, vent_id)
+            if d < best_dist then
+                best_dist = d
+                nearest_id = vent_id
+            end
+        end
+    end
+
+    return nearest_id
+end
+
+local function get_vent_neighbors_for_path(cell_id, world_grid, path_context)
+    -- Placeholder only; intentionally returns no extra neighbors for now.
+    -- Later this should return entries shaped like:
+    --   { id = <target_cell_id>, cost = <vent_travel_cost> }
+    -- and be appended inside get_neighbors() for alien movement profile.
+    --
+    -- Suggested future behavior:
+    -- - If current cell has active vent, allow jump to nearest active vent.
+    -- - If multiple vent choices are desired, return more than one edge.
+    -- - Respect sealed-vent state (Techie interaction) dynamically.
+    return {}
 end
 
 -- =============================================================================
@@ -489,7 +588,7 @@ function heuristic(from_id, to_id)
     return math.abs(x2 - x1) + math.abs(y2 - y1)  -- Manhattan distance
 end
 
-function find_path(world_grid, start_id, end_id, max_action_points)
+function find_path(world_grid, start_id, end_id, max_action_points, movement_profile, path_context)
     if not world_grid[start_id] or not world_grid[end_id] then
         return nil
     end
@@ -497,6 +596,8 @@ function find_path(world_grid, start_id, end_id, max_action_points)
     if world_grid[end_id].tileID == hash("empty") then
         return nil  -- Can't path to VOID cell
     end
+
+    movement_profile = movement_profile or MOVEMENT_PROFILE_HUMAN
 
     local open_set = { start_id }
     local came_from = {}
@@ -547,7 +648,7 @@ function find_path(world_grid, start_id, end_id, max_action_points)
         table.remove(open_set, current_index)
 
         -- Check neighbors
-        local neighbors = get_neighbors(current, world_grid)
+        local neighbors = get_neighbors(current, world_grid, movement_profile, path_context)
         for _, neighbor_data in ipairs(neighbors) do
             local neighbor_id = neighbor_data.id
             local move_cost = neighbor_data.cost
@@ -703,6 +804,106 @@ local function highlight_path(self, path)
     end
 end
 
+local function clamp(value, min_value, max_value)
+    if value < min_value then
+        return min_value
+    end
+    if value > max_value then
+        return max_value
+    end
+    return value
+end
+
+local function get_camera_clamped_pos(camera_pos, zoom)
+    local world_w = CELL_WIDTH * GRID_COLS
+    local world_h = CELL_HEIGHT * GRID_ROWS
+    local half_view_w = (SCREEN_WIDTH * 0.5) / zoom
+    local half_view_h = (SCREEN_HEIGHT * 0.5) / zoom
+
+    local min_x = half_view_w - CAMERA_EDGE_PADDING_X
+    local max_x = world_w - half_view_w + CAMERA_EDGE_PADDING_X
+    local min_y = half_view_h - CAMERA_EDGE_PADDING_Y
+    local max_y = world_h - half_view_h + CAMERA_EDGE_PADDING_Y
+
+    local clamped_x = camera_pos.x
+    local clamped_y = camera_pos.y
+
+    if min_x > max_x then
+        clamped_x = world_w * 0.5
+    else
+        clamped_x = clamp(camera_pos.x, min_x, max_x)
+    end
+
+    if min_y > max_y then
+        clamped_y = world_h * 0.5
+    else
+        clamped_y = clamp(camera_pos.y, min_y, max_y)
+    end
+
+    return vmath.vector3(clamped_x, clamped_y, camera_pos.z)
+end
+
+local function apply_camera_transform(self)
+    self.camera_pos = get_camera_clamped_pos(self.camera_pos, self.camera_zoom)
+    go.set_position(self.camera_pos, "/camera")
+    go.set("/camera#camera", "orthographic_zoom", self.camera_zoom)
+end
+
+local function zoom_camera_at_screen_point(self, target_zoom, screen_x, screen_y)
+    local old_zoom = self.camera_zoom
+    if target_zoom == old_zoom then
+        return
+    end
+
+    -- Keep the world point under cursor fixed during zoom.
+    local world_x, world_y = screen_to_world(screen_x, screen_y, self.camera_pos, old_zoom)
+    self.camera_zoom = target_zoom
+    self.camera_pos.x = world_x - ((screen_x - SCREEN_WIDTH * 0.5) / self.camera_zoom)
+    self.camera_pos.y = world_y - ((screen_y - SCREEN_HEIGHT * 0.5) / self.camera_zoom)
+    apply_camera_transform(self)
+end
+
+local function process_cell_selection(self, clicked_cell_id)
+    local cell = self.world_grid[clicked_cell_id]
+    if cell.tileID == hash("empty") then
+        print("Clicked VOID cell. Select a valid cell.")
+        return
+    end
+
+    if not self.selected_start_cell then
+        clear_path_visuals(self)
+        self.selected_start_cell = clicked_cell_id
+        apply_cell_tint(clicked_cell_id, COLOR_START)
+        table.insert(self.path_highlight_cells, clicked_cell_id)
+        print("Start cell selected: " .. clicked_cell_id .. ". Click destination cell.")
+    else
+        local start_id = self.selected_start_cell
+        local end_id = clicked_cell_id
+
+        if start_id == end_id then
+            clear_path_visuals(self)
+            self.selected_start_cell = nil
+            print("Selection canceled (same start/destination cell).")
+            return
+        end
+
+        local path, total_cost = find_path(self.world_grid, start_id, end_id, nil)
+        if path then
+            print_path_debug(path, total_cost)
+            highlight_path(self, path)
+        else
+            clear_path_visuals(self)
+            apply_cell_tint(start_id, COLOR_START)
+            table.insert(self.path_highlight_cells, start_id)
+            apply_cell_tint(end_id, COLOR_END)
+            table.insert(self.path_highlight_cells, end_id)
+            print("No valid path from " .. start_id .. " to " .. end_id)
+        end
+
+        self.selected_start_cell = nil
+    end
+end
+
 
     -- =============================================================================
     -- VISUAL RENDERING
@@ -813,13 +1014,25 @@ function init(self)
     self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     self.camera_zoom = 1.0
     self.camera_min_zoom = 0.5
-    self.camera_max_zoom = 2.0
+    self.camera_max_zoom = 1.0
+    self.drag_threshold_px = 12
+    self.is_panning = false
+    self.did_drag = false
+    self.drag_start_screen_x = 0
+    self.drag_start_screen_y = 0
+    self.drag_start_camera_pos = self.camera_pos
+    self.last_pan_screen_x = 0
+    self.last_pan_screen_y = 0
+    self.pan_velocity_x = 0
+    self.pan_velocity_y = 0
+    self.pan_inertia_damping = 8
+    self.pan_inertia_min_speed = 3
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")
 
-    -- Keep the actual camera GO aligned with the world center
-    go.set_position(self.camera_pos, "/camera")
+    -- Keep camera position/zoom and click conversion in the same space
+    apply_camera_transform(self)
 
     -- Enable input
     msg.post(".", "acquire_input_focus")
@@ -846,8 +1059,22 @@ end
 -- =============================================================================
 
 function update(self, dt)
-    -- Update camera position
-    -- (Camera scrolling can be added here)
+    if not self.is_panning then
+        local speed = math.sqrt(self.pan_velocity_x * self.pan_velocity_x + self.pan_velocity_y * self.pan_velocity_y)
+        if speed > self.pan_inertia_min_speed then
+            self.camera_pos.x = self.camera_pos.x + self.pan_velocity_x * dt
+            self.camera_pos.y = self.camera_pos.y + self.pan_velocity_y * dt
+
+            local decay = math.exp(-self.pan_inertia_damping * dt)
+            self.pan_velocity_x = self.pan_velocity_x * decay
+            self.pan_velocity_y = self.pan_velocity_y * decay
+
+            apply_camera_transform(self)
+        else
+            self.pan_velocity_x = 0
+            self.pan_velocity_y = 0
+        end
+    end
 end
 
 -- =============================================================================
@@ -857,53 +1084,67 @@ end
 function on_input(self, action_id, action)
     if action_id == hash("touch") then
         if action.pressed then
-            -- Handle cell click
-            local clicked_cell_id = handle_cell_click(action, self.camera_pos, self.camera_zoom)
-            if clicked_cell_id then
-                local cell = self.world_grid[clicked_cell_id]
-                if cell.tileID == hash("empty") then
-                    print("Clicked VOID cell. Select a valid cell.")
-                    return
+            self.is_panning = true
+            self.did_drag = false
+            self.drag_start_screen_x = action.x
+            self.drag_start_screen_y = action.y
+            self.drag_start_camera_pos = vmath.vector3(self.camera_pos)
+            self.last_pan_screen_x = action.x
+            self.last_pan_screen_y = action.y
+            self.pan_velocity_x = 0
+            self.pan_velocity_y = 0
+        elseif action.released then
+            if not self.did_drag then
+                local clicked_cell_id = handle_cell_click(action, self.camera_pos, self.camera_zoom)
+                if clicked_cell_id then
+                    process_cell_selection(self, clicked_cell_id)
                 end
+            end
+            self.is_panning = false
+        elseif self.is_panning and action.x and action.y then
+            local dx = action.x - self.drag_start_screen_x
+            local dy = action.y - self.drag_start_screen_y
+            local drag_distance = math.sqrt(dx * dx + dy * dy)
 
-                if not self.selected_start_cell then
-                    clear_path_visuals(self)
-                    self.selected_start_cell = clicked_cell_id
-                    apply_cell_tint(clicked_cell_id, COLOR_START)
-                    table.insert(self.path_highlight_cells, clicked_cell_id)
-                    print("Start cell selected: " .. clicked_cell_id .. ". Click destination cell.")
-                else
-                    local start_id = self.selected_start_cell
-                    local end_id = clicked_cell_id
+            if drag_distance >= self.drag_threshold_px then
+                self.did_drag = true
+            end
 
-                    if start_id == end_id then
-                        clear_path_visuals(self)
-                        self.selected_start_cell = nil
-                        print("Selection canceled (same start/destination cell).")
-                        return
-                    end
+            if self.did_drag then
+                -- Convert screen drag to world offset (zoom-aware).
+                local old_cam_x = self.camera_pos.x
+                local old_cam_y = self.camera_pos.y
+                self.camera_pos.x = self.drag_start_camera_pos.x - (dx / self.camera_zoom)
+                self.camera_pos.y = self.drag_start_camera_pos.y - (dy / self.camera_zoom)
+                apply_camera_transform(self)
 
-                    local path, total_cost = find_path(self.world_grid, start_id, end_id, nil)
-                    if path then
-                        print_path_debug(path, total_cost)
-                        highlight_path(self, path)
-                    else
-                        clear_path_visuals(self)
-                        apply_cell_tint(start_id, COLOR_START)
-                        table.insert(self.path_highlight_cells, start_id)
-                        apply_cell_tint(end_id, COLOR_END)
-                        table.insert(self.path_highlight_cells, end_id)
-                        print("No valid path from " .. start_id .. " to " .. end_id)
-                    end
+                -- Approximate world-space pan velocity for release inertia.
+                local frame_dx = action.x - self.last_pan_screen_x
+                local frame_dy = action.y - self.last_pan_screen_y
+                self.pan_velocity_x = -(frame_dx / self.camera_zoom) * 60
+                self.pan_velocity_y = -(frame_dy / self.camera_zoom) * 60
+                self.last_pan_screen_x = action.x
+                self.last_pan_screen_y = action.y
 
-                    self.selected_start_cell = nil
+                -- If clamped by bounds, don't keep adding outward velocity.
+                if self.camera_pos.x == old_cam_x then
+                    self.pan_velocity_x = 0
+                end
+                if self.camera_pos.y == old_cam_y then
+                    self.pan_velocity_y = 0
                 end
             end
         end
     elseif action_id == hash("zoom_in") then
-        self.camera_zoom = math.min(self.camera_zoom + 0.1, self.camera_max_zoom)
+        local target_zoom = math.min(self.camera_zoom + 0.1, self.camera_max_zoom)
+        local focus_x = action.x or (SCREEN_WIDTH * 0.5)
+        local focus_y = action.y or (SCREEN_HEIGHT * 0.5)
+        zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
     elseif action_id == hash("zoom_out") then
-        self.camera_zoom = math.max(self.camera_zoom - 0.1, self.camera_min_zoom)
+        local target_zoom = math.max(self.camera_zoom - 0.1, self.camera_min_zoom)
+        local focus_x = action.x or (SCREEN_WIDTH * 0.5)
+        local focus_y = action.y or (SCREEN_HEIGHT * 0.5)
+        zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
     end
 end
 

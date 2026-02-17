@@ -103,6 +103,7 @@ local ALIEN_REVEAL_WEIGHT_CANNON = 1
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 1
 local ALIEN_REVEAL_WEIGHT_SPITTER = 1
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
+local TILE_OPACITY = 0.5
 local CLASS_ROLE_HOOKS = {
     [UNIT_CLASS_SARGE] = { can_donate_ap = true, can_fix = false, can_heal = false, heavy_weapon = false },
     [UNIT_CLASS_TECHIE] = { can_donate_ap = false, can_fix = true, can_heal = false, heavy_weapon = false },
@@ -2417,24 +2418,25 @@ end
         print("Creating visual representation...")
         local spawned_count = 0
         cell_objects = {}
+        tile_objects = {}
 
---         --Spawn tile sprites first (background)
---         local selected_level = self.level_library[1]
--- 
---         for _, placement in ipairs(selected_level) do
---             local center_x = (placement.x - 1) * CELL_WIDTH * visual_scale
---             local center_y = (placement.y - 1) * CELL_HEIGHT * visual_scale
---             local pos = vmath.vector3(center_x, center_y, -0.1)
--- 
---             local id = factory.create("#tile_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
---             if id then
---                 local anim = "tile_" .. placement.tile
---                 msg.post(msg.url(nil, id, "sprite"), "play_animation", {id = hash(anim)})
---                 table.insert(tile_objects, id)
---             end
---         end
--- 
---         print("Spawned " .. #tile_objects .. " tiles")
+        -- Spawn tile sprites first (background, 50% opacity).
+        local selected_level = self.level_library[1]
+        for _, placement in ipairs(selected_level) do
+            local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
+            local pos = vmath.vector3(center_x, center_y, 0)
+
+            local id = factory.create("/tile_factory#tile_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
+            if id then
+                local anim = "tile_" .. placement.tile
+                msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = hash(anim) })
+                go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, TILE_OPACITY))
+                table.insert(tile_objects, id)
+            else
+                print("Tile factory create failed for: " .. placement.tile)
+            end
+        end
+        print("Spawned " .. #tile_objects .. " tiles")
 
         -- Spawn cell sprites (foreground debug grid)
         for _, cell in ipairs(self.world_grid) do

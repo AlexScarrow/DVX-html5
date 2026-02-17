@@ -117,6 +117,16 @@ embedded_instances {
   }
 }
 embedded_instances {
+  id: "tile_factory"
+  data: "embedded_components {\n"
+  "  id: \"tile_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/tile.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "cell_factory"
   data: "embedded_components {\n"
   "  id: \"cell_factory\"\n"

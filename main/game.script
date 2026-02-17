@@ -2751,11 +2751,11 @@ end
         cell_objects = {}
         tile_objects = {}
 
-        -- Spawn tile sprites first (background, 50% opacity).
+        -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[1]
         for _, placement in ipairs(selected_level) do
             local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
-            local pos = vmath.vector3(center_x, center_y, 0)
+            local pos = vmath.vector3(center_x, center_y, 0.02)
 
             local id = factory.create("/tile_factory#tile_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
             if id then
@@ -2769,13 +2769,13 @@ end
         end
         print("Spawned " .. #tile_objects .. " tiles")
 
-        -- Spawn cell sprites (foreground debug grid)
+        -- Spawn cell sprites (debug grid under semi-transparent tiles)
         for _, cell in ipairs(self.world_grid) do
             print("making visual cell")
             if cell.tileID ~= hash("empty") then  -- Only spawn cells that are part of tiles
             --if true then  -- spawn ALL CELLS!
                 local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
-                local pos = vmath.vector3(x, y, 0.02)
+                local pos = vmath.vector3(x, y, 0)
 
                 -- Determine animation
                 local animation = "cell_open"

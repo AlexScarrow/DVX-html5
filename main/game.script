@@ -28,6 +28,7 @@ local SCREEN_HEIGHT = 720
 local visual_scale = 1 -- Keep visuals in the same unit space as world_grid
 local cell_objects = {}
 local tile_objects = {}
+local loot_objects = {}
 local MOVEMENT_PROFILE_HUMAN = "human"
 local MOVEMENT_PROFILE_ALIEN_VENT = "alien_vent"
 local COLOR_DEFAULT = vmath.vector4(1, 1, 1, 1)
@@ -80,6 +81,21 @@ local UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 local UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
 local UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
 local UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
+local LOOT_UI = {
+    button_color = vmath.vector4(0.55, 0.36, 0.18, 1),
+    ammo_color = vmath.vector4(0.65, 0.65, 0.65, 1),
+    meds_color = vmath.vector4(0.95, 0.25, 0.25, 1),
+    material_color = vmath.vector4(0.55, 0.36, 0.18, 1),
+    button_size = 44,
+    button_x = UI_PANEL_X + (UI_PANEL_W * 0.5) - 34,
+    button_y = UI_PANEL_Y - (UI_PANEL_H * 0.5) + 34,
+    marker_size = 12,
+    marker_z = 0.04,
+    pickup_blip_size = 20,
+    pickup_blip_speed = 950,
+    ap_cost = 1
+}
+local LOOT_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
 local HUMAN_TINT_TECHIE = vmath.vector4(0.45, 0.7, 1, 1)
 local HUMAN_TINT_MEDIC = vmath.vector4(1, 0.45, 0.45, 1)
@@ -159,6 +175,7 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         accessDown = true,
         isPowered = false,
         isOccupied = hash("empty"),
+        hasLoot = false,
         object1 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
         object2 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
         object3 = { name = hash("empty"), isFixed = false, isDependentOn = {} }
@@ -195,6 +212,7 @@ function create_tile_prototype(tile_id)
             accessDown = true,
             isPowered = false,
             isOccupied = hash("empty"),
+            hasLoot = false,
             object1 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
             object2 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
             object3 = { name = hash("empty"), isFixed = false, isDependentOn = {} }
@@ -582,6 +600,14 @@ end
 function create_tile_library()
     local library = {}
 
+    local function assign_random_loot_cell(tile)
+        for i = 1, 9 do
+            tile.cells[i].hasLoot = false
+        end
+        local idx = math.random(1, 9)
+        tile.cells[idx].hasLoot = true
+    end
+
 ------ Example Tile 1: "corridor" - simple passage--------------------------------------------------
     local corridor = create_tile_prototype("corridor")
     -- Set all cells to be passable corridors
@@ -608,6 +634,7 @@ function create_tile_library()
     --corridor.cells[4].accessRight = false  -- Wall on right of cell 4
     --corridor.cells[6].accessRight = false  -- Wall on right of cell 6
 
+    assign_random_loot_cell(corridor)
     library["corridor"] = corridor
 
 ------ Example Tile 2: "canteen" - open room----------------------------------------------------------------
@@ -632,6 +659,7 @@ function create_tile_library()
     canteen.cells[2].accessDown = false   -- Wall on bottom of cell 2
     canteen.cells[8].accessDown = false   -- Wall on bottom of cell 8
     
+    assign_random_loot_cell(canteen)
     library["canteen"] = canteen
 
 ------ Example Tile 3: "armoury" - room with objects--------------------------------------------------------
@@ -657,6 +685,7 @@ function create_tile_library()
         isFixed = false,
         isDependentOn = {}
     }
+    assign_random_loot_cell(armoury)
     library["armoury"] = armoury
 
 ------ Add more tiles as needed...--------------------------------------------------------------------------
@@ -717,6 +746,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
     -- First, ensure all cells start as "empty" (VOID)
     for i = 1, #world_grid do
         world_grid[i].tileID = hash("empty")
+        world_grid[i].hasLoot = false
     end
 
     -- Place each tile from the level design
@@ -753,6 +783,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.accessDown = tile_cell.accessDown
                         world_cell.isPowered = tile_cell.isPowered
                         world_cell.isOccupied = tile_cell.isOccupied
+                        world_cell.hasLoot = tile_cell.hasLoot == true
                         world_cell.object1 = tile_cell.object1
                         world_cell.object2 = tile_cell.object2
                         world_cell.object3 = tile_cell.object3
@@ -1814,6 +1845,7 @@ local function create_squad_units()
             current_ammo = 4,
             backpack_slots = 12,
             backpack_used = 0,
+            backpack_items = {},
             command_points = 0,
             max_command_points = 10,
             cell_id = nil,
@@ -1838,6 +1870,7 @@ local function create_squad_units()
             current_ammo = 2,
             backpack_slots = 12,
             backpack_used = 0,
+            backpack_items = {},
             command_points = 0,
             max_command_points = 0,
             cell_id = nil,
@@ -1862,6 +1895,7 @@ local function create_squad_units()
             current_ammo = 3,
             backpack_slots = 12,
             backpack_used = 0,
+            backpack_items = {},
             command_points = 0,
             max_command_points = 0,
             cell_id = nil,
@@ -1886,6 +1920,7 @@ local function create_squad_units()
             current_ammo = 6,
             backpack_slots = 12,
             backpack_used = 0,
+            backpack_items = {},
             command_points = 0,
             max_command_points = 0,
             cell_id = nil,
@@ -2197,7 +2232,8 @@ local function initialize_unit_ui(self)
         ap_pips = {},
         hp_pips = {},
         ammo_pips = {},
-        backpack_slots = {}
+        backpack_slots = {},
+        loot_button = nil
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
@@ -2211,6 +2247,7 @@ local function initialize_unit_ui(self)
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
+    self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
 
     print(string.format(
         "UI panel pixels: panel=%dx%d, portrait=%dx%d, footer=%dx%d, pip=%dx%d (max %d), backpack slots=%d (%dx%d each, %dx%d grid)",
@@ -2235,6 +2272,7 @@ local function set_ui_hidden(self)
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
+    set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
 end
 
 local function get_selected_unit(self)
@@ -2247,6 +2285,33 @@ local function get_selected_unit(self)
         end
     end
     return nil
+end
+
+LOOT_RUNTIME.get_backpack_item_color = function(item_type)
+    if item_type == "ammo" then
+        return LOOT_UI.ammo_color
+    elseif item_type == "meds" then
+        return LOOT_UI.meds_color
+    elseif item_type == "material" then
+        return LOOT_UI.material_color
+    end
+    return UI_COLOR_SLOT
+end
+
+LOOT_RUNTIME.get_backpack_slot_screen_pos = function(slot_index)
+    local col = (slot_index - 1) % UI_BACKPACK_COLS
+    local row = math.floor((slot_index - 1) / UI_BACKPACK_COLS)
+    local slot_x = UI_BACKPACK_START_X + col * (UI_BACKPACK_SLOT_SIZE + UI_BACKPACK_SLOT_GAP)
+    local slot_y = UI_BACKPACK_START_Y - row * (UI_BACKPACK_SLOT_SIZE + UI_BACKPACK_SLOT_GAP)
+    return slot_x, slot_y
+end
+
+LOOT_RUNTIME.is_point_in_loot_button = function(screen_x, screen_y)
+    local half = LOOT_UI.button_size * 0.5
+    return screen_x >= (LOOT_UI.button_x - half)
+        and screen_x <= (LOOT_UI.button_x + half)
+        and screen_y >= (LOOT_UI.button_y - half)
+        and screen_y <= (LOOT_UI.button_y + half)
 end
 
 local function update_selected_unit_ui(self)
@@ -2278,12 +2343,35 @@ local function update_selected_unit_ui(self)
 
     local total_slots = UI_BACKPACK_COLS * UI_BACKPACK_ROWS
     for i = 1, total_slots do
-        local col = (i - 1) % UI_BACKPACK_COLS
-        local row = math.floor((i - 1) / UI_BACKPACK_COLS)
-        local slot_x = UI_BACKPACK_START_X + col * (UI_BACKPACK_SLOT_SIZE + UI_BACKPACK_SLOT_GAP)
-        local slot_y = UI_BACKPACK_START_Y - row * (UI_BACKPACK_SLOT_SIZE + UI_BACKPACK_SLOT_GAP)
-        local slot_color = (i <= unit.backpack_used) and UI_COLOR_SLOT_ACTIVE or UI_COLOR_SLOT
+        local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(i)
+        local item_type = unit.backpack_items and unit.backpack_items[i] or nil
+        local slot_color = item_type and LOOT_RUNTIME.get_backpack_item_color(item_type) or UI_COLOR_SLOT
         set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, 0.81, slot_color, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+    end
+
+    local current_cell = unit.cell_id and self.world_grid and self.world_grid[unit.cell_id] or nil
+    if current_cell and current_cell.hasLoot then
+        set_ui_square_transform(
+            self,
+            self.ui.loot_button,
+            LOOT_UI.button_x,
+            LOOT_UI.button_y,
+            0.82,
+            LOOT_UI.button_color,
+            LOOT_UI.button_size,
+            LOOT_UI.button_size
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.loot_button,
+            -9999,
+            -9999,
+            0.82,
+            vmath.vector4(0, 0, 0, 0),
+            LOOT_UI.button_size,
+            LOOT_UI.button_size
+        )
     end
 end
 
@@ -2293,6 +2381,146 @@ local function is_point_in_ui_panel(screen_x, screen_y)
     local min_y = UI_PANEL_Y - UI_PANEL_H * 0.5
     local max_y = UI_PANEL_Y + UI_PANEL_H * 0.5
     return screen_x >= min_x and screen_x <= max_x and screen_y >= min_y and screen_y <= max_y
+end
+
+LOOT_RUNTIME.clear_loot_marker = function(cell_id)
+    local marker = loot_objects[cell_id]
+    if marker then
+        go.delete(marker)
+        loot_objects[cell_id] = nil
+    end
+end
+
+LOOT_RUNTIME.refresh_loot_markers = function(self)
+    for cell_id, marker in pairs(loot_objects) do
+        if marker then
+            go.delete(marker)
+        end
+        loot_objects[cell_id] = nil
+    end
+
+    if not self.world_grid then
+        return
+    end
+
+    for cell_id, cell in ipairs(self.world_grid) do
+        if cell.hasLoot and cell.tileID ~= hash("empty") then
+            local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
+            local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y, LOOT_UI.marker_z))
+            if marker_id then
+                go.set_scale(vmath.vector3(LOOT_UI.marker_size, LOOT_UI.marker_size, 1), marker_id)
+                go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                loot_objects[cell_id] = marker_id
+            end
+        end
+    end
+end
+
+LOOT_RUNTIME.spawn_loot_pickup_blip = function(self, from_cell_id, to_slot_index, item_type)
+    if not self.world_grid or not self.world_grid[from_cell_id] then
+        return
+    end
+
+    local from_cell = self.world_grid[from_cell_id]
+    local from_x, from_y = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+    local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(to_slot_index)
+    local to_x, to_y = screen_to_world(slot_x, slot_y, self.camera_pos, self.camera_zoom)
+
+    local blip_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.83))
+    if not blip_id then
+        return
+    end
+
+    local color = LOOT_RUNTIME.get_backpack_item_color(item_type)
+    go.set_scale(vmath.vector3(LOOT_UI.pickup_blip_size, LOOT_UI.pickup_blip_size, 1), blip_id)
+    go.set(msg.url(nil, blip_id, "sprite"), "tint", color)
+
+    table.insert(self.loot_pickup_blips, {
+        go_id = blip_id,
+        from = vmath.vector3(from_x, from_y, 0.83),
+        to = vmath.vector3(to_x, to_y, 0.83),
+        t = 0
+    })
+end
+
+LOOT_RUNTIME.update_loot_pickup_blips = function(self, dt)
+    if not self.loot_pickup_blips then
+        return
+    end
+
+    for i = #self.loot_pickup_blips, 1, -1 do
+        local blip = self.loot_pickup_blips[i]
+        if not blip.go_id then
+            table.remove(self.loot_pickup_blips, i)
+        else
+            local dx = blip.to.x - blip.from.x
+            local dy = blip.to.y - blip.from.y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            local travel_time = math.max(0.05, dist / LOOT_UI.pickup_blip_speed)
+            blip.t = math.min(1, blip.t + (dt / travel_time))
+            local px = blip.from.x + (dx * blip.t)
+            local py = blip.from.y + (dy * blip.t)
+            go.set_position(vmath.vector3(px, py, 0.83), blip.go_id)
+            if blip.t >= 1 then
+                go.delete(blip.go_id)
+                table.remove(self.loot_pickup_blips, i)
+            end
+        end
+    end
+end
+
+LOOT_RUNTIME.try_scavenge_selected_unit = function(self, screen_x, screen_y)
+    if not LOOT_RUNTIME.is_point_in_loot_button(screen_x, screen_y) then
+        return false
+    end
+
+    local unit = get_selected_unit(self)
+    if not unit or not unit.cell_id then
+        return true
+    end
+
+    local cell = self.world_grid and self.world_grid[unit.cell_id]
+    if not cell or not cell.hasLoot then
+        print("No loot available here.")
+        return true
+    end
+
+    if unit.current_ap < LOOT_UI.ap_cost then
+        print("Unable to scavenge: no AP")
+        return true
+    end
+
+    unit.current_ap = unit.current_ap - LOOT_UI.ap_cost
+
+    local roll_count = math.random(1, 3)
+    local capacity = unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
+    unit.backpack_items = unit.backpack_items or {}
+    local added = 0
+    local dropped = 0
+
+    for _ = 1, roll_count do
+        local loot_roll = math.random(1, 3)
+        local item_type = (loot_roll == 1 and "ammo") or (loot_roll == 2 and "meds") or "material"
+        if #unit.backpack_items < capacity then
+            table.insert(unit.backpack_items, item_type)
+            unit.backpack_used = #unit.backpack_items
+            LOOT_RUNTIME.spawn_loot_pickup_blip(self, unit.cell_id, #unit.backpack_items, item_type)
+            added = added + 1
+        else
+            dropped = dropped + 1
+        end
+    end
+
+    cell.hasLoot = false
+    LOOT_RUNTIME.clear_loot_marker(unit.cell_id)
+
+    print(string.format(
+        "%s scavenged loot: rolled=%d added=%d dropped=%d (AP -%d)",
+        unit.display_name, roll_count, added, dropped, LOOT_UI.ap_cost
+    ))
+
+    update_human_visual_state(self)
+    return true
 end
 
 local function update_human_ap_debug_label(self)
@@ -2408,6 +2636,8 @@ local function spawn_human_unit(self)
             unit.move_path_index = 0
             unit.anim_phase = 0
             unit.current_ap = unit.max_ap
+            unit.backpack_items = {}
+            unit.backpack_used = 0
 
             move_human_to_cell(self, unit, spawn_cells[i])
             set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
@@ -2758,6 +2988,7 @@ end
         local spawned_count = 0
         cell_objects = {}
         tile_objects = {}
+        loot_objects = {}
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[1]
@@ -2815,6 +3046,7 @@ end
         end
 
         print("Spawned " .. spawned_count .. " cells")
+        LOOT_RUNTIME.refresh_loot_markers(self)
     end--of spawn visuals fn
 
 
@@ -2904,6 +3136,7 @@ function init(self)
     self.spitter_attack_timer = 0
     self.spitter_attack_queue = {}
     self.spitter_projectiles = {}
+    self.loot_pickup_blips = {}
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
 
     print("=== Initialization Complete ===")
@@ -2923,6 +3156,7 @@ function update(self, dt)
     update_alien_movement(self, dt)
     update_spitter_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
+    LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
     update_human_visual_state(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
@@ -2965,6 +3199,9 @@ function on_input(self, action_id, action)
         elseif action.released then
             if not self.did_drag then
                 if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
+                    if LOOT_RUNTIME.try_scavenge_selected_unit(self, action.x, action.y) then
+                        return
+                    end
                     return
                 end
                 local world_x, world_y = screen_to_world(action.x, action.y, self.camera_pos, self.camera_zoom)

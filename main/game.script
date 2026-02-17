@@ -1562,6 +1562,14 @@ local function process_alien_turn(self)
         return
     end
 
+    -- Temporary turn rule: spawn one new blip every new turn.
+    local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
+    if #edge_cells > 0 then
+        local idx = math.random(1, #edge_cells)
+        spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+        print("Turn event: spawned 1 new blip")
+    end
+
     print("=== Alien Turn Start ===")
     for _, alien in ipairs(self.aliens) do
         local cfg = ALIEN_TYPE_CONFIG[alien.type]

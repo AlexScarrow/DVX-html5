@@ -99,9 +99,14 @@ local ALIEN_VENT_TRANSIT_AP_COST = 1
 local INITIAL_BLIP_COUNT = 3
 local ALIEN_MARKER_SIZE = 20
 local ALIEN_MOVE_SPEED = 320
+local SPITTER_MAX_RANGE_CELLS = 4
+local SPITTER_SHOT_AP_COST = 1
+local SPITTER_SHOT_INTERVAL_SECONDS = 0.5
+local SPITTER_PROJECTILE_SPEED = 900
+local SPITTER_PROJECTILE_SIZE = 8
 local ALIEN_REVEAL_WEIGHT_CANNON = 1
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 1
-local ALIEN_REVEAL_WEIGHT_SPITTER = 1
+local ALIEN_REVEAL_WEIGHT_SPITTER = 6 -- temp weighting for spitter-heavy testing
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
 local TILE_OPACITY = 0.5
 local CLASS_ROLE_HOOKS = {
@@ -114,7 +119,7 @@ local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = true, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
     [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
     [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
-    [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = 6, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
+    [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
     [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 6, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
 }
 
@@ -1224,6 +1229,29 @@ local function remove_dead_aliens(self)
     end
 end
 
+local function spawn_human_reaction_projectile(self, shooter_unit, target_alien)
+    if not shooter_unit or not shooter_unit.go_path or not target_alien or not target_alien.go_id then
+        return
+    end
+
+    local from = go.get_position(shooter_unit.go_path)
+    local to = go.get_position(target_alien.go_id)
+    local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from.x, from.y, 0.75))
+    if not projectile_id then
+        return
+    end
+
+    go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE, SPITTER_PROJECTILE_SIZE, 1), projectile_id)
+    go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+
+    table.insert(self.spitter_projectiles, {
+        go_id = projectile_id,
+        from = vmath.vector3(from.x, from.y + 20, 0.75),
+        to = vmath.vector3(to.x, to.y, 0.75),
+        t = 0
+    })
+end
+
 local function resolve_human_reaction_fire(self, alien)
     if not alien or alien.is_dead then
         return false
@@ -1250,6 +1278,7 @@ local function resolve_human_reaction_fire(self, alien)
                 fired_any = true
                 unit.current_ap = unit.current_ap - 1
                 unit.current_ammo = unit.current_ammo - 1
+                spawn_human_reaction_projectile(self, unit, alien)
                 local roll = math.random(0, 1)
                 if roll == 1 then
                     print(string.format("%s fired at alien #%d and HIT (alien eliminated)", unit.display_name, alien.id))
@@ -1266,6 +1295,213 @@ local function resolve_human_reaction_fire(self, alien)
     end
 
     return false
+end
+
+local function get_living_humans(self)
+    local living = {}
+    if not self.squad_units then
+        return living
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit.cell_id and unit.current_health and unit.current_health > 0 then
+            table.insert(living, unit)
+        end
+    end
+    return living
+end
+
+local function choose_spitter_target(self, alien)
+    local candidates = {}
+    local range_cells = alien.ranged_cells or SPITTER_MAX_RANGE_CELLS
+    for _, human in ipairs(get_living_humans(self)) do
+        local dist = heuristic(alien.cell_id, human.cell_id)
+        if dist <= range_cells and has_unobstructed_los(self.world_grid, alien.cell_id, human.cell_id) then
+            table.insert(candidates, { unit = human, dist = dist, hp = human.current_health })
+        end
+    end
+
+    if #candidates == 0 then
+        return nil
+    end
+
+    local nearest_dist = math.huge
+    for _, candidate in ipairs(candidates) do
+        if candidate.dist < nearest_dist then
+            nearest_dist = candidate.dist
+        end
+    end
+
+    local nearest = {}
+    for _, candidate in ipairs(candidates) do
+        if candidate.dist == nearest_dist then
+            table.insert(nearest, candidate)
+        end
+    end
+
+    local lowest_hp = math.huge
+    for _, candidate in ipairs(nearest) do
+        if candidate.hp < lowest_hp then
+            lowest_hp = candidate.hp
+        end
+    end
+
+    local best = {}
+    for _, candidate in ipairs(nearest) do
+        if candidate.hp == lowest_hp then
+            table.insert(best, candidate)
+        end
+    end
+
+    if #best == 1 then
+        return best[1].unit
+    end
+    return best[math.random(1, #best)].unit
+end
+
+local function spawn_spitter_projectile(self, alien, target_human)
+    if not alien.go_id or not target_human.go_path then
+        return
+    end
+
+    local from = go.get_position(alien.go_id)
+    local to = go.get_position(target_human.go_path)
+    local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from.x, from.y, 0.75))
+    if not projectile_id then
+        return
+    end
+
+    go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE, SPITTER_PROJECTILE_SIZE, 1), projectile_id)
+    go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+
+    table.insert(self.spitter_projectiles, {
+        go_id = projectile_id,
+        from = vmath.vector3(from.x, from.y, 0.75),
+        to = vmath.vector3(to.x, to.y + 20, 0.75),
+        t = 0
+    })
+end
+
+local function begin_spitter_attack_phase(self)
+    self.pending_spitter_attack_phase = true
+    self.spitter_attack_started = false
+    self.spitter_attack_timer = 0
+end
+
+local function start_spitter_attack_queue(self)
+    self.spitter_attack_queue = {}
+    if not self.aliens then
+        return
+    end
+
+    for _, alien in ipairs(self.aliens) do
+        if (not alien.is_dead) and alien.type == ALIEN_TYPE_SPITTER then
+            table.insert(self.spitter_attack_queue, {
+                alien_id = alien.id,
+                ap_left = alien.ap_max or 0
+            })
+        end
+    end
+end
+
+local function update_spitter_projectiles(self, dt)
+    if not self.spitter_projectiles then
+        return
+    end
+
+    for i = #self.spitter_projectiles, 1, -1 do
+        local p = self.spitter_projectiles[i]
+        if not p.go_id then
+            table.remove(self.spitter_projectiles, i)
+        else
+            local dx = p.to.x - p.from.x
+            local dy = p.to.y - p.from.y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            local travel_time = math.max(0.05, dist / SPITTER_PROJECTILE_SPEED)
+            p.t = math.min(1, p.t + (dt / travel_time))
+            local px = p.from.x + (dx * p.t)
+            local py = p.from.y + (dy * p.t)
+            go.set_position(vmath.vector3(px, py, 0.75), p.go_id)
+            if p.t >= 1 then
+                go.delete(p.go_id)
+                table.remove(self.spitter_projectiles, i)
+            end
+        end
+    end
+end
+
+local function find_alien_by_id(self, alien_id)
+    if not self.aliens then
+        return nil
+    end
+    for _, alien in ipairs(self.aliens) do
+        if alien.id == alien_id then
+            return alien
+        end
+    end
+    return nil
+end
+
+local function update_spitter_attack_phase(self, dt)
+    if not self.pending_spitter_attack_phase then
+        return
+    end
+
+    if not self.spitter_attack_started then
+        if any_alien_is_moving(self) then
+            return
+        end
+        self.spitter_attack_started = true
+        start_spitter_attack_queue(self)
+        if #self.spitter_attack_queue == 0 then
+            self.pending_spitter_attack_phase = false
+            return
+        end
+    end
+
+    self.spitter_attack_timer = self.spitter_attack_timer - dt
+    if self.spitter_attack_timer > 0 then
+        return
+    end
+
+    if #self.spitter_attack_queue == 0 then
+        self.pending_spitter_attack_phase = false
+        return
+    end
+
+    local attacker = table.remove(self.spitter_attack_queue, 1)
+    if not attacker or attacker.ap_left < SPITTER_SHOT_AP_COST then
+        return
+    end
+
+    local spitter = find_alien_by_id(self, attacker.alien_id)
+    if not spitter or spitter.is_dead then
+        return
+    end
+
+    local target = choose_spitter_target(self, spitter)
+    if not target then
+        print(string.format("Spitter #%d cannot fire (no valid target in LOS/range)", spitter.id))
+        return
+    end
+
+    attacker.ap_left = attacker.ap_left - SPITTER_SHOT_AP_COST
+    spawn_spitter_projectile(self, spitter, target)
+
+    local roll = math.random(0, 1)
+    if roll == 1 then
+        target.current_health = math.max(0, target.current_health - 1)
+        print(string.format("Spitter #%d fired at %s and HIT (HP now %d)", spitter.id, target.display_name, target.current_health))
+        if target.current_health <= 0 then
+            print(target.display_name .. " is dead")
+        end
+    else
+        print(string.format("Spitter #%d fired at %s and MISSED", spitter.id, target.display_name))
+    end
+
+    if attacker.ap_left >= SPITTER_SHOT_AP_COST then
+        table.insert(self.spitter_attack_queue, attacker)
+    end
+    self.spitter_attack_timer = SPITTER_SHOT_INTERVAL_SECONDS
 end
 
 local function update_alien_movement(self, dt)
@@ -1346,6 +1582,7 @@ local function process_alien_turn(self)
         end
     end
     print("=== Alien Turn End ===")
+    begin_spitter_attack_phase(self)
 end
 
 local function spawn_initial_blips(self, count)
@@ -2295,6 +2532,95 @@ local function get_clicked_unit_in_cell(self, cell_id, world_x, world_y)
     return nil
 end
 
+local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
+    if not self.aliens then
+        return nil
+    end
+
+    local best_alien = nil
+    local best_dist = math.huge
+    local count_on_cell = 0
+
+    for _, alien in ipairs(self.aliens) do
+        if (not alien.is_dead) and alien.cell_id == cell_id then
+            count_on_cell = count_on_cell + 1
+            if alien.go_id then
+                local pos = go.get_position(alien.go_id)
+                local dx = pos.x - world_x
+                local dy = pos.y - world_y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < best_dist then
+                    best_dist = dist
+                    best_alien = alien
+                end
+            elseif not best_alien then
+                best_alien = alien
+            end
+        end
+    end
+
+    if count_on_cell == 1 then
+        return best_alien
+    end
+
+    if best_dist <= UNIT_CLICK_SELECT_RADIUS then
+        return best_alien
+    end
+    return nil
+end
+
+local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
+    if not unit or not unit.is_selected then
+        return false
+    end
+
+    local alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
+    if not alien then
+        return false
+    end
+
+    -- Keep this command on the human side of the turn boundary.
+    if any_alien_is_moving(self) or self.pending_spitter_attack_phase then
+        print("Unable to fire: alien turn in progress.")
+        return true
+    end
+
+    local alien_cell = self.world_grid[alien.cell_id]
+    if not alien_cell or alien_cell.tileID == hash("empty") then
+        print("Unable to fire: target is in VOID.")
+        return true
+    end
+
+    if not has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
+        print("Unable to fire: no line of sight.")
+        return true
+    end
+
+    if unit.current_ap <= 0 or unit.current_ammo <= 0 then
+        print("unable to fire no ammo/ap")
+        return true
+    end
+
+    unit.current_ap = unit.current_ap - 1
+    unit.current_ammo = unit.current_ammo - 1
+    spawn_human_reaction_projectile(self, unit, alien)
+
+    local roll = math.random(0, 1)
+    if roll == 1 then
+        print(string.format("%s fired at alien #%d and HIT (alien eliminated)", unit.display_name, alien.id))
+        alien.is_dead = true
+        alien.is_moving = false
+        alien.move_path = nil
+        alien.move_path_index = 0
+    else
+        print(string.format("%s fired at alien #%d and MISSED", unit.display_name, alien.id))
+    end
+
+    update_human_visual_state(self)
+    update_human_ap_debug_label(self)
+    return true
+end
+
 local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     local unit = get_controlled_unit(self)
     if not unit or not unit.cell_id then
@@ -2333,6 +2659,11 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     end
 
     if unit.is_selected then
+        if try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y) then
+            self.ui_close_on_next_non_unit_click = true
+            return true
+        end
+
         if unit.is_moving then
             print(unit.display_name .. " is already moving.")
             return true
@@ -2444,7 +2775,7 @@ end
             if cell.tileID ~= hash("empty") then  -- Only spawn cells that are part of tiles
             --if true then  -- spawn ALL CELLS!
                 local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
-                local pos = vmath.vector3(x, y, 0)
+                local pos = vmath.vector3(x, y, 0.02)
 
                 -- Determine animation
                 local animation = "cell_open"
@@ -2560,6 +2891,11 @@ function init(self)
     spawn_human_unit(self)
     self.aliens = {}
     self.next_alien_id = 0
+    self.pending_spitter_attack_phase = false
+    self.spitter_attack_started = false
+    self.spitter_attack_timer = 0
+    self.spitter_attack_queue = {}
+    self.spitter_projectiles = {}
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
 
     print("=== Initialization Complete ===")
@@ -2577,6 +2913,8 @@ end
 function update(self, dt)
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
+    update_spitter_projectiles(self, dt)
+    update_spitter_attack_phase(self, dt)
     update_human_visual_state(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)

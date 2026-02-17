@@ -89,11 +89,32 @@ local UNIT_CLASS_SARGE = "sarge"
 local UNIT_CLASS_TECHIE = "techie"
 local UNIT_CLASS_MEDIC = "medic"
 local UNIT_CLASS_GUNNER = "gunner"
+local ALIEN_TYPE_BLIP = "blip"
+local ALIEN_TYPE_CANNON = "cannon_fodder"
+local ALIEN_TYPE_SPEEDY = "speedy"
+local ALIEN_TYPE_SPITTER = "spitter"
+local ALIEN_TYPE_BRUTE = "brute"
+local ALIEN_VERTICAL_MOVE_AP_COST = 3
+local ALIEN_VENT_TRANSIT_AP_COST = 1
+local INITIAL_BLIP_COUNT = 3
+local ALIEN_MARKER_SIZE = 20
+local ALIEN_MOVE_SPEED = 320
+local ALIEN_REVEAL_WEIGHT_CANNON = 1
+local ALIEN_REVEAL_WEIGHT_SPEEDY = 1
+local ALIEN_REVEAL_WEIGHT_SPITTER = 1
+local ALIEN_REVEAL_WEIGHT_BRUTE = 1
 local CLASS_ROLE_HOOKS = {
     [UNIT_CLASS_SARGE] = { can_donate_ap = true, can_fix = false, can_heal = false, heavy_weapon = false },
     [UNIT_CLASS_TECHIE] = { can_donate_ap = false, can_fix = true, can_heal = false, heavy_weapon = false },
     [UNIT_CLASS_MEDIC] = { can_donate_ap = false, can_fix = false, can_heal = true, heavy_weapon = false },
     [UNIT_CLASS_GUNNER] = { can_donate_ap = false, can_fix = false, can_heal = false, heavy_weapon = true }
+}
+local ALIEN_TYPE_CONFIG = {
+    [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = true, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
+    [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
+    [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
+    [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = 6, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
+    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 6, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
 }
 
 
@@ -338,6 +359,68 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
     return to_cell.moveValue
 end
 
+local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
+    local from_cell = world_grid[from_cell_id]
+    local to_cell = world_grid[to_cell_id]
+    if not from_cell or not to_cell then
+        return math.huge
+    end
+
+    if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
+        return ALIEN_VERTICAL_MOVE_AP_COST
+    end
+
+    return to_cell.moveValue
+end
+
+local function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
+    local from_cell = world_grid[from_cell_id]
+    local to_cell = world_grid[to_cell_id]
+    if not from_cell or not to_cell then
+        return false
+    end
+
+    local dx = to_cell.xCell - from_cell.xCell
+    local dy = to_cell.yCell - from_cell.yCell
+
+    if dx == 1 and dy == 0 then
+        return from_cell.accessRight
+    elseif dx == -1 and dy == 0 then
+        return to_cell.accessRight
+    elseif dx == 0 and dy == 1 then
+        return to_cell.accessDown
+    elseif dx == 0 and dy == -1 then
+        return from_cell.accessDown
+    end
+
+    return false
+end
+
+local function get_alien_neighbors(cell_id, world_grid, alien_type)
+    local neighbors = {}
+    local directions = { "right", "left", "up", "down" }
+    local cfg = ALIEN_TYPE_CONFIG[alien_type]
+    local can_traverse_void = cfg and cfg.can_traverse_void
+
+    for _, dir in ipairs(directions) do
+        local adj_id = get_adjacent_cell(cell_id, dir)
+        if adj_id then
+            local adj_cell = world_grid[adj_id]
+            local can_enter_void = can_traverse_void == true
+            local is_void = adj_cell.tileID == hash("empty")
+            if (not is_void or can_enter_void) and can_cross_between_cells(world_grid, cell_id, adj_id) then
+                local step_cost = 1
+                if alien_type ~= ALIEN_TYPE_BLIP then
+                    step_cost = get_alien_step_move_cost(world_grid, cell_id, adj_id)
+                end
+                table.insert(neighbors, { id = adj_id, cost = step_cost })
+            end
+        end
+    end
+
+    return neighbors
+end
+
 -- Get all valid adjacent cells (4-directional)
 function get_neighbors(cell_id, world_grid, movement_profile, path_context)
     local neighbors = {}
@@ -508,7 +591,7 @@ function create_tile_library()
     --     --              1 2 3
     corridor.cells[1].accessDown = false 
     corridor.cells[2].accessDown = false
-    --corridor.cells[2].moveValue = 3
+    --corridor.cells[2].moveValue = 3 -- NOTE ROOMS WITH LADDERS DONT NEED a move value of 3, just 1. (hardcoded - vert moves always cost 3 AP)
     corridor.cells[3].accessDown = false
     corridor.cells[3].accessRight = false 
     corridor.cells[4].accessDown = false
@@ -781,6 +864,504 @@ function find_path(world_grid, start_id, end_id, max_action_points, movement_pro
     end
 
     return nil  -- No path found
+end
+
+local function find_alien_path(world_grid, alien_type, start_id, end_id, max_action_points)
+    if not world_grid[start_id] or not world_grid[end_id] then
+        return nil
+    end
+
+    local end_is_void = world_grid[end_id].tileID == hash("empty")
+    if alien_type ~= ALIEN_TYPE_BLIP and end_is_void then
+        return nil
+    end
+
+    local open_set = { start_id }
+    local came_from = {}
+    local g_score = {}
+    local f_score = {}
+
+    for i = 1, #world_grid do
+        g_score[i] = math.huge
+        f_score[i] = math.huge
+    end
+
+    g_score[start_id] = 0
+    f_score[start_id] = heuristic(start_id, end_id)
+
+    while #open_set > 0 do
+        local current = open_set[1]
+        local current_index = 1
+        for i, node_id in ipairs(open_set) do
+            if f_score[node_id] < f_score[current] then
+                current = node_id
+                current_index = i
+            end
+        end
+
+        if current == end_id then
+            local path = { current }
+            while came_from[current] do
+                current = came_from[current]
+                table.insert(path, 1, current)
+            end
+
+            local total_cost = 0
+            for i = 2, #path do
+                local step_cost = 1
+                if alien_type ~= ALIEN_TYPE_BLIP then
+                    step_cost = get_alien_step_move_cost(world_grid, path[i - 1], path[i])
+                end
+                total_cost = total_cost + step_cost
+            end
+
+            if max_action_points and total_cost > max_action_points then
+                return nil
+            end
+
+            return path, total_cost
+        end
+
+        table.remove(open_set, current_index)
+
+        local neighbors = get_alien_neighbors(current, world_grid, alien_type)
+        for _, neighbor_data in ipairs(neighbors) do
+            local neighbor_id = neighbor_data.id
+            local move_cost = neighbor_data.cost
+            local tentative_g_score = g_score[current] + move_cost
+
+            if tentative_g_score < g_score[neighbor_id] then
+                came_from[neighbor_id] = current
+                g_score[neighbor_id] = tentative_g_score
+                f_score[neighbor_id] = g_score[neighbor_id] + heuristic(neighbor_id, end_id)
+
+                local in_open = false
+                for _, id in ipairs(open_set) do
+                    if id == neighbor_id then
+                        in_open = true
+                        break
+                    end
+                end
+                if not in_open then
+                    table.insert(open_set, neighbor_id)
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function pick_weighted_blip_reveal_type()
+    local weighted = {
+        { type = ALIEN_TYPE_CANNON, w = ALIEN_REVEAL_WEIGHT_CANNON },
+        { type = ALIEN_TYPE_SPEEDY, w = ALIEN_REVEAL_WEIGHT_SPEEDY },
+        { type = ALIEN_TYPE_SPITTER, w = ALIEN_REVEAL_WEIGHT_SPITTER },
+        { type = ALIEN_TYPE_BRUTE, w = ALIEN_REVEAL_WEIGHT_BRUTE }
+    }
+
+    local total = 0
+    for _, item in ipairs(weighted) do
+        total = total + item.w
+    end
+
+    if total <= 0 then
+        return ALIEN_TYPE_CANNON
+    end
+
+    local roll = math.random() * total
+    local running = 0
+    for _, item in ipairs(weighted) do
+        running = running + item.w
+        if roll <= running then
+            return item.type
+        end
+    end
+
+    return ALIEN_TYPE_CANNON
+end
+
+local function get_human_cell_ids(self)
+    local ids = {}
+    if not self.squad_units then
+        return ids
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit.cell_id then
+            table.insert(ids, unit.cell_id)
+        end
+    end
+    return ids
+end
+
+local function get_nearest_human_cell_id(self, from_cell_id)
+    local nearest = nil
+    local best = math.huge
+    for _, human_cell_id in ipairs(get_human_cell_ids(self)) do
+        local d = heuristic(from_cell_id, human_cell_id)
+        if d < best then
+            best = d
+            nearest = human_cell_id
+        end
+    end
+    return nearest
+end
+
+local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_id)
+    local candidates = {}
+    for _, human_cell_id in ipairs(get_human_cell_ids(self)) do
+        table.insert(candidates, {
+            cell_id = human_cell_id,
+            dist = heuristic(from_cell_id, human_cell_id)
+        })
+    end
+
+    table.sort(candidates, function(a, b) return a.dist < b.dist end)
+
+    for _, c in ipairs(candidates) do
+        local path = find_alien_path(self.world_grid, alien_type, from_cell_id, c.cell_id, nil)
+        if path then
+            return c.cell_id, path
+        end
+    end
+
+    return nil, nil
+end
+
+local function has_unobstructed_los(world_grid, from_id, to_id)
+    local from_cell = world_grid[from_id]
+    local to_cell = world_grid[to_id]
+    if not from_cell or not to_cell then
+        return false
+    end
+
+    if from_cell.xCell ~= to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
+        return false
+    end
+
+    if from_cell.xCell == to_cell.xCell then
+        local step = (to_cell.yCell > from_cell.yCell) and 1 or -1
+        local current_id = from_id
+        while current_id ~= to_id do
+            local next_id = current_id + (GRID_COLS * step)
+            if not can_cross_between_cells(world_grid, current_id, next_id) then
+                return false
+            end
+            current_id = next_id
+        end
+        return true
+    end
+
+    local step = (to_cell.xCell > from_cell.xCell) and 1 or -1
+    local current_id = from_id
+    while current_id ~= to_id do
+        local next_id = current_id + step
+        if not can_cross_between_cells(world_grid, current_id, next_id) then
+            return false
+        end
+        current_id = next_id
+    end
+    return true
+end
+
+local function get_edge_spawn_cell_ids(world_grid)
+    local ids = {}
+    for cell_id, cell in ipairs(world_grid) do
+        if cell.xCell == 1 or cell.xCell == GRID_COLS or cell.yCell == 1 or cell.yCell == GRID_ROWS then
+            table.insert(ids, cell_id)
+        end
+    end
+    return ids
+end
+
+local function ensure_alien_visual(self, alien)
+    if alien.go_id then
+        return
+    end
+
+    local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
+    local pos = vmath.vector3(x, y + 35, 0.6)
+    alien.go_id = factory.create("/ui_factory#ui_factory", pos)
+    if alien.go_id then
+        go.set_scale(vmath.vector3(ALIEN_MARKER_SIZE, ALIEN_MARKER_SIZE, 1), alien.go_id)
+    end
+end
+
+local function refresh_alien_visual(self, alien)
+    if not alien.go_id then
+        return
+    end
+    local cfg = ALIEN_TYPE_CONFIG[alien.type]
+    local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
+    go.set_position(vmath.vector3(x, y + 35, 0.6), alien.go_id)
+    if cfg and cfg.marker_tint then
+        go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
+    end
+end
+
+local function spawn_alien(self, alien_type, cell_id)
+    local cfg = ALIEN_TYPE_CONFIG[alien_type]
+    if not cfg then
+        return nil
+    end
+
+    self.next_alien_id = (self.next_alien_id or 0) + 1
+    local alien = {
+        id = self.next_alien_id,
+        type = alien_type,
+        cell_id = cell_id,
+        ap_max = cfg.ap_per_turn,
+        hp_max = cfg.hp,
+        hp_current = cfg.hp,
+        can_traverse_void = cfg.can_traverse_void == true,
+        has_ranged = cfg.has_ranged == true,
+        ranged_cells = cfg.ranged_cells or 0,
+        go_id = nil,
+        is_moving = false,
+        move_path = nil,
+        move_path_index = 0
+    }
+
+    table.insert(self.aliens, alien)
+    ensure_alien_visual(self, alien)
+    refresh_alien_visual(self, alien)
+    print(string.format("Alien spawned: #%d %s at cell %d", alien.id, alien.type, alien.cell_id))
+    return alien
+end
+
+local function maybe_reveal_blip(self, alien)
+    if alien.type ~= ALIEN_TYPE_BLIP then
+        return
+    end
+
+    -- Blips cannot reveal while standing in VOID cells.
+    local current_cell = self.world_grid[alien.cell_id]
+    if not current_cell or current_cell.tileID == hash("empty") then
+        return
+    end
+
+    for _, human_cell_id in ipairs(get_human_cell_ids(self)) do
+        if has_unobstructed_los(self.world_grid, alien.cell_id, human_cell_id) then
+            local revealed_type = pick_weighted_blip_reveal_type()
+            local cfg = ALIEN_TYPE_CONFIG[revealed_type]
+            alien.type = revealed_type
+            alien.ap_max = cfg.ap_per_turn
+            alien.hp_max = cfg.hp
+            alien.hp_current = cfg.hp
+            alien.can_traverse_void = cfg.can_traverse_void == true
+            alien.has_ranged = cfg.has_ranged == true
+            alien.ranged_cells = cfg.ranged_cells or 0
+            refresh_alien_visual(self, alien)
+            print(string.format("Blip #%d revealed as %s", alien.id, revealed_type))
+            return
+        end
+    end
+end
+
+local function get_alien_turn_movement_segment(self, alien, path, max_ap)
+    if not path or #path < 2 then
+        return nil, 0
+    end
+
+    local ap_spent = 0
+    local segment = { path[1] }
+
+    for i = 2, #path do
+        local from_cell = path[i - 1]
+        local to_cell = path[i]
+        local step_cost = 1
+        if alien.type ~= ALIEN_TYPE_BLIP then
+            step_cost = get_alien_step_move_cost(self.world_grid, from_cell, to_cell)
+        end
+
+        if ap_spent + step_cost > max_ap then
+            break
+        end
+
+        ap_spent = ap_spent + step_cost
+        table.insert(segment, to_cell)
+    end
+
+    if #segment < 2 then
+        return nil, 0
+    end
+
+    return segment, ap_spent
+end
+
+local function begin_alien_path_animation(alien, segment_path)
+    alien.move_path = segment_path
+    alien.move_path_index = 2 -- first is current position
+    alien.is_moving = true
+end
+
+local function any_alien_is_moving(self)
+    if not self.aliens then
+        return false
+    end
+    for _, alien in ipairs(self.aliens) do
+        if alien.is_moving then
+            return true
+        end
+    end
+    return false
+end
+
+local function remove_dead_aliens(self)
+    if not self.aliens then
+        return
+    end
+    for i = #self.aliens, 1, -1 do
+        if self.aliens[i].is_dead then
+            local alien = self.aliens[i]
+            if alien.go_id then
+                go.delete(alien.go_id)
+                alien.go_id = nil
+            end
+            table.remove(self.aliens, i)
+        end
+    end
+end
+
+local function resolve_human_reaction_fire(self, alien)
+    if not alien or alien.is_dead then
+        return false
+    end
+
+    local alien_cell = self.world_grid[alien.cell_id]
+    if not alien_cell or alien_cell.tileID == hash("empty") then
+        return false
+    end
+
+    local fired_any = false
+    local target_cell_id = alien.cell_id
+    local reaction_order = { "sarge", "techie", "medic", "gunner" }
+    for _, unit_id in ipairs(reaction_order) do
+        local unit = self.squad_units and self.squad_units[unit_id]
+        if unit and unit.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, target_cell_id) then
+            if unit.current_ap <= 0 and unit.current_ammo <= 0 then
+                print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, alien.id))
+            elseif unit.current_ap <= 0 then
+                print(string.format("%s cannot fire at alien #%d (no AP)", unit.display_name, alien.id))
+            elseif unit.current_ammo <= 0 then
+                print(string.format("%s cannot fire at alien #%d (no ammo)", unit.display_name, alien.id))
+            else
+                fired_any = true
+                unit.current_ap = unit.current_ap - 1
+                unit.current_ammo = unit.current_ammo - 1
+                local roll = math.random(0, 1)
+                if roll == 1 then
+                    print(string.format("%s fired at alien #%d and HIT (alien eliminated)", unit.display_name, alien.id))
+                    alien.is_dead = true
+                    alien.is_moving = false
+                    alien.move_path = nil
+                    alien.move_path_index = 0
+                    return true
+                else
+                    print(string.format("%s fired at alien #%d and MISSED", unit.display_name, alien.id))
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function update_alien_movement(self, dt)
+    if not self.aliens then
+        return
+    end
+
+    for _, alien in ipairs(self.aliens) do
+        if (not alien.is_dead) and alien.is_moving and alien.move_path and alien.go_id then
+            local target_cell_id = alien.move_path[alien.move_path_index]
+            if not target_cell_id then
+                alien.is_moving = false
+                alien.move_path = nil
+                alien.move_path_index = 0
+            else
+                local target_cell = self.world_grid[target_cell_id]
+                local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+                ty = ty + 35
+
+                local pos = go.get_position(alien.go_id)
+                local dx = tx - pos.x
+                local dy = ty - pos.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                local step = ALIEN_MOVE_SPEED * dt
+
+                if dist <= step then
+                    go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
+                    alien.cell_id = target_cell_id
+                    alien.move_path_index = alien.move_path_index + 1
+                    maybe_reveal_blip(self, alien)
+                    local killed = resolve_human_reaction_fire(self, alien)
+                    if not killed then
+                        if alien.move_path_index > #alien.move_path then
+                            alien.is_moving = false
+                            alien.move_path = nil
+                            alien.move_path_index = 0
+                        end
+                    end
+                else
+                    local nx = pos.x + (dx / dist) * step
+                    local ny = pos.y + (dy / dist) * step
+                    go.set_position(vmath.vector3(nx, ny, 0.6), alien.go_id)
+                end
+            end
+        end
+    end
+
+    remove_dead_aliens(self)
+end
+
+local function process_alien_turn(self)
+    if not self.aliens or #self.aliens == 0 then
+        return
+    end
+
+    if any_alien_is_moving(self) then
+        print("Alien turn ignored: aliens are still moving.")
+        return
+    end
+
+    print("=== Alien Turn Start ===")
+    for _, alien in ipairs(self.aliens) do
+        local cfg = ALIEN_TYPE_CONFIG[alien.type]
+        local ap_budget = cfg and cfg.ap_per_turn or 1
+        local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
+        if target_cell_id then
+            local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, ap_budget)
+            local moved = segment_path ~= nil
+            if segment_path then
+                begin_alien_path_animation(alien, segment_path)
+            end
+            print(string.format(
+                "Alien #%d (%s) target=%d moved=%s spent=%d",
+                alien.id, alien.type, target_cell_id, tostring(moved), spent or 0
+            ))
+        else
+            print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
+        end
+    end
+    print("=== Alien Turn End ===")
+end
+
+local function spawn_initial_blips(self, count)
+    local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
+    if #edge_cells == 0 then
+        return
+    end
+
+    local used = {}
+    for i = 1, math.min(count, #edge_cells) do
+        local idx = math.random(1, #edge_cells)
+        while used[idx] do
+            idx = math.random(1, #edge_cells)
+        end
+        used[idx] = true
+        spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+    end
 end
 
 -- =============================================================================
@@ -1975,6 +2556,9 @@ function init(self)
     self.controlled_unit_id = "sarge"
     print_squad_debug_overview(self)
     spawn_human_unit(self)
+    self.aliens = {}
+    self.next_alien_id = 0
+    spawn_initial_blips(self, INITIAL_BLIP_COUNT)
 
     print("=== Initialization Complete ===")
 
@@ -1990,6 +2574,8 @@ end
 
 function update(self, dt)
     update_human_movement(self, dt)
+    update_alien_movement(self, dt)
+    update_human_visual_state(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
     update_human_ap_debug_label(self)
@@ -2089,6 +2675,7 @@ function on_input(self, action_id, action)
         zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
     elseif action_id == hash("next_turn") and action.pressed then
         next_turn_reset_human_ap(self)
+        process_alien_turn(self)
     end
 end
 
@@ -2099,5 +2686,6 @@ end
 function on_message(self, message_id, message, sender)
     if message_id == hash("next_turn") then
         next_turn_reset_human_ap(self)
+        process_alien_turn(self)
     end
 end

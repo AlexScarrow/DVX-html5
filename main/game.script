@@ -93,7 +93,10 @@ local LOOT_UI = {
     marker_z = 0.04,
     pickup_blip_size = 20,
     pickup_blip_speed = 950,
-    ap_cost = 1
+    ap_cost = 1,
+    drag_pip_size = 24,
+    human_drop_radius = 42,
+    bar_hit_padding = 10
 }
 local LOOT_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
@@ -2233,7 +2236,8 @@ local function initialize_unit_ui(self)
         hp_pips = {},
         ammo_pips = {},
         backpack_slots = {},
-        loot_button = nil
+        loot_button = nil,
+        drag_pip = nil
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
@@ -2248,6 +2252,7 @@ local function initialize_unit_ui(self)
         self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
+    self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 
     print(string.format(
         "UI panel pixels: panel=%dx%d, portrait=%dx%d, footer=%dx%d, pip=%dx%d (max %d), backpack slots=%d (%dx%d each, %dx%d grid)",
@@ -2273,6 +2278,7 @@ local function set_ui_hidden(self)
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
+    set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
 
 local function get_selected_unit(self)
@@ -2346,6 +2352,9 @@ local function update_selected_unit_ui(self)
         local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(i)
         local item_type = unit.backpack_items and unit.backpack_items[i] or nil
         local slot_color = item_type and LOOT_RUNTIME.get_backpack_item_color(item_type) or UI_COLOR_SLOT
+        if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
+            slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
+        end
         set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, 0.81, slot_color, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
 
@@ -2521,6 +2530,207 @@ LOOT_RUNTIME.try_scavenge_selected_unit = function(self, screen_x, screen_y)
 
     update_human_visual_state(self)
     return true
+end
+
+LOOT_RUNTIME.get_backpack_slot_index_at = function(screen_x, screen_y)
+    local half = UI_BACKPACK_SLOT_SIZE * 0.5
+    local total_slots = UI_BACKPACK_COLS * UI_BACKPACK_ROWS
+    for i = 1, total_slots do
+        local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(i)
+        if screen_x >= (slot_x - half)
+            and screen_x <= (slot_x + half)
+            and screen_y >= (slot_y - half)
+            and screen_y <= (slot_y + half) then
+            return i
+        end
+    end
+    return nil
+end
+
+LOOT_RUNTIME.begin_resource_drag = function(self, screen_x, screen_y)
+    local unit = get_selected_unit(self)
+    if not unit or not unit.backpack_items then
+        return false
+    end
+
+    local slot_index = LOOT_RUNTIME.get_backpack_slot_index_at(screen_x, screen_y)
+    if not slot_index then
+        return false
+    end
+
+    local item_type = unit.backpack_items[slot_index]
+    if not item_type then
+        return false
+    end
+
+    self.drag_resource = {
+        active = true,
+        source_unit_id = unit.id,
+        source_slot_index = slot_index,
+        item_type = item_type,
+        screen_x = screen_x,
+        screen_y = screen_y
+    }
+    return true
+end
+
+LOOT_RUNTIME.update_resource_drag = function(self, screen_x, screen_y)
+    if not self.drag_resource or not self.drag_resource.active then
+        return
+    end
+    self.drag_resource.screen_x = screen_x
+    self.drag_resource.screen_y = screen_y
+end
+
+LOOT_RUNTIME.get_bar_drop_target = function(screen_x, screen_y)
+    local min_y = UI_BAR_START_Y - ((UI_MAX_PIPS - 1) * (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP)) - LOOT_UI.bar_hit_padding
+    local max_y = UI_BAR_START_Y + LOOT_UI.bar_hit_padding
+    if screen_y < min_y or screen_y > max_y then
+        return nil
+    end
+
+    local half_w = (UI_BAR_PIP_SIZE * 0.5) + LOOT_UI.bar_hit_padding
+    if math.abs(screen_x - UI_BAR_AMMO_X) <= half_w then
+        return "ammo"
+    end
+    if math.abs(screen_x - UI_BAR_HP_X) <= half_w then
+        return "meds"
+    end
+    return nil
+end
+
+LOOT_RUNTIME.try_apply_to_own_bar = function(unit, item_type, bar_target)
+    if not unit or not bar_target then
+        return false
+    end
+    if item_type ~= bar_target then
+        return false
+    end
+
+    if bar_target == "ammo" then
+        if unit.current_ammo >= unit.max_ammo then
+            print("Ammo already full.")
+            return false
+        end
+        unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 1)
+        return true
+    end
+
+    if bar_target == "meds" then
+        if unit.current_health >= unit.max_health then
+            print("Health already full.")
+            return false
+        end
+        unit.current_health = math.min(unit.max_health, unit.current_health + 1)
+        return true
+    end
+
+    return false
+end
+
+LOOT_RUNTIME.find_human_drop_target = function(self, world_x, world_y, exclude_unit_id)
+    if not self.squad_units then
+        return nil
+    end
+
+    local best = nil
+    local best_dist = math.huge
+    for _, unit in pairs(self.squad_units) do
+        if unit.id ~= exclude_unit_id and unit.go_path then
+            local pos = go.get_position(unit.go_path)
+            local dx = pos.x - world_x
+            local dy = pos.y - world_y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            if dist < best_dist and dist <= LOOT_UI.human_drop_radius then
+                best = unit
+                best_dist = dist
+            end
+        end
+    end
+    return best
+end
+
+LOOT_RUNTIME.can_transfer_between_units = function(source_unit, target_unit)
+    if not source_unit or not target_unit or not source_unit.cell_id or not target_unit.cell_id then
+        return false
+    end
+    local sx, sy = id_to_coords(source_unit.cell_id)
+    local tx, ty = id_to_coords(target_unit.cell_id)
+    local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+    return manhattan <= 1
+end
+
+LOOT_RUNTIME.end_resource_drag = function(self, screen_x, screen_y)
+    local drag = self.drag_resource
+    if not drag or not drag.active then
+        return false
+    end
+
+    local source_unit = self.squad_units and self.squad_units[drag.source_unit_id]
+    if not source_unit or not source_unit.backpack_items then
+        self.drag_resource = { active = false }
+        return true
+    end
+
+    local source_item = source_unit.backpack_items[drag.source_slot_index]
+    if not source_item then
+        self.drag_resource = { active = false }
+        return true
+    end
+
+    local consumed = false
+    local bar_target = LOOT_RUNTIME.get_bar_drop_target(screen_x, screen_y)
+    if bar_target then
+        consumed = LOOT_RUNTIME.try_apply_to_own_bar(source_unit, source_item, bar_target)
+        if consumed then
+            table.remove(source_unit.backpack_items, drag.source_slot_index)
+            source_unit.backpack_used = #source_unit.backpack_items
+            print(string.format("%s used 1 %s on own %s bar.", source_unit.display_name, source_item, bar_target))
+        end
+    else
+        local world_x, world_y = screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local target_unit = LOOT_RUNTIME.find_human_drop_target(self, world_x, world_y, source_unit.id)
+        if target_unit then
+            if LOOT_RUNTIME.can_transfer_between_units(source_unit, target_unit) then
+                target_unit.backpack_items = target_unit.backpack_items or {}
+                local target_cap = target_unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
+                if #target_unit.backpack_items < target_cap then
+                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                    source_unit.backpack_used = #source_unit.backpack_items
+                    table.insert(target_unit.backpack_items, source_item)
+                    target_unit.backpack_used = #target_unit.backpack_items
+                    consumed = true
+                    print(string.format("%s gave 1 %s to %s.", source_unit.display_name, source_item, target_unit.display_name))
+                else
+                    print(target_unit.display_name .. " backpack is full.")
+                end
+            else
+                print("too far away")
+            end
+        end
+    end
+
+    if not consumed then
+        print("Resource returned to backpack slot.")
+    end
+
+    self.drag_resource = { active = false }
+    return true
+end
+
+LOOT_RUNTIME.update_drag_visual = function(self)
+    if not self.ui or not self.ui.drag_pip then
+        return
+    end
+
+    local drag = self.drag_resource
+    if not drag or not drag.active then
+        set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
+        return
+    end
+
+    local color = LOOT_RUNTIME.get_backpack_item_color(drag.item_type)
+    set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, color, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
 
 local function update_human_ap_debug_label(self)
@@ -3137,6 +3347,7 @@ function init(self)
     self.spitter_attack_queue = {}
     self.spitter_projectiles = {}
     self.loot_pickup_blips = {}
+    self.drag_resource = { active = false }
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
 
     print("=== Initialization Complete ===")
@@ -3160,6 +3371,7 @@ function update(self, dt)
     update_human_visual_state(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
+    LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
 
     if not self.is_panning then
@@ -3186,7 +3398,25 @@ end
 
 function on_input(self, action_id, action)
     if action_id == hash("touch") then
+        if self.drag_resource and self.drag_resource.active then
+            if action.x and action.y then
+                LOOT_RUNTIME.update_resource_drag(self, action.x, action.y)
+            end
+            if action.released then
+                LOOT_RUNTIME.end_resource_drag(self, action.x, action.y)
+            end
+            return true
+        end
+
         if action.pressed then
+            if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
+                if LOOT_RUNTIME.begin_resource_drag(self, action.x, action.y) then
+                    self.is_panning = false
+                    self.did_drag = true
+                    return true
+                end
+            end
+
             self.is_panning = true
             self.did_drag = false
             self.drag_start_screen_x = action.x

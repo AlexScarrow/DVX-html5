@@ -64,8 +64,15 @@ M.CLASS_ROLE_HOOKS = {
     sarge = { can_donate_ap = true, can_fix = false, can_heal = false, heavy_weapon = false, ranged_hit_bonus = 0 },
     techie = { can_donate_ap = false, can_fix = true, can_heal = false, heavy_weapon = false, ranged_hit_bonus = 0 },
     medic = { can_donate_ap = false, can_fix = false, can_heal = true, heavy_weapon = false, ranged_hit_bonus = 0 },
-    -- Hook for detailed combat modeling: Gunner gets higher ranged effectiveness.
-    gunner = { can_donate_ap = false, can_fix = false, can_heal = false, heavy_weapon = true, ranged_hit_bonus = 5 }
+    -- Hook for detailed combat modeling: Gunner gets substantially higher ranged effectiveness.
+    gunner = { can_donate_ap = false, can_fix = false, can_heal = false, heavy_weapon = true, ranged_hit_bonus = 20 }
+}
+
+M.RANGED_HIT_MODEL = {
+    base_hit_chance = 35,
+    per_light_level_bonus = 15,
+    min_hit_chance = 5,
+    max_hit_chance = 100
 }
 
 return M

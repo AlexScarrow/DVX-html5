@@ -29,6 +29,7 @@ local visual_scale = 1 -- Keep visuals in the same unit space as world_grid
 local cell_objects = {}
 local tile_objects = {}
 local loot_objects = {}
+local machine_objects = {}
 local MOVEMENT_PROFILE_HUMAN = "human"
 local MOVEMENT_PROFILE_ALIEN_VENT = "alien_vent"
 local COLOR_DEFAULT = vmath.vector4(1, 1, 1, 1)
@@ -109,6 +110,16 @@ local COMMAND_UI = {
     active_color = vmath.vector4(1, 0.85, 0.25, 1),
     inactive_color = vmath.vector4(1, 0.85, 0.25, 0.2),
     drag_color = vmath.vector4(1, 0.85, 0.25, 1)
+}
+local COMPONENT_UI = {
+    item_type_blue = "component_blue",
+    component_color = vmath.vector4(0.35, 0.65, 1, 1),
+    machine_marker_color = vmath.vector4(0.2, 0.75, 1, 1),
+    machine_marker_size = 14,
+    button_color = vmath.vector4(0.25, 0.5, 0.9, 1),
+    button_size = 44,
+    button_x = UI_PANEL_X + (UI_PANEL_W * 0.5) - 86,
+    button_y = UI_PANEL_Y - (UI_PANEL_H * 0.5) + 34
 }
 local LOOT_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
@@ -2258,6 +2269,7 @@ local function initialize_unit_ui(self)
         ammo_pips = {},
         command_pips = {},
         backpack_slots = {},
+        component_button = nil,
         loot_button = nil,
         drag_pip = nil
     }
@@ -2277,6 +2289,7 @@ local function initialize_unit_ui(self)
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
+    self.ui.component_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.button_color, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 
@@ -2306,6 +2319,7 @@ local function set_ui_hidden(self)
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
+    set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
@@ -2329,6 +2343,8 @@ LOOT_RUNTIME.get_backpack_item_color = function(item_type)
         return LOOT_UI.meds_color
     elseif item_type == "material" then
         return LOOT_UI.material_color
+    elseif item_type == COMPONENT_UI.item_type_blue then
+        return COMPONENT_UI.component_color
     end
     return UI_COLOR_SLOT
 end
@@ -2355,6 +2371,23 @@ LOOT_RUNTIME.is_point_in_loot_button = function(screen_x, screen_y)
         and screen_x <= (LOOT_UI.button_x + half)
         and screen_y >= (LOOT_UI.button_y - half)
         and screen_y <= (LOOT_UI.button_y + half)
+end
+
+LOOT_RUNTIME.is_point_in_component_button = function(screen_x, screen_y)
+    local half = COMPONENT_UI.button_size * 0.5
+    return screen_x >= (COMPONENT_UI.button_x - half)
+        and screen_x <= (COMPONENT_UI.button_x + half)
+        and screen_y >= (COMPONENT_UI.button_y - half)
+        and screen_y <= (COMPONENT_UI.button_y + half)
+end
+
+LOOT_RUNTIME.cell_has_component_machine = function(cell)
+    if not cell then
+        return false
+    end
+    return (cell.object1 and cell.object1.name == hash("machine"))
+        or (cell.object2 and cell.object2.name == hash("machine"))
+        or (cell.object3 and cell.object3.name == hash("machine"))
 end
 
 local function update_selected_unit_ui(self)
@@ -2411,6 +2444,31 @@ local function update_selected_unit_ui(self)
     end
 
     local current_cell = unit.cell_id and self.world_grid and self.world_grid[unit.cell_id] or nil
+    local show_component_button = current_cell and LOOT_RUNTIME.cell_has_component_machine(current_cell)
+    if show_component_button then
+        set_ui_square_transform(
+            self,
+            self.ui.component_button,
+            COMPONENT_UI.button_x,
+            COMPONENT_UI.button_y,
+            0.82,
+            COMPONENT_UI.button_color,
+            COMPONENT_UI.button_size,
+            COMPONENT_UI.button_size
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.component_button,
+            -9999,
+            -9999,
+            0.82,
+            vmath.vector4(0, 0, 0, 0),
+            COMPONENT_UI.button_size,
+            COMPONENT_UI.button_size
+        )
+    end
+
     if current_cell and current_cell.hasLoot then
         set_ui_square_transform(
             self,
@@ -2477,13 +2535,41 @@ LOOT_RUNTIME.refresh_loot_markers = function(self)
     end
 end
 
-LOOT_RUNTIME.spawn_loot_pickup_blip = function(self, from_cell_id, to_slot_index, item_type)
-    if not self.world_grid or not self.world_grid[from_cell_id] then
+LOOT_RUNTIME.refresh_machine_markers = function(self)
+    for cell_id, marker in pairs(machine_objects) do
+        if marker then
+            go.delete(marker)
+        end
+        machine_objects[cell_id] = nil
+    end
+
+    if not self.world_grid then
         return
     end
 
-    local from_cell = self.world_grid[from_cell_id]
-    local from_x, from_y = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+    for cell_id, cell in ipairs(self.world_grid) do
+        if LOOT_RUNTIME.cell_has_component_machine(cell) and cell.tileID ~= hash("empty") then
+            local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
+            local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y + 10, 0.045))
+            if marker_id then
+                go.set_scale(vmath.vector3(COMPONENT_UI.machine_marker_size, COMPONENT_UI.machine_marker_size, 1), marker_id)
+                go.set(msg.url(nil, marker_id, "sprite"), "tint", COMPONENT_UI.machine_marker_color)
+                machine_objects[cell_id] = marker_id
+            end
+        end
+    end
+end
+
+LOOT_RUNTIME.spawn_loot_pickup_blip = function(self, from_cell_id, to_slot_index, item_type, from_world_x, from_world_y)
+    local from_x, from_y = from_world_x, from_world_y
+    if not from_x or not from_y then
+        if not self.world_grid or not self.world_grid[from_cell_id] then
+            return
+        end
+        local from_cell = self.world_grid[from_cell_id]
+        from_x, from_y = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+    end
+
     local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(to_slot_index)
     local to_x, to_y = screen_to_world(slot_x, slot_y, self.camera_pos, self.camera_zoom)
 
@@ -2581,6 +2667,56 @@ LOOT_RUNTIME.try_scavenge_selected_unit = function(self, screen_x, screen_y)
     ))
 
     update_human_visual_state(self)
+    return true
+end
+
+LOOT_RUNTIME.try_use_component_vending = function(self, screen_x, screen_y)
+    if not LOOT_RUNTIME.is_point_in_component_button(screen_x, screen_y) then
+        return false
+    end
+
+    local unit = get_selected_unit(self)
+    if not unit or not unit.cell_id then
+        return true
+    end
+
+    local cell = self.world_grid and self.world_grid[unit.cell_id]
+    if not LOOT_RUNTIME.cell_has_component_machine(cell) then
+        print("No component vending machine here.")
+        return true
+    end
+
+    unit.backpack_items = unit.backpack_items or {}
+    local material_slot = nil
+    for i, item in ipairs(unit.backpack_items) do
+        if item == "material" then
+            material_slot = i
+            break
+        end
+    end
+
+    if not material_slot then
+        print("Need 1 material to produce a component.")
+        return true
+    end
+
+    -- Consume one material and produce one random component (phase 1 has one component).
+    table.remove(unit.backpack_items, material_slot)
+    local component_pool = { COMPONENT_UI.item_type_blue }
+    local produced_component = component_pool[math.random(1, #component_pool)]
+    table.insert(unit.backpack_items, produced_component)
+    unit.backpack_used = #unit.backpack_items
+
+    local machine_x, machine_y = coords_to_world_pos(cell.xCell, cell.yCell)
+    LOOT_RUNTIME.spawn_loot_pickup_blip(
+        self,
+        unit.cell_id,
+        #unit.backpack_items,
+        produced_component,
+        machine_x,
+        machine_y + 18
+    )
+    print(string.format("%s used 1 material and produced 1 component.", unit.display_name))
     return true
 end
 
@@ -3329,6 +3465,7 @@ end
         cell_objects = {}
         tile_objects = {}
         loot_objects = {}
+        machine_objects = {}
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[1]
@@ -3387,6 +3524,7 @@ end
 
         print("Spawned " .. spawned_count .. " cells")
         LOOT_RUNTIME.refresh_loot_markers(self)
+        LOOT_RUNTIME.refresh_machine_markers(self)
     end--of spawn visuals fn
 
 
@@ -3564,6 +3702,9 @@ function on_input(self, action_id, action)
         elseif action.released then
             if not self.did_drag then
                 if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
+                    if LOOT_RUNTIME.try_use_component_vending(self, action.x, action.y) then
+                        return
+                    end
                     if LOOT_RUNTIME.try_scavenge_selected_unit(self, action.x, action.y) then
                         return
                     end

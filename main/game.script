@@ -98,6 +98,18 @@ local LOOT_UI = {
     human_drop_radius = 42,
     bar_hit_padding = 10
 }
+local COMMAND_UI = {
+    cols = 5,
+    rows = 2,
+    max_pips = 10,
+    pip_size = 16,
+    pip_gap = 4,
+    start_x = 196,
+    start_y = 282,
+    active_color = vmath.vector4(1, 0.85, 0.25, 1),
+    inactive_color = vmath.vector4(1, 0.85, 0.25, 0.2),
+    drag_color = vmath.vector4(1, 0.85, 0.25, 1)
+}
 local LOOT_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
 local HUMAN_TINT_TECHIE = vmath.vector4(0.45, 0.7, 1, 1)
@@ -2235,6 +2247,7 @@ local function initialize_unit_ui(self)
         ap_pips = {},
         hp_pips = {},
         ammo_pips = {},
+        command_pips = {},
         backpack_slots = {},
         loot_button = nil,
         drag_pip = nil
@@ -2246,6 +2259,10 @@ local function initialize_unit_ui(self)
         self.ui.ap_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_AP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         self.ui.hp_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_HP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         self.ui.ammo_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_AMMO, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+    end
+
+    for i = 1, COMMAND_UI.max_pips do
+        self.ui.command_pips[i] = create_ui_square(0, 0, 0.81, COMMAND_UI.inactive_color, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
     end
 
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
@@ -2273,6 +2290,9 @@ local function set_ui_hidden(self)
         set_ui_square_transform(self, self.ui.ap_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         set_ui_square_transform(self, self.ui.hp_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         set_ui_square_transform(self, self.ui.ammo_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+    end
+    for i = 1, COMMAND_UI.max_pips do
+        set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, 0.81, hidden, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
     end
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
@@ -2312,6 +2332,14 @@ LOOT_RUNTIME.get_backpack_slot_screen_pos = function(slot_index)
     return slot_x, slot_y
 end
 
+LOOT_RUNTIME.get_command_pip_screen_pos = function(pip_index)
+    local col = (pip_index - 1) % COMMAND_UI.cols
+    local row = math.floor((pip_index - 1) / COMMAND_UI.cols)
+    local x = COMMAND_UI.start_x + col * (COMMAND_UI.pip_size + COMMAND_UI.pip_gap)
+    local y = COMMAND_UI.start_y - row * (COMMAND_UI.pip_size + COMMAND_UI.pip_gap)
+    return x, y
+end
+
 LOOT_RUNTIME.is_point_in_loot_button = function(screen_x, screen_y)
     local half = LOOT_UI.button_size * 0.5
     return screen_x >= (LOOT_UI.button_x - half)
@@ -2345,6 +2373,21 @@ local function update_selected_unit_ui(self)
         set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, 0.81, ap_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, 0.81, hp_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, 0.81, ammo_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+    end
+
+    local show_command = unit.class_id == UNIT_CLASS_SARGE
+    local command_count = show_command and math.min(unit.command_points or 0, COMMAND_UI.max_pips) or 0
+    for i = 1, COMMAND_UI.max_pips do
+        local cx, cy = LOOT_RUNTIME.get_command_pip_screen_pos(i)
+        local command_color = (i <= command_count) and COMMAND_UI.active_color or COMMAND_UI.inactive_color
+        if self.drag_resource and self.drag_resource.active and self.drag_resource.drag_type == "command" and self.drag_resource.source_slot_index == i then
+            command_color = vmath.vector4(command_color.x, command_color.y, command_color.z, 0.25)
+        end
+        if show_command then
+            set_ui_square_transform(self, self.ui.command_pips[i], cx, cy, 0.81, command_color, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        else
+            set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, 0.81, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        end
     end
 
     local total_slots = UI_BACKPACK_COLS * UI_BACKPACK_ROWS
@@ -2547,6 +2590,51 @@ LOOT_RUNTIME.get_backpack_slot_index_at = function(screen_x, screen_y)
     return nil
 end
 
+LOOT_RUNTIME.get_command_pip_index_at = function(unit, screen_x, screen_y)
+    if not unit or unit.class_id ~= UNIT_CLASS_SARGE then
+        return nil
+    end
+    local command_count = math.min(unit.command_points or 0, COMMAND_UI.max_pips)
+    if command_count <= 0 then
+        return nil
+    end
+
+    local half = COMMAND_UI.pip_size * 0.5
+    for i = 1, command_count do
+        local cx, cy = LOOT_RUNTIME.get_command_pip_screen_pos(i)
+        if screen_x >= (cx - half)
+            and screen_x <= (cx + half)
+            and screen_y >= (cy - half)
+            and screen_y <= (cy + half) then
+            return i
+        end
+    end
+    return nil
+end
+
+LOOT_RUNTIME.begin_command_drag = function(self, screen_x, screen_y)
+    local unit = get_selected_unit(self)
+    if not unit then
+        return false
+    end
+
+    local pip_index = LOOT_RUNTIME.get_command_pip_index_at(unit, screen_x, screen_y)
+    if not pip_index then
+        return false
+    end
+
+    self.drag_resource = {
+        active = true,
+        drag_type = "command",
+        source_unit_id = unit.id,
+        source_slot_index = pip_index,
+        item_type = "command",
+        screen_x = screen_x,
+        screen_y = screen_y
+    }
+    return true
+end
+
 LOOT_RUNTIME.begin_resource_drag = function(self, screen_x, screen_y)
     local unit = get_selected_unit(self)
     if not unit or not unit.backpack_items then
@@ -2565,6 +2653,7 @@ LOOT_RUNTIME.begin_resource_drag = function(self, screen_x, screen_y)
 
     self.drag_resource = {
         active = true,
+        drag_type = "backpack",
         source_unit_id = unit.id,
         source_slot_index = slot_index,
         item_type = item_type,
@@ -2673,52 +2762,71 @@ LOOT_RUNTIME.end_resource_drag = function(self, screen_x, screen_y)
     end
 
     local source_item = source_unit.backpack_items[drag.source_slot_index]
-    if not source_item then
+    if drag.drag_type ~= "command" and not source_item then
         self.drag_resource = { active = false }
         return true
     end
 
     local consumed = false
-    local bar_target = LOOT_RUNTIME.get_bar_drop_target(screen_x, screen_y)
-    if bar_target then
-        consumed = LOOT_RUNTIME.try_apply_to_own_bar(source_unit, source_item, bar_target)
-        if consumed then
-            table.remove(source_unit.backpack_items, drag.source_slot_index)
-            source_unit.backpack_used = #source_unit.backpack_items
-            print(string.format("%s used 1 %s on own %s bar.", source_unit.display_name, source_item, bar_target))
-        end
-    else
+    if drag.drag_type == "command" then
         local world_x, world_y = screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
         local target_unit = LOOT_RUNTIME.find_human_drop_target(self, world_x, world_y, source_unit.id)
         if target_unit then
             if LOOT_RUNTIME.can_transfer_between_units(source_unit, target_unit) then
-                if source_unit.class_id == UNIT_CLASS_MEDIC and source_item == "meds" then
-                    if target_unit.current_health >= target_unit.max_health then
-                        print(target_unit.display_name .. " already has full HP.")
-                    else
-                        table.remove(source_unit.backpack_items, drag.source_slot_index)
-                        source_unit.backpack_used = #source_unit.backpack_items
-                        target_unit.current_health = target_unit.max_health
-                        consumed = true
-                        print(string.format("%s used 1 meds on %s (full heal).", source_unit.display_name, target_unit.display_name))
-                        -- FUTURE HOOK: play heal particle effect on target_unit.
-                    end
+                if (source_unit.command_points or 0) > 0 then
+                    source_unit.command_points = source_unit.command_points - 1
+                    target_unit.current_ap = target_unit.current_ap + 1 -- intentionally uncapped by design
+                    consumed = true
+                    print(string.format("%s granted +1 AP to %s.", source_unit.display_name, target_unit.display_name))
                 else
-                    target_unit.backpack_items = target_unit.backpack_items or {}
-                    local target_cap = target_unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
-                    if #target_unit.backpack_items < target_cap then
-                        table.remove(source_unit.backpack_items, drag.source_slot_index)
-                        source_unit.backpack_used = #source_unit.backpack_items
-                        table.insert(target_unit.backpack_items, source_item)
-                        target_unit.backpack_used = #target_unit.backpack_items
-                        consumed = true
-                        print(string.format("%s gave 1 %s to %s.", source_unit.display_name, source_item, target_unit.display_name))
-                    else
-                        print(target_unit.display_name .. " backpack is full.")
-                    end
+                    print("No command points available.")
                 end
             else
                 print("too far away")
+            end
+        end
+    else
+        local bar_target = LOOT_RUNTIME.get_bar_drop_target(screen_x, screen_y)
+        if bar_target then
+            consumed = LOOT_RUNTIME.try_apply_to_own_bar(source_unit, source_item, bar_target)
+            if consumed then
+                table.remove(source_unit.backpack_items, drag.source_slot_index)
+                source_unit.backpack_used = #source_unit.backpack_items
+                print(string.format("%s used 1 %s on own %s bar.", source_unit.display_name, source_item, bar_target))
+            end
+        else
+            local world_x, world_y = screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+            local target_unit = LOOT_RUNTIME.find_human_drop_target(self, world_x, world_y, source_unit.id)
+            if target_unit then
+                if LOOT_RUNTIME.can_transfer_between_units(source_unit, target_unit) then
+                    if source_unit.class_id == UNIT_CLASS_MEDIC and source_item == "meds" then
+                        if target_unit.current_health >= target_unit.max_health then
+                            print(target_unit.display_name .. " already has full HP.")
+                        else
+                            table.remove(source_unit.backpack_items, drag.source_slot_index)
+                            source_unit.backpack_used = #source_unit.backpack_items
+                            target_unit.current_health = target_unit.max_health
+                            consumed = true
+                            print(string.format("%s used 1 meds on %s (full heal).", source_unit.display_name, target_unit.display_name))
+                            -- FUTURE HOOK: play heal particle effect on target_unit.
+                        end
+                    else
+                        target_unit.backpack_items = target_unit.backpack_items or {}
+                        local target_cap = target_unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
+                        if #target_unit.backpack_items < target_cap then
+                            table.remove(source_unit.backpack_items, drag.source_slot_index)
+                            source_unit.backpack_used = #source_unit.backpack_items
+                            table.insert(target_unit.backpack_items, source_item)
+                            target_unit.backpack_used = #target_unit.backpack_items
+                            consumed = true
+                            print(string.format("%s gave 1 %s to %s.", source_unit.display_name, source_item, target_unit.display_name))
+                        else
+                            print(target_unit.display_name .. " backpack is full.")
+                        end
+                    end
+                else
+                    print("too far away")
+                end
             end
         end
     end
@@ -2742,7 +2850,7 @@ LOOT_RUNTIME.update_drag_visual = function(self)
         return
     end
 
-    local color = LOOT_RUNTIME.get_backpack_item_color(drag.item_type)
+    local color = (drag.drag_type == "command") and COMMAND_UI.drag_color or LOOT_RUNTIME.get_backpack_item_color(drag.item_type)
     set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, color, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
 
@@ -3423,6 +3531,11 @@ function on_input(self, action_id, action)
 
         if action.pressed then
             if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
+                if LOOT_RUNTIME.begin_command_drag(self, action.x, action.y) then
+                    self.is_panning = false
+                    self.did_drag = true
+                    return true
+                end
                 if LOOT_RUNTIME.begin_resource_drag(self, action.x, action.y) then
                     self.is_panning = false
                     self.did_drag = true

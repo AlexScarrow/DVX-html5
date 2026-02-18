@@ -2692,17 +2692,30 @@ LOOT_RUNTIME.end_resource_drag = function(self, screen_x, screen_y)
         local target_unit = LOOT_RUNTIME.find_human_drop_target(self, world_x, world_y, source_unit.id)
         if target_unit then
             if LOOT_RUNTIME.can_transfer_between_units(source_unit, target_unit) then
-                target_unit.backpack_items = target_unit.backpack_items or {}
-                local target_cap = target_unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
-                if #target_unit.backpack_items < target_cap then
-                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                    source_unit.backpack_used = #source_unit.backpack_items
-                    table.insert(target_unit.backpack_items, source_item)
-                    target_unit.backpack_used = #target_unit.backpack_items
-                    consumed = true
-                    print(string.format("%s gave 1 %s to %s.", source_unit.display_name, source_item, target_unit.display_name))
+                if source_unit.class_id == UNIT_CLASS_MEDIC and source_item == "meds" then
+                    if target_unit.current_health >= target_unit.max_health then
+                        print(target_unit.display_name .. " already has full HP.")
+                    else
+                        table.remove(source_unit.backpack_items, drag.source_slot_index)
+                        source_unit.backpack_used = #source_unit.backpack_items
+                        target_unit.current_health = target_unit.max_health
+                        consumed = true
+                        print(string.format("%s used 1 meds on %s (full heal).", source_unit.display_name, target_unit.display_name))
+                        -- FUTURE HOOK: play heal particle effect on target_unit.
+                    end
                 else
-                    print(target_unit.display_name .. " backpack is full.")
+                    target_unit.backpack_items = target_unit.backpack_items or {}
+                    local target_cap = target_unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
+                    if #target_unit.backpack_items < target_cap then
+                        table.remove(source_unit.backpack_items, drag.source_slot_index)
+                        source_unit.backpack_used = #source_unit.backpack_items
+                        table.insert(target_unit.backpack_items, source_item)
+                        target_unit.backpack_used = #target_unit.backpack_items
+                        consumed = true
+                        print(string.format("%s gave 1 %s to %s.", source_unit.display_name, source_item, target_unit.display_name))
+                    else
+                        print(target_unit.display_name .. " backpack is full.")
+                    end
                 end
             else
                 print("too far away")

@@ -1,6 +1,29 @@
 local M = {}
 
 function M.extend(runtime, ctx)
+    runtime.find_power_node_drop_target = function(self, world_x, world_y)
+        if not self.world_grid then
+            return nil
+        end
+
+        local best_cell = nil
+        local best_dist = math.huge
+        local max_dist = ctx.LOOT_UI.power_node_drop_radius
+        for _, cell in ipairs(self.world_grid) do
+            if runtime.cell_has_power_node(cell) and cell.tileID ~= hash("empty") then
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local dx = cx - world_x
+                local dy = (cy + 10) - world_y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist <= max_dist and dist < best_dist then
+                    best_cell = cell
+                    best_dist = dist
+                end
+            end
+        end
+        return best_cell
+    end
+
     runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
         if not runtime.is_point_in_loot_button(screen_x, screen_y) then
             return false
@@ -30,9 +53,18 @@ function M.extend(runtime, ctx)
         local added = 0
         local dropped = 0
 
-        for _ = 1, roll_count do
-            local loot_roll = math.random(1, 3)
-            local item_type = (loot_roll == 1 and "ammo") or (loot_roll == 2 and "meds") or "material"
+        -- Temporary test rule: every loot box guarantees at least one power unit.
+        local loot_results = { "power" }
+        for _ = 2, roll_count do
+            local loot_roll = math.random(1, 4)
+            local item_type = (loot_roll == 1 and "ammo")
+                or (loot_roll == 2 and "meds")
+                or (loot_roll == 3 and "material")
+                or "power"
+            table.insert(loot_results, item_type)
+        end
+
+        for _, item_type in ipairs(loot_results) do
             if #unit.backpack_items < capacity then
                 table.insert(unit.backpack_items, item_type)
                 unit.backpack_used = #unit.backpack_items
@@ -291,6 +323,50 @@ function M.extend(runtime, ctx)
                         end
                     else
                         print("too far away")
+                    end
+                else
+                    local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+                    local target_power_cell = runtime.find_power_node_drop_target(self, world_x, world_y)
+                    if target_power_cell and source_item == "power" then
+                        if not source_unit.cell_id then
+                            print("Unable to activate power node: source unit has no cell.")
+                            self.drag_resource = { active = false }
+                            return true
+                        end
+                        local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                        local tx, ty = target_power_cell.xCell, target_power_cell.yCell
+                        local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                        if manhattan <= 1 then
+                            if target_power_cell.isPowered then
+                                print("Power node already active.")
+                            else
+                                table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                source_unit.backpack_used = #source_unit.backpack_items
+                                consumed = true
+
+                                if target_power_cell.object1 and target_power_cell.object1.name == hash("power_node") then
+                                    target_power_cell.object1.isFixed = true
+                                elseif target_power_cell.object2 and target_power_cell.object2.name == hash("power_node") then
+                                    target_power_cell.object2.isFixed = true
+                                elseif target_power_cell.object3 and target_power_cell.object3.name == hash("power_node") then
+                                    target_power_cell.object3.isFixed = true
+                                end
+
+                                local target_tile_instance = target_power_cell.tileInstanceId or 0
+                                if target_tile_instance > 0 then
+                                    for _, cell in ipairs(self.world_grid) do
+                                        if cell.tileInstanceId == target_tile_instance then
+                                            cell.isPowered = true
+                                        end
+                                    end
+                                end
+                                print(string.format("%s activated a power node.", source_unit.display_name))
+                                runtime.refresh_power_node_markers(self)
+                                runtime.refresh_light_value_markers(self)
+                            end
+                        else
+                            print("too far away")
+                        end
                     end
                 end
             end

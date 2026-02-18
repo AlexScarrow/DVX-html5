@@ -62,6 +62,69 @@ function M.extend(runtime, ctx)
         end
     end
 
+    runtime.refresh_power_node_markers = function(self)
+        self.power_node_objects = self.power_node_objects or {}
+        local power_node_objects = self.power_node_objects
+        for cell_id, marker in pairs(power_node_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            power_node_objects[cell_id] = nil
+        end
+
+        if not self.world_grid then
+            return
+        end
+
+        for cell_id, cell in ipairs(self.world_grid) do
+            if runtime.cell_has_power_node(cell) and cell.tileID ~= hash("empty") then
+                local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y + 10, 0.046))
+                if marker_id then
+                    go.set_scale(vmath.vector3(ctx.LOOT_UI.power_node_marker_size, ctx.LOOT_UI.power_node_marker_size, 1), marker_id)
+                    local marker_color = cell.isPowered and ctx.LOOT_UI.power_node_marker_powered_color or ctx.LOOT_UI.power_node_marker_color
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", marker_color)
+                    power_node_objects[cell_id] = marker_id
+                end
+            end
+        end
+    end
+
+    runtime.refresh_light_value_markers = function(self)
+        self.light_value_objects = self.light_value_objects or {}
+        local light_value_objects = self.light_value_objects
+        for _, marker in ipairs(light_value_objects) do
+            if marker then
+                go.delete(marker)
+            end
+        end
+        self.light_value_objects = {}
+
+        if not self.world_grid then
+            return
+        end
+
+        for _, cell in ipairs(self.world_grid) do
+            if cell.tileID ~= hash("empty") and cell.isPowered then
+                local pip_count = math.max(0, math.min(3, cell.lightValue or 0))
+                if pip_count > 0 then
+                    local center_x, center_y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    local top_left_x = center_x - (ctx.CELL_WIDTH * 0.5) + ctx.LOOT_UI.light_pip_top_left_offset_x
+                    local top_left_y = center_y + (ctx.CELL_HEIGHT * 0.5) - ctx.LOOT_UI.light_pip_top_left_offset_y
+                    for i = 1, pip_count do
+                        local pip_x = top_left_x + ((i - 1) * (ctx.LOOT_UI.light_pip_size + ctx.LOOT_UI.light_pip_gap))
+                        local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(pip_x, top_left_y, 0.047))
+                        if marker_id then
+                            go.set_scale(vmath.vector3(ctx.LOOT_UI.light_pip_size, ctx.LOOT_UI.light_pip_size, 1), marker_id)
+                            go.set(msg.url(nil, marker_id, "sprite"), "tint", ctx.LOOT_UI.light_pip_color)
+                            table.insert(self.light_value_objects, marker_id)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     runtime.spawn_loot_pickup_blip = function(self, from_cell_id, to_slot_index, item_type, from_world_x, from_world_y)
         local from_x, from_y = from_world_x, from_world_y
         if not from_x or not from_y then

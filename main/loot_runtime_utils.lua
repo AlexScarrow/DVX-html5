@@ -8,6 +8,8 @@ function M.create(ctx)
             return ctx.LOOT_UI.ammo_color
         elseif item_type == "meds" then
             return ctx.LOOT_UI.meds_color
+        elseif item_type == "power" then
+            return ctx.LOOT_UI.power_color
         elseif item_type == "material" then
             return ctx.LOOT_UI.material_color
         elseif item_type == ctx.COMPONENT_UI.item_type_blue then
@@ -55,6 +57,15 @@ function M.create(ctx)
         return (cell.object1 and cell.object1.name == hash("machine"))
             or (cell.object2 and cell.object2.name == hash("machine"))
             or (cell.object3 and cell.object3.name == hash("machine"))
+    end
+
+    runtime.cell_has_power_node = function(cell)
+        if not cell then
+            return false
+        end
+        return (cell.object1 and cell.object1.name == hash("power_node"))
+            or (cell.object2 and cell.object2.name == hash("power_node"))
+            or (cell.object3 and cell.object3.name == hash("power_node"))
     end
 
     runtime.get_backpack_slot_index_at = function(screen_x, screen_y)

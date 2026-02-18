@@ -160,6 +160,7 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         accessRight = true,
         accessDown = true,
         isPowered = false,
+        tileInstanceId = 0,
         isOccupied = hash("empty"),
         hasLoot = false,
         object1 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
@@ -197,6 +198,7 @@ function create_tile_prototype(tile_id)
             accessRight = true,
             accessDown = true,
             isPowered = false,
+            tileInstanceId = 0,
             isOccupied = hash("empty"),
             hasLoot = false,
             object1 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
@@ -620,6 +622,12 @@ function create_tile_library()
     --corridor.cells[4].accessRight = false  -- Wall on right of cell 4
     --corridor.cells[6].accessRight = false  -- Wall on right of cell 6
 
+    corridor.cells[5].object1 = {
+        name = hash("power_node"),
+        isFixed = false,
+        isDependentOn = {}
+    }
+
     assign_random_loot_cell(corridor)
     library["corridor"] = corridor
 
@@ -644,7 +652,13 @@ function create_tile_library()
     canteen.cells[6].accessRight = false  -- Wall on right of cell 6
     canteen.cells[2].accessDown = false   -- Wall on bottom of cell 2
     canteen.cells[8].accessDown = false   -- Wall on bottom of cell 8
-    
+
+    canteen.cells[5].object1 = {
+        name = hash("power_node"),
+        isFixed = false,
+        isDependentOn = {}
+    }
+
     assign_random_loot_cell(canteen)
     library["canteen"] = canteen
 
@@ -664,7 +678,13 @@ function create_tile_library()
     armoury.cells[6].accessRight = false  -- Wall on right of cell 6
     armoury.cells[2].accessDown = false   -- Wall on bottom of cell 2
     armoury.cells[8].accessDown = false   -- Wall on bottom of cell 8
-    
+
+    armoury.cells[2].object1 = {
+        name = hash("power_node"),
+        isFixed = false,
+        isDependentOn = {}
+    }
+
     -- Add a machine to center cell (cell 5)
     armoury.cells[5].object1 = {
         name = hash("machine"),
@@ -732,11 +752,12 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
     -- First, ensure all cells start as "empty" (VOID)
     for i = 1, #world_grid do
         world_grid[i].tileID = hash("empty")
+        world_grid[i].tileInstanceId = 0
         world_grid[i].hasLoot = false
     end
 
     -- Place each tile from the level design
-    for _, placement in ipairs(level_design) do
+    for placement_index, placement in ipairs(level_design) do
         local center_x = placement.x
         local center_y = placement.y
         local tile_name = placement.tile
@@ -768,6 +789,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.accessRight = tile_cell.accessRight
                         world_cell.accessDown = tile_cell.accessDown
                         world_cell.isPowered = tile_cell.isPowered
+                        world_cell.tileInstanceId = placement_index
                         world_cell.isOccupied = tile_cell.isOccupied
                         world_cell.hasLoot = tile_cell.hasLoot == true
                         world_cell.object1 = tile_cell.object1
@@ -2431,6 +2453,8 @@ end
 LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     LOOT_UI = LOOT_UI,
     COMPONENT_UI = COMPONENT_UI,
+    CELL_WIDTH = CELL_WIDTH,
+    CELL_HEIGHT = CELL_HEIGHT,
     coords_to_world_pos = coords_to_world_pos,
     screen_to_world = screen_to_world,
     get_loot_objects = function() return loot_objects end,
@@ -2445,6 +2469,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,
     get_selected_unit = get_selected_unit,
     screen_to_world = screen_to_world,
+    id_to_coords = id_to_coords,
     coords_to_world_pos = coords_to_world_pos,
     set_ui_square_transform = set_ui_square_transform,
     update_human_visual_state = update_human_visual_state
@@ -2917,6 +2942,8 @@ end
         tile_objects = {}
         loot_objects = {}
         machine_objects = {}
+        self.power_node_objects = {}
+        self.light_value_objects = {}
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[1]
@@ -2976,6 +3003,8 @@ end
         print("Spawned " .. spawned_count .. " cells")
         LOOT_RUNTIME.refresh_loot_markers(self)
         LOOT_RUNTIME.refresh_machine_markers(self)
+        LOOT_RUNTIME.refresh_power_node_markers(self)
+        LOOT_RUNTIME.refresh_light_value_markers(self)
     end--of spawn visuals fn
 
 

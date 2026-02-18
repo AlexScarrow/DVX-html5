@@ -2428,119 +2428,14 @@ local function is_point_in_ui_panel(screen_x, screen_y)
     return screen_x >= min_x and screen_x <= max_x and screen_y >= min_y and screen_y <= max_y
 end
 
-LOOT_RUNTIME.clear_loot_marker = function(cell_id)
-    local marker = loot_objects[cell_id]
-    if marker then
-        go.delete(marker)
-        loot_objects[cell_id] = nil
-    end
-end
-
-LOOT_RUNTIME.refresh_loot_markers = function(self)
-    for cell_id, marker in pairs(loot_objects) do
-        if marker then
-            go.delete(marker)
-        end
-        loot_objects[cell_id] = nil
-    end
-
-    if not self.world_grid then
-        return
-    end
-
-    for cell_id, cell in ipairs(self.world_grid) do
-        if cell.hasLoot and cell.tileID ~= hash("empty") then
-            local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
-            local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y, LOOT_UI.marker_z))
-            if marker_id then
-                go.set_scale(vmath.vector3(LOOT_UI.marker_size, LOOT_UI.marker_size, 1), marker_id)
-                go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
-                loot_objects[cell_id] = marker_id
-            end
-        end
-    end
-end
-
-LOOT_RUNTIME.refresh_machine_markers = function(self)
-    for cell_id, marker in pairs(machine_objects) do
-        if marker then
-            go.delete(marker)
-        end
-        machine_objects[cell_id] = nil
-    end
-
-    if not self.world_grid then
-        return
-    end
-
-    for cell_id, cell in ipairs(self.world_grid) do
-        if LOOT_RUNTIME.cell_has_component_machine(cell) and cell.tileID ~= hash("empty") then
-            local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
-            local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y + 10, 0.045))
-            if marker_id then
-                go.set_scale(vmath.vector3(COMPONENT_UI.machine_marker_size, COMPONENT_UI.machine_marker_size, 1), marker_id)
-                go.set(msg.url(nil, marker_id, "sprite"), "tint", COMPONENT_UI.machine_marker_color)
-                machine_objects[cell_id] = marker_id
-            end
-        end
-    end
-end
-
-LOOT_RUNTIME.spawn_loot_pickup_blip = function(self, from_cell_id, to_slot_index, item_type, from_world_x, from_world_y)
-    local from_x, from_y = from_world_x, from_world_y
-    if not from_x or not from_y then
-        if not self.world_grid or not self.world_grid[from_cell_id] then
-            return
-        end
-        local from_cell = self.world_grid[from_cell_id]
-        from_x, from_y = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
-    end
-
-    local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(to_slot_index)
-    local to_x, to_y = screen_to_world(slot_x, slot_y, self.camera_pos, self.camera_zoom)
-
-    local blip_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.83))
-    if not blip_id then
-        return
-    end
-
-    local color = LOOT_RUNTIME.get_backpack_item_color(item_type)
-    go.set_scale(vmath.vector3(LOOT_UI.pickup_blip_size, LOOT_UI.pickup_blip_size, 1), blip_id)
-    go.set(msg.url(nil, blip_id, "sprite"), "tint", color)
-
-    table.insert(self.loot_pickup_blips, {
-        go_id = blip_id,
-        from = vmath.vector3(from_x, from_y, 0.83),
-        to = vmath.vector3(to_x, to_y, 0.83),
-        t = 0
-    })
-end
-
-LOOT_RUNTIME.update_loot_pickup_blips = function(self, dt)
-    if not self.loot_pickup_blips then
-        return
-    end
-
-    for i = #self.loot_pickup_blips, 1, -1 do
-        local blip = self.loot_pickup_blips[i]
-        if not blip.go_id then
-            table.remove(self.loot_pickup_blips, i)
-        else
-            local dx = blip.to.x - blip.from.x
-            local dy = blip.to.y - blip.from.y
-            local dist = math.sqrt(dx * dx + dy * dy)
-            local travel_time = math.max(0.05, dist / LOOT_UI.pickup_blip_speed)
-            blip.t = math.min(1, blip.t + (dt / travel_time))
-            local px = blip.from.x + (dx * blip.t)
-            local py = blip.from.y + (dy * blip.t)
-            go.set_position(vmath.vector3(px, py, 0.83), blip.go_id)
-            if blip.t >= 1 then
-                go.delete(blip.go_id)
-                table.remove(self.loot_pickup_blips, i)
-            end
-        end
-    end
-end
+LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
+    LOOT_UI = LOOT_UI,
+    COMPONENT_UI = COMPONENT_UI,
+    coords_to_world_pos = coords_to_world_pos,
+    screen_to_world = screen_to_world,
+    get_loot_objects = function() return loot_objects end,
+    get_machine_objects = function() return machine_objects end
+})
 
 LOOT_RUNTIME.try_scavenge_selected_unit = function(self, screen_x, screen_y)
     if not LOOT_RUNTIME.is_point_in_loot_button(screen_x, screen_y) then

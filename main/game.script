@@ -2295,59 +2295,26 @@ local function get_selected_unit(self)
     return nil
 end
 
-LOOT_RUNTIME.get_backpack_item_color = function(item_type)
-    if item_type == "ammo" then
-        return LOOT_UI.ammo_color
-    elseif item_type == "meds" then
-        return LOOT_UI.meds_color
-    elseif item_type == "material" then
-        return LOOT_UI.material_color
-    elseif item_type == COMPONENT_UI.item_type_blue then
-        return COMPONENT_UI.component_color
-    end
-    return UI_COLOR_SLOT
-end
-
-LOOT_RUNTIME.get_backpack_slot_screen_pos = function(slot_index)
-    local col = (slot_index - 1) % UI_BACKPACK_COLS
-    local row = math.floor((slot_index - 1) / UI_BACKPACK_COLS)
-    local slot_x = UI_BACKPACK_START_X + col * (UI_BACKPACK_SLOT_SIZE + UI_BACKPACK_SLOT_GAP)
-    local slot_y = UI_BACKPACK_START_Y - row * (UI_BACKPACK_SLOT_SIZE + UI_BACKPACK_SLOT_GAP)
-    return slot_x, slot_y
-end
-
-LOOT_RUNTIME.get_command_pip_screen_pos = function(pip_index)
-    local col = (pip_index - 1) % COMMAND_UI.cols
-    local row = math.floor((pip_index - 1) / COMMAND_UI.cols)
-    local x = COMMAND_UI.start_x + col * (COMMAND_UI.pip_size + COMMAND_UI.pip_gap)
-    local y = COMMAND_UI.start_y - row * (COMMAND_UI.pip_size + COMMAND_UI.pip_gap)
-    return x, y
-end
-
-LOOT_RUNTIME.is_point_in_loot_button = function(screen_x, screen_y)
-    local half = LOOT_UI.button_size * 0.5
-    return screen_x >= (LOOT_UI.button_x - half)
-        and screen_x <= (LOOT_UI.button_x + half)
-        and screen_y >= (LOOT_UI.button_y - half)
-        and screen_y <= (LOOT_UI.button_y + half)
-end
-
-LOOT_RUNTIME.is_point_in_component_button = function(screen_x, screen_y)
-    local half = COMPONENT_UI.button_size * 0.5
-    return screen_x >= (COMPONENT_UI.button_x - half)
-        and screen_x <= (COMPONENT_UI.button_x + half)
-        and screen_y >= (COMPONENT_UI.button_y - half)
-        and screen_y <= (COMPONENT_UI.button_y + half)
-end
-
-LOOT_RUNTIME.cell_has_component_machine = function(cell)
-    if not cell then
-        return false
-    end
-    return (cell.object1 and cell.object1.name == hash("machine"))
-        or (cell.object2 and cell.object2.name == hash("machine"))
-        or (cell.object3 and cell.object3.name == hash("machine"))
-end
+LOOT_RUNTIME = require("main.loot_runtime_utils").create({
+    LOOT_UI = LOOT_UI,
+    COMMAND_UI = COMMAND_UI,
+    COMPONENT_UI = COMPONENT_UI,
+    UI_COLOR_SLOT = UI_COLOR_SLOT,
+    UI_BACKPACK_COLS = UI_BACKPACK_COLS,
+    UI_BACKPACK_ROWS = UI_BACKPACK_ROWS,
+    UI_BACKPACK_SLOT_SIZE = UI_BACKPACK_SLOT_SIZE,
+    UI_BACKPACK_SLOT_GAP = UI_BACKPACK_SLOT_GAP,
+    UI_BACKPACK_START_X = UI_BACKPACK_START_X,
+    UI_BACKPACK_START_Y = UI_BACKPACK_START_Y,
+    UNIT_CLASS_SARGE = UNIT_CLASS_SARGE,
+    UI_BAR_START_Y = UI_BAR_START_Y,
+    UI_MAX_PIPS = UI_MAX_PIPS,
+    UI_BAR_PIP_SIZE = UI_BAR_PIP_SIZE,
+    UI_BAR_PIP_GAP = UI_BAR_PIP_GAP,
+    UI_BAR_AMMO_X = UI_BAR_AMMO_X,
+    UI_BAR_HP_X = UI_BAR_HP_X,
+    id_to_coords = id_to_coords
+})
 
 local function update_selected_unit_ui(self)
     local unit = get_selected_unit(self)
@@ -2679,43 +2646,6 @@ LOOT_RUNTIME.try_use_component_vending = function(self, screen_x, screen_y)
     return true
 end
 
-LOOT_RUNTIME.get_backpack_slot_index_at = function(screen_x, screen_y)
-    local half = UI_BACKPACK_SLOT_SIZE * 0.5
-    local total_slots = UI_BACKPACK_COLS * UI_BACKPACK_ROWS
-    for i = 1, total_slots do
-        local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(i)
-        if screen_x >= (slot_x - half)
-            and screen_x <= (slot_x + half)
-            and screen_y >= (slot_y - half)
-            and screen_y <= (slot_y + half) then
-            return i
-        end
-    end
-    return nil
-end
-
-LOOT_RUNTIME.get_command_pip_index_at = function(unit, screen_x, screen_y)
-    if not unit or unit.class_id ~= UNIT_CLASS_SARGE then
-        return nil
-    end
-    local command_count = math.min(unit.command_points or 0, COMMAND_UI.max_pips)
-    if command_count <= 0 then
-        return nil
-    end
-
-    local half = COMMAND_UI.pip_size * 0.5
-    for i = 1, command_count do
-        local cx, cy = LOOT_RUNTIME.get_command_pip_screen_pos(i)
-        if screen_x >= (cx - half)
-            and screen_x <= (cx + half)
-            and screen_y >= (cy - half)
-            and screen_y <= (cy + half) then
-            return i
-        end
-    end
-    return nil
-end
-
 LOOT_RUNTIME.begin_command_drag = function(self, screen_x, screen_y)
     local unit = get_selected_unit(self)
     if not unit then
@@ -2775,23 +2705,6 @@ LOOT_RUNTIME.update_resource_drag = function(self, screen_x, screen_y)
     self.drag_resource.screen_y = screen_y
 end
 
-LOOT_RUNTIME.get_bar_drop_target = function(screen_x, screen_y)
-    local min_y = UI_BAR_START_Y - ((UI_MAX_PIPS - 1) * (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP)) - LOOT_UI.bar_hit_padding
-    local max_y = UI_BAR_START_Y + LOOT_UI.bar_hit_padding
-    if screen_y < min_y or screen_y > max_y then
-        return nil
-    end
-
-    local half_w = (UI_BAR_PIP_SIZE * 0.5) + LOOT_UI.bar_hit_padding
-    if math.abs(screen_x - UI_BAR_AMMO_X) <= half_w then
-        return "ammo"
-    end
-    if math.abs(screen_x - UI_BAR_HP_X) <= half_w then
-        return "meds"
-    end
-    return nil
-end
-
 LOOT_RUNTIME.try_apply_to_own_bar = function(unit, item_type, bar_target)
     if not unit or not bar_target then
         return false
@@ -2841,16 +2754,6 @@ LOOT_RUNTIME.find_human_drop_target = function(self, world_x, world_y, exclude_u
         end
     end
     return best
-end
-
-LOOT_RUNTIME.can_transfer_between_units = function(source_unit, target_unit)
-    if not source_unit or not target_unit or not source_unit.cell_id or not target_unit.cell_id then
-        return false
-    end
-    local sx, sy = id_to_coords(source_unit.cell_id)
-    local tx, ty = id_to_coords(target_unit.cell_id)
-    local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
-    return manhattan <= 1
 end
 
 LOOT_RUNTIME.end_resource_drag = function(self, screen_x, screen_y)

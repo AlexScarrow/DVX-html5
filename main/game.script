@@ -141,10 +141,11 @@ local ALIEN_REVEAL_WEIGHT_SPITTER = 6 -- temp weighting for spitter-heavy testin
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
 local TILE_OPACITY = 0.5
 local CLASS_ROLE_HOOKS = {
-    [UNIT_CLASS_SARGE] = { can_donate_ap = true, can_fix = false, can_heal = false, heavy_weapon = false },
-    [UNIT_CLASS_TECHIE] = { can_donate_ap = false, can_fix = true, can_heal = false, heavy_weapon = false },
-    [UNIT_CLASS_MEDIC] = { can_donate_ap = false, can_fix = false, can_heal = true, heavy_weapon = false },
-    [UNIT_CLASS_GUNNER] = { can_donate_ap = false, can_fix = false, can_heal = false, heavy_weapon = true }
+    [UNIT_CLASS_SARGE] = { can_donate_ap = true, can_fix = false, can_heal = false, heavy_weapon = false, ranged_hit_bonus = 0 },
+    [UNIT_CLASS_TECHIE] = { can_donate_ap = false, can_fix = true, can_heal = false, heavy_weapon = false, ranged_hit_bonus = 0 },
+    [UNIT_CLASS_MEDIC] = { can_donate_ap = false, can_fix = false, can_heal = true, heavy_weapon = false, ranged_hit_bonus = 0 },
+    -- Hook for detailed combat modeling: Gunner gets higher ranged effectiveness.
+    [UNIT_CLASS_GUNNER] = { can_donate_ap = false, can_fix = false, can_heal = false, heavy_weapon = true, ranged_hit_bonus = 5 }
 }
 local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = true, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
@@ -2122,6 +2123,14 @@ end
 
 local function has_heavy_weapon(unit)
     return unit_has_role(unit, "heavy_weapon")
+end
+
+local function get_unit_ranged_hit_bonus(unit)
+    if not unit then
+        return 0
+    end
+    local role = CLASS_ROLE_HOOKS[unit.class_id]
+    return (role and role.ranged_hit_bonus) or 0
 end
 
 local function print_squad_debug_overview(self)

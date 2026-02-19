@@ -7,6 +7,12 @@ images {
 images {
   image: "/assets/images/tile_armoury.png"
 }
+images {
+  image: "/assets/images/tile_armoury_off.png"
+}
+images {
+  image: "/assets/images/tile_armoury_on.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

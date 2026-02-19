@@ -116,7 +116,7 @@ local ALIEN_REVEAL_WEIGHT_CANNON = 1
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 1
 local ALIEN_REVEAL_WEIGHT_SPITTER = 6 -- temp weighting for spitter-heavy testing
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
-local TILE_OPACITY = 0.5
+local TILE_OPACITY = 1.0
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = true, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
@@ -3175,6 +3175,9 @@ end
         local spawned_count = 0
         cell_objects = {}
         tile_objects = {}
+        self.tile_light_layers = {}
+        self.tile_light_power_state = {}
+        self.tile_light_flicker_state = {}
         loot_objects = {}
         machine_objects = {}
         self.power_node_objects = {}
@@ -3182,7 +3185,7 @@ end
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[1]
-        for _, placement in ipairs(selected_level) do
+        for placement_index, placement in ipairs(selected_level) do
             local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
             local pos = vmath.vector3(center_x, center_y, 0.02)
 
@@ -3194,6 +3197,16 @@ end
                 table.insert(tile_objects, id)
             else
                 print("Tile factory create failed for: " .. placement.tile)
+            end
+
+            if placement.tile == "armoury" then
+                local light_id = factory.create("/tile_factory#tile_factory", vmath.vector3(center_x, center_y, 0.3), nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
+                if light_id then
+                    msg.post(msg.url(nil, light_id, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
+                    self.tile_light_layers[placement_index] = light_id
+                    self.tile_light_power_state[placement_index] = false
+                    self.tile_light_flicker_state[placement_index] = nil
+                end
             end
         end
         print("Spawned " .. #tile_objects .. " tiles")
@@ -3352,6 +3365,60 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    if self.world_grid and self.tile_light_layers then
+        for tile_instance_id, light_go in pairs(self.tile_light_layers) do
+            local tile_powered = false
+            for _, cell in ipairs(self.world_grid) do
+                if cell.tileInstanceId == tile_instance_id and cell.isPowered then
+                    tile_powered = true
+                    break
+                end
+            end
+
+            local was_powered = self.tile_light_power_state[tile_instance_id]
+            if was_powered == nil or was_powered ~= tile_powered then
+                if tile_powered then
+                    -- Fluorescent-style startup flicker: OFF/ON pulses before stabilizing ON.
+                    self.tile_light_flicker_state[tile_instance_id] = {
+                        active = true,
+                        timer = 0.06,
+                        step = 1
+                    }
+                    msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
+                else
+                    self.tile_light_flicker_state[tile_instance_id] = nil
+                    msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
+                end
+                self.tile_light_power_state[tile_instance_id] = tile_powered
+            end
+
+            local flicker = self.tile_light_flicker_state[tile_instance_id]
+            if flicker and flicker.active then
+                flicker.timer = flicker.timer - dt
+                if flicker.timer <= 0 then
+                    if flicker.step == 1 then
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_on") })
+                        flicker.timer = 0.05
+                    elseif flicker.step == 2 then
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
+                        flicker.timer = 0.06
+                    elseif flicker.step == 3 then
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_on") })
+                        flicker.timer = 0.05
+                    elseif flicker.step == 4 then
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
+                        flicker.timer = 0.04
+                    else
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_on") })
+                        flicker.active = false
+                        flicker.timer = 0
+                    end
+                    flicker.step = flicker.step + 1
+                end
+            end
+        end
+    end
+
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
     MELEE_RUNTIME.update_human_hit_flash(self, dt)

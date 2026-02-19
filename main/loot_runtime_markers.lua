@@ -62,6 +62,35 @@ function M.extend(runtime, ctx)
         end
     end
 
+    runtime.refresh_fix_markers = function(self)
+        self.fix_objects = self.fix_objects or {}
+        for cell_id, marker in pairs(self.fix_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.fix_objects[cell_id] = nil
+        end
+
+        if not self.world_grid then
+            return
+        end
+
+        for cell_id, cell in ipairs(self.world_grid) do
+            local fixables = runtime.get_fixable_objects_in_cell(cell)
+            if #fixables > 0 and cell.tileID ~= hash("empty") then
+                local unresolved = runtime.cell_has_fixable_object(cell)
+                local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x - 18, y + 12, 0.046))
+                if marker_id then
+                    go.set_scale(vmath.vector3(ctx.COMPONENT_UI.fix_marker_size, ctx.COMPONENT_UI.fix_marker_size, 1), marker_id)
+                    local color = unresolved and ctx.COMPONENT_UI.fix_marker_color or ctx.COMPONENT_UI.fix_marker_fixed_color
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
+                    self.fix_objects[cell_id] = marker_id
+                end
+            end
+        end
+    end
+
     runtime.refresh_power_node_markers = function(self)
         self.power_node_objects = self.power_node_objects or {}
         local power_node_objects = self.power_node_objects

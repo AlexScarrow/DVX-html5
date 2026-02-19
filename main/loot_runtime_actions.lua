@@ -56,11 +56,13 @@ function M.extend(runtime, ctx)
         -- Temporary test rule: every loot box guarantees at least one power unit.
         local loot_results = { "power" }
         for _ = 2, roll_count do
-            local loot_roll = math.random(1, 4)
-            local item_type = (loot_roll == 1 and "ammo")
-                or (loot_roll == 2 and "meds")
-                or (loot_roll == 3 and "material")
-                or "power"
+            -- Temporary test weighting for vending/fixing loop:
+            -- bias additional loot heavily toward material.
+            local loot_roll = math.random(1, 10)
+            local item_type = (loot_roll <= 6 and "material")
+                or (loot_roll <= 8 and "power")
+                or (loot_roll == 9 and "ammo")
+                or "meds"
             table.insert(loot_results, item_type)
         end
 
@@ -102,6 +104,10 @@ function M.extend(runtime, ctx)
             print("No component vending machine here.")
             return true
         end
+        if not cell.isPowered then
+            print("Vending machine is offline (tile has no power).")
+            return true
+        end
 
         unit.backpack_items = unit.backpack_items or {}
         local material_slot = nil
@@ -133,6 +139,84 @@ function M.extend(runtime, ctx)
             machine_y + 18
         )
         print(string.format("%s used 1 material and produced 1 component.", unit.display_name))
+        return true
+    end
+
+    runtime.try_fix_selected_unit = function(self, screen_x, screen_y)
+        if not runtime.is_point_in_fix_button(screen_x, screen_y) then
+            return false
+        end
+
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return true
+        end
+
+        if unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
+            print("Only the Techie can fix objects.")
+            return true
+        end
+
+        local cell = self.world_grid and self.world_grid[unit.cell_id]
+        if not cell then
+            print("No cell selected for fixing.")
+            return true
+        end
+
+        local fixable = runtime.find_best_fixable_object(cell, ctx.COMPONENT_UI.item_type_blue)
+        if not fixable then
+            print("No fixable object here.")
+            return true
+        end
+
+        local dependency_id = fixable.dependsOn or 0
+        if dependency_id > 0 then
+            local dependency_fixed = false
+            for _, scan_cell in ipairs(self.world_grid or {}) do
+                local scan_objects = { scan_cell.object1, scan_cell.object2, scan_cell.object3 }
+                for _, scan_obj in ipairs(scan_objects) do
+                    if scan_obj and scan_obj.objectId == dependency_id then
+                        dependency_fixed = scan_obj.isFixed == true
+                        break
+                    end
+                end
+                if dependency_fixed then
+                    break
+                end
+            end
+            if not dependency_fixed then
+                print("Cannot fix: dependency is not fixed yet.")
+                return true
+            end
+        end
+
+        if unit.current_ap < ctx.COMPONENT_UI.fix_ap_cost then
+            print("Unable to fix: no AP")
+            return true
+        end
+
+        unit.backpack_items = unit.backpack_items or {}
+        local component_slot = nil
+        for i, item in ipairs(unit.backpack_items) do
+            if item == ctx.COMPONENT_UI.item_type_blue then
+                component_slot = i
+                break
+            end
+        end
+
+        if not component_slot then
+            print("Need 1 component to fix.")
+            return true
+        end
+
+        table.remove(unit.backpack_items, component_slot)
+        unit.backpack_used = #unit.backpack_items
+        unit.current_ap = unit.current_ap - ctx.COMPONENT_UI.fix_ap_cost
+        fixable.isFixed = true
+        print(string.format("%s fixed object #%d.", unit.display_name, fixable.objectId or 0))
+        -- FUTURE HOOK: trigger object-fix effects (fx/sound/gameplay event chain).
+        runtime.refresh_fix_markers(self)
+        ctx.update_human_visual_state(self)
         return true
     end
 
@@ -336,7 +420,7 @@ function M.extend(runtime, ctx)
                         local sx, sy = ctx.id_to_coords(source_unit.cell_id)
                         local tx, ty = target_power_cell.xCell, target_power_cell.yCell
                         local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
-                        if manhattan <= 1 then
+                        if manhattan == 0 then
                             if target_power_cell.isPowered then
                                 print("Power node already active.")
                             else

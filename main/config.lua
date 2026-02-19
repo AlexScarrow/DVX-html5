@@ -47,10 +47,19 @@ function M.create_ui_config(ui_panel_x, ui_panel_y, ui_panel_w, ui_panel_h)
         component_color = vmath.vector4(0.35, 0.65, 1, 1),
         machine_marker_color = vmath.vector4(0.2, 0.75, 1, 1),
         machine_marker_size = 14,
+        fix_marker_color = vmath.vector4(0.95, 0.6, 0.2, 1),
+        fix_marker_fixed_color = vmath.vector4(0.35, 0.9, 0.45, 1),
+        fix_marker_size = 12,
         button_color = vmath.vector4(0.25, 0.5, 0.9, 1),
         button_size = 44,
         button_x = ui_panel_x + (ui_panel_w * 0.5) - 86,
-        button_y = ui_panel_y - (ui_panel_h * 0.5) + 34
+        button_y = ui_panel_y - (ui_panel_h * 0.5) + 34,
+        fix_button_color = vmath.vector4(0.2, 0.8, 0.4, 1),
+        fix_button_size = 44,
+        fix_button_x = ui_panel_x + (ui_panel_w * 0.5) - 138,
+        fix_button_y = ui_panel_y - (ui_panel_h * 0.5) + 34,
+        fix_ap_cost = 1,
+        object_default_hit_size = 32
     }
 
     return {

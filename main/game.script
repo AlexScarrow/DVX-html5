@@ -163,9 +163,9 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         tileInstanceId = 0,
         isOccupied = hash("empty"),
         hasLoot = false,
-        object1 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
-        object2 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
-        object3 = { name = hash("empty"), isFixed = false, isDependentOn = {} }
+        object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+        object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+        object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
     }
 end
 
@@ -201,9 +201,9 @@ function create_tile_prototype(tile_id)
             tileInstanceId = 0,
             isOccupied = hash("empty"),
             hasLoot = false,
-            object1 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
-            object2 = { name = hash("empty"), isFixed = false, isDependentOn = {} },
-            object3 = { name = hash("empty"), isFixed = false, isDependentOn = {} }
+            object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+            object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+            object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
         }
     end
 
@@ -624,8 +624,15 @@ function create_tile_library()
 
     corridor.cells[5].object1 = {
         name = hash("power_node"),
-        isFixed = false,
-        isDependentOn = {}
+        isFixed = true,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = 0,
+        offsetY = 0,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
     }
 
     assign_random_loot_cell(corridor)
@@ -655,8 +662,15 @@ function create_tile_library()
 
     canteen.cells[5].object1 = {
         name = hash("power_node"),
-        isFixed = false,
-        isDependentOn = {}
+        isFixed = true,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = 0,
+        offsetY = 0,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
     }
 
     assign_random_loot_cell(canteen)
@@ -681,15 +695,42 @@ function create_tile_library()
 
     armoury.cells[2].object1 = {
         name = hash("power_node"),
-        isFixed = false,
-        isDependentOn = {}
+        isFixed = true,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = 0,
+        offsetY = 0,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
     }
 
     -- Add a machine to center cell (cell 5)
     armoury.cells[5].object1 = {
         name = hash("machine"),
         isFixed = false,
-        isDependentOn = {}
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = 0,
+        offsetY = 0,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
+    -- Temporary fixable object for Phase 1 fixing loop tests.
+    armoury.cells[6].object1 = {
+        name = hash("console"),
+        isFixed = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = -12,
+        offsetY = 4,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = COMPONENT_UI.item_type_blue
     }
     assign_random_loot_cell(armoury)
     library["armoury"] = armoury
@@ -749,11 +790,35 @@ end
 ]]
 
 function bake_level_to_world_grid(world_grid, level_design, tile_library)
+    local function clone_object(obj)
+        local dep_list = {}
+        if obj and obj.isDependentOn then
+            for i, dep in ipairs(obj.isDependentOn) do
+                dep_list[i] = dep
+            end
+        end
+        return {
+            name = (obj and obj.name) or hash("empty"),
+            isFixed = (obj and obj.isFixed) == true,
+            dependsOn = (obj and obj.dependsOn) or 0,
+            isDependentOn = dep_list,
+            objectId = (obj and obj.objectId) or 0,
+            offsetX = (obj and obj.offsetX) or 0,
+            offsetY = (obj and obj.offsetY) or 0,
+            hitW = (obj and obj.hitW) or 32,
+            hitH = (obj and obj.hitH) or 32,
+            requiredComponent = obj and obj.requiredComponent or nil
+        }
+    end
+
     -- First, ensure all cells start as "empty" (VOID)
     for i = 1, #world_grid do
         world_grid[i].tileID = hash("empty")
         world_grid[i].tileInstanceId = 0
         world_grid[i].hasLoot = false
+        world_grid[i].object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
     end
 
     -- Place each tile from the level design
@@ -792,12 +857,36 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.tileInstanceId = placement_index
                         world_cell.isOccupied = tile_cell.isOccupied
                         world_cell.hasLoot = tile_cell.hasLoot == true
-                        world_cell.object1 = tile_cell.object1
-                        world_cell.object2 = tile_cell.object2
-                        world_cell.object3 = tile_cell.object3
+                        world_cell.object1 = clone_object(tile_cell.object1)
+                        world_cell.object2 = clone_object(tile_cell.object2)
+                        world_cell.object3 = clone_object(tile_cell.object3)
                     end
 
                     tile_cell_index = tile_cell_index + 1
+                end
+            end
+        end
+    end
+
+    local next_object_id = 1
+    for _, cell in ipairs(world_grid) do
+        local objects = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(objects) do
+            if obj then
+                obj.dependsOn = obj.dependsOn or 0
+                obj.isDependentOn = obj.isDependentOn or {}
+                obj.offsetX = obj.offsetX or 0
+                obj.offsetY = obj.offsetY or 0
+                obj.hitW = obj.hitW or 32
+                obj.hitH = obj.hitH or 32
+                obj.requiredComponent = obj.requiredComponent
+                if obj.name and obj.name ~= hash("empty") then
+                    if not obj.objectId or obj.objectId == 0 then
+                        obj.objectId = next_object_id
+                        next_object_id = next_object_id + 1
+                    end
+                else
+                    obj.objectId = obj.objectId or 0
                 end
             end
         end
@@ -2276,6 +2365,7 @@ local function initialize_unit_ui(self)
         command_pips = {},
         backpack_slots = {},
         component_button = nil,
+        fix_button = nil,
         loot_button = nil,
         drag_pip = nil
     }
@@ -2296,6 +2386,7 @@ local function initialize_unit_ui(self)
         self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
     self.ui.component_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.button_color, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
+    self.ui.fix_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.fix_button_color, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 
@@ -2326,6 +2417,7 @@ local function set_ui_hidden(self)
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
     end
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
+    set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
@@ -2417,7 +2509,9 @@ local function update_selected_unit_ui(self)
     end
 
     local current_cell = unit.cell_id and self.world_grid and self.world_grid[unit.cell_id] or nil
-    local show_component_button = current_cell and LOOT_RUNTIME.cell_has_component_machine(current_cell)
+    local show_component_button = current_cell
+        and LOOT_RUNTIME.cell_has_component_machine(current_cell)
+        and current_cell.isPowered
     if show_component_button then
         set_ui_square_transform(
             self,
@@ -2439,6 +2533,33 @@ local function update_selected_unit_ui(self)
             vmath.vector4(0, 0, 0, 0),
             COMPONENT_UI.button_size,
             COMPONENT_UI.button_size
+        )
+    end
+
+    local show_fix_button = unit.class_id == UNIT_CLASS_TECHIE
+        and current_cell
+        and LOOT_RUNTIME.cell_has_fixable_object(current_cell)
+    if show_fix_button then
+        set_ui_square_transform(
+            self,
+            self.ui.fix_button,
+            COMPONENT_UI.fix_button_x,
+            COMPONENT_UI.fix_button_y,
+            0.82,
+            COMPONENT_UI.fix_button_color,
+            COMPONENT_UI.fix_button_size,
+            COMPONENT_UI.fix_button_size
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.fix_button,
+            -9999,
+            -9999,
+            0.82,
+            vmath.vector4(0, 0, 0, 0),
+            COMPONENT_UI.fix_button_size,
+            COMPONENT_UI.fix_button_size
         )
     end
 
@@ -2492,6 +2613,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     UI_BACKPACK_COLS = UI_BACKPACK_COLS,
     UI_BACKPACK_ROWS = UI_BACKPACK_ROWS,
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,
+    UNIT_CLASS_TECHIE = UNIT_CLASS_TECHIE,
     get_selected_unit = get_selected_unit,
     screen_to_world = screen_to_world,
     id_to_coords = id_to_coords,
@@ -3040,6 +3162,7 @@ end
         print("Spawned " .. spawned_count .. " cells")
         LOOT_RUNTIME.refresh_loot_markers(self)
         LOOT_RUNTIME.refresh_machine_markers(self)
+        LOOT_RUNTIME.refresh_fix_markers(self)
         LOOT_RUNTIME.refresh_power_node_markers(self)
         LOOT_RUNTIME.refresh_light_value_markers(self)
     end--of spawn visuals fn
@@ -3219,6 +3342,9 @@ function on_input(self, action_id, action)
         elseif action.released then
             if not self.did_drag then
                 if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
+                    if LOOT_RUNTIME.try_fix_selected_unit(self, action.x, action.y) then
+                        return
+                    end
                     if LOOT_RUNTIME.try_use_component_vending(self, action.x, action.y) then
                         return
                     end

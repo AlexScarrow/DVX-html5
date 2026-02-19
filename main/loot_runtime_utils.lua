@@ -50,6 +50,14 @@ function M.create(ctx)
             and screen_y <= (ctx.COMPONENT_UI.button_y + half)
     end
 
+    runtime.is_point_in_fix_button = function(screen_x, screen_y)
+        local half = ctx.COMPONENT_UI.fix_button_size * 0.5
+        return screen_x >= (ctx.COMPONENT_UI.fix_button_x - half)
+            and screen_x <= (ctx.COMPONENT_UI.fix_button_x + half)
+            and screen_y >= (ctx.COMPONENT_UI.fix_button_y - half)
+            and screen_y <= (ctx.COMPONENT_UI.fix_button_y + half)
+    end
+
     runtime.cell_has_component_machine = function(cell)
         if not cell then
             return false
@@ -57,6 +65,41 @@ function M.create(ctx)
         return (cell.object1 and cell.object1.name == hash("machine"))
             or (cell.object2 and cell.object2.name == hash("machine"))
             or (cell.object3 and cell.object3.name == hash("machine"))
+    end
+
+    runtime.get_fixable_objects_in_cell = function(cell)
+        local out = {}
+        if not cell then
+            return out
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name and obj.name ~= hash("empty") and obj.name ~= hash("machine") and obj.name ~= hash("power_node") then
+                table.insert(out, obj)
+            end
+        end
+        return out
+    end
+
+    runtime.cell_has_fixable_object = function(cell)
+        local objects = runtime.get_fixable_objects_in_cell(cell)
+        for _, obj in ipairs(objects) do
+            if obj.isFixed ~= true then
+                return true
+            end
+        end
+        return false
+    end
+
+    runtime.find_best_fixable_object = function(cell, required_component)
+        local objects = runtime.get_fixable_objects_in_cell(cell)
+        for _, obj in ipairs(objects) do
+            local requires = obj.requiredComponent or ctx.COMPONENT_UI.item_type_blue
+            if obj.isFixed ~= true and (not required_component or required_component == requires) then
+                return obj
+            end
+        end
+        return nil
     end
 
     runtime.cell_has_power_node = function(cell)

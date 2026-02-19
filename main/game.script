@@ -87,6 +87,7 @@ local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
 end)()
 local LOOT_RUNTIME = {}
+MELEE_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
 local HUMAN_TINT_TECHIE = vmath.vector4(0.45, 0.7, 1, 1)
 local HUMAN_TINT_MEDIC = vmath.vector4(1, 0.45, 0.45, 1)
@@ -1135,7 +1136,7 @@ local function get_human_cell_ids(self)
         return ids
     end
     for _, unit in pairs(self.squad_units) do
-        if unit.cell_id then
+        if unit.cell_id and (unit.current_health or 0) > 0 then
             table.insert(ids, unit.cell_id)
         end
     end
@@ -1599,6 +1600,9 @@ local function update_spitter_attack_phase(self, dt)
     if not self.pending_spitter_attack_phase then
         return
     end
+    if self.pending_melee_attack_phase then
+        return
+    end
 
     if not self.spitter_attack_started then
         if any_alien_is_moving(self) then
@@ -1741,9 +1745,11 @@ local function process_alien_turn(self)
     for _, alien in ipairs(self.aliens) do
         local cfg = ALIEN_TYPE_CONFIG[alien.type]
         local ap_budget = cfg and cfg.ap_per_turn or 1
+        alien.turn_ap_remaining = ap_budget
         local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
         if target_cell_id then
             local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, ap_budget)
+            alien.turn_ap_remaining = math.max(0, ap_budget - (spent or 0))
             local moved = segment_path ~= nil
             if segment_path then
                 begin_alien_path_animation(alien, segment_path)
@@ -1757,6 +1763,7 @@ local function process_alien_turn(self)
         end
     end
     print("=== Alien Turn End ===")
+    MELEE_RUNTIME.begin_phase(self)
     begin_spitter_attack_phase(self)
 end
 
@@ -2296,7 +2303,17 @@ local function update_human_visual_state(self)
 
     for _, unit in pairs(self.squad_units) do
         if unit.sprite_path then
-            if unit.current_ap <= 0 then
+            local flash_timer = unit.hit_flash_timer or 0
+            if not (unit and (unit.current_health or 0) > 0) then
+                go.set(unit.sprite_path, "tint", vmath.vector4(0.18, 0.18, 0.18, 1))
+            elseif flash_timer > 0 then
+                local flash_band = math.floor(flash_timer * 24) % 2
+                if flash_band == 0 then
+                    go.set(unit.sprite_path, "tint", vmath.vector4(1, 0.15, 0.15, 1))
+                else
+                    go.set(unit.sprite_path, "tint", vmath.vector4(0.08, 0.08, 0.08, 1))
+                end
+            elseif unit.current_ap <= 0 then
                 go.set(unit.sprite_path, "tint", HUMAN_TINT_NO_AP)
             else
                 local base_tint = get_unit_base_tint(unit)
@@ -2635,6 +2652,11 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     set_ui_square_transform = set_ui_square_transform,
     update_human_visual_state = update_human_visual_state
 })
+MELEE_RUNTIME = require("main.melee_runtime").create({
+    MELEE_MODEL = require("main.config").MELEE_MODEL,
+    ALIEN_TYPE_BRUTE = ALIEN_TYPE_BRUTE,
+    any_alien_is_moving = any_alien_is_moving
+})
 
 local function update_human_ap_debug_label(self)
     local unit = get_controlled_unit(self)
@@ -2655,7 +2677,14 @@ local function next_turn_reset_human_ap(self)
     end
 
     for _, unit in pairs(self.squad_units) do
-        unit.current_ap = unit.max_ap
+        if unit and (unit.current_health or 0) > 0 then
+            unit.current_ap = unit.max_ap
+        else
+            unit.current_ap = 0
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+        end
         unit.is_selected = false
     end
 
@@ -2767,6 +2796,10 @@ local function begin_human_path_move(self, path)
     if not unit then
         return
     end
+    if not (unit and (unit.current_health or 0) > 0) then
+        print(unit.display_name .. " is dead and cannot move.")
+        return
+    end
 
     if not path or #path < 2 then
         unit.is_moving = false
@@ -2783,6 +2816,13 @@ end
 
 local function update_single_unit_movement(self, unit, dt)
     if not unit or not unit.is_moving or not unit.move_path then
+        return
+    end
+    if not (unit and (unit.current_health or 0) > 0) then
+        unit.is_moving = false
+        unit.move_path = nil
+        unit.move_path_index = 0
+        set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         return
     end
 
@@ -2924,6 +2964,10 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     if not unit or not unit.is_selected then
         return false
     end
+    if not (unit and (unit.current_health or 0) > 0) then
+        print("Unable to fire: selected unit is dead.")
+        return true
+    end
 
     local alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
     if not alien then
@@ -2931,8 +2975,14 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     end
 
     -- Keep this command on the human side of the turn boundary.
-    if any_alien_is_moving(self) or self.pending_spitter_attack_phase then
+    if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase then
         print("Unable to fire: alien turn in progress.")
+        return true
+    end
+
+    if MELEE_RUNTIME.try_manual_human_melee(self, unit, alien) then
+        update_human_visual_state(self)
+        update_human_ap_debug_label(self)
         return true
     end
 
@@ -2992,6 +3042,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
     local clicked_unit = get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y)
     if clicked_unit then
+        if not (clicked_unit and (clicked_unit.current_health or 0) > 0) then
+            print(clicked_unit.display_name .. " is dead.")
+            return true
+        end
         self.ui_close_on_next_non_unit_click = false
         if clicked_unit.is_moving then
             print(clicked_unit.display_name .. " is already moving.")
@@ -3013,6 +3067,14 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     end
 
     unit = get_controlled_unit(self)
+    if not (unit and (unit.current_health or 0) > 0) then
+        if unit.is_selected then
+            unit.is_selected = false
+            update_human_visual_state(self)
+        end
+        print(unit.display_name .. " is dead and cannot act.")
+        return true
+    end
     if unit.is_selected and self.ui_close_on_next_non_unit_click then
         self.ui_close_on_next_non_unit_click = false
         deselect_all_units(self)
@@ -3268,6 +3330,11 @@ function init(self)
     self.spitter_attack_timer = 0
     self.spitter_attack_queue = {}
     self.spitter_projectiles = {}
+    self.pending_melee_attack_phase = false
+    self.melee_attack_started = false
+    self.melee_attack_timer = 0
+    self.melee_action_queue = {}
+    self.melee_ap_left_by_alien_id = {}
     self.loot_pickup_blips = {}
     self.drag_resource = { active = false }
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
@@ -3287,6 +3354,8 @@ end
 function update(self, dt)
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
+    MELEE_RUNTIME.update_human_hit_flash(self, dt)
+    MELEE_RUNTIME.update_phase(self, dt)
     update_spitter_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)

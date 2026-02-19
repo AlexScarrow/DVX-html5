@@ -86,4 +86,13 @@ M.RANGED_HIT_MODEL = {
     max_hit_chance = 100
 }
 
+M.MELEE_MODEL = {
+    swipe_interval_seconds = 0.5,
+    alien_base_hit_chance = 55,
+    human_base_hit_chance = 60,
+    min_hit_chance = 5,
+    max_hit_chance = 95,
+    human_hit_flash_duration = 0.18
+}
+
 return M

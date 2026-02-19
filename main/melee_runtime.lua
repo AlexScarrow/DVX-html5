@@ -1,0 +1,288 @@
+local M = {}
+
+function M.create(ctx)
+    local runtime = {}
+
+    local function clamp(v, lo, hi)
+        if v < lo then return lo end
+        if v > hi then return hi end
+        return v
+    end
+
+    local function get_human_by_id(self, unit_id)
+        if not self.squad_units or not unit_id then
+            return nil
+        end
+        return self.squad_units[unit_id]
+    end
+
+    local function find_alien_by_id(self, alien_id)
+        if not self.aliens then
+            return nil
+        end
+        for _, alien in ipairs(self.aliens) do
+            if alien.id == alien_id then
+                return alien
+            end
+        end
+        return nil
+    end
+
+    local function get_living_humans_on_cell(self, cell_id)
+        local list = {}
+        if not self.squad_units then
+            return list
+        end
+        for _, unit in pairs(self.squad_units) do
+            if unit.cell_id == cell_id and (unit.current_health or 0) > 0 then
+                table.insert(list, unit)
+            end
+        end
+        table.sort(list, function(a, b)
+            if a.current_health == b.current_health then
+                return tostring(a.id) < tostring(b.id)
+            end
+            return a.current_health < b.current_health
+        end)
+        return list
+    end
+
+    local function get_living_aliens_on_cell(self, cell_id)
+        local list = {}
+        if not self.aliens then
+            return list
+        end
+        for _, alien in ipairs(self.aliens) do
+            if (not alien.is_dead) and alien.cell_id == cell_id then
+                table.insert(list, alien)
+            end
+        end
+        table.sort(list, function(a, b)
+            if a.hp_current == b.hp_current then
+                return a.id < b.id
+            end
+            return a.hp_current < b.hp_current
+        end)
+        return list
+    end
+
+    local function kill_alien(alien)
+        alien.is_dead = true
+        alien.is_moving = false
+        alien.move_path = nil
+        alien.move_path_index = 0
+    end
+
+    local function mark_human_hit(unit)
+        unit.hit_flash_timer = ctx.MELEE_MODEL.human_hit_flash_duration
+    end
+
+    local function resolve_human_melee_strike(self, human, target_alien, source_tag)
+        if not human or not target_alien then
+            return
+        end
+        if (human.current_health or 0) <= 0 or human.current_ap <= 0 then
+            return
+        end
+        if target_alien.is_dead or target_alien.cell_id ~= human.cell_id then
+            return
+        end
+
+        human.current_ap = human.current_ap - 1
+        local hit_chance = clamp(ctx.MELEE_MODEL.human_base_hit_chance, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
+        local roll = math.random(1, 100)
+        if roll <= hit_chance then
+            if target_alien.type == ctx.ALIEN_TYPE_BRUTE then
+                target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                print(string.format(
+                    "%s melee %s on alien #%d (BRUTE) and HIT [chance=%d%% roll=%d hp=%d]",
+                    human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current
+                ))
+                if target_alien.hp_current <= 0 then
+                    kill_alien(target_alien)
+                    print(string.format("Alien #%d (BRUTE) is dead.", target_alien.id))
+                end
+            else
+                print(string.format(
+                    "%s melee %s on alien #%d and HIT (alien eliminated) [chance=%d%% roll=%d]",
+                    human.display_name, source_tag, target_alien.id, hit_chance, roll
+                ))
+                kill_alien(target_alien)
+            end
+        else
+            print(string.format(
+                "%s melee %s on alien #%d and MISSED [chance=%d%% roll=%d]",
+                human.display_name, source_tag, target_alien.id, hit_chance, roll
+            ))
+        end
+    end
+
+    local function resolve_alien_melee_strike(self, alien)
+        local ap_left = self.melee_ap_left_by_alien_id and (self.melee_ap_left_by_alien_id[alien.id] or 0) or 0
+        if ap_left <= 0 then
+            return
+        end
+
+        local humans = get_living_humans_on_cell(self, alien.cell_id)
+        if #humans == 0 then
+            return
+        end
+
+        local target = humans[1] -- weakest-first
+        local armor_bonus = target.melee_armor_bonus or target.equipped_armor_bonus or 0
+        local hit_chance = clamp(ctx.MELEE_MODEL.alien_base_hit_chance - armor_bonus, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
+        local roll = math.random(1, 100)
+        self.melee_ap_left_by_alien_id[alien.id] = ap_left - 1
+
+        if roll <= hit_chance then
+            target.current_health = math.max(0, (target.current_health or 0) - 1)
+            mark_human_hit(target)
+            print(string.format(
+                "Alien #%d melee on %s and HIT [chance=%d%% roll=%d hp=%d armor=%d]",
+                alien.id, target.display_name, hit_chance, roll, target.current_health, armor_bonus
+            ))
+            if target.current_health <= 0 then
+                print(target.display_name .. " is dead")
+            end
+        else
+            print(string.format(
+                "Alien #%d melee on %s and MISSED [chance=%d%% roll=%d armor=%d]",
+                alien.id, target.display_name, hit_chance, roll, armor_bonus
+            ))
+        end
+
+        local retaliators = get_living_humans_on_cell(self, alien.cell_id)
+        for _, human in ipairs(retaliators) do
+            if human.current_ap > 0 then
+                table.insert(self.melee_action_queue, {
+                    kind = "human_react",
+                    human_id = human.id,
+                    preferred_alien_id = alien.id,
+                    cell_id = alien.cell_id
+                })
+            end
+        end
+
+        local still_has_humans = #get_living_humans_on_cell(self, alien.cell_id) > 0
+        local remaining = self.melee_ap_left_by_alien_id[alien.id] or 0
+        if (not alien.is_dead) and remaining > 0 and still_has_humans then
+            table.insert(self.melee_action_queue, { kind = "alien", alien_id = alien.id })
+        end
+    end
+
+    runtime.begin_phase = function(self)
+        self.pending_melee_attack_phase = true
+        self.melee_attack_started = false
+        self.melee_attack_timer = 0
+        self.melee_action_queue = {}
+        self.melee_ap_left_by_alien_id = {}
+    end
+
+    runtime.is_busy = function(self)
+        return self.pending_melee_attack_phase == true
+    end
+
+    runtime.update_human_hit_flash = function(self, dt)
+        if not self.squad_units then
+            return
+        end
+        for _, unit in pairs(self.squad_units) do
+            if unit.hit_flash_timer and unit.hit_flash_timer > 0 then
+                unit.hit_flash_timer = math.max(0, unit.hit_flash_timer - dt)
+            end
+        end
+    end
+
+    runtime.update_phase = function(self, dt)
+        if not self.pending_melee_attack_phase then
+            return
+        end
+
+        if not self.melee_attack_started then
+            if ctx.any_alien_is_moving(self) then
+                return
+            end
+            self.melee_attack_started = true
+            self.melee_action_queue = {}
+            self.melee_ap_left_by_alien_id = {}
+
+            for _, alien in ipairs(self.aliens or {}) do
+                if not alien.is_dead then
+                    local ap_budget = alien.turn_ap_remaining or alien.ap_max or 0
+                    self.melee_ap_left_by_alien_id[alien.id] = ap_budget
+                    if ap_budget > 0 and #get_living_humans_on_cell(self, alien.cell_id) > 0 then
+                        table.insert(self.melee_action_queue, { kind = "alien", alien_id = alien.id })
+                    end
+                end
+            end
+
+            if #self.melee_action_queue == 0 then
+                self.pending_melee_attack_phase = false
+                return
+            end
+        end
+
+        self.melee_attack_timer = self.melee_attack_timer - dt
+        if self.melee_attack_timer > 0 then
+            return
+        end
+
+        if #self.melee_action_queue == 0 then
+            self.pending_melee_attack_phase = false
+            return
+        end
+
+        local action = table.remove(self.melee_action_queue, 1)
+        if not action then
+            self.pending_melee_attack_phase = false
+            return
+        end
+
+        if action.kind == "alien" then
+            local alien = find_alien_by_id(self, action.alien_id)
+            if alien and (not alien.is_dead) then
+                resolve_alien_melee_strike(self, alien)
+            end
+        elseif action.kind == "human_react" then
+            local human = get_human_by_id(self, action.human_id)
+            if human and (human.current_health or 0) > 0 and human.current_ap > 0 and human.cell_id == action.cell_id then
+                local target = nil
+                local preferred = find_alien_by_id(self, action.preferred_alien_id)
+                if preferred and (not preferred.is_dead) and preferred.cell_id == human.cell_id then
+                    target = preferred
+                else
+                    local aliens = get_living_aliens_on_cell(self, human.cell_id)
+                    target = aliens[1]
+                end
+                if target then
+                    resolve_human_melee_strike(self, human, target, "reactive strike")
+                end
+            end
+        end
+
+        self.melee_attack_timer = ctx.MELEE_MODEL.swipe_interval_seconds
+    end
+
+    runtime.try_manual_human_melee = function(self, unit, alien)
+        if not unit or not alien then
+            return false
+        end
+        if unit.cell_id ~= alien.cell_id then
+            return false
+        end
+        if unit.current_ap <= 0 then
+            print("Unable melee strike: no AP")
+            return true
+        end
+        if alien.is_dead then
+            return true
+        end
+
+        resolve_human_melee_strike(self, unit, alien, "manual strike")
+        return true
+    end
+
+    return runtime
+end
+
+return M

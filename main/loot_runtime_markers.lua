@@ -78,12 +78,27 @@ function M.extend(runtime, ctx)
         for cell_id, cell in ipairs(self.world_grid) do
             local fixables = runtime.get_fixable_objects_in_cell(cell)
             if #fixables > 0 and cell.tileID ~= hash("empty") then
-                local unresolved = runtime.cell_has_fixable_object(cell)
+                local unresolved = false
+                local blocked = false
+                local has_dependency = false
+                for _, obj in ipairs(fixables) do
+                    if obj and (obj.dependsOn or 0) > 0 then
+                        has_dependency = true
+                    end
+                    if obj and obj.isFixed ~= true then
+                        unresolved = true
+                    elseif obj and obj.isFixed == true and not runtime.is_object_dependency_met(self.world_grid, obj) then
+                        blocked = true
+                    end
+                end
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x - 18, y + 12, 0.046))
                 if marker_id then
-                    go.set_scale(vmath.vector3(ctx.COMPONENT_UI.fix_marker_size, ctx.COMPONENT_UI.fix_marker_size, 1), marker_id)
-                    local color = unresolved and ctx.COMPONENT_UI.fix_marker_color or ctx.COMPONENT_UI.fix_marker_fixed_color
+                    local marker_size = has_dependency and ctx.COMPONENT_UI.fix_marker_dependency_size or ctx.COMPONENT_UI.fix_marker_size
+                    go.set_scale(vmath.vector3(marker_size, marker_size, 1), marker_id)
+                    local color = unresolved and ctx.COMPONENT_UI.fix_marker_color
+                        or (blocked and ctx.COMPONENT_UI.fix_marker_blocked_color)
+                        or ctx.COMPONENT_UI.fix_marker_fixed_color
                     go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
                     self.fix_objects[cell_id] = marker_id
                 end

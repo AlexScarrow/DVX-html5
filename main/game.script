@@ -144,7 +144,7 @@ local ALIEN_TYPE_CONFIG = {
     - isPowered: Boolean - is this cell powered
     - isOccupied: Hash of occupant ("empty", "sarge", "medic", "alien", etc)
     - object1/2/3: Objects in cell (hash names: "switch", "door", "machine", "wire")
-    - isFixed: Boolean - is the object functional
+    - isFixed: Boolean - has the object itself been repaired
     - isDependentOn: List of other objects needed for this to function
 ]]
 
@@ -725,9 +725,23 @@ function create_tile_library()
         isFixed = false,
         dependsOn = 0,
         isDependentOn = {},
-        objectId = 0,
+        objectId = 6101,
         offsetX = -12,
         offsetY = 4,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = COMPONENT_UI.item_type_blue
+    }
+    -- Temporary dependent object for dependency-rule tests.
+    -- This object cannot be fixed until object #6101 is fixed first.
+    armoury.cells[7].object1 = {
+        name = hash("relay"),
+        isFixed = false,
+        dependsOn = 6101,
+        isDependentOn = {},
+        objectId = 6102,
+        offsetX = 10,
+        offsetY = 8,
         hitW = 32,
         hitH = 32,
         requiredComponent = COMPONENT_UI.item_type_blue

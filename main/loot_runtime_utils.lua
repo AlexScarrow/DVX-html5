@@ -93,13 +93,46 @@ function M.create(ctx)
 
     runtime.find_best_fixable_object = function(cell, required_component)
         local objects = runtime.get_fixable_objects_in_cell(cell)
+        local best = nil
         for _, obj in ipairs(objects) do
             local requires = obj.requiredComponent or ctx.COMPONENT_UI.item_type_blue
             if obj.isFixed ~= true and (not required_component or required_component == requires) then
-                return obj
+                if (obj.dependsOn or 0) == 0 then
+                    return obj
+                end
+                if not best then
+                    best = obj
+                end
+            end
+        end
+        return best
+    end
+
+    runtime.find_object_by_id = function(world_grid, object_id)
+        if not world_grid or not object_id or object_id <= 0 then
+            return nil
+        end
+        for _, cell in ipairs(world_grid) do
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objects) do
+                if obj and obj.objectId == object_id then
+                    return obj
+                end
             end
         end
         return nil
+    end
+
+    runtime.is_object_dependency_met = function(world_grid, obj)
+        if not obj then
+            return false
+        end
+        local dependency_id = obj.dependsOn or 0
+        if dependency_id <= 0 then
+            return true
+        end
+        local dependency_obj = runtime.find_object_by_id(world_grid, dependency_id)
+        return dependency_obj ~= nil and dependency_obj.isFixed == true
     end
 
     runtime.cell_has_power_node = function(cell)

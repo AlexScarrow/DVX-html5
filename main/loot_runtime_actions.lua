@@ -170,25 +170,7 @@ function M.extend(runtime, ctx)
         end
 
         local dependency_id = fixable.dependsOn or 0
-        if dependency_id > 0 then
-            local dependency_fixed = false
-            for _, scan_cell in ipairs(self.world_grid or {}) do
-                local scan_objects = { scan_cell.object1, scan_cell.object2, scan_cell.object3 }
-                for _, scan_obj in ipairs(scan_objects) do
-                    if scan_obj and scan_obj.objectId == dependency_id then
-                        dependency_fixed = scan_obj.isFixed == true
-                        break
-                    end
-                end
-                if dependency_fixed then
-                    break
-                end
-            end
-            if not dependency_fixed then
-                print("Cannot fix: dependency is not fixed yet.")
-                return true
-            end
-        end
+        local dependency_met_pre_fix = runtime.is_object_dependency_met(self.world_grid, fixable)
 
         if unit.current_ap < ctx.COMPONENT_UI.fix_ap_cost then
             print("Unable to fix: no AP")
@@ -213,7 +195,45 @@ function M.extend(runtime, ctx)
         unit.backpack_used = #unit.backpack_items
         unit.current_ap = unit.current_ap - ctx.COMPONENT_UI.fix_ap_cost
         fixable.isFixed = true
-        print(string.format("%s fixed object #%d.", unit.display_name, fixable.objectId or 0))
+        if dependency_id > 0 then
+            if dependency_met_pre_fix then
+                print(string.format(
+                    "%s fixed object #%d. Dependency #%d already satisfied, object is now functional.",
+                    unit.display_name,
+                    fixable.objectId or 0,
+                    dependency_id
+                ))
+            else
+                print(string.format(
+                    "%s fixed object #%d. Waiting for dependency #%d before functionality.",
+                    unit.display_name,
+                    fixable.objectId or 0,
+                    dependency_id
+                ))
+            end
+        else
+            print(string.format("%s fixed object #%d and it is functional.", unit.display_name, fixable.objectId or 0))
+        end
+
+        local unlocked_functional_count = 0
+        for _, scan_cell in ipairs(self.world_grid or {}) do
+            local scan_objects = { scan_cell.object1, scan_cell.object2, scan_cell.object3 }
+            for _, scan_obj in ipairs(scan_objects) do
+                if scan_obj
+                    and (scan_obj.dependsOn or 0) == (fixable.objectId or -1)
+                    and scan_obj.isFixed == true
+                    and runtime.is_object_dependency_met(self.world_grid, scan_obj) then
+                    unlocked_functional_count = unlocked_functional_count + 1
+                end
+            end
+        end
+        if unlocked_functional_count > 0 then
+            print(string.format(
+                "Fixing object #%d enabled %d already-fixed dependent object(s) to become functional.",
+                fixable.objectId or 0,
+                unlocked_functional_count
+            ))
+        end
         -- FUTURE HOOK: trigger object-fix effects (fx/sound/gameplay event chain).
         runtime.refresh_fix_markers(self)
         ctx.update_human_visual_state(self)

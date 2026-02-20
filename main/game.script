@@ -712,11 +712,11 @@ function create_tile_library()
         dependsOn = 0,
         isDependentOn = {},
         objectId = 0,
-        offsetX = 0,
+        offsetX = -90,
         offsetY = 10,
-        fxOffsetX = 0,
-        fxOffsetY = 0,
-        fxRotation = 0,
+        fxOffsetX = 20,
+        fxOffsetY = -20,
+        fxRotation = -90,
         hitW = 64,
         hitH = 124,
         requiredComponent = nil
@@ -1254,6 +1254,7 @@ local function ensure_alien_visual(self, alien)
     end
 
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
+    x = x + (CELL_WIDTH * 0.25)
     local pos = vmath.vector3(x, y + 35, 0.6)
     alien.go_id = factory.create("/ui_factory#ui_factory", pos)
     if alien.go_id then
@@ -1267,6 +1268,7 @@ local function refresh_alien_visual(self, alien)
     end
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
+    x = x + (CELL_WIDTH * 0.25)
     go.set_position(vmath.vector3(x, y + 35, 0.6), alien.go_id)
     if cfg and cfg.marker_tint then
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
@@ -1715,6 +1717,7 @@ local function update_alien_movement(self, dt)
             else
                 local target_cell = self.world_grid[target_cell_id]
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+                tx = tx + (CELL_WIDTH * 0.25)
                 ty = ty + 35
 
                 local pos = go.get_position(alien.go_id)
@@ -2727,6 +2730,7 @@ end
 
 local function get_human_world_pos_for_cell(cell)
     local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
+    x = x + (CELL_WIDTH * 0.25)
     -- Keep feet near the floor: 10px above each cell's bottom boundary.
     y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
     return x, y
@@ -3014,17 +3018,17 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     local alien_cell = self.world_grid[alien.cell_id]
     if not alien_cell or alien_cell.tileID == hash("empty") then
         print("Unable to fire: target is in VOID.")
-        return true
+        return false
     end
 
     if not has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
         print("Unable to fire: no line of sight.")
-        return true
+        return false
     end
 
     if unit.current_ap <= 0 or unit.current_ammo <= 0 then
         print("unable to fire no ammo/ap")
-        return true
+        return false
     end
 
     unit.current_ap = unit.current_ap - 1
@@ -3350,8 +3354,8 @@ function init(self)
     msg.post("@render:", "use_camera_projection")
     msg.post("/camera#camera", "acquire_camera_focus")
 
-    self.sheen_z = 0.4
-    self.sheen_alpha = 0.25--0.22
+    self.sheen_z = 0.9--0.4
+    self.sheen_alpha = 0.95--0.22
     self.sheen_art_w = 650--768
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0

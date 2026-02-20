@@ -25,3 +25,6 @@ images {
 images {
   image: "/assets/images/smokeParticle.png"
 }
+images {
+  image: "/assets/images/smokeParticle_dark.png"
+}

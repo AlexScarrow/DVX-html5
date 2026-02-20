@@ -3,14 +3,14 @@ emitters {
   duration: 1.0
   space: EMISSION_SPACE_WORLD
   tile_source: "/assets/tiles.atlas"
-  animation: "smokeParticle"
+  animation: "smokeParticle_dark"
   material: "/builtins/materials/particlefx.material"
   max_particle_count: 128
   type: EMITTER_TYPE_2DCONE
   properties {
     key: EMITTER_KEY_SPAWN_RATE
     points {
-      y: 10.0
+      y: 15.0
     }
   }
   properties {
@@ -28,13 +28,13 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 2.5
+      y: 4.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 100.0
+      y: 80.0
     }
   }
   properties {
@@ -121,12 +121,6 @@ emitters {
     key: PARTICLE_KEY_ROTATION
     points {
       y: 300.0
-    }
-  }
-  particle_properties {
-    key: PARTICLE_KEY_ANGULAR_VELOCITY
-    points {
-      y: 1.0
     }
   }
 }

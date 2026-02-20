@@ -24,7 +24,7 @@ function M.extend(runtime, ctx)
         end
 
         for cell_id, cell in ipairs(self.world_grid) do
-            if cell.hasLoot and cell.tileID ~= hash("empty") then
+            if cell.hasLoot and cell.tileID ~= hash("empty") and cell.isPowered then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local marker_x = x + (cell.lootOffsetX or 0)
                 local marker_y = y + (cell.lootOffsetY or 0)
@@ -51,7 +51,7 @@ function M.extend(runtime, ctx)
         end
 
         for cell_id, cell in ipairs(self.world_grid) do
-            if runtime.cell_has_component_machine(cell) and cell.tileID ~= hash("empty") then
+            if runtime.cell_has_component_machine(cell) and cell.tileID ~= hash("empty") and cell.isPowered then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y + 10, 0.045))
                 if marker_id then
@@ -78,7 +78,7 @@ function M.extend(runtime, ctx)
 
         for cell_id, cell in ipairs(self.world_grid) do
             local fixables = runtime.get_fixable_objects_in_cell(cell)
-            if #fixables > 0 and cell.tileID ~= hash("empty") then
+            if #fixables > 0 and cell.tileID ~= hash("empty") and cell.isPowered then
                 local unresolved = false
                 local blocked = false
                 local has_dependency = false

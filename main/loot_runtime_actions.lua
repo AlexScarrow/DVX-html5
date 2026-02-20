@@ -76,6 +76,10 @@ function M.extend(runtime, ctx)
             print("No loot available here.")
             return true
         end
+        if not cell.isPowered then
+            print("Loot crate is hidden (tile has no power).")
+            return true
+        end
 
         if unit.current_ap < ctx.LOOT_UI.ap_cost then
             print("Unable to scavenge: no AP")
@@ -197,6 +201,10 @@ function M.extend(runtime, ctx)
         local cell = self.world_grid and self.world_grid[unit.cell_id]
         if not cell then
             print("No cell selected for fixing.")
+            return true
+        end
+        if not cell.isPowered then
+            print("Cannot fix here: tile has no power.")
             return true
         end
 
@@ -501,6 +509,9 @@ function M.extend(runtime, ctx)
                                 print(string.format("%s activated a power node.", source_unit.display_name))
                                 runtime.play_power_node_activation_sound(self, target_power_cell, power_node)
                                 runtime.spawn_power_node_activation_fx(self, target_power_cell, power_node)
+                                runtime.refresh_loot_markers(self)
+                                runtime.refresh_machine_markers(self)
+                                runtime.refresh_fix_markers(self)
                                 runtime.refresh_power_node_markers(self)
                                 runtime.refresh_light_value_markers(self)
                             end

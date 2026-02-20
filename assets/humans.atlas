@@ -1,6 +1,9 @@
 images {
   image: "/assets/images/human_placeholder.png"
 }
+images {
+  image: "/assets/images/human_dropShadow.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

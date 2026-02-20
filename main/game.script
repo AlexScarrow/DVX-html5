@@ -1256,21 +1256,40 @@ local function ensure_alien_visual(self, alien)
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     x = x + (CELL_WIDTH * 0.25)
     local pos = vmath.vector3(x, y + 35, 0.6)
-    alien.go_id = factory.create("/ui_factory#ui_factory", pos)
+    if alien.type == ALIEN_TYPE_BLIP then
+        alien.go_id = factory.create("/alien_blip_factory#alien_blip_factory", pos)
+        alien.uses_blip_sprite = true
+    else
+        alien.go_id = factory.create("/ui_factory#ui_factory", pos)
+        alien.uses_blip_sprite = false
+    end
     if alien.go_id then
-        go.set_scale(vmath.vector3(ALIEN_MARKER_SIZE, ALIEN_MARKER_SIZE, 1), alien.go_id)
+        if alien.uses_blip_sprite then
+            go.set_scale(vmath.vector3(1, 1, 1), alien.go_id)
+        else
+            go.set_scale(vmath.vector3(ALIEN_MARKER_SIZE, ALIEN_MARKER_SIZE, 1), alien.go_id)
+        end
     end
 end
 
 local function refresh_alien_visual(self, alien)
+    local wants_blip_sprite = alien.type == ALIEN_TYPE_BLIP
+    if alien.go_id and alien.uses_blip_sprite ~= wants_blip_sprite then
+        go.delete(alien.go_id)
+        alien.go_id = nil
+    end
+    if not alien.go_id then
+        ensure_alien_visual(self, alien)
+    end
     if not alien.go_id then
         return
     end
+
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     x = x + (CELL_WIDTH * 0.25)
     go.set_position(vmath.vector3(x, y + 35, 0.6), alien.go_id)
-    if cfg and cfg.marker_tint then
+    if (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
     end
 end
@@ -2027,6 +2046,7 @@ local function create_squad_units()
             anim_phase = 0,
             go_path = "/human",
             sprite_path = "/human#sprite",
+            shadow_path = "/human#shadow",
             occupancy_hash = hash("human_sarge")
         },
         techie = {
@@ -2052,6 +2072,7 @@ local function create_squad_units()
             anim_phase = 0,
             go_path = "/techie",
             sprite_path = "/techie#sprite",
+            shadow_path = "/techie#shadow",
             occupancy_hash = hash("human_techie")
         },
         medic = {
@@ -2077,6 +2098,7 @@ local function create_squad_units()
             anim_phase = 0,
             go_path = "/medic",
             sprite_path = "/medic#sprite",
+            shadow_path = "/medic#shadow",
             occupancy_hash = hash("human_medic")
         },
         gunner = {
@@ -2102,6 +2124,7 @@ local function create_squad_units()
             anim_phase = 0,
             go_path = "/gunner",
             sprite_path = "/gunner#sprite",
+            shadow_path = "/gunner#shadow",
             occupancy_hash = hash("human_gunner")
         }
     }
@@ -2597,6 +2620,7 @@ local function update_selected_unit_ui(self)
 
     local show_fix_button = unit.class_id == UNIT_CLASS_TECHIE
         and current_cell
+        and current_cell.isPowered
         and LOOT_RUNTIME.cell_has_fixable_object(current_cell)
     if show_fix_button then
         set_ui_square_transform(
@@ -2622,7 +2646,7 @@ local function update_selected_unit_ui(self)
         )
     end
 
-    if current_cell and current_cell.hasLoot then
+    if current_cell and current_cell.hasLoot and current_cell.isPowered then
         set_ui_square_transform(
             self,
             self.ui.loot_button,
@@ -2807,11 +2831,19 @@ local function spawn_human_unit(self)
             unit.move_path_index = 0
             unit.anim_phase = 0
             unit.current_ap = unit.max_ap
-            unit.backpack_items = {}
-            unit.backpack_used = 0
+            if unit.class_id == UNIT_CLASS_TECHIE then
+                unit.backpack_items = { "power" }
+                unit.backpack_used = 1
+            else
+                unit.backpack_items = {}
+                unit.backpack_used = 0
+            end
 
             move_human_to_cell(self, unit, spawn_cells[i])
             set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            if unit.shadow_path then
+                go.set(unit.shadow_path, "tint", vmath.vector4(1, 1, 1, 0.5))
+            end
             print(unit.display_name .. " spawned on cell: " .. spawn_cells[i])
         end
     end
@@ -3354,7 +3386,7 @@ function init(self)
     msg.post("@render:", "use_camera_projection")
     msg.post("/camera#camera", "acquire_camera_focus")
 
-    self.sheen_z = 0.9--0.4
+    self.sheen_z = 0.3
     self.sheen_alpha = 0.95--0.22
     self.sheen_art_w = 650--768
     self.sheen_art_h = 300--576

@@ -28,3 +28,6 @@ images {
 images {
   image: "/assets/images/smokeParticle_dark.png"
 }
+images {
+  image: "/assets/images/alien_blip.png"
+}

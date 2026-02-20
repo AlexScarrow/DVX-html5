@@ -1,6 +1,9 @@
 images {
   image: "/assets/images/ui_square_white.png"
 }
+images {
+  image: "/assets/images/DVX_sheen.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

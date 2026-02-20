@@ -689,6 +689,8 @@ function create_tile_library()
     --     -- Cell layout: 7 8 9
     --     --              4 5 6
     --     --              1 2 3
+    armoury.cells[1].accessDown = false  -- Wall on right of cell 4
+    armoury.cells[2].accessDown = false  -- Wall on right of cell 4
     armoury.cells[4].accessRight = false  -- Wall on right of cell 4
     armoury.cells[6].accessRight = false  -- Wall on right of cell 6
     armoury.cells[2].accessDown = false   -- Wall on bottom of cell 2
@@ -775,10 +777,10 @@ function create_level_library()
 
     -- Example Level 1
     levels[1] = {
-        { x = 11, y = 11, tile = "corridor" },
-        { x = 8, y = 11, tile = "canteen" },
-        { x = 8, y = 8, tile = "canteen" },
-        { x = 11, y = 8, tile = "corridor" },
+        { x = 11, y = 11, tile = "armoury" },
+        { x = 8, y = 11, tile = "armoury" },
+        { x = 8, y = 8, tile = "armoury" },
+        { x = 11, y = 8, tile = "armoury" },
         { x = 5, y = 8, tile = "armoury" }
     }
 
@@ -3297,8 +3299,8 @@ function init(self)
     -- Camera setup
     self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     self.camera_zoom = 1.0
-    self.camera_min_zoom = 0.5
-    self.camera_max_zoom = 1.0
+    self.camera_min_zoom = 0.25--0.5
+    self.camera_max_zoom = 1.5--1.0
     self.drag_threshold_px = 12
     self.is_panning = false
     self.did_drag = false
@@ -3309,7 +3311,7 @@ function init(self)
     self.last_pan_screen_y = 0
     self.pan_velocity_x = 0
     self.pan_velocity_y = 0
-    self.pan_inertia_damping = 8
+    self.pan_inertia_damping = 1--8
     self.pan_inertia_min_speed = 3
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
@@ -3325,8 +3327,29 @@ function init(self)
     msg.post("@render:", "use_camera_projection")
     msg.post("/camera#camera", "acquire_camera_focus")
 
+    self.sheen_z = 0.4
+    self.sheen_alpha = 0.25--0.22
+    self.sheen_art_w = 650--768
+    self.sheen_art_h = 300--576
+    self.sheen_offset_x = 0
+    self.sheen_offset_y = 0
+
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
+    if not self.sheen_overlay then
+        local sheen_id = factory.create("/ui_factory#ui_factory", vmath.vector3(self.camera_pos.x + self.sheen_offset_x, self.camera_pos.y + self.sheen_offset_y, self.sheen_z))
+        if sheen_id then
+            msg.post(msg.url(nil, sheen_id, "sprite"), "play_animation", { id = hash("DVX_sheen") })
+            go.set(msg.url(nil, sheen_id, "sprite"), "tint", vmath.vector4(1, 1, 1, self.sheen_alpha))
+            self.sheen_overlay = sheen_id
+        end
+    end
+    if self.sheen_overlay then
+        local sx = (SCREEN_WIDTH / self.camera_zoom) / self.sheen_art_w
+        local sy = (SCREEN_HEIGHT / self.camera_zoom) / self.sheen_art_h
+        go.set_position(vmath.vector3(self.camera_pos.x + self.sheen_offset_x, self.camera_pos.y + self.sheen_offset_y, self.sheen_z), self.sheen_overlay)
+        go.set_scale(vmath.vector3(sx, sy, 1), self.sheen_overlay)
+    end
     initialize_unit_ui(self)
     set_ui_hidden(self)
     self.selected_start_cell = nil
@@ -3431,6 +3454,14 @@ function update(self, dt)
     update_selected_unit_ui(self)
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
+    if self.sheen_overlay then
+        local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.sheen_art_w or 768)
+        local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.sheen_art_h or 576)
+        local ox = self.sheen_offset_x or 0
+        local oy = self.sheen_offset_y or 0
+        go.set_position(vmath.vector3(self.camera_pos.x + ox, self.camera_pos.y + oy, self.sheen_z or 0.4), self.sheen_overlay)
+        go.set_scale(vmath.vector3(sx, sy, 1), self.sheen_overlay)
+    end
 
     if not self.is_panning then
         local speed = math.sqrt(self.pan_velocity_x * self.pan_velocity_x + self.pan_velocity_y * self.pan_velocity_y)

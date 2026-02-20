@@ -147,6 +147,36 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "loot_marker_factory"
+  data: "embedded_components {\n"
+  "  id: \"loot_marker_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/loot_marker.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "power_node_marker_factory"
+  data: "embedded_components {\n"
+  "  id: \"power_node_marker_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/power_node_marker.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "power_node_steam_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"power_node_steam_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/power_node_steam_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "ui_panel_factory"
   data: "embedded_components {\n"
   "  id: \"ui_panel_factory\"\n"

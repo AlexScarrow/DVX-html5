@@ -13,6 +13,15 @@ images {
 images {
   image: "/assets/images/tile_armoury_on.png"
 }
-margin: 0
-extrude_borders: 0
-inner_padding: 0
+images {
+  image: "/assets/images/lootCrate.png"
+}
+images {
+  image: "/assets/images/powerNode_off.png"
+}
+images {
+  image: "/assets/images/powerNode_on.png"
+}
+images {
+  image: "/assets/images/smokeParticle.png"
+}

@@ -135,13 +135,24 @@ function M.create(ctx)
         return dependency_obj ~= nil and dependency_obj.isFixed == true
     end
 
-    runtime.cell_has_power_node = function(cell)
+    runtime.get_power_node_object = function(cell)
         if not cell then
-            return false
+            return nil
         end
-        return (cell.object1 and cell.object1.name == hash("power_node"))
-            or (cell.object2 and cell.object2.name == hash("power_node"))
-            or (cell.object3 and cell.object3.name == hash("power_node"))
+        if cell.object1 and cell.object1.name == hash("power_node") then
+            return cell.object1
+        end
+        if cell.object2 and cell.object2.name == hash("power_node") then
+            return cell.object2
+        end
+        if cell.object3 and cell.object3.name == hash("power_node") then
+            return cell.object3
+        end
+        return nil
+    end
+
+    runtime.cell_has_power_node = function(cell)
+        return runtime.get_power_node_object(cell) ~= nil
     end
 
     runtime.get_backpack_slot_index_at = function(screen_x, screen_y)

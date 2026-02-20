@@ -26,10 +26,11 @@ function M.extend(runtime, ctx)
         for cell_id, cell in ipairs(self.world_grid) do
             if cell.hasLoot and cell.tileID ~= hash("empty") then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y, ctx.LOOT_UI.marker_z))
+                local marker_x = x + (cell.lootOffsetX or 0)
+                local marker_y = y + (cell.lootOffsetY or 0)
+                local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(marker_x, marker_y, ctx.LOOT_UI.marker_z))
                 if marker_id then
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.marker_size, ctx.LOOT_UI.marker_size, 1), marker_id)
-                    go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                     loot_objects[cell_id] = marker_id
                 end
             end
@@ -108,6 +109,8 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_power_node_markers = function(self)
         self.power_node_objects = self.power_node_objects or {}
+        self.power_node_power_state = self.power_node_power_state or {}
+        self.power_node_flicker_state = self.power_node_flicker_state or {}
         local power_node_objects = self.power_node_objects
         for cell_id, marker in pairs(power_node_objects) do
             if marker then
@@ -121,14 +124,67 @@ function M.extend(runtime, ctx)
         end
 
         for cell_id, cell in ipairs(self.world_grid) do
-            if runtime.cell_has_power_node(cell) and cell.tileID ~= hash("empty") then
+            local power_node = runtime.get_power_node_object(cell)
+            if power_node and cell.tileID ~= hash("empty") then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y + 10, 0.046))
+                local marker_x = x + (power_node.offsetX or 0)
+                local marker_y = y + (power_node.offsetY or 0)
+                local marker_id = factory.create("/power_node_marker_factory#power_node_marker_factory", vmath.vector3(marker_x, marker_y, ctx.LOOT_UI.power_node_marker_z or 0.55))
                 if marker_id then
+                    local was_powered = self.power_node_power_state[cell_id]
+                    if cell.isPowered and was_powered == false then
+                        -- Match tile-light behavior: quick OFF/ON pulses before stable ON.
+                        self.power_node_flicker_state[cell_id] = {
+                            active = true,
+                            timer = 0.06,
+                            step = 1,
+                            go_id = marker_id
+                        }
+                        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("powerNode_off") })
+                    else
+                        self.power_node_flicker_state[cell_id] = nil
+                        local anim = cell.isPowered and hash("powerNode_on") or hash("powerNode_off")
+                        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                    end
+                    self.power_node_power_state[cell_id] = cell.isPowered
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.power_node_marker_size, ctx.LOOT_UI.power_node_marker_size, 1), marker_id)
-                    local marker_color = cell.isPowered and ctx.LOOT_UI.power_node_marker_powered_color or ctx.LOOT_UI.power_node_marker_color
-                    go.set(msg.url(nil, marker_id, "sprite"), "tint", marker_color)
                     power_node_objects[cell_id] = marker_id
+                end
+            end
+        end
+    end
+
+    runtime.update_power_node_flicker = function(self, dt)
+        if not self.power_node_flicker_state then
+            return
+        end
+        for cell_id, flicker in pairs(self.power_node_flicker_state) do
+            if flicker and flicker.active then
+                local marker_id = self.power_node_objects and self.power_node_objects[cell_id]
+                if not marker_id or marker_id ~= flicker.go_id then
+                    self.power_node_flicker_state[cell_id] = nil
+                else
+                    flicker.timer = flicker.timer - dt
+                    if flicker.timer <= 0 then
+                        if flicker.step == 1 then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("powerNode_on") })
+                            flicker.timer = 0.05
+                        elseif flicker.step == 2 then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("powerNode_off") })
+                            flicker.timer = 0.06
+                        elseif flicker.step == 3 then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("powerNode_on") })
+                            flicker.timer = 0.05
+                        elseif flicker.step == 4 then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("powerNode_off") })
+                            flicker.timer = 0.04
+                        else
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("powerNode_on") })
+                            flicker.active = false
+                            flicker.timer = 0
+                        end
+                        flicker.step = flicker.step + 1
+                    end
                 end
             end
         end

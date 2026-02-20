@@ -1,6 +1,35 @@
 local M = {}
 
 function M.extend(runtime, ctx)
+    runtime.play_power_node_activation_sound = function(self, cell, power_node)
+        -- FUTURE HOOK: trigger power-node activation SFX when audio assets are ready.
+    end
+
+    runtime.spawn_power_node_activation_fx = function(self, cell, power_node)
+        if not cell or not power_node then
+            return
+        end
+        self.power_node_loop_fx = self.power_node_loop_fx or {}
+        local cell_id = cell.idNumber or 0
+        if cell_id > 0 and self.power_node_loop_fx[cell_id] then
+            return
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local px = cx + (power_node.offsetX or 0) + (power_node.fxOffsetX or 0)
+        local py = cy + (power_node.offsetY or 0) + (power_node.fxOffsetY or 0)
+        local pz = 0.39
+        local fx_id = factory.create("/power_node_steam_fx_factory#power_node_steam_fx_factory", vmath.vector3(px, py, pz))
+        if not fx_id then
+            return
+        end
+        local rotation_deg = power_node.fxRotation or 0
+        go.set_rotation(vmath.quat_rotation_z(math.rad(rotation_deg)), fx_id)
+        particlefx.play(msg.url(nil, fx_id, "particlefx"))
+        if cell_id > 0 then
+            self.power_node_loop_fx[cell_id] = fx_id
+        end
+    end
+
     runtime.find_power_node_drop_target = function(self, world_x, world_y)
         if not self.world_grid then
             return nil
@@ -8,14 +37,22 @@ function M.extend(runtime, ctx)
 
         local best_cell = nil
         local best_dist = math.huge
-        local max_dist = ctx.LOOT_UI.power_node_drop_radius
         for _, cell in ipairs(self.world_grid) do
-            if runtime.cell_has_power_node(cell) and cell.tileID ~= hash("empty") then
+            local power_node = runtime.get_power_node_object(cell)
+            if power_node and cell.tileID ~= hash("empty") then
                 local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                local dx = cx - world_x
-                local dy = (cy + 10) - world_y
-                local dist = math.sqrt(dx * dx + dy * dy)
-                if dist <= max_dist and dist < best_dist then
+                local node_x = cx + (power_node.offsetX or 0)
+                local node_y = cy + (power_node.offsetY or 0)
+                local half_w = ((power_node.hitW or 64) * 0.5)
+                local half_h = ((power_node.hitH or 124) * 0.5)
+                local inside = world_x >= (node_x - half_w)
+                    and world_x <= (node_x + half_w)
+                    and world_y >= (node_y - half_h)
+                    and world_y <= (node_y + half_h)
+                if inside then
+                    local dx = node_x - world_x
+                    local dy = node_y - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
                     best_cell = cell
                     best_dist = dist
                 end
@@ -448,12 +485,9 @@ function M.extend(runtime, ctx)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 consumed = true
 
-                                if target_power_cell.object1 and target_power_cell.object1.name == hash("power_node") then
-                                    target_power_cell.object1.isFixed = true
-                                elseif target_power_cell.object2 and target_power_cell.object2.name == hash("power_node") then
-                                    target_power_cell.object2.isFixed = true
-                                elseif target_power_cell.object3 and target_power_cell.object3.name == hash("power_node") then
-                                    target_power_cell.object3.isFixed = true
+                                local power_node = runtime.get_power_node_object(target_power_cell)
+                                if power_node then
+                                    power_node.isFixed = true
                                 end
 
                                 local target_tile_instance = target_power_cell.tileInstanceId or 0
@@ -465,6 +499,8 @@ function M.extend(runtime, ctx)
                                     end
                                 end
                                 print(string.format("%s activated a power node.", source_unit.display_name))
+                                runtime.play_power_node_activation_sound(self, target_power_cell, power_node)
+                                runtime.spawn_power_node_activation_fx(self, target_power_cell, power_node)
                                 runtime.refresh_power_node_markers(self)
                                 runtime.refresh_light_value_markers(self)
                             end

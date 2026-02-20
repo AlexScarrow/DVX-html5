@@ -40,7 +40,7 @@ local CAMERA_EDGE_PADDING_X = CELL_WIDTH * 0.5
 local CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
 local HUMAN_MOVE_SPEED = 250
 local HUMAN_VISUAL_SCALE = 0.35
-local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 38
+local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
 local HUMAN_PINGPONG_AMPLITUDE = 0.18
 local HUMAN_PINGPONG_SPEED = 7
 local HUMAN_MAX_ACTION_POINTS = 5
@@ -164,6 +164,8 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         tileInstanceId = 0,
         isOccupied = hash("empty"),
         hasLoot = false,
+        lootOffsetX = -32,
+        lootOffsetY = -32,
         object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
         object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
         object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
@@ -202,6 +204,8 @@ function create_tile_prototype(tile_id)
             tileInstanceId = 0,
             isOccupied = hash("empty"),
             hasLoot = false,
+            lootOffsetX = -32,
+            lootOffsetY = -32,
             object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
             object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
             object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
@@ -630,9 +634,12 @@ function create_tile_library()
         isDependentOn = {},
         objectId = 0,
         offsetX = 0,
-        offsetY = 0,
-        hitW = 32,
-        hitH = 32,
+        offsetY = 10,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 64,
+        hitH = 124,
         requiredComponent = nil
     }
 
@@ -668,9 +675,12 @@ function create_tile_library()
         isDependentOn = {},
         objectId = 0,
         offsetX = 0,
-        offsetY = 0,
-        hitW = 32,
-        hitH = 32,
+        offsetY = 10,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 64,
+        hitH = 124,
         requiredComponent = nil
     }
 
@@ -703,9 +713,12 @@ function create_tile_library()
         isDependentOn = {},
         objectId = 0,
         offsetX = 0,
-        offsetY = 0,
-        hitW = 32,
-        hitH = 32,
+        offsetY = 10,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 64,
+        hitH = 124,
         requiredComponent = nil
     }
 
@@ -822,6 +835,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
             objectId = (obj and obj.objectId) or 0,
             offsetX = (obj and obj.offsetX) or 0,
             offsetY = (obj and obj.offsetY) or 0,
+            fxOffsetX = (obj and obj.fxOffsetX) or 0,
+            fxOffsetY = (obj and obj.fxOffsetY) or 0,
+            fxRotation = (obj and obj.fxRotation) or 0,
             hitW = (obj and obj.hitW) or 32,
             hitH = (obj and obj.hitH) or 32,
             requiredComponent = obj and obj.requiredComponent or nil
@@ -833,6 +849,8 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
         world_grid[i].tileID = hash("empty")
         world_grid[i].tileInstanceId = 0
         world_grid[i].hasLoot = false
+        world_grid[i].lootOffsetX = 0
+        world_grid[i].lootOffsetY = 0
         world_grid[i].object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
         world_grid[i].object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
         world_grid[i].object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
@@ -874,6 +892,8 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.tileInstanceId = placement_index
                         world_cell.isOccupied = tile_cell.isOccupied
                         world_cell.hasLoot = tile_cell.hasLoot == true
+                        world_cell.lootOffsetX = tile_cell.lootOffsetX or 0
+                        world_cell.lootOffsetY = tile_cell.lootOffsetY or 0
                         world_cell.object1 = clone_object(tile_cell.object1)
                         world_cell.object2 = clone_object(tile_cell.object2)
                         world_cell.object3 = clone_object(tile_cell.object3)
@@ -894,6 +914,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                 obj.isDependentOn = obj.isDependentOn or {}
                 obj.offsetX = obj.offsetX or 0
                 obj.offsetY = obj.offsetY or 0
+                obj.fxOffsetX = obj.fxOffsetX or 0
+                obj.fxOffsetY = obj.fxOffsetY or 0
+                obj.fxRotation = obj.fxRotation or 0
                 obj.hitW = obj.hitW or 32
                 obj.hitH = obj.hitH or 32
                 obj.requiredComponent = obj.requiredComponent
@@ -3449,6 +3472,7 @@ function update(self, dt)
     update_spitter_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
+    LOOT_RUNTIME.update_power_node_flicker(self, dt)
     update_human_visual_state(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)

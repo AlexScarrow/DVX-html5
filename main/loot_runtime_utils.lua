@@ -58,6 +58,14 @@ function M.create(ctx)
             and screen_y <= (ctx.COMPONENT_UI.fix_button_y + half)
     end
 
+    runtime.is_point_in_retrieve_button = function(screen_x, screen_y)
+        local half = ctx.LOOT_UI.retrieve_button_size * 0.5
+        return screen_x >= (ctx.LOOT_UI.retrieve_button_x - half)
+            and screen_x <= (ctx.LOOT_UI.retrieve_button_x + half)
+            and screen_y >= (ctx.LOOT_UI.retrieve_button_y - half)
+            and screen_y <= (ctx.LOOT_UI.retrieve_button_y + half)
+    end
+
     runtime.cell_has_component_machine = function(cell)
         if not cell then
             return false

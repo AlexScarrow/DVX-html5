@@ -2449,6 +2449,7 @@ local function initialize_unit_ui(self)
         component_button = nil,
         fix_button = nil,
         loot_button = nil,
+        retrieve_button = nil,
         drag_pip = nil
     }
 
@@ -2470,6 +2471,7 @@ local function initialize_unit_ui(self)
     self.ui.component_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.button_color, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     self.ui.fix_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.fix_button_color, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
+    self.ui.retrieve_button = create_ui_square(0, 0, 0.82, LOOT_UI.retrieve_button_color, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 
     print(string.format(
@@ -2501,6 +2503,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
+    set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
 
@@ -2667,6 +2670,37 @@ local function update_selected_unit_ui(self)
             vmath.vector4(0, 0, 0, 0),
             LOOT_UI.button_size,
             LOOT_UI.button_size
+        )
+    end
+
+    local power_node_on_cell = current_cell and LOOT_RUNTIME.get_power_node_object(current_cell) or nil
+    local backpack_capacity = unit.backpack_slots or (UI_BACKPACK_COLS * UI_BACKPACK_ROWS)
+    local backpack_count = unit.backpack_items and #unit.backpack_items or 0
+    local show_retrieve_button = current_cell
+        and current_cell.isPowered
+        and power_node_on_cell ~= nil
+        and backpack_count < backpack_capacity
+    if show_retrieve_button then
+        set_ui_square_transform(
+            self,
+            self.ui.retrieve_button,
+            LOOT_UI.retrieve_button_x,
+            LOOT_UI.retrieve_button_y,
+            0.82,
+            LOOT_UI.retrieve_button_color,
+            LOOT_UI.retrieve_button_size,
+            LOOT_UI.retrieve_button_size
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.retrieve_button,
+            -9999,
+            -9999,
+            0.82,
+            vmath.vector4(0, 0, 0, 0),
+            LOOT_UI.retrieve_button_size,
+            LOOT_UI.retrieve_button_size
         )
     end
 end
@@ -3583,6 +3617,9 @@ function on_input(self, action_id, action)
         elseif action.released then
             if not self.did_drag then
                 if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
+                    if LOOT_RUNTIME.try_retrieve_power_selected_unit(self, action.x, action.y) then
+                        return
+                    end
                     if LOOT_RUNTIME.try_fix_selected_unit(self, action.x, action.y) then
                         return
                     end

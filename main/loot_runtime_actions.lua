@@ -5,6 +5,17 @@ function M.extend(runtime, ctx)
         -- FUTURE HOOK: trigger power-node activation SFX when audio assets are ready.
     end
 
+    runtime.stop_power_node_fx_for_cell = function(self, cell_id)
+        if not self.power_node_loop_fx or not cell_id then
+            return
+        end
+        local fx_id = self.power_node_loop_fx[cell_id]
+        if fx_id then
+            go.delete(fx_id)
+            self.power_node_loop_fx[cell_id] = nil
+        end
+    end
+
     runtime.spawn_power_node_activation_fx = function(self, cell, power_node)
         if not cell or not power_node then
             return
@@ -281,6 +292,71 @@ function M.extend(runtime, ctx)
         end
         -- FUTURE HOOK: trigger object-fix effects (fx/sound/gameplay event chain).
         runtime.refresh_fix_markers(self)
+        ctx.update_human_visual_state(self)
+        return true
+    end
+
+    runtime.try_retrieve_power_selected_unit = function(self, screen_x, screen_y)
+        if not runtime.is_point_in_retrieve_button(screen_x, screen_y) then
+            return false
+        end
+
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return true
+        end
+
+        local cell = self.world_grid and self.world_grid[unit.cell_id]
+        if not cell then
+            print("No cell selected for power retrieval.")
+            return true
+        end
+        if not cell.isPowered then
+            print("No active power to retrieve here.")
+            return true
+        end
+
+        local power_node = runtime.get_power_node_object(cell)
+        if not power_node then
+            print("No power node here.")
+            return true
+        end
+
+        if unit.current_ap < (ctx.LOOT_UI.retrieve_ap_cost or 1) then
+            print("Unable to retrieve power: no AP")
+            return true
+        end
+
+        unit.backpack_items = unit.backpack_items or {}
+        local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if #unit.backpack_items >= capacity then
+            print("Backpack full. Cannot retrieve power.")
+            return true
+        end
+
+        unit.current_ap = unit.current_ap - (ctx.LOOT_UI.retrieve_ap_cost or 1)
+        table.insert(unit.backpack_items, "power")
+        unit.backpack_used = #unit.backpack_items
+
+        local target_tile_instance = cell.tileInstanceId or 0
+        if target_tile_instance > 0 then
+            for _, scan_cell in ipairs(self.world_grid) do
+                if scan_cell.tileInstanceId == target_tile_instance then
+                    scan_cell.isPowered = false
+                    runtime.stop_power_node_fx_for_cell(self, scan_cell.idNumber)
+                end
+            end
+        else
+            cell.isPowered = false
+            runtime.stop_power_node_fx_for_cell(self, cell.idNumber)
+        end
+
+        print(string.format("%s retrieved a power unit from the node. Tile is now unpowered.", unit.display_name))
+        runtime.refresh_loot_markers(self)
+        runtime.refresh_machine_markers(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_power_node_markers(self)
+        runtime.refresh_light_value_markers(self)
         ctx.update_human_visual_state(self)
         return true
     end

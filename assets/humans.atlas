@@ -4,6 +4,18 @@ images {
 images {
   image: "/assets/images/human_dropShadow.png"
 }
+images {
+  image: "/assets/images/human_sarge.png"
+}
+images {
+  image: "/assets/images/human_medic.png"
+}
+images {
+  image: "/assets/images/human_gunner.png"
+}
+images {
+  image: "/assets/images/human_techie.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

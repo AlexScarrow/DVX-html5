@@ -88,10 +88,10 @@ local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
 end)()
 local LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
-local HUMAN_TINT_SARGE = vmath.vector4(1, 0.75, 0.25, 1)
-local HUMAN_TINT_TECHIE = vmath.vector4(0.45, 0.7, 1, 1)
-local HUMAN_TINT_MEDIC = vmath.vector4(1, 0.45, 0.45, 1)
-local HUMAN_TINT_GUNNER = vmath.vector4(0.7, 0.7, 0.7, 1)
+local HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
+local HUMAN_TINT_TECHIE = vmath.vector4(1, 1, 1, 1)
+local HUMAN_TINT_MEDIC = vmath.vector4(1, 1, 1, 1)
+local HUMAN_TINT_GUNNER = vmath.vector4(1, 1, 1, 1)
 local HUMAN_TINT_NO_AP = vmath.vector4(0.7, 0.1, 0.1, 1)
 local UNIT_CLASS_SARGE = "sarge"
 local UNIT_CLASS_TECHIE = "techie"
@@ -113,8 +113,8 @@ local SPITTER_SHOT_INTERVAL_SECONDS = 0.5
 local SPITTER_PROJECTILE_SPEED = 900
 local SPITTER_PROJECTILE_SIZE = 8
 local ALIEN_REVEAL_WEIGHT_CANNON = 1
-local ALIEN_REVEAL_WEIGHT_SPEEDY = 1
-local ALIEN_REVEAL_WEIGHT_SPITTER = 6 -- temp weighting for spitter-heavy testing
+local ALIEN_REVEAL_WEIGHT_SPEEDY = 10 -- temp weighting for speedy art testing
+local ALIEN_REVEAL_WEIGHT_SPITTER = 2
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
 local TILE_OPACITY = 1.0
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
@@ -1255,17 +1255,42 @@ local function ensure_alien_visual(self, alien)
 
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     x = x + (CELL_WIDTH * 0.25)
-    local pos = vmath.vector3(x, y + 35, 0.6)
+    if alien.type == ALIEN_TYPE_SPEEDY then
+        y = y + 60
+    else
+        y = y + 35
+    end
+    local pos = vmath.vector3(x, y, 0.6)
+    local visual_kind = "marker"
     if alien.type == ALIEN_TYPE_BLIP then
         alien.go_id = factory.create("/alien_blip_factory#alien_blip_factory", pos)
         alien.uses_blip_sprite = true
+        visual_kind = "blip"
+    elseif alien.type == ALIEN_TYPE_SPITTER then
+        alien.go_id = factory.create("/alien_spitter_factory#alien_spitter_factory", pos)
+        alien.uses_blip_sprite = true
+        visual_kind = "spitter"
+    elseif alien.type == ALIEN_TYPE_SPEEDY then
+        alien.go_id = factory.create("/alien_speedy_factory#alien_speedy_factory", pos)
+        alien.uses_blip_sprite = true
+        visual_kind = "speedy"
     else
         alien.go_id = factory.create("/ui_factory#ui_factory", pos)
         alien.uses_blip_sprite = false
+        visual_kind = "marker"
     end
+    alien.visual_kind = visual_kind
     if alien.go_id then
         if alien.uses_blip_sprite then
-            go.set_scale(vmath.vector3(1, 1, 1), alien.go_id)
+            if alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                go.set_scale(vmath.vector3(0.33333334, 0.33333334, 1), alien.go_id)
+                sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
+                sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
+                go.set(msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, 0.5))
+                alien.spitter_flip = false
+            else
+                go.set_scale(vmath.vector3(1, 1, 1), alien.go_id)
+            end
         else
             go.set_scale(vmath.vector3(ALIEN_MARKER_SIZE, ALIEN_MARKER_SIZE, 1), alien.go_id)
         end
@@ -1273,8 +1298,15 @@ local function ensure_alien_visual(self, alien)
 end
 
 local function refresh_alien_visual(self, alien)
-    local wants_blip_sprite = alien.type == ALIEN_TYPE_BLIP
-    if alien.go_id and alien.uses_blip_sprite ~= wants_blip_sprite then
+    local wanted_visual_kind = "marker"
+    if alien.type == ALIEN_TYPE_BLIP then
+        wanted_visual_kind = "blip"
+    elseif alien.type == ALIEN_TYPE_SPITTER then
+        wanted_visual_kind = "spitter"
+    elseif alien.type == ALIEN_TYPE_SPEEDY then
+        wanted_visual_kind = "speedy"
+    end
+    if alien.go_id and alien.visual_kind ~= wanted_visual_kind then
         go.delete(alien.go_id)
         alien.go_id = nil
     end
@@ -1288,7 +1320,12 @@ local function refresh_alien_visual(self, alien)
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     x = x + (CELL_WIDTH * 0.25)
-    go.set_position(vmath.vector3(x, y + 35, 0.6), alien.go_id)
+    if alien.type == ALIEN_TYPE_SPEEDY then
+        y = y + 60
+    else
+        y = y + 35
+    end
+    go.set_position(vmath.vector3(x, y, 0.6), alien.go_id)
     if (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
     end
@@ -1314,7 +1351,9 @@ local function spawn_alien(self, alien_type, cell_id)
         go_id = nil,
         is_moving = false,
         move_path = nil,
-        move_path_index = 0
+        move_path_index = 0,
+        spitter_anim_phase = math.random() * math.pi * 2,
+        spitter_flip = false
     }
 
     table.insert(self.aliens, alien)
@@ -1688,6 +1727,17 @@ local function update_spitter_attack_phase(self, dt)
         return
     end
 
+    if spitter.go_id and target.go_path then
+        local spitter_pos = go.get_position(spitter.go_id)
+        local target_pos = go.get_position(target.go_path)
+        local dx = target_pos.x - spitter_pos.x
+        if math.abs(dx) > 2 then
+            spitter.spitter_flip = dx > 0
+            sprite.set_hflip(msg.url(nil, spitter.go_id, "sprite"), spitter.spitter_flip)
+            sprite.set_hflip(msg.url(nil, spitter.go_id, "shadow"), spitter.spitter_flip)
+        end
+    end
+
     attacker.ap_left = attacker.ap_left - SPITTER_SHOT_AP_COST
     spawn_spitter_projectile(self, spitter, target)
 
@@ -1737,13 +1787,25 @@ local function update_alien_movement(self, dt)
                 local target_cell = self.world_grid[target_cell_id]
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 tx = tx + (CELL_WIDTH * 0.25)
-                ty = ty + 35
+                if alien.type == ALIEN_TYPE_SPEEDY then
+                    ty = ty + 60
+                else
+                    ty = ty + 35
+                end
 
                 local pos = go.get_position(alien.go_id)
                 local dx = tx - pos.x
                 local dy = ty - pos.y
                 local dist = math.sqrt(dx * dx + dy * dy)
                 local step = ALIEN_MOVE_SPEED * dt
+                if alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                    if math.abs(dx) > 0.1 then
+                        -- Requirement: flip sprite while moving right; unflipped while moving left.
+                        alien.spitter_flip = dx > 0
+                        sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), alien.spitter_flip)
+                        sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), alien.spitter_flip)
+                    end
+                end
 
                 if dist <= step then
                     go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
@@ -3420,12 +3482,12 @@ function init(self)
     msg.post("@render:", "use_camera_projection")
     msg.post("/camera#camera", "acquire_camera_focus")
 
-    self.sheen_z = 0.3
-    self.sheen_alpha = 0.95--0.22
-    self.sheen_art_w = 650--768
+    self.sheen_z = 0.4--0.3
+    self.sheen_alpha = 0.8--0.22
+    self.sheen_art_w = 550--768
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0
-    self.sheen_offset_y = 0
+    self.sheen_offset_y = 100
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
@@ -3537,6 +3599,20 @@ function update(self, dt)
 
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
+    if self.aliens then
+        for _, alien in ipairs(self.aliens) do
+            if alien
+                and (not alien.is_dead)
+                and (alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
+                and alien.go_id then
+                alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * 2.2 * math.pi * 2)
+                local pulse = math.sin(alien.spitter_anim_phase)
+                local sx = 0.33333334 * (1 - (0.03 * pulse))
+                local sy = 0.33333334 * (1 + (0.045 * pulse))
+                go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
+            end
+        end
+    end
     MELEE_RUNTIME.update_human_hit_flash(self, dt)
     MELEE_RUNTIME.update_phase(self, dt)
     update_spitter_projectiles(self, dt)

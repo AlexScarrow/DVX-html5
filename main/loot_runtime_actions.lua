@@ -99,14 +99,14 @@ function M.extend(runtime, ctx)
 
         unit.current_ap = unit.current_ap - ctx.LOOT_UI.ap_cost
 
-        local roll_count = math.random(1, 3)
+        local roll_count = math.random(1, 6)
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         unit.backpack_items = unit.backpack_items or {}
         local added = 0
         local dropped = 0
 
         -- Temporary test rule: every loot box guarantees at least one power unit.
-        local loot_results = { "power" }
+       local loot_results = {}--{ "power" }
         for _ = 2, roll_count do
             -- Temporary test weighting for vending/fixing loop:
             -- bias additional loot heavily toward material.

@@ -44,6 +44,12 @@ images {
   image: "/assets/images/alien_speedy_shadow.png"
 }
 images {
+  image: "/assets/images/alien_cannonFodder.png"
+}
+images {
+  image: "/assets/images/alien_cannonFodder_shadow.png"
+}
+images {
   image: "/assets/images/tile_generic_alpha_layer.png"
 }
 images {

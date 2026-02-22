@@ -271,6 +271,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "alien_cannon_fodder_factory"
+  data: "embedded_components {\n"
+  "  id: \"alien_cannon_fodder_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/alien_cannonFodder.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "ui_panel_factory"
   data: "embedded_components {\n"
   "  id: \"ui_panel_factory\"\n"

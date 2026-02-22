@@ -2585,6 +2585,7 @@ local function initialize_unit_ui(self)
         ammo_pips = {},
         command_pips = {},
         backpack_slots = {},
+        backpack_item_icons = {},
         component_button = nil,
         fix_button = nil,
         loot_button = nil,
@@ -2606,6 +2607,7 @@ local function initialize_unit_ui(self)
 
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        self.ui.backpack_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.815))
     end
     self.ui.component_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.button_color, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     self.ui.fix_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.fix_button_color, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
@@ -2638,6 +2640,7 @@ local function set_ui_hidden(self)
     end
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, hidden, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
     end
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
@@ -2726,10 +2729,30 @@ local function update_selected_unit_ui(self)
         local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(i)
         local item_type = unit.backpack_items and unit.backpack_items[i] or nil
         local slot_color = item_type and LOOT_RUNTIME.get_backpack_item_color(item_type) or UI_COLOR_SLOT
+        local icon_anim = nil
+        if item_type == "material" then
+            icon_anim = hash("material_unit")
+        elseif item_type == "meds" then
+            icon_anim = hash("med_unit")
+        elseif item_type == "ammo" then
+            icon_anim = hash("ammo_unit")
+        elseif item_type == "power" then
+            icon_anim = hash("power_unit")
+        end
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
         end
         set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, 0.81, slot_color, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        if icon_anim then
+            local icon_color = vmath.vector4(1, 1, 1, 1)
+            if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
+                icon_color = vmath.vector4(1, 1, 1, 0.25)
+            end
+            msg.post(msg.url(nil, self.ui.backpack_item_icons[i], "sprite"), "play_animation", { id = icon_anim })
+            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, 0.815, icon_color, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+        else
+            set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+        end
     end
 
     local current_cell = unit.cell_id and self.world_grid and self.world_grid[unit.cell_id] or nil

@@ -55,3 +55,15 @@ images {
 images {
   image: "/assets/images/alien_meleeSwipe_1.png"
 }
+images {
+  image: "/assets/images/material_unit.png"
+}
+images {
+  image: "/assets/images/med_unit.png"
+}
+images {
+  image: "/assets/images/ammo_unit.png"
+}
+images {
+  image: "/assets/images/power_unit.png"
+}

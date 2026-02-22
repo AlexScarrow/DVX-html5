@@ -30,6 +30,19 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    local function get_world_item_animation(item_type)
+        if item_type == "material" then
+            return hash("material_unit")
+        elseif item_type == "meds" then
+            return hash("med_unit")
+        elseif item_type == "ammo" then
+            return hash("ammo_unit")
+        elseif item_type == "power" then
+            return hash("power_unit")
+        end
+        return nil
+    end
+
     runtime.ensure_item_runtime_state = function(self)
         self.world_item_instances = self.world_item_instances or {}
         self.world_item_visuals = self.world_item_visuals or {}
@@ -151,8 +164,14 @@ function M.extend(runtime, ctx)
                     local wy = cy + oy
                     local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.56))
                     if marker_id then
-                        local color = runtime.get_backpack_item_color(item.item_type)
-                        go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
+                        local anim = get_world_item_animation(item.item_type)
+                        if anim then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                            go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        else
+                            local color = runtime.get_backpack_item_color(item.item_type)
+                            go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
+                        end
                         go.set_scale(vmath.vector3(0.85, 0.85, 1), marker_id)
                         self.world_item_visuals[item.id] = marker_id
                         print(string.format(

@@ -77,6 +77,28 @@ function M.create(ctx)
         unit.hit_flash_timer = ctx.MELEE_MODEL.human_hit_flash_duration
     end
 
+    local function spawn_alien_melee_swipe_fx(self, target)
+        if not target or not target.go_path then
+            return
+        end
+        local pos = go.get_position(target.go_path)
+        local fx_id = factory.create("/tile_factory#tile_factory", vmath.vector3(pos.x, pos.y + 10, 0.9))
+        if not fx_id then
+            return
+        end
+        go.set_scale(vmath.vector3(1.5, 1.5, 1), fx_id)
+        msg.post(msg.url(nil, fx_id, "sprite"), "play_animation", { id = hash("alien_meleeSwipe_1") })
+        go.set(msg.url(nil, fx_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.3))
+        go.set_rotation(vmath.quat_rotation_z(0), fx_id)
+        self.melee_swipe_fx = self.melee_swipe_fx or {}
+        table.insert(self.melee_swipe_fx, {
+            go_id = fx_id,
+            elapsed = 0,
+            duration = 0.35,
+            spins = 1.5
+        })
+    end
+
     local function resolve_human_melee_strike(self, human, target_alien, source_tag)
         if not human or not target_alien then
             return
@@ -133,6 +155,7 @@ function M.create(ctx)
         local hit_chance = clamp(ctx.MELEE_MODEL.alien_base_hit_chance - armor_bonus, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)
         self.melee_ap_left_by_alien_id[alien.id] = ap_left - 1
+        spawn_alien_melee_swipe_fx(self, target)
 
         if roll <= hit_chance then
             target.current_health = math.max(0, (target.current_health or 0) - 1)
@@ -189,6 +212,27 @@ function M.create(ctx)
         for _, unit in pairs(self.squad_units) do
             if unit.hit_flash_timer and unit.hit_flash_timer > 0 then
                 unit.hit_flash_timer = math.max(0, unit.hit_flash_timer - dt)
+            end
+        end
+    end
+
+    runtime.update_swipe_fx = function(self, dt)
+        if not self.melee_swipe_fx then
+            return
+        end
+        for i = #self.melee_swipe_fx, 1, -1 do
+            local fx = self.melee_swipe_fx[i]
+            if not fx.go_id then
+                table.remove(self.melee_swipe_fx, i)
+            else
+                fx.elapsed = (fx.elapsed or 0) + dt
+                local t = math.min(1, fx.elapsed / (fx.duration or 0.35))
+                local angle = math.rad(360 * (fx.spins or 3) * t)
+                go.set_rotation(vmath.quat_rotation_z(angle), fx.go_id)
+                if t >= 1 then
+                    go.delete(fx.go_id)
+                    table.remove(self.melee_swipe_fx, i)
+                end
             end
         end
     end

@@ -1473,14 +1473,21 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien)
         return
     end
 
-    go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE, SPITTER_PROJECTILE_SIZE, 1), projectile_id)
+    go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+    msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
     go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    local dir_x = to.x - from.x
+    local dir_y = to.y - (from.y + 20)
+    if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+        go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+    end
 
     table.insert(self.spitter_projectiles, {
         go_id = projectile_id,
         from = vmath.vector3(from.x, from.y + 20, 0.75),
         to = vmath.vector3(to.x, to.y, 0.75),
-        t = 0
+        t = 0,
+        speed = SPITTER_PROJECTILE_SPEED * 1.4
     })
 end
 
@@ -1614,8 +1621,14 @@ local function spawn_spitter_projectile(self, alien, target_human)
         return
     end
 
-    go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE, SPITTER_PROJECTILE_SIZE, 1), projectile_id)
+    go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+    msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("alien_projectile_1") })
     go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    local dir_x = to.x - from.x
+    local dir_y = (to.y + 20) - from.y
+    if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+        go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+    end
 
     table.insert(self.spitter_projectiles, {
         go_id = projectile_id,
@@ -1660,7 +1673,7 @@ local function update_spitter_projectiles(self, dt)
             local dx = p.to.x - p.from.x
             local dy = p.to.y - p.from.y
             local dist = math.sqrt(dx * dx + dy * dy)
-            local travel_time = math.max(0.05, dist / SPITTER_PROJECTILE_SPEED)
+            local travel_time = math.max(0.05, dist / (p.speed or SPITTER_PROJECTILE_SPEED))
             p.t = math.min(1, p.t + (dt / travel_time))
             local px = p.from.x + (dx * p.t)
             local py = p.from.y + (dy * p.t)
@@ -3685,6 +3698,7 @@ function update(self, dt)
         end
     end
     MELEE_RUNTIME.update_human_hit_flash(self, dt)
+    MELEE_RUNTIME.update_swipe_fx(self, dt)
     MELEE_RUNTIME.update_phase(self, dt)
     update_spitter_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)

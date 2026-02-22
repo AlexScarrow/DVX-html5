@@ -4,6 +4,15 @@ images {
 images {
   image: "/assets/images/DVX_sheen.png"
 }
+images {
+  image: "/assets/images/human_projectile_1.png"
+}
+images {
+  image: "/assets/images/alien_projectile_1.png"
+}
+images {
+  image: "/assets/images/alien_meleeSwipe_1.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

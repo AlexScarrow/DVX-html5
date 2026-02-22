@@ -2866,6 +2866,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     LOOT_UI = LOOT_UI,
     COMMAND_UI = COMMAND_UI,
     COMPONENT_UI = COMPONENT_UI,
+    CELL_WIDTH = CELL_WIDTH,
+    CELL_HEIGHT = CELL_HEIGHT,
+    HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM,
     UI_BACKPACK_COLS = UI_BACKPACK_COLS,
     UI_BACKPACK_ROWS = UI_BACKPACK_ROWS,
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,
@@ -3139,7 +3142,7 @@ local function get_clicked_unit_in_cell(self, cell_id, world_x, world_y)
     local best_unit = nil
     local best_dist = math.huge
     for _, unit in ipairs(units_in_cell) do
-        if unit.go_path then
+        if unit.go_path and (unit.current_health or 0) > 0 then
             local pos = go.get_position(unit.go_path)
             local dx = pos.x - world_x
             local dy = pos.y - world_y
@@ -3615,6 +3618,9 @@ function init(self)
     self.melee_action_queue = {}
     self.melee_ap_left_by_alien_id = {}
     self.loot_pickup_blips = {}
+    self.world_item_instances = {}
+    self.world_item_visuals = {}
+    self.next_world_item_id = 0
     self.drag_resource = { active = false }
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
 
@@ -3825,6 +3831,9 @@ function on_input(self, action_id, action)
                 local world_x, world_y = screen_to_world(action.x, action.y, self.camera_pos, self.camera_zoom)
                 local clicked_cell_id = handle_cell_click(action, self.camera_pos, self.camera_zoom)
                 if clicked_cell_id then
+                    if LOOT_RUNTIME.handle_world_click_selected_unit(self, action.x, action.y) then
+                        return
+                    end
                     local handled_by_human = handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     if not handled_by_human then
                         process_cell_selection(self, clicked_cell_id)

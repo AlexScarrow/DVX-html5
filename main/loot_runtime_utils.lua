@@ -12,6 +12,8 @@ function M.create(ctx)
             return ctx.LOOT_UI.power_color
         elseif item_type == "material" then
             return ctx.LOOT_UI.material_color
+        elseif item_type == "corpse" then
+            return vmath.vector4(0.75, 0.12, 0.12, 1)
         elseif item_type == ctx.COMPONENT_UI.item_type_blue then
             return ctx.COMPONENT_UI.component_color
         end

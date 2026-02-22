@@ -1,6 +1,322 @@
 local M = {}
 
 function M.extend(runtime, ctx)
+    local WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM = 34
+
+    local function get_drag_ap_cost()
+        return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
+    end
+
+    local function flash_invalid_drag_units(source_unit, target_unit)
+        if source_unit then
+            source_unit.hit_flash_timer = math.max(source_unit.hit_flash_timer or 0, 0.25)
+        end
+        if target_unit then
+            target_unit.hit_flash_timer = math.max(target_unit.hit_flash_timer or 0, 0.25)
+        end
+    end
+
+    local function try_consume_drag_ap(source_unit, target_unit)
+        if not source_unit then
+            return false
+        end
+        local ap_cost = get_drag_ap_cost()
+        if (source_unit.current_ap or 0) < ap_cost then
+            print(string.format("Unable action: no AP (need %d).", ap_cost))
+            flash_invalid_drag_units(source_unit, target_unit)
+            return false
+        end
+        source_unit.current_ap = source_unit.current_ap - ap_cost
+        return true
+    end
+
+    runtime.ensure_item_runtime_state = function(self)
+        self.world_item_instances = self.world_item_instances or {}
+        self.world_item_visuals = self.world_item_visuals or {}
+        self.next_world_item_id = self.next_world_item_id or 0
+    end
+
+    runtime.create_world_item_instance = function(self, item_type, cell_id, owner_unit_id, meta)
+        runtime.ensure_item_runtime_state(self)
+        self.next_world_item_id = self.next_world_item_id + 1
+        local item = {
+            id = self.next_world_item_id,
+            item_type = item_type,
+            cell_id = cell_id,
+            owner_unit_id = owner_unit_id,
+            meta = meta or {}
+        }
+        table.insert(self.world_item_instances, item)
+        return item
+    end
+
+    runtime.remove_world_item_instance = function(self, world_item_id)
+        runtime.ensure_item_runtime_state(self)
+        for i = #self.world_item_instances, 1, -1 do
+            local item = self.world_item_instances[i]
+            if item and item.id == world_item_id then
+                table.remove(self.world_item_instances, i)
+                break
+            end
+        end
+        local visual = self.world_item_visuals[world_item_id]
+        if visual then
+            go.delete(visual)
+            self.world_item_visuals[world_item_id] = nil
+        end
+    end
+
+    runtime.get_world_items_on_cell = function(self, cell_id)
+        runtime.ensure_item_runtime_state(self)
+        local out = {}
+        for _, item in ipairs(self.world_item_instances) do
+            if item and item.cell_id == cell_id then
+                table.insert(out, item)
+            end
+        end
+        table.sort(out, function(a, b)
+            local a_order = (a.meta and a.meta.slot_order) or 0
+            local b_order = (b.meta and b.meta.slot_order) or 0
+            if a_order == b_order then
+                return (a.id or 0) < (b.id or 0)
+            end
+            return a_order < b_order
+        end)
+        return out
+    end
+
+    local function get_dead_human_by_id(self, unit_id)
+        if not self.squad_units or not unit_id then
+            return nil
+        end
+        local unit = self.squad_units[unit_id]
+        if unit and (unit.current_health or 0) <= 0 then
+            return unit
+        end
+        return nil
+    end
+
+    runtime.find_cell_id_at_world_point = function(self, world_x, world_y)
+        if not self.world_grid then
+            return nil
+        end
+        local half_w = ((ctx.CELL_WIDTH or 250) * 0.5)
+        local half_h = ((ctx.CELL_HEIGHT or 150) * 0.5)
+        for _, cell in ipairs(self.world_grid) do
+            if cell and cell.tileID ~= hash("empty") then
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                if world_x >= (cx - half_w)
+                    and world_x <= (cx + half_w)
+                    and world_y >= (cy - half_h)
+                    and world_y <= (cy + half_h) then
+                    return cell.idNumber
+                end
+            end
+        end
+        return nil
+    end
+
+    runtime.get_world_item_offset_for_slot = function(slot_index, total_items)
+        local cols = 4
+        local spacing_x = 16
+        local spacing_y = 14
+        local row = math.floor((slot_index - 1) / cols)
+        local col = (slot_index - 1) % cols
+        local row_count = math.min(cols, math.max(1, total_items - (row * cols)))
+        local start_x = -((row_count - 1) * spacing_x * 0.5)
+        local ox = start_x + (col * spacing_x)
+        local floor_from_center = -((ctx.CELL_HEIGHT or 150) * 0.5) + WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM
+        local oy = floor_from_center - (row * spacing_y)
+        return ox, oy
+    end
+
+    runtime.refresh_world_item_visuals = function(self)
+        runtime.ensure_item_runtime_state(self)
+        for item_id, go_id in pairs(self.world_item_visuals) do
+            if go_id then
+                go.delete(go_id)
+            end
+            self.world_item_visuals[item_id] = nil
+        end
+        if not self.world_item_instances or not self.world_grid then
+            return
+        end
+        for _, cell in ipairs(self.world_grid) do
+            if cell and cell.tileID ~= hash("empty") then
+                local items = runtime.get_world_items_on_cell(self, cell.idNumber)
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                for i, item in ipairs(items) do
+                    local ox, oy = runtime.get_world_item_offset_for_slot(i, #items)
+                    local wx = cx + ox
+                    local wy = cy + oy
+                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.56))
+                    if marker_id then
+                        local color = runtime.get_backpack_item_color(item.item_type)
+                        go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
+                        go.set_scale(vmath.vector3(0.85, 0.85, 1), marker_id)
+                        self.world_item_visuals[item.id] = marker_id
+                        print(string.format(
+                            "WORLD ITEM VISUAL | id=%d type=%s cell=%d slot=%d/%d pos=(%.1f, %.1f)",
+                            item.id or 0,
+                            tostring(item.item_type),
+                            cell.idNumber or 0,
+                            i,
+                            #items,
+                            wx,
+                            wy
+                        ))
+                    end
+                end
+            end
+        end
+    end
+
+    runtime.find_world_item_at_screen_point = function(self, screen_x, screen_y)
+        runtime.ensure_item_runtime_state(self)
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
+        if not cell_id then
+            return nil, nil
+        end
+        local cell = self.world_grid and self.world_grid[cell_id]
+        if not cell then
+            return nil, nil
+        end
+        local items = runtime.get_world_items_on_cell(self, cell_id)
+        if #items == 0 then
+            return nil, nil
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local best_item = nil
+        local best_dist = math.huge
+        local hit_radius = (ctx.LOOT_UI and ctx.LOOT_UI.world_item_hit_radius) or 22
+        for i = #items, 1, -1 do
+            local item = items[i]
+            local ox, oy = runtime.get_world_item_offset_for_slot(i, #items)
+            local ix = cx + ox
+            local iy = cy + oy
+            local dx = ix - world_x
+            local dy = iy - world_y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= hit_radius and dist < best_dist then
+                best_item = item
+                best_dist = dist
+            end
+        end
+        return best_item, cell_id
+    end
+
+    runtime.find_dead_human_at_screen_point = function(self, screen_x, screen_y)
+        if not self.squad_units then
+            return nil
+        end
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local best = nil
+        local best_dist = math.huge
+        local max_dist = (ctx.LOOT_UI and ctx.LOOT_UI.human_drop_radius) or 80
+        for _, unit in pairs(self.squad_units) do
+            if unit and (unit.current_health or 0) <= 0 and unit.cell_id and unit.go_path then
+                local pos = go.get_position(unit.go_path)
+                local dx = pos.x - world_x
+                local dy = pos.y - world_y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist <= max_dist and dist < best_dist then
+                    best = unit
+                    best_dist = dist
+                end
+            end
+        end
+        return best
+    end
+
+    runtime.try_store_dead_human_corpse_selected_unit = function(self, screen_x, screen_y)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local dead_unit = runtime.find_dead_human_at_screen_point(self, screen_x, screen_y)
+        if not dead_unit then
+            return false
+        end
+        if dead_unit.id == unit.id then
+            return true
+        end
+        if dead_unit.cell_id ~= unit.cell_id then
+            print("too far away")
+            flash_invalid_drag_units(unit, dead_unit)
+            return true
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        if #unit.backpack_items > 0 then
+            print("Backpack must be emptied before carrying a corpse.")
+            flash_invalid_drag_units(unit, dead_unit)
+            return true
+        end
+        if not try_consume_drag_ap(unit, dead_unit) then
+            return true
+        end
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        unit.backpack_items = {}
+        for _ = 1, cap do
+            table.insert(unit.backpack_items, "corpse")
+        end
+        unit.backpack_used = #unit.backpack_items
+        unit.carrying_corpse_id = dead_unit.id
+        dead_unit.cell_id = nil
+        dead_unit.is_corpse_stowed = true
+        if dead_unit.go_path then
+            go.set_position(vmath.vector3(-9999, -9999, 0.5), dead_unit.go_path)
+        end
+        print(string.format("%s moved %s corpse into backpack. (AP -%d)", unit.display_name, dead_unit.display_name, get_drag_ap_cost()))
+        return true
+    end
+
+    runtime.find_fix_object_drop_target = function(self, world_x, world_y, cell_id, required_component)
+        if not self.world_grid or not cell_id then
+            return nil
+        end
+        local cell = self.world_grid[cell_id]
+        if not cell then
+            return nil
+        end
+        local best = nil
+        local best_dist = math.huge
+        local objects = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(objects) do
+            if obj
+                and obj.name
+                and obj.name ~= hash("empty")
+                and obj.name ~= hash("machine")
+                and obj.name ~= hash("power_node")
+                and obj.isFixed ~= true then
+                local requires = obj.requiredComponent or ctx.COMPONENT_UI.item_type_blue
+                if not required_component or required_component == requires then
+                    local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    local ox = obj.offsetX or 0
+                    local oy = obj.offsetY or 0
+                    local half_w = ((obj.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                    local half_h = ((obj.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                    local x = cx + ox
+                    local y = cy + oy
+                    local inside = world_x >= (x - half_w)
+                        and world_x <= (x + half_w)
+                        and world_y >= (y - half_h)
+                        and world_y <= (y + half_h)
+                    if inside then
+                        local dx = x - world_x
+                        local dy = y - world_y
+                        local dist = math.sqrt(dx * dx + dy * dy)
+                        if dist < best_dist then
+                            best = obj
+                            best_dist = dist
+                        end
+                    end
+                end
+            end
+        end
+        return best
+    end
+
     runtime.play_power_node_activation_sound = function(self, cell, power_node)
         -- FUTURE HOOK: trigger power-node activation SFX when audio assets are ready.
     end
@@ -471,7 +787,80 @@ function M.extend(runtime, ctx)
         return best
     end
 
+    runtime.try_pickup_world_item_selected_unit = function(self, screen_x, screen_y)
+        runtime.ensure_item_runtime_state(self)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local item, item_cell_id = runtime.find_world_item_at_screen_point(self, screen_x, screen_y)
+        if not item then
+            return false
+        end
+        if item_cell_id ~= unit.cell_id then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if #unit.backpack_items >= cap then
+            print("Backpack full.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        if not try_consume_drag_ap(unit, nil) then
+            return true
+        end
+        if item.item_type == "corpse" then
+            if #unit.backpack_items > 0 then
+                print("Backpack must be emptied before carrying a corpse.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            for _ = 1, cap do
+                table.insert(unit.backpack_items, "corpse")
+            end
+            unit.carrying_corpse_id = item.meta and item.meta.corpse_unit_id or nil
+            local corpse_unit = get_dead_human_by_id(self, unit.carrying_corpse_id)
+            if corpse_unit then
+                corpse_unit.cell_id = nil
+                corpse_unit.is_corpse_stowed = true
+                if corpse_unit.go_path then
+                    go.set_position(vmath.vector3(-9999, -9999, 0.5), corpse_unit.go_path)
+                end
+            end
+        else
+            table.insert(unit.backpack_items, item.item_type)
+        end
+        unit.backpack_used = #unit.backpack_items
+        if item.meta and item.meta.installed_on_object_id then
+            local obj = runtime.find_object_by_id(self.world_grid, item.meta.installed_on_object_id)
+            if obj then
+                obj.isFixed = false
+            end
+            runtime.refresh_fix_markers(self)
+        end
+        runtime.remove_world_item_instance(self, item.id)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s picked up 1 %s from world. (AP -%d)", unit.display_name, item.item_type, get_drag_ap_cost()))
+        return true
+    end
+
+    runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y)
+        -- Deterministic click order for crowded cells:
+        -- 1) corpse interaction, 2) deployed world item pickup.
+        if runtime.try_store_dead_human_corpse_selected_unit(self, screen_x, screen_y) then
+            return true
+        end
+        if runtime.try_pickup_world_item_selected_unit(self, screen_x, screen_y) then
+            return true
+        end
+        return false
+    end
+
     runtime.end_resource_drag = function(self, screen_x, screen_y)
+        runtime.ensure_item_runtime_state(self)
         local drag = self.drag_resource
         if not drag or not drag.active then
             return false
@@ -512,9 +901,20 @@ function M.extend(runtime, ctx)
             if bar_target then
                 consumed = runtime.try_apply_to_own_bar(source_unit, source_item, bar_target)
                 if consumed then
+                    if not try_consume_drag_ap(source_unit, nil) then
+                        consumed = false
+                        self.drag_resource = { active = false }
+                        return true
+                    end
                     table.remove(source_unit.backpack_items, drag.source_slot_index)
                     source_unit.backpack_used = #source_unit.backpack_items
-                    print(string.format("%s used 1 %s on own %s bar.", source_unit.display_name, source_item, bar_target))
+                    print(string.format(
+                        "%s used 1 %s on own %s bar. (AP -%d)",
+                        source_unit.display_name,
+                        source_item,
+                        bar_target,
+                        get_drag_ap_cost()
+                    ))
                 end
             else
                 local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
@@ -525,29 +925,50 @@ function M.extend(runtime, ctx)
                             if target_unit.current_health >= target_unit.max_health then
                                 print(target_unit.display_name .. " already has full HP.")
                             else
+                                if not try_consume_drag_ap(source_unit, target_unit) then
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
                                 table.remove(source_unit.backpack_items, drag.source_slot_index)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 target_unit.current_health = target_unit.max_health
                                 consumed = true
-                                print(string.format("%s used 1 meds on %s (full heal).", source_unit.display_name, target_unit.display_name))
+                                print(string.format(
+                                    "%s used 1 meds on %s (full heal). (AP -%d)",
+                                    source_unit.display_name,
+                                    target_unit.display_name,
+                                    get_drag_ap_cost()
+                                ))
                                 -- FUTURE HOOK: play heal particle effect on target_unit.
                             end
                         else
                             target_unit.backpack_items = target_unit.backpack_items or {}
                             local target_cap = target_unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
                             if #target_unit.backpack_items < target_cap then
+                                if not try_consume_drag_ap(source_unit, target_unit) then
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
                                 table.remove(source_unit.backpack_items, drag.source_slot_index)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 table.insert(target_unit.backpack_items, source_item)
                                 target_unit.backpack_used = #target_unit.backpack_items
                                 consumed = true
-                                print(string.format("%s gave 1 %s to %s.", source_unit.display_name, source_item, target_unit.display_name))
+                                print(string.format(
+                                    "%s gave 1 %s to %s. (AP -%d)",
+                                    source_unit.display_name,
+                                    source_item,
+                                    target_unit.display_name,
+                                    get_drag_ap_cost()
+                                ))
                             else
                                 print(target_unit.display_name .. " backpack is full.")
+                                flash_invalid_drag_units(source_unit, target_unit)
                             end
                         end
                     else
                         print("too far away")
+                        flash_invalid_drag_units(source_unit, target_unit)
                     end
                 else
                     local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
@@ -565,6 +986,10 @@ function M.extend(runtime, ctx)
                             if target_power_cell.isPowered then
                                 print("Power node already active.")
                             else
+                                if not try_consume_drag_ap(source_unit, nil) then
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
                                 table.remove(source_unit.backpack_items, drag.source_slot_index)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 consumed = true
@@ -582,7 +1007,11 @@ function M.extend(runtime, ctx)
                                         end
                                     end
                                 end
-                                print(string.format("%s activated a power node.", source_unit.display_name))
+                                print(string.format(
+                                    "%s activated a power node. (AP -%d)",
+                                    source_unit.display_name,
+                                    get_drag_ap_cost()
+                                ))
                                 runtime.play_power_node_activation_sound(self, target_power_cell, power_node)
                                 runtime.spawn_power_node_activation_fx(self, target_power_cell, power_node)
                                 runtime.refresh_loot_markers(self)
@@ -593,6 +1022,94 @@ function M.extend(runtime, ctx)
                             end
                         else
                             print("too far away")
+                            flash_invalid_drag_units(source_unit, nil)
+                        end
+                    end
+                    if not consumed then
+                        local component_target = nil
+                        local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
+                        if drop_cell_id and source_unit.cell_id and source_item == ctx.COMPONENT_UI.item_type_blue then
+                            component_target = runtime.find_fix_object_drop_target(self, world_x, world_y, drop_cell_id, source_item)
+                            if component_target then
+                                local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                                local tx, ty = ctx.id_to_coords(drop_cell_id)
+                                local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                                if manhattan == 0 then
+                                    if not try_consume_drag_ap(source_unit, nil) then
+                                        self.drag_resource = { active = false }
+                                        return true
+                                    end
+                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    component_target.isFixed = true
+                                    local world_item = runtime.create_world_item_instance(self, source_item, drop_cell_id, source_unit.id, {
+                                        installed_on_object_id = component_target.objectId,
+                                        slot_order = 1
+                                    })
+                                    consumed = world_item ~= nil
+                                    runtime.refresh_fix_markers(self)
+                                    runtime.refresh_world_item_visuals(self)
+                                    print(string.format(
+                                        "%s installed 1 %s on object #%d. (AP -%d)",
+                                        source_unit.display_name,
+                                        source_item,
+                                        component_target.objectId or 0,
+                                        get_drag_ap_cost()
+                                    ))
+                                else
+                                    print("too far away")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                end
+                            end
+                        end
+                        if (not consumed) and drop_cell_id and source_unit.cell_id then
+                            local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                            local tx, ty = ctx.id_to_coords(drop_cell_id)
+                            local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                            if manhattan == 0 then
+                                if not try_consume_drag_ap(source_unit, nil) then
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
+                                if source_item == "corpse" then
+                                    source_unit.backpack_items = {}
+                                    source_unit.backpack_used = 0
+                                    local corpse_id = source_unit.carrying_corpse_id
+                                    source_unit.carrying_corpse_id = nil
+                                    local corpse_unit = get_dead_human_by_id(self, corpse_id)
+                                    if corpse_unit then
+                                        corpse_unit.cell_id = drop_cell_id
+                                        corpse_unit.is_corpse_stowed = false
+                                        local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                                        if drop_cell and corpse_unit.go_path then
+                                            local wx, wy = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                                            local hy = (ctx.HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM or 58)
+                                            wy = wy - ((ctx.CELL_HEIGHT or 150) * 0.5) + hy
+                                            go.set_position(vmath.vector3(wx + ((ctx.CELL_WIDTH or 250) * 0.25), wy, 0.5), corpse_unit.go_path)
+                                        end
+                                    else
+                                        runtime.create_world_item_instance(self, "corpse", drop_cell_id, source_unit.id, { corpse_unit_id = corpse_id })
+                                        runtime.refresh_world_item_visuals(self)
+                                    end
+                                    consumed = true
+                                    print(string.format("%s dropped a corpse from backpack. (AP -%d)", source_unit.display_name, get_drag_ap_cost()))
+                                else
+                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    runtime.create_world_item_instance(self, source_item, drop_cell_id, source_unit.id, {})
+                                    runtime.refresh_world_item_visuals(self)
+                                    consumed = true
+                                    print(string.format(
+                                        "%s dropped 1 %s into world. (AP -%d)",
+                                        source_unit.display_name,
+                                        source_item,
+                                        get_drag_ap_cost()
+                                    ))
+                                end
+                            else
+                                print("too far away")
+                                flash_invalid_drag_units(source_unit, nil)
+                            end
                         end
                     end
                 end

@@ -434,21 +434,20 @@ function M.extend(runtime, ctx)
 
         unit.current_ap = unit.current_ap - ctx.LOOT_UI.ap_cost
 
-        local roll_count = math.random(1, 6)
+        local roll_count = math.random(4, 9)
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         unit.backpack_items = unit.backpack_items or {}
         local added = 0
         local dropped = 0
 
-        -- Temporary test rule: every loot box guarantees at least one power unit.
-       local loot_results = {}--{ "power" }
-        for _ = 2, roll_count do
-            -- Temporary test weighting for vending/fixing loop:
-            -- bias additional loot heavily toward material.
-            local loot_roll = math.random(1, 10)
-            local item_type = (loot_roll <= 6 and "material")
-                or (loot_roll <= 8 and "power")
-                or (loot_roll == 9 and "ammo")
+        local loot_results = {}
+        for _ = 1, roll_count do
+            -- Temporary test weighting for combat loop:
+            -- make ammo the most common pickup.
+            local loot_roll = math.random(1, 12)
+            local item_type = (loot_roll <= 7 and "ammo")
+                or (loot_roll <= 9 and "material")
+                or (loot_roll == 10 and "power")
                 or "meds"
             table.insert(loot_results, item_type)
         end
@@ -768,7 +767,7 @@ function M.extend(runtime, ctx)
                 print("Ammo already full.")
                 return false
             end
-            unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 1)
+            unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 5)
             return true
         end
 

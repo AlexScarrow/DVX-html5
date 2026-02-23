@@ -1892,11 +1892,50 @@ local function update_alien_movement(self, dt)
         if (not alien.is_dead) and alien.is_moving and alien.move_path and alien.go_id then
             local target_cell_id = alien.move_path[alien.move_path_index]
             if not target_cell_id then
-                alien.is_moving = false
-                alien.move_path = nil
-                alien.move_path_index = 0
-                if alien.type == ALIEN_TYPE_SPEEDY then
-                    go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                if alien.melee_shuffle_target_x and alien.melee_shuffle_target_y then
+                    local pos = go.get_position(alien.go_id)
+                    local sdx = alien.melee_shuffle_target_x - pos.x
+                    local sdy = alien.melee_shuffle_target_y - pos.y
+                    local sdist = math.sqrt(sdx * sdx + sdy * sdy)
+                    local sstep = ALIEN_MOVE_SPEED * dt
+                    if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                        alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                        local ping = math.sin(alien.spitter_anim_phase)
+                        local base_scale = 0.33333334
+                        if alien.type == ALIEN_TYPE_CANNON then
+                            base_scale = 0.22
+                        end
+                        local sx = base_scale
+                        local sy = base_scale
+                        if math.abs(sdx) >= math.abs(sdy) then
+                            sx = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
+                        else
+                            sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
+                        end
+                        go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
+                    end
+                    if sdist <= sstep then
+                        go.set_position(vmath.vector3(alien.melee_shuffle_target_x, alien.melee_shuffle_target_y, 0.6), alien.go_id)
+                        alien.melee_shuffle_target_x = nil
+                        alien.melee_shuffle_target_y = nil
+                        alien.is_moving = false
+                        alien.move_path = nil
+                        alien.move_path_index = 0
+                        if alien.type == ALIEN_TYPE_SPEEDY then
+                            go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                        end
+                    else
+                        local nsx = pos.x + (sdx / sdist) * sstep
+                        local nsy = pos.y + (sdy / sdist) * sstep
+                        go.set_position(vmath.vector3(nsx, nsy, 0.6), alien.go_id)
+                    end
+                else
+                    alien.is_moving = false
+                    alien.move_path = nil
+                    alien.move_path_index = 0
+                    if alien.type == ALIEN_TYPE_SPEEDY then
+                        go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                    end
                 end
             else
                 local target_cell = self.world_grid[target_cell_id]
@@ -1995,11 +2034,82 @@ local function update_alien_movement(self, dt)
                     local killed = resolve_human_reaction_fire(self, alien)
                     if not killed then
                         if alien.move_path_index > #alien.move_path then
-                            alien.is_moving = false
-                            alien.move_path = nil
-                            alien.move_path_index = 0
-                            if alien.type == ALIEN_TYPE_SPEEDY then
-                                go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                            local weakest_human = nil
+                            if self.squad_units then
+                                for _, unit in pairs(self.squad_units) do
+                                    if unit.cell_id == alien.cell_id and (unit.current_health or 0) > 0 then
+                                        if (not weakest_human)
+                                            or ((unit.current_health or 0) < (weakest_human.current_health or 0))
+                                            or (((unit.current_health or 0) == (weakest_human.current_health or 0)) and tostring(unit.id) < tostring(weakest_human.id))
+                                        then
+                                            weakest_human = unit
+                                        end
+                                    end
+                                end
+                            end
+                            if weakest_human and weakest_human.go_path then
+                                local hpos = go.get_position(weakest_human.go_path)
+                                local apos = go.get_position(alien.go_id)
+                                local desired_x = hpos.x + 38
+                                if apos.x < hpos.x then
+                                    desired_x = hpos.x - 38
+                                end
+                                desired_x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x)
+                                local _, ty_adj = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
+                                if alien.type == ALIEN_TYPE_SPEEDY then
+                                    ty_adj = ty_adj + 50
+                                elseif alien.type == ALIEN_TYPE_SPITTER then
+                                    ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                                elseif alien.type == ALIEN_TYPE_CANNON then
+                                    ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+                                end
+                                local occupied = {}
+                                if self.aliens then
+                                    for _, other in ipairs(self.aliens) do
+                                        if other.id ~= alien.id and (not other.is_dead) and other.cell_id == alien.cell_id and other.go_id then
+                                            local op = go.get_position(other.go_id)
+                                            table.insert(occupied, op.x)
+                                        end
+                                    end
+                                end
+                                local final_x = desired_x
+                                for hop = 0, 4 do
+                                    local cand_a = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x + (hop * 24))
+                                    local cand_b = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x - (hop * 24))
+                                    local cand = cand_a
+                                    if hop % 2 == 1 then
+                                        cand = cand_b
+                                    end
+                                    local ok = true
+                                    for i = 1, #occupied do
+                                        if math.abs(cand - occupied[i]) < 18 then
+                                            ok = false
+                                            break
+                                        end
+                                    end
+                                    if ok then
+                                        final_x = cand
+                                        break
+                                    end
+                                end
+                                if math.abs(final_x - apos.x) > 1 then
+                                    alien.melee_shuffle_target_x = final_x
+                                    alien.melee_shuffle_target_y = ty_adj
+                                else
+                                    alien.is_moving = false
+                                    alien.move_path = nil
+                                    alien.move_path_index = 0
+                                    if alien.type == ALIEN_TYPE_SPEEDY then
+                                        go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                                    end
+                                end
+                            else
+                                alien.is_moving = false
+                                alien.move_path = nil
+                                alien.move_path_index = 0
+                                if alien.type == ALIEN_TYPE_SPEEDY then
+                                    go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                                end
                             end
                         end
                     end
@@ -3102,6 +3212,10 @@ local function move_human_to_cell(self, unit, cell_id)
     unit.cell_id = cell_id
     self.world_grid[cell_id].isOccupied = unit.occupancy_hash
     ensure_cell_slot_assignment(self, unit, cell_id)
+    if unit.forced_slot_index and self.cell_slot_assignments and self.cell_slot_assignments[cell_id] then
+        self.cell_slot_assignments[cell_id][unit.id] = unit.forced_slot_index
+        unit.forced_slot_index = nil
+    end
 
     refresh_unit_positions_in_cell(self, old_cell_id)
     refresh_unit_positions_in_cell(self, cell_id)
@@ -3180,6 +3294,13 @@ local function begin_human_path_move(self, path)
     unit.move_path = path
     unit.move_path_index = 2 -- first element is current cell
     unit.anim_phase = 0
+    unit.micro_target_x = nil
+    unit.micro_target_y = nil
+    unit.micro_move_kind = nil
+    unit.vertical_prep_done_for_index = nil
+    unit.entry_slot_for_index = nil
+    unit.entry_slot_index = nil
+    unit.last_completed_step_vertical = false
 end
 
 local function update_single_unit_movement(self, unit, dt)
@@ -3190,7 +3311,55 @@ local function update_single_unit_movement(self, unit, dt)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.micro_target_x = nil
+        unit.micro_target_y = nil
+        unit.micro_move_kind = nil
+        unit.vertical_prep_done_for_index = nil
+        unit.entry_slot_for_index = nil
+        unit.entry_slot_index = nil
+        unit.last_completed_step_vertical = false
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        return
+    end
+
+    if unit.micro_target_x and unit.micro_target_y then
+        local current_pos = go.get_position(unit.go_path)
+        local dx = unit.micro_target_x - current_pos.x
+        local dy = unit.micro_target_y - current_pos.y
+        local distance = math.sqrt(dx * dx + dy * dy)
+        local step = HUMAN_MOVE_SPEED * dt
+        unit.anim_phase = (unit.anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+        local ping = math.sin(unit.anim_phase)
+        local scale_x = HUMAN_VISUAL_SCALE
+        local scale_y = HUMAN_VISUAL_SCALE
+        if math.abs(dx) >= math.abs(dy) then
+            scale_x = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+        else
+            scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+        end
+        set_unit_scale(unit, scale_x, scale_y)
+        if distance <= step then
+            go.set_position(vmath.vector3(unit.micro_target_x, unit.micro_target_y, 0.5), unit.go_path)
+            if unit.micro_move_kind == "settle_end" then
+                unit.is_moving = false
+                unit.move_path = nil
+                unit.move_path_index = 0
+                unit.micro_target_x = nil
+                unit.micro_target_y = nil
+                unit.micro_move_kind = nil
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+                print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
+                update_human_visual_state(self)
+                return
+            end
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            return
+        end
+        local nx = current_pos.x + (dx / distance) * step
+        local ny = current_pos.y + (dy / distance) * step
+        go.set_position(vmath.vector3(nx, ny, 0.5), unit.go_path)
         return
     end
 
@@ -3199,16 +3368,88 @@ local function update_single_unit_movement(self, unit, dt)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.vertical_prep_done_for_index = nil
+        unit.entry_slot_for_index = nil
+        unit.entry_slot_index = nil
+        unit.last_completed_step_vertical = false
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         return
     end
 
-    local target_x, target_y = get_unit_world_pos_in_cell(self, unit, target_cell_id)
+    local from_x, from_y = id_to_coords(unit.cell_id)
+    local to_x, to_y = id_to_coords(target_cell_id)
+    local is_vertical_step = (from_x == to_x) and (from_y ~= to_y)
+    if is_vertical_step and unit.vertical_prep_done_for_index ~= unit.move_path_index then
+        if self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
+            local assignment = self.cell_slot_assignments[unit.cell_id]
+            local right_slot = 1
+            for i = 1, #CELL_SLOT_OFFSETS_X do
+                local slot_offset = CELL_SLOT_OFFSETS_X[i] or 0
+                local best_offset = CELL_SLOT_OFFSETS_X[right_slot] or 0
+                if slot_offset > best_offset then
+                    right_slot = i
+                end
+            end
+            assignment[unit.id] = right_slot
+        end
+        local prep_x, prep_y = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
+        unit.micro_target_x = prep_x
+        unit.micro_target_y = prep_y
+        unit.micro_move_kind = "prep_vertical"
+        unit.vertical_prep_done_for_index = unit.move_path_index
+        return
+    end
+
+    if unit.entry_slot_for_index ~= unit.move_path_index then
+        local selected_slot = math.random(1, #CELL_SLOT_OFFSETS_X)
+        if is_vertical_step then
+            local right_slot = 1
+            for i = 1, #CELL_SLOT_OFFSETS_X do
+                local slot_offset = CELL_SLOT_OFFSETS_X[i] or 0
+                local best_offset = CELL_SLOT_OFFSETS_X[right_slot] or 0
+                if slot_offset > best_offset then
+                    right_slot = i
+                end
+            end
+            selected_slot = right_slot
+        end
+        if self.cell_slot_assignments and self.cell_slot_assignments[target_cell_id] then
+            local assignment = self.cell_slot_assignments[target_cell_id]
+            local free_slots = {}
+            local used = {}
+            for unit_id, slot_index in pairs(assignment) do
+                if unit_id ~= unit.id then
+                    used[slot_index] = true
+                end
+            end
+            for i = 1, #CELL_SLOT_OFFSETS_X do
+                if not used[i] then
+                    table.insert(free_slots, i)
+                end
+            end
+            if (not is_vertical_step) and #free_slots > 0 then
+                selected_slot = free_slots[math.random(1, #free_slots)]
+            end
+        end
+        unit.entry_slot_for_index = unit.move_path_index
+        unit.entry_slot_index = selected_slot
+    end
+    local target_cell = self.world_grid[target_cell_id]
+    local target_x, target_y = get_human_world_pos_for_cell(target_cell)
+    target_x = target_x + ((CELL_SLOT_OFFSETS_X[unit.entry_slot_index] or 0) * HUMAN_STACK_SPACING_X)
+    target_x = clamp_world_x_to_cell(target_cell, target_x)
     local target_cost = get_step_move_cost(self.world_grid, unit.cell_id, target_cell_id)
     if target_cost > unit.current_ap then
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.micro_target_x = nil
+        unit.micro_target_y = nil
+        unit.micro_move_kind = nil
+        unit.vertical_prep_done_for_index = nil
+        unit.entry_slot_for_index = nil
+        unit.entry_slot_index = nil
+        unit.last_completed_step_vertical = false
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         print(unit.display_name .. " stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. unit.current_ap .. ")")
         update_human_visual_state(self)
@@ -3236,14 +3477,45 @@ local function update_single_unit_movement(self, unit, dt)
     if distance <= step then
         go.set_position(vmath.vector3(target_x, target_y, 0.5), unit.go_path)
         unit.current_ap = unit.current_ap - target_cost
+        unit.forced_slot_index = unit.entry_slot_index
         move_human_to_cell(self, unit, target_cell_id)
+        unit.entry_slot_for_index = nil
+        unit.entry_slot_index = nil
+        unit.vertical_prep_done_for_index = nil
+        unit.last_completed_step_vertical = is_vertical_step
         update_human_ap_debug_label(self)
         unit.move_path_index = unit.move_path_index + 1
 
         if unit.move_path_index > #unit.move_path then
+            if unit.last_completed_step_vertical and self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
+                local assignment = self.cell_slot_assignments[unit.cell_id]
+                local current_slot = assignment[unit.id] or 1
+                local spare_slots = {}
+                local used = {}
+                for unit_id, slot_index in pairs(assignment) do
+                    if unit_id ~= unit.id then
+                        used[slot_index] = true
+                    end
+                end
+                for i = 1, #CELL_SLOT_OFFSETS_X do
+                    if i ~= current_slot and not used[i] then
+                        table.insert(spare_slots, i)
+                    end
+                end
+                if #spare_slots > 0 then
+                    local settle_slot = spare_slots[math.random(1, #spare_slots)]
+                    assignment[unit.id] = settle_slot
+                    local settle_x, settle_y = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
+                    unit.micro_target_x = settle_x
+                    unit.micro_target_y = settle_y
+                    unit.micro_move_kind = "settle_end"
+                    return
+                end
+            end
             unit.is_moving = false
             unit.move_path = nil
             unit.move_path_index = 0
+            unit.last_completed_step_vertical = false
             set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
             print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
             update_human_visual_state(self)
@@ -3438,7 +3710,21 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     end
                 end
                 assignment[clicked_unit.id] = next_slot
-                refresh_unit_positions_in_cell(self, clicked_cell_id)
+                local target_x, target_y = get_unit_world_pos_in_cell(self, clicked_unit, clicked_cell_id)
+                local current_pos = go.get_position(clicked_unit.go_path)
+                local dx = target_x - current_pos.x
+                local dy = target_y - current_pos.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                local move_duration = math.max(0.06, distance / HUMAN_MOVE_SPEED)
+                go.cancel_animations(clicked_unit.go_path, "position")
+                go.animate(
+                    clicked_unit.go_path,
+                    "position",
+                    go.PLAYBACK_ONCE_FORWARD,
+                    vmath.vector3(target_x, target_y, 0.5),
+                    go.EASING_INOUTSINE,
+                    move_duration
+                )
                 print(clicked_unit.display_name .. " shifted position within cell.")
             else
                 clicked_unit.is_selected = false
@@ -3503,7 +3789,21 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     end
                 end
                 assignment[unit.id] = best_slot
-                refresh_unit_positions_in_cell(self, clicked_cell_id)
+                local target_x, target_y = get_unit_world_pos_in_cell(self, unit, clicked_cell_id)
+                local current_pos = go.get_position(unit.go_path)
+                local dx = target_x - current_pos.x
+                local dy = target_y - current_pos.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                local move_duration = math.max(0.06, distance / HUMAN_MOVE_SPEED)
+                go.cancel_animations(unit.go_path, "position")
+                go.animate(
+                    unit.go_path,
+                    "position",
+                    go.PLAYBACK_ONCE_FORWARD,
+                    vmath.vector3(target_x, target_y, 0.5),
+                    go.EASING_INOUTSINE,
+                    move_duration
+                )
                 print(unit.display_name .. " repositioned within cell (0 AP).")
             end
             self.ui_close_on_next_non_unit_click = true

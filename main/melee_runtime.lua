@@ -99,6 +99,28 @@ function M.create(ctx)
         })
     end
 
+    local function spawn_alien_blood_splatter_fx(target_alien)
+        if not target_alien or not target_alien.go_id then
+            return
+        end
+        local pos = go.get_position(target_alien.go_id)
+        local fx_id = factory.create("/alien_blood_splatter1_fx_factory#alien_blood_splatter1_fx_factory", vmath.vector3(pos.x, pos.y + 6, 0.61))
+        if not fx_id then
+            return
+        end
+        particlefx.play(msg.url(nil, fx_id, "particlefx"))
+        timer.delay(0.12, false, function()
+            if fx_id then
+                particlefx.stop(msg.url(nil, fx_id, "particlefx"), { clear = false })
+            end
+        end)
+        timer.delay(1.0, false, function()
+            if fx_id then
+                go.delete(fx_id)
+            end
+        end)
+    end
+
     local function resolve_human_melee_strike(self, human, target_alien, source_tag)
         if not human or not target_alien then
             return
@@ -114,6 +136,7 @@ function M.create(ctx)
         local hit_chance = clamp(ctx.MELEE_MODEL.human_base_hit_chance, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)
         if roll <= hit_chance then
+            spawn_alien_blood_splatter_fx(target_alien)
             if target_alien.type == ctx.ALIEN_TYPE_BRUTE then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
                 print(string.format(
@@ -235,6 +258,10 @@ function M.create(ctx)
                 end
             end
         end
+    end
+
+    runtime.spawn_alien_blood_splatter_fx = function(self, alien)
+        spawn_alien_blood_splatter_fx(alien)
     end
 
     runtime.update_phase = function(self, dt)

@@ -251,6 +251,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "human_blood_splatter1_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"human_blood_splatter1_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/human_blood_splatter1_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "alien_blip_factory"
   data: "embedded_components {\n"
   "  id: \"alien_blip_factory\"\n"

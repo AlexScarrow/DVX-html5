@@ -121,6 +121,28 @@ function M.create(ctx)
         end)
     end
 
+    local function spawn_human_blood_splatter_fx(target_human)
+        if not target_human or not target_human.go_path then
+            return
+        end
+        local pos = go.get_position(target_human.go_path)
+        local fx_id = factory.create("/human_blood_splatter1_fx_factory#human_blood_splatter1_fx_factory", vmath.vector3(pos.x, pos.y + 6, 0.61))
+        if not fx_id then
+            return
+        end
+        particlefx.play(msg.url(nil, fx_id, "particlefx"))
+        timer.delay(0.12, false, function()
+            if fx_id then
+                particlefx.stop(msg.url(nil, fx_id, "particlefx"), { clear = false })
+            end
+        end)
+        timer.delay(1.0, false, function()
+            if fx_id then
+                go.delete(fx_id)
+            end
+        end)
+    end
+
     local function resolve_human_melee_strike(self, human, target_alien, source_tag)
         if not human or not target_alien then
             return
@@ -183,6 +205,7 @@ function M.create(ctx)
         if roll <= hit_chance then
             target.current_health = math.max(0, (target.current_health or 0) - 1)
             mark_human_hit(target)
+            spawn_human_blood_splatter_fx(target)
             print(string.format(
                 "Alien #%d melee on %s and HIT [chance=%d%% roll=%d hp=%d armor=%d]",
                 alien.id, target.display_name, hit_chance, roll, target.current_health, armor_bonus
@@ -262,6 +285,10 @@ function M.create(ctx)
 
     runtime.spawn_alien_blood_splatter_fx = function(self, alien)
         spawn_alien_blood_splatter_fx(alien)
+    end
+
+    runtime.spawn_human_blood_splatter_fx = function(self, human)
+        spawn_human_blood_splatter_fx(human)
     end
 
     runtime.update_phase = function(self, dt)

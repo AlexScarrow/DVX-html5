@@ -44,9 +44,9 @@ local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
 local HUMAN_PINGPONG_AMPLITUDE = 0.18
 local HUMAN_PINGPONG_SPEED = 7
 local HUMAN_MAX_ACTION_POINTS = 5
-local HUMAN_STACK_SPACING_X = 36
+local HUMAN_STACK_SPACING_X = 28
 local UNIT_CLICK_SELECT_RADIUS = 45
-local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2 }
+local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2, -3, 3 }
 local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
 local UNIT_SELECTED_PULSE_SPEED = 4
 local VERTICAL_MOVE_AP_COST = 3
@@ -270,6 +270,22 @@ function coords_to_world_pos(x_cell, y_cell)
     local x_pos = (x_cell - 1) * CELL_WIDTH + (CELL_WIDTH * 0.5)
     local y_pos = (y_cell - 1) * CELL_HEIGHT + (CELL_HEIGHT * 0.5)
     return x_pos, y_pos
+end
+
+function clamp_world_x_to_cell(cell, world_x)
+    if not cell then
+        return world_x
+    end
+    local center_x, _ = coords_to_world_pos(cell.xCell, cell.yCell)
+    local min_x = center_x - (CELL_WIDTH * 0.5) + 8
+    local max_x = center_x + (CELL_WIDTH * 0.5) - 8
+    if world_x < min_x then
+        return min_x
+    end
+    if world_x > max_x then
+        return max_x
+    end
+    return world_x
 end
 
 function world_pos_to_coords(x_pos, y_pos)
@@ -1256,6 +1272,35 @@ local function ensure_alien_visual(self, alien)
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     if alien.type ~= ALIEN_TYPE_BLIP then
         x = x + (CELL_WIDTH * 0.25)
+        local human_count = 0
+        if self.squad_units then
+            for _, unit in pairs(self.squad_units) do
+                if unit.cell_id == alien.cell_id and (unit.current_health or 0) > 0 then
+                    human_count = human_count + 1
+                end
+            end
+        end
+        if human_count > 0 and self.aliens then
+            local on_cell = {}
+            for _, scan in ipairs(self.aliens) do
+                if (not scan.is_dead) and scan.cell_id == alien.cell_id and scan.type ~= ALIEN_TYPE_BLIP then
+                    table.insert(on_cell, scan)
+                end
+            end
+            table.sort(on_cell, function(a, b)
+                return (a.id or 0) < (b.id or 0)
+            end)
+            local idx = 1
+            for i, scan in ipairs(on_cell) do
+                if scan.id == alien.id then
+                    idx = i
+                    break
+                end
+            end
+            local lane = { 20, -20, 40, -40, 60, -60 }
+            x = x + (lane[idx] or 0)
+        end
+        x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
     end
     if alien.type == ALIEN_TYPE_SPEEDY then
         y = y + 50
@@ -1337,6 +1382,35 @@ local function refresh_alien_visual(self, alien)
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     if alien.type ~= ALIEN_TYPE_BLIP then
         x = x + (CELL_WIDTH * 0.25)
+        local human_count = 0
+        if self.squad_units then
+            for _, unit in pairs(self.squad_units) do
+                if unit.cell_id == alien.cell_id and (unit.current_health or 0) > 0 then
+                    human_count = human_count + 1
+                end
+            end
+        end
+        if human_count > 0 and self.aliens then
+            local on_cell = {}
+            for _, scan in ipairs(self.aliens) do
+                if (not scan.is_dead) and scan.cell_id == alien.cell_id and scan.type ~= ALIEN_TYPE_BLIP then
+                    table.insert(on_cell, scan)
+                end
+            end
+            table.sort(on_cell, function(a, b)
+                return (a.id or 0) < (b.id or 0)
+            end)
+            local idx = 1
+            for i, scan in ipairs(on_cell) do
+                if scan.id == alien.id then
+                    idx = i
+                    break
+                end
+            end
+            local lane = { 20, -20, 40, -40, 60, -60 }
+            x = x + (lane[idx] or 0)
+        end
+        x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
     end
     if alien.type == ALIEN_TYPE_SPEEDY then
         y = y + 50
@@ -1829,6 +1903,38 @@ local function update_alien_movement(self, dt)
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 if alien.type ~= ALIEN_TYPE_BLIP then
                     tx = tx + (CELL_WIDTH * 0.25)
+                    local human_count = 0
+                    if self.squad_units then
+                        for _, unit in pairs(self.squad_units) do
+                            if unit.cell_id == target_cell_id and (unit.current_health or 0) > 0 then
+                                human_count = human_count + 1
+                            end
+                        end
+                    end
+                    if human_count > 0 and self.aliens then
+                        local on_cell = {}
+                        for _, scan in ipairs(self.aliens) do
+                            if (not scan.is_dead)
+                                and scan.type ~= ALIEN_TYPE_BLIP
+                                and (scan.cell_id == target_cell_id or scan.id == alien.id)
+                            then
+                                table.insert(on_cell, scan)
+                            end
+                        end
+                        table.sort(on_cell, function(a, b)
+                            return (a.id or 0) < (b.id or 0)
+                        end)
+                        local idx = 1
+                        for i, scan in ipairs(on_cell) do
+                            if scan.id == alien.id then
+                                idx = i
+                                break
+                            end
+                        end
+                        local lane = { 20, -20, 40, -40, 60, -60 }
+                        tx = tx + (lane[idx] or 0)
+                    end
+                    tx = clamp_world_x_to_cell(target_cell, tx)
                 end
                 if alien.type == ALIEN_TYPE_SPEEDY then
                     ty = ty + 50
@@ -2953,17 +3059,19 @@ end
 
 local function get_human_world_pos_for_cell(cell)
     local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
-    x = x + (CELL_WIDTH * 0.25)
     -- Keep feet near the floor: 10px above each cell's bottom boundary.
     y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
     return x, y
 end
 
 local function get_unit_world_pos_in_cell(self, unit, cell_id)
-    local base_x, base_y = get_human_world_pos_for_cell(self.world_grid[cell_id])
+    local cell = self.world_grid[cell_id]
+    local base_x, base_y = get_human_world_pos_for_cell(cell)
     local slot_index = ensure_cell_slot_assignment(self, unit, cell_id)
     local slot_offset = CELL_SLOT_OFFSETS_X[slot_index] or 0
-    return base_x + (slot_offset * HUMAN_STACK_SPACING_X), base_y
+    local x = base_x + (slot_offset * HUMAN_STACK_SPACING_X)
+    x = clamp_world_x_to_cell(cell, x)
+    return x, base_y
 end
 
 local function refresh_unit_positions_in_cell(self, cell_id)
@@ -3312,8 +3420,30 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             return true
         end
         if self.controlled_unit_id == clicked_unit.id and clicked_unit.is_selected then
-            clicked_unit.is_selected = false
-            print(clicked_unit.display_name .. " deselected.")
+            if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
+                local assignment = self.cell_slot_assignments[clicked_cell_id]
+                local current_slot = assignment[clicked_unit.id] or 1
+                local used = {}
+                for unit_id, slot_index in pairs(assignment) do
+                    if unit_id ~= clicked_unit.id then
+                        used[slot_index] = true
+                    end
+                end
+                local next_slot = current_slot
+                for step = 1, #CELL_SLOT_OFFSETS_X do
+                    local candidate = ((current_slot + step - 1) % #CELL_SLOT_OFFSETS_X) + 1
+                    if not used[candidate] then
+                        next_slot = candidate
+                        break
+                    end
+                end
+                assignment[clicked_unit.id] = next_slot
+                refresh_unit_positions_in_cell(self, clicked_cell_id)
+                print(clicked_unit.display_name .. " shifted position within cell.")
+            else
+                clicked_unit.is_selected = false
+                print(clicked_unit.display_name .. " deselected.")
+            end
         else
             self.controlled_unit_id = clicked_unit.id
             deselect_all_units(self)
@@ -3346,6 +3476,39 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     if unit.is_selected then
         if try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y) then
             self.ui_close_on_next_non_unit_click = true
+            return true
+        end
+
+        if clicked_cell_id == unit.cell_id then
+            if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
+                local assignment = self.cell_slot_assignments[clicked_cell_id]
+                local current_slot = assignment[unit.id] or 1
+                local used = {}
+                for unit_id, slot_index in pairs(assignment) do
+                    if unit_id ~= unit.id then
+                        used[slot_index] = true
+                    end
+                end
+                local base_x, _ = get_human_world_pos_for_cell(self.world_grid[clicked_cell_id])
+                local best_slot = current_slot
+                local best_dist = math.huge
+                for i = 1, #CELL_SLOT_OFFSETS_X do
+                    if i == current_slot or not used[i] then
+                        local slot_x = base_x + ((CELL_SLOT_OFFSETS_X[i] or 0) * HUMAN_STACK_SPACING_X)
+                        local dist = math.abs(world_x - slot_x)
+                        if dist < best_dist then
+                            best_dist = dist
+                            best_slot = i
+                        end
+                    end
+                end
+                assignment[unit.id] = best_slot
+                refresh_unit_positions_in_cell(self, clicked_cell_id)
+                print(unit.display_name .. " repositioned within cell (0 AP).")
+            end
+            self.ui_close_on_next_non_unit_click = true
+            update_human_visual_state(self)
+            update_human_ap_debug_label(self)
             return true
         end
 

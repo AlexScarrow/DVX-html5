@@ -4097,7 +4097,7 @@ function init(self)
     msg.post("/camera#camera", "acquire_camera_focus")
 
     self.sheen_z = 0.4--0.3
-    self.sheen_alpha = 0.8--0.22
+    self.sheen_alpha = 0--0.8--0.22
     self.sheen_art_w = 550--768
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0

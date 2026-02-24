@@ -16,9 +16,9 @@ height = 720
 high_dpi = 1
 
 [render]
-clear_color_red = 0.1
-clear_color_green = 0.1
-clear_color_blue = 0.1
+clear_color_red = 0.0
+clear_color_green = 0.0
+clear_color_blue = 0.0
 clear_color_alpha = 1
 
 [physics]

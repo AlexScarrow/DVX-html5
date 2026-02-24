@@ -76,3 +76,15 @@ images {
 images {
   image: "/assets/images/vent_unwelded.png"
 }
+images {
+  image: "/assets/images/wiregap_straight_off.png"
+}
+images {
+  image: "/assets/images/wiregap_straight_on.png"
+}
+images {
+  image: "/assets/images/wiregap_corner_off.png"
+}
+images {
+  image: "/assets/images/wiregap_corner_on.png"
+}

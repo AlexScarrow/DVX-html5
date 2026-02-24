@@ -14,7 +14,13 @@ function M.create(ctx)
             return ctx.LOOT_UI.material_color
         elseif item_type == "corpse" then
             return vmath.vector4(0.75, 0.12, 0.12, 1)
-        elseif item_type == ctx.COMPONENT_UI.item_type_blue then
+        elseif item_type == ctx.COMPONENT_UI.item_type_blue
+            or item_type == ctx.COMPONENT_UI.component_wiring_straight
+            or item_type == ctx.COMPONENT_UI.component_wiring_corner
+            or item_type == ctx.COMPONENT_UI.component_plate
+            or item_type == ctx.COMPONENT_UI.component_fuse
+            or item_type == ctx.COMPONENT_UI.component_sensor
+        then
             return ctx.COMPONENT_UI.component_color
         end
         return ctx.UI_COLOR_SLOT
@@ -105,7 +111,7 @@ function M.create(ctx)
         local objects = runtime.get_fixable_objects_in_cell(cell)
         local best = nil
         for _, obj in ipairs(objects) do
-            local requires = obj.requiredComponent or ctx.COMPONENT_UI.item_type_blue
+            local requires = runtime.get_required_component_for_object(obj)
             if obj.isFixed ~= true and (not required_component or required_component == requires) then
                 if (obj.dependsOn or 0) == 0 then
                     return obj
@@ -116,6 +122,13 @@ function M.create(ctx)
             end
         end
         return best
+    end
+
+    runtime.get_required_component_for_object = function(obj)
+        if not obj then
+            return ctx.COMPONENT_UI.item_type_blue
+        end
+        return obj.requiredComponent or ctx.COMPONENT_UI.item_type_blue
     end
 
     runtime.find_object_by_id = function(world_grid, object_id)

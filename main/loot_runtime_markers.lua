@@ -154,6 +154,63 @@ function M.extend(runtime, ctx)
         end
     end
 
+    runtime.refresh_wiregap_markers = function(self)
+        self.wiregap_objects = self.wiregap_objects or {}
+        for _, marker in ipairs(self.wiregap_objects) do
+            if marker then
+                go.delete(marker)
+            end
+        end
+        self.wiregap_objects = {}
+
+        if not self.world_grid then
+            return
+        end
+
+        local function get_wiregap_anim(obj)
+            if not obj or not obj.name then
+                return nil
+            end
+            local key = nil
+            if obj.name == hash("wiregap_straight") or obj.name == hash("wireGap_straight") then
+                key = "straight"
+            elseif obj.name == hash("wiregap_corner") or obj.name == hash("wireGap_corner") then
+                key = "corner"
+            elseif obj.name == hash("wiregap") or obj.name == hash("wireGap") then
+                if obj.requiredComponent == ctx.COMPONENT_UI.component_wiring_corner then
+                    key = "corner"
+                else
+                    key = "straight"
+                end
+            end
+            if not key then
+                return nil
+            end
+            local state = (obj.isFixed == true) and "on" or "off"
+            return hash("wiregap_" .. key .. "_" .. state)
+        end
+
+        for _, cell in ipairs(self.world_grid) do
+            if cell.tileID ~= hash("empty") and cell.isPowered then
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(objects) do
+                    local anim = get_wiregap_anim(obj)
+                    if anim then
+                        local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                        local wx = x + (obj.offsetX or 0)
+                        local wy = y + (obj.offsetY or 0)
+                        local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(wx, wy, 0.56))
+                        if marker_id then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                            go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                            table.insert(self.wiregap_objects, marker_id)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     runtime.refresh_vent_markers = function(self)
         self.vent_objects = self.vent_objects or {}
         for cell_id, marker in pairs(self.vent_objects) do

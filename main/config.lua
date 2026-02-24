@@ -49,6 +49,13 @@ function M.create_ui_config(ui_panel_x, ui_panel_y, ui_panel_w, ui_panel_h)
     }
 
     local component_ui = {
+        -- Canonical component ids for fixing/object interactions.
+        component_wiring_straight = "wiring_straight",
+        component_wiring_corner = "wiring_corner",
+        component_plate = "plate",
+        component_fuse = "fuse",
+        component_sensor = "sensor",
+        -- Legacy placeholder component id kept for backward compatibility.
         item_type_blue = "component_blue",
         component_color = vmath.vector4(0.35, 0.65, 1, 1),
         machine_marker_color = vmath.vector4(0.2, 0.75, 1, 1),

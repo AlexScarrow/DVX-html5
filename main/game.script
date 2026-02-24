@@ -166,9 +166,9 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         hasLoot = false,
         lootOffsetX = -32,
         lootOffsetY = -32,
-        object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-        object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-        object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+        object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+        object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
     }
 end
 
@@ -206,9 +206,9 @@ function create_tile_prototype(tile_id)
             hasLoot = false,
             lootOffsetX = -32,
             lootOffsetY = -32,
-            object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-            object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-            object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+            object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+            object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+            object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
         }
     end
 
@@ -760,6 +760,23 @@ function create_tile_library()
         hitH = 32,
         requiredComponent = nil
     }
+    armoury.cells[5].object2 = {
+        name = hash("wiregap"),
+        isFixed = false,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6301,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
     -- Temporary fixable object for Phase 1 fixing loop tests.
     armoury.cells[6].object1 = {
         name = hash("console"),
@@ -882,6 +899,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
             name = (obj and obj.name) or hash("empty"),
             isFixed = (obj and obj.isFixed) == true,
             isWelded = (obj and obj.isWelded) == true,
+            isOpen = (obj and obj.isOpen) == true,
             dependsOn = (obj and obj.dependsOn) or 0,
             isDependentOn = dep_list,
             objectId = (obj and obj.objectId) or 0,
@@ -903,9 +921,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
         world_grid[i].hasLoot = false
         world_grid[i].lootOffsetX = 0
         world_grid[i].lootOffsetY = 0
-        world_grid[i].object1 = { name = hash("empty"), isFixed = false, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
-        world_grid[i].object2 = { name = hash("empty"), isFixed = false, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
-        world_grid[i].object3 = { name = hash("empty"), isFixed = false, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
     end
 
     -- Place each tile from the level design
@@ -965,6 +983,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                 obj.dependsOn = obj.dependsOn or 0
                 obj.isDependentOn = obj.isDependentOn or {}
                 obj.isWelded = obj.isWelded == true
+                obj.isOpen = obj.isOpen == true
                 obj.offsetX = obj.offsetX or 0
                 obj.offsetY = obj.offsetY or 0
                 obj.fxOffsetX = obj.fxOffsetX or 0
@@ -3193,6 +3212,10 @@ local function update_selected_unit_ui(self)
             icon_anim = hash("ammo_unit")
         elseif item_type == "power" then
             icon_anim = hash("power_unit")
+        elseif item_type == COMPONENT_UI.component_wiring_straight then
+            icon_anim = hash("wiregap_straight_on")
+        elseif item_type == COMPONENT_UI.component_wiring_corner then
+            icon_anim = hash("wiregap_corner_on")
         end
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
@@ -4315,6 +4338,7 @@ end
         LOOT_RUNTIME.refresh_machine_markers(self)
         LOOT_RUNTIME.refresh_fix_markers(self)
         LOOT_RUNTIME.refresh_power_node_markers(self)
+        LOOT_RUNTIME.refresh_wiregap_markers(self)
         LOOT_RUNTIME.refresh_vent_markers(self)
         LOOT_RUNTIME.refresh_light_value_markers(self)
     end--of spawn visuals fn

@@ -440,8 +440,8 @@ function M.extend(runtime, ctx)
         local added = 0
         local dropped = 0
 
-        local loot_results = {}
-        for _ = 1, roll_count do
+        local loot_results = { ctx.COMPONENT_UI.component_wiring_straight }
+        for _ = 2, roll_count do
             -- Temporary test weighting for combat loop:
             -- make ammo the most common pickup.
             local loot_roll = math.random(1, 12)
@@ -553,9 +553,38 @@ function M.extend(runtime, ctx)
             return true
         end
 
-        local fixable = runtime.find_best_fixable_object(cell, ctx.COMPONENT_UI.item_type_blue)
+        local fixables = runtime.get_fixable_objects_in_cell(cell)
+        local fixable = nil
+        local required_component = nil
+        local component_slot = nil
+        local missing_required_component = nil
+        unit.backpack_items = unit.backpack_items or {}
+        for _, candidate in ipairs(fixables) do
+            if candidate and candidate.isFixed ~= true then
+                local needed = runtime.get_required_component_for_object(candidate)
+                local slot = nil
+                for i, item in ipairs(unit.backpack_items) do
+                    if item == needed then
+                        slot = i
+                        break
+                    end
+                end
+                if slot then
+                    fixable = candidate
+                    required_component = needed
+                    component_slot = slot
+                    break
+                elseif not missing_required_component then
+                    missing_required_component = needed
+                end
+            end
+        end
         if not fixable then
-            print("No fixable object here.")
+            if missing_required_component then
+                print("Need 1 " .. tostring(missing_required_component) .. " to fix.")
+            else
+                print("No fixable object here.")
+            end
             return true
         end
 
@@ -567,17 +596,8 @@ function M.extend(runtime, ctx)
             return true
         end
 
-        unit.backpack_items = unit.backpack_items or {}
-        local component_slot = nil
-        for i, item in ipairs(unit.backpack_items) do
-            if item == ctx.COMPONENT_UI.item_type_blue then
-                component_slot = i
-                break
-            end
-        end
-
         if not component_slot then
-            print("Need 1 component to fix.")
+            print("Need 1 " .. tostring(required_component) .. " to fix.")
             return true
         end
 
@@ -690,6 +710,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_machine_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_power_node_markers(self)
+        runtime.refresh_wiregap_markers(self)
         runtime.refresh_vent_markers(self)
         runtime.refresh_light_value_markers(self)
         ctx.update_human_visual_state(self)
@@ -1055,6 +1076,7 @@ function M.extend(runtime, ctx)
                                 runtime.refresh_machine_markers(self)
                                 runtime.refresh_fix_markers(self)
                                 runtime.refresh_power_node_markers(self)
+                                runtime.refresh_wiregap_markers(self)
                                 runtime.refresh_vent_markers(self)
                                 runtime.refresh_light_value_markers(self)
                             end
@@ -1066,7 +1088,13 @@ function M.extend(runtime, ctx)
                     if not consumed then
                         local component_target = nil
                         local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
-                        if drop_cell_id and source_unit.cell_id and source_item == ctx.COMPONENT_UI.item_type_blue then
+                        local is_component_item = source_item == ctx.COMPONENT_UI.item_type_blue
+                            or source_item == ctx.COMPONENT_UI.component_wiring_straight
+                            or source_item == ctx.COMPONENT_UI.component_wiring_corner
+                            or source_item == ctx.COMPONENT_UI.component_plate
+                            or source_item == ctx.COMPONENT_UI.component_fuse
+                            or source_item == ctx.COMPONENT_UI.component_sensor
+                        if drop_cell_id and source_unit.cell_id and is_component_item then
                             component_target = runtime.find_fix_object_drop_target(self, world_x, world_y, drop_cell_id, source_item)
                             if component_target then
                                 local sx, sy = ctx.id_to_coords(source_unit.cell_id)
@@ -1080,12 +1108,9 @@ function M.extend(runtime, ctx)
                                     table.remove(source_unit.backpack_items, drag.source_slot_index)
                                     source_unit.backpack_used = #source_unit.backpack_items
                                     component_target.isFixed = true
-                                    local world_item = runtime.create_world_item_instance(self, source_item, drop_cell_id, source_unit.id, {
-                                        installed_on_object_id = component_target.objectId,
-                                        slot_order = 1
-                                    })
-                                    consumed = world_item ~= nil
+                                    consumed = true
                                     runtime.refresh_fix_markers(self)
+                                    runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_world_item_visuals(self)
                                     print(string.format(
                                         "%s installed 1 %s on object #%d. (AP -%d)",

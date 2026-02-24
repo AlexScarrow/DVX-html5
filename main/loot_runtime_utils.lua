@@ -165,6 +165,22 @@ function M.create(ctx)
         return runtime.get_power_node_object(cell) ~= nil
     end
 
+    runtime.get_vent_object = function(cell)
+        if not cell then
+            return nil
+        end
+        if cell.object1 and cell.object1.name == hash("vent") then
+            return cell.object1
+        end
+        if cell.object2 and cell.object2.name == hash("vent") then
+            return cell.object2
+        end
+        if cell.object3 and cell.object3.name == hash("vent") then
+            return cell.object3
+        end
+        return nil
+    end
+
     runtime.get_backpack_slot_index_at = function(screen_x, screen_y)
         local half = ctx.UI_BACKPACK_SLOT_SIZE * 0.5
         local total_slots = ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS

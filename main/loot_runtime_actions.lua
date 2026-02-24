@@ -690,6 +690,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_machine_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_power_node_markers(self)
+        runtime.refresh_vent_markers(self)
         runtime.refresh_light_value_markers(self)
         ctx.update_human_visual_state(self)
         return true
@@ -1036,6 +1037,7 @@ function M.extend(runtime, ctx)
                                 runtime.refresh_machine_markers(self)
                                 runtime.refresh_fix_markers(self)
                                 runtime.refresh_power_node_markers(self)
+                                runtime.refresh_vent_markers(self)
                                 runtime.refresh_light_value_markers(self)
                             end
                         else

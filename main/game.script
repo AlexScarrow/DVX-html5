@@ -455,6 +455,7 @@ local function get_alien_neighbors(cell_id, world_grid, alien_type)
 end
 
 -- Get all valid adjacent cells (4-directional)
+local get_vent_neighbors_for_path
 function get_neighbors(cell_id, world_grid, movement_profile, path_context)
     local neighbors = {}
     local directions = {"right", "left", "up", "down"}
@@ -495,18 +496,12 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
     end
 
     -- FUTURE HOOK (not active yet):
-    -- For alien vent-capable pathfinding, append additional neighbor edges here.
-    -- That lets aliens choose either:
-    -- 1) regular cell-to-cell movement (already in neighbors table), or
-    -- 2) vent transition edges (once implemented).
-    --
-    -- Example future use:
-    -- if movement_profile == MOVEMENT_PROFILE_ALIEN_VENT then
-    --     local vent_neighbors = get_vent_neighbors_for_path(cell_id, world_grid, path_context)
-    --     for _, vent_neighbor in ipairs(vent_neighbors) do
-    --         table.insert(neighbors, vent_neighbor)
-    --     end
-    -- end
+    if movement_profile == MOVEMENT_PROFILE_ALIEN_VENT then
+        local vent_neighbors = get_vent_neighbors_for_path(cell_id, world_grid, path_context)
+        for _, vent_neighbor in ipairs(vent_neighbors) do
+            table.insert(neighbors, vent_neighbor)
+        end
+    end
 
     return neighbors
 end
@@ -533,9 +528,7 @@ local function cell_has_active_vent(cell)
     local candidates = { cell.object1, cell.object2, cell.object3 }
     for _, obj in ipairs(candidates) do
         if object_is_vent(obj) then
-            -- Future rule: treat sealed vents as inactive.
-            -- Expected schema later: obj.isSealed == true/false
-            if obj.isSealed ~= true then
+            if obj.isWelded ~= true and obj.isSealed ~= true then
                 return true
             end
         end
@@ -578,16 +571,32 @@ local function get_nearest_active_vent(from_cell_id, world_grid)
     return nearest_id
 end
 
-local function get_vent_neighbors_for_path(cell_id, world_grid, path_context)
-    -- Placeholder only; intentionally returns no extra neighbors for now.
-    -- Later this should return entries shaped like:
-    --   { id = <target_cell_id>, cost = <vent_travel_cost> }
-    -- and be appended inside get_neighbors() for alien movement profile.
-    --
-    -- Suggested future behavior:
-    -- - If current cell has active vent, allow jump to nearest active vent.
-    -- - If multiple vent choices are desired, return more than one edge.
-    -- - Respect sealed-vent state (Techie interaction) dynamically.
+get_vent_neighbors_for_path = function(cell_id, world_grid, path_context)
+    if not world_grid or not world_grid[cell_id] then
+        return {}
+    end
+    if not cell_has_active_vent(world_grid[cell_id]) then
+        return {}
+    end
+    local target_cell_id = path_context and path_context.target_cell_id or nil
+    if not target_cell_id then
+        return {}
+    end
+    local vents = get_active_vent_cell_ids(world_grid)
+    local best_vent = nil
+    local best_dist = math.huge
+    for _, vent_id in ipairs(vents) do
+        if vent_id ~= cell_id then
+            local d = manhattan_distance_by_id(vent_id, target_cell_id)
+            if d < best_dist or (d == best_dist and (best_vent == nil or vent_id < best_vent)) then
+                best_dist = d
+                best_vent = vent_id
+            end
+        end
+    end
+    if best_vent then
+        return { { id = best_vent, cost = 1 } }
+    end
     return {}
 end
 
@@ -778,6 +787,32 @@ function create_tile_library()
         hitH = 32,
         requiredComponent = COMPONENT_UI.item_type_blue
     }
+    armoury.cells[9].object1 = {
+        name = hash("vent"),
+        isFixed = true,
+        isWelded = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6201,
+        offsetX = -115,
+        offsetY = 65,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
+    armoury.cells[3].object2 = {
+        name = hash("vent"),
+        isFixed = true,
+        isWelded = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6202,
+        offsetX = -115,
+        offsetY = 65,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
     assign_random_loot_cell(armoury)
     library["armoury"] = armoury
 
@@ -846,6 +881,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
         return {
             name = (obj and obj.name) or hash("empty"),
             isFixed = (obj and obj.isFixed) == true,
+            isWelded = (obj and obj.isWelded) == true,
             dependsOn = (obj and obj.dependsOn) or 0,
             isDependentOn = dep_list,
             objectId = (obj and obj.objectId) or 0,
@@ -867,9 +903,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
         world_grid[i].hasLoot = false
         world_grid[i].lootOffsetX = 0
         world_grid[i].lootOffsetY = 0
-        world_grid[i].object1 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
-        world_grid[i].object2 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
-        world_grid[i].object3 = { name = hash("empty"), isFixed = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object1 = { name = hash("empty"), isFixed = false, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object2 = { name = hash("empty"), isFixed = false, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object3 = { name = hash("empty"), isFixed = false, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil }
     end
 
     -- Place each tile from the level design
@@ -928,6 +964,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
             if obj then
                 obj.dependsOn = obj.dependsOn or 0
                 obj.isDependentOn = obj.isDependentOn or {}
+                obj.isWelded = obj.isWelded == true
                 obj.offsetX = obj.offsetX or 0
                 obj.offsetY = obj.offsetY or 0
                 obj.fxOffsetX = obj.fxOffsetX or 0
@@ -1198,23 +1235,49 @@ local function get_nearest_human_cell_id(self, from_cell_id)
 end
 
 local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_id)
-    local candidates = {}
-    for _, human_cell_id in ipairs(get_human_cell_ids(self)) do
-        table.insert(candidates, {
-            cell_id = human_cell_id,
-            dist = heuristic(from_cell_id, human_cell_id)
-        })
-    end
-
-    table.sort(candidates, function(a, b) return a.dist < b.dist end)
-
-    for _, c in ipairs(candidates) do
-        local path = find_alien_path(self.world_grid, alien_type, from_cell_id, c.cell_id, nil)
-        if path then
-            return c.cell_id, path
+    local human_ids = get_human_cell_ids(self)
+    local best_target = nil
+    local best_path = nil
+    local best_cost = math.huge
+    local from_cell = self.world_grid and self.world_grid[from_cell_id]
+    local blip_in_void = (alien_type == ALIEN_TYPE_BLIP) and (from_cell and from_cell.tileID == hash("empty"))
+    local can_use_vent = alien_type ~= ALIEN_TYPE_BRUTE and not blip_in_void
+    for _, human_cell_id in ipairs(human_ids) do
+        local normal_path, normal_cost
+        if alien_type == ALIEN_TYPE_BLIP then
+            normal_path, normal_cost = find_alien_path(self.world_grid, alien_type, from_cell_id, human_cell_id, nil)
+        else
+            normal_path, normal_cost = find_path(self.world_grid, from_cell_id, human_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        end
+        local chosen_path = normal_path
+        local chosen_cost = normal_cost or math.huge
+        if can_use_vent then
+            local vent_path, vent_cost = find_path(
+                self.world_grid,
+                from_cell_id,
+                human_cell_id,
+                nil,
+                MOVEMENT_PROFILE_ALIEN_VENT,
+                { target_cell_id = human_cell_id }
+            )
+            if vent_path and vent_cost and (vent_cost < chosen_cost or vent_cost == chosen_cost) then
+                chosen_path = vent_path
+                chosen_cost = vent_cost
+            end
+        end
+        if chosen_path and chosen_cost then
+            if chosen_cost < best_cost
+                or (chosen_cost == best_cost and (best_target == nil or human_cell_id < best_target))
+            then
+                best_target = human_cell_id
+                best_path = chosen_path
+                best_cost = chosen_cost
+            end
         end
     end
-
+    if best_target and best_path then
+        return best_target, best_path
+    end
     return nil, nil
 end
 
@@ -1519,6 +1582,21 @@ local function get_alien_turn_movement_segment(self, alien, path, max_ap)
     return segment, ap_spent
 end
 
+local function get_vent_object_on_cell(cell)
+    if not cell then
+        return nil
+    end
+    local objs = { cell.object1, cell.object2, cell.object3 }
+    for _, obj in ipairs(objs) do
+        if object_is_vent(obj) then
+            if obj.isWelded ~= true and obj.isSealed ~= true then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
 local function begin_alien_path_animation(alien, segment_path)
     alien.move_path = segment_path
     alien.move_path_index = 2 -- first is current position
@@ -1818,6 +1896,9 @@ local function update_spitter_attack_phase(self, dt)
     if self.pending_melee_attack_phase then
         return
     end
+    if self.alien_turn_waiting_for_advance then
+        return
+    end
 
     if not self.spitter_attack_started then
         if any_alien_is_moving(self) then
@@ -2052,7 +2133,18 @@ local function update_alien_movement(self, dt)
 
                 if dist <= step then
                     go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
+                    local from_cell_before_step = alien.cell_id
                     alien.cell_id = target_cell_id
+                    local from_cell = self.world_grid[from_cell_before_step]
+                    local to_cell = self.world_grid[target_cell_id]
+                    local from_vent = get_vent_object_on_cell(from_cell)
+                    local to_vent = get_vent_object_on_cell(to_cell)
+                    if from_vent and to_vent and from_cell_before_step ~= target_cell_id then
+                        local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+                        local vx = cx + (to_vent.offsetX or 0)
+                        local vy = cy + (to_vent.offsetY or 0)
+                        go.set_position(vmath.vector3(vx, vy, 0.6), alien.go_id)
+                    end
                     alien.move_path_index = alien.move_path_index + 1
                     maybe_reveal_blip(self, alien)
                     local killed = resolve_human_reaction_fire(self, alien)
@@ -2154,43 +2246,83 @@ local function process_alien_turn(self)
         return
     end
 
-    if any_alien_is_moving(self) then
-        print("Alien turn ignored: aliens are still moving.")
+    if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase then
         return
     end
 
-    -- Temporary turn rule: spawn one new blip every new turn.
-    local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
-    if #edge_cells > 0 then
-        local idx = math.random(1, #edge_cells)
-        spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
-        print("Turn event: spawned 1 new blip")
+    if self.alien_turn_waiting_for_advance then
+        return
     end
 
-    print("=== Alien Turn Start ===")
-    for _, alien in ipairs(self.aliens) do
-        local cfg = ALIEN_TYPE_CONFIG[alien.type]
-        local ap_budget = cfg and cfg.ap_per_turn or 1
-        alien.turn_ap_remaining = ap_budget
-        local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
-        if target_cell_id then
-            local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, ap_budget)
-            alien.turn_ap_remaining = math.max(0, ap_budget - (spent or 0))
-            local moved = segment_path ~= nil
-            if segment_path then
-                begin_alien_path_animation(alien, segment_path)
+    if not self.alien_turn_active then
+        -- Temporary turn rule: spawn one new blip every new turn.
+        local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
+        if #edge_cells > 0 then
+            local idx = math.random(1, #edge_cells)
+            spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+            print("Turn event: spawned 1 new blip")
+        end
+        self.alien_turn_active = true
+        self.alien_turn_waiting_for_advance = false
+        print("=== Alien Turn Start ===")
+        for _, alien in ipairs(self.aliens) do
+            if not alien.is_dead then
+                local cfg = ALIEN_TYPE_CONFIG[alien.type]
+                local ap_budget = cfg and cfg.ap_per_turn or 1
+                alien.turn_ap_remaining = ap_budget
             end
-            print(string.format(
-                "Alien #%d (%s) target=%d moved=%s spent=%d",
-                alien.id, alien.type, target_cell_id, tostring(moved), spent or 0
-            ))
-        else
-            print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
         end
     end
+
+    local any_step = false
+    local step_mode = self.reactive_combat_enabled or self.alien_turn_manual_pause
+    for _, alien in ipairs(self.aliens) do
+        if (not alien.is_dead) and (alien.turn_ap_remaining or 0) > 0 then
+            local ap_budget = alien.turn_ap_remaining or 0
+            local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
+            if target_cell_id then
+                local step_budget = ap_budget
+                if step_mode then
+                    step_budget = 1
+                end
+                local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, step_budget)
+                spent = spent or 0
+                if spent <= 0 then
+                    alien.turn_ap_remaining = 0
+                else
+                    alien.turn_ap_remaining = math.max(0, ap_budget - spent)
+                    any_step = true
+                end
+                if segment_path then
+                    begin_alien_path_animation(alien, segment_path)
+                end
+                print(string.format(
+                    "Alien #%d (%s) target=%d moved=%s spent=%d rem=%d",
+                    alien.id, alien.type, target_cell_id, tostring(segment_path ~= nil), spent, alien.turn_ap_remaining or 0
+                ))
+            else
+                alien.turn_ap_remaining = 0
+                print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
+            end
+        end
+    end
+
+    if any_step then
+        MELEE_RUNTIME.begin_phase(self)
+        begin_spitter_attack_phase(self)
+        if step_mode and (self.alien_turn_manual_pause or (self.reactive_combat_enabled and can_any_human_reactively_attack(self))) then
+            self.alien_turn_waiting_for_advance = true
+        end
+        if not step_mode then
+            self.alien_turn_active = false
+        end
+        return
+    end
+
+    self.alien_turn_active = false
+    self.alien_turn_waiting_for_advance = false
+    self.alien_turn_manual_pause = false
     print("=== Alien Turn End ===")
-    MELEE_RUNTIME.begin_phase(self)
-    begin_spitter_attack_phase(self)
 end
 
 local function spawn_initial_blips(self, count)
@@ -2208,6 +2340,31 @@ local function spawn_initial_blips(self, count)
         used[idx] = true
         spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
     end
+end
+
+function can_any_human_reactively_attack(self)
+    if not self.squad_units or not self.aliens then
+        return false
+    end
+    for _, unit in pairs(self.squad_units) do
+        if (unit.current_health or 0) > 0 and unit.cell_id then
+            local can_melee = unit.current_ap > 0
+            local can_ranged = unit.current_ap > 0 and unit.current_ammo > 0
+            if can_melee or can_ranged then
+                for _, alien in ipairs(self.aliens) do
+                    if (not alien.is_dead) and alien.cell_id then
+                        if can_melee and alien.cell_id == unit.cell_id then
+                            return true
+                        end
+                        if can_ranged and has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
 end
 
 -- =============================================================================
@@ -2831,6 +2988,8 @@ local function initialize_unit_ui(self)
         loot_button = nil,
         retrieve_button = nil,
         close_button = nil,
+        reactive_toggle_button = nil,
+        reactive_advance_button = nil,
         drag_pip = nil
     }
 
@@ -2855,6 +3014,8 @@ local function initialize_unit_ui(self)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.retrieve_button = create_ui_square(0, 0, 0.82, LOOT_UI.retrieve_button_color, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     self.ui.close_button = create_ui_square(0, 0, 0.83, vmath.vector4(0.8, 0.2, 0.2, 0.95), 28, 28)
+    self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
+    self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 
     print(string.format(
@@ -2889,6 +3050,8 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     set_ui_square_transform(self, self.ui.close_button, -9999, -9999, 0.83, hidden, 28, 28)
+    set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
+    set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
 end
 
@@ -2927,8 +3090,46 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
 
 local function update_selected_unit_ui(self)
     local unit = get_selected_unit(self)
-    if not unit or not self.ui then
+    if not self.ui then
+        return
+    end
+    if not unit then
         set_ui_hidden(self)
+        local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
+        set_ui_square_transform(
+            self,
+            self.ui.reactive_toggle_button,
+            40,
+            SCREEN_HEIGHT - 40,
+            0.84,
+            toggle_color,
+            30,
+            30
+        )
+        if self.alien_turn_active and (self.reactive_combat_enabled or self.alien_turn_manual_pause or self.alien_turn_waiting_for_advance) then
+            local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
+            set_ui_square_transform(
+                self,
+                self.ui.reactive_advance_button,
+                105,
+                SCREEN_HEIGHT - 40,
+                0.84,
+                adv_color,
+                70,
+                30
+            )
+        else
+            set_ui_square_transform(
+                self,
+                self.ui.reactive_advance_button,
+                -9999,
+                -9999,
+                0.84,
+                vmath.vector4(0, 0, 0, 0),
+                70,
+                30
+            )
+        end
         return
     end
 
@@ -3118,6 +3319,41 @@ local function update_selected_unit_ui(self)
         28,
         28
     )
+    local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
+    set_ui_square_transform(
+        self,
+        self.ui.reactive_toggle_button,
+        40,
+        SCREEN_HEIGHT - 40,
+        0.84,
+        toggle_color,
+        30,
+        30
+    )
+    if self.alien_turn_active and (self.reactive_combat_enabled or self.alien_turn_manual_pause or self.alien_turn_waiting_for_advance) then
+        local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
+        set_ui_square_transform(
+            self,
+            self.ui.reactive_advance_button,
+            105,
+            SCREEN_HEIGHT - 40,
+            0.84,
+            adv_color,
+            70,
+            30
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.reactive_advance_button,
+            -9999,
+            -9999,
+            0.84,
+            vmath.vector4(0, 0, 0, 0),
+            70,
+            30
+        )
+    end
 end
 
 local function is_point_in_ui_panel(screen_x, screen_y)
@@ -3152,6 +3388,40 @@ function try_close_selected_unit_ui(self, screen_x, screen_y)
     update_human_visual_state(self)
     print("Unit panel closed.")
     return true
+end
+
+function try_toggle_reactive_combat(self, screen_x, screen_y)
+    local tx = 40
+    local ty = SCREEN_HEIGHT - 40
+    if screen_x >= (tx - 15) and screen_x <= (tx + 15) and screen_y >= (ty - 15) and screen_y <= (ty + 15) then
+        self.reactive_combat_enabled = not self.reactive_combat_enabled
+        if not self.reactive_combat_enabled and self.alien_turn_active then
+            self.alien_turn_waiting_for_advance = false
+        end
+        print("Reactive combat: " .. (self.reactive_combat_enabled and "ON" or "OFF"))
+        return true
+    end
+    return false
+end
+
+function try_advance_reactive_alien_turn(self, screen_x, screen_y)
+    if not self.alien_turn_active then
+        return false
+    end
+    local ax = 105
+    local ay = SCREEN_HEIGHT - 40
+    if screen_x >= (ax - 35) and screen_x <= (ax + 35) and screen_y >= (ay - 15) and screen_y <= (ay + 15) then
+        if self.alien_turn_waiting_for_advance then
+            self.alien_turn_waiting_for_advance = false
+            print("Alien turn step advanced.")
+        elseif not self.reactive_combat_enabled then
+            self.alien_turn_manual_pause = true
+            self.alien_turn_waiting_for_advance = true
+            print("Alien turn paused. Press again to advance steps.")
+        end
+        return true
+    end
+    return false
 end
 
 LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
@@ -3678,7 +3948,7 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     end
 
     -- Keep this command on the human side of the turn boundary.
-    if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase then
+    if (any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase) and (not self.alien_turn_waiting_for_advance) then
         print("Unable to fire: alien turn in progress.")
         return true
     end
@@ -3802,6 +4072,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.ui_close_on_next_non_unit_click = false
             return true
         end
+        if self.alien_turn_active then
+            print("Alien turn paused: select humans and fire, or press advance.")
+            return true
+        end
 
         if clicked_cell_id == unit.cell_id then
             if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
@@ -3884,7 +4158,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     return false
 end
 
-local function process_cell_selection(self, clicked_cell_id)
+function process_cell_selection(self, clicked_cell_id)
     local cell = self.world_grid[clicked_cell_id]
     if cell.tileID == hash("empty") then
         print("Clicked VOID cell. Select a valid cell.")
@@ -3943,6 +4217,7 @@ end
         loot_objects = {}
         machine_objects = {}
         self.power_node_objects = {}
+        self.vent_objects = {}
         self.light_value_objects = {}
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
@@ -4024,6 +4299,7 @@ end
         LOOT_RUNTIME.refresh_machine_markers(self)
         LOOT_RUNTIME.refresh_fix_markers(self)
         LOOT_RUNTIME.refresh_power_node_markers(self)
+        LOOT_RUNTIME.refresh_vent_markers(self)
         LOOT_RUNTIME.refresh_light_value_markers(self)
     end--of spawn visuals fn
 
@@ -4140,6 +4416,10 @@ function init(self)
     self.melee_attack_timer = 0
     self.melee_action_queue = {}
     self.melee_ap_left_by_alien_id = {}
+    self.reactive_combat_enabled = false
+    self.alien_turn_active = false
+    self.alien_turn_waiting_for_advance = false
+    self.alien_turn_manual_pause = false
     self.loot_pickup_blips = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
@@ -4261,6 +4541,9 @@ function update(self, dt)
     MELEE_RUNTIME.update_phase(self, dt)
     update_spitter_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
+    if self.alien_turn_active and (not self.alien_turn_waiting_for_advance) and (not any_alien_is_moving(self)) and (not self.pending_spitter_attack_phase) and (not self.pending_melee_attack_phase) then
+        process_alien_turn(self)
+    end
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     update_human_visual_state(self)
@@ -4336,6 +4619,12 @@ function on_input(self, action_id, action)
             self.pan_velocity_y = 0
         elseif action.released then
             if not self.did_drag then
+                if try_toggle_reactive_combat(self, action.x, action.y) then
+                    return true
+                end
+                if try_advance_reactive_alien_turn(self, action.x, action.y) then
+                    return true
+                end
                 if get_selected_unit(self) and is_point_in_ui_panel(action.x, action.y) then
                     if try_close_selected_unit_ui(self, action.x, action.y) then
                         return

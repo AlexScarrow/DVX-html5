@@ -154,6 +154,35 @@ function M.extend(runtime, ctx)
         end
     end
 
+    runtime.refresh_vent_markers = function(self)
+        self.vent_objects = self.vent_objects or {}
+        for cell_id, marker in pairs(self.vent_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.vent_objects[cell_id] = nil
+        end
+
+        if not self.world_grid then
+            return
+        end
+
+        for cell_id, cell in ipairs(self.world_grid) do
+            local vent = runtime.get_vent_object(cell)
+            if vent and cell.tileID ~= hash("empty") and vent.isWelded ~= true then
+                local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local vent_x = x + (vent.offsetX or 0)
+                local vent_y = y + (vent.offsetY or 0)
+                local marker_id = factory.create("/alien_blip_factory#alien_blip_factory", vmath.vector3(vent_x, vent_y, 0.9))
+                if marker_id then
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(0.2, 1, 0.2, 1))
+                    go.set_scale(vmath.vector3(0.6, 0.6, 1), marker_id)
+                    self.vent_objects[cell_id] = marker_id
+                end
+            end
+        end
+    end
+
     runtime.update_power_node_flicker = function(self, dt)
         if not self.power_node_flicker_state then
             return

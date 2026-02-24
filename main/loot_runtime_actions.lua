@@ -938,6 +938,24 @@ function M.extend(runtime, ctx)
             else
                 local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
                 local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
+                if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
+                    -- Prioritize self-heal when the drop lands on/near the medic sprite.
+                    -- This avoids nearby allies stealing the target in crowded cells.
+                    local self_pos = source_unit.go_path and go.get_position(source_unit.go_path) or nil
+                    local self_drop_radius = ctx.LOOT_UI.human_drop_radius or 48
+                    if self_pos then
+                        local sdx = self_pos.x - world_x
+                        local sdy = self_pos.y - world_y
+                        local self_dist = math.sqrt(sdx * sdx + sdy * sdy)
+                        if self_dist <= self_drop_radius then
+                            target_unit = source_unit
+                        elseif not target_unit then
+                            target_unit = source_unit
+                        end
+                    elseif not target_unit then
+                        target_unit = source_unit
+                    end
+                end
                 if target_unit then
                     if runtime.can_transfer_between_units(source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then

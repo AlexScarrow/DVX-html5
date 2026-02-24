@@ -220,15 +220,17 @@ function M.create(ctx)
             ))
         end
 
-        local retaliators = get_living_humans_on_cell(self, alien.cell_id)
-        for _, human in ipairs(retaliators) do
-            if human.current_ap > 0 then
-                table.insert(self.melee_action_queue, {
-                    kind = "human_react",
-                    human_id = human.id,
-                    preferred_alien_id = alien.id,
-                    cell_id = alien.cell_id
-                })
+        if self.reactive_combat_enabled then
+            local retaliators = get_living_humans_on_cell(self, alien.cell_id)
+            for _, human in ipairs(retaliators) do
+                if human.current_ap > 0 then
+                    table.insert(self.melee_action_queue, {
+                        kind = "human_react",
+                        human_id = human.id,
+                        preferred_alien_id = alien.id,
+                        cell_id = alien.cell_id
+                    })
+                end
             end
         end
 

@@ -795,7 +795,7 @@ function create_tile_library()
         isDependentOn = {},
         objectId = 6201,
         offsetX = -115,
-        offsetY = 65,
+        offsetY = 45,
         hitW = 32,
         hitH = 32,
         requiredComponent = nil
@@ -808,7 +808,7 @@ function create_tile_library()
         isDependentOn = {},
         objectId = 6202,
         offsetX = -115,
-        offsetY = 65,
+        offsetY = 45,
         hitW = 32,
         hitH = 32,
         requiredComponent = nil
@@ -1669,6 +1669,9 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
 end
 
 local function resolve_human_reaction_fire(self, alien)
+    if not self.reactive_combat_enabled then
+        return false
+    end
     if not alien or alien.is_dead then
         return false
     end
@@ -2044,6 +2047,12 @@ local function update_alien_movement(self, dt)
                 end
             else
                 local target_cell = self.world_grid[target_cell_id]
+                local from_cell_before_step = alien.cell_id
+                local from_cell = self.world_grid[from_cell_before_step]
+                local to_cell = self.world_grid[target_cell_id]
+                local from_vent = get_vent_object_on_cell(from_cell)
+                local to_vent = get_vent_object_on_cell(to_cell)
+                local is_vent_jump = from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 if alien.type ~= ALIEN_TYPE_BLIP then
                     tx = tx + (CELL_WIDTH * 0.25)
@@ -2095,7 +2104,7 @@ local function update_alien_movement(self, dt)
                 local dy = ty - pos.y
                 local dist = math.sqrt(dx * dx + dy * dy)
                 local step = ALIEN_MOVE_SPEED * dt
-                if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
                     alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
                     local ping = math.sin(alien.spitter_anim_phase)
                     local base_scale = 0.33333334
@@ -2111,7 +2120,7 @@ local function update_alien_movement(self, dt)
                     end
                     go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
                 end
-                if alien.type == ALIEN_TYPE_SPEEDY then
+                if (not is_vent_jump) and alien.type == ALIEN_TYPE_SPEEDY then
                     if math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.1 then
                         if dy > 0 then
                             go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), alien.go_id)
@@ -2122,7 +2131,7 @@ local function update_alien_movement(self, dt)
                         go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
                     end
                 end
-                if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
                     if math.abs(dx) > 0.1 then
                         -- Requirement: flip sprite while moving right; unflipped while moving left.
                         alien.spitter_flip = dx > 0
@@ -2131,14 +2140,16 @@ local function update_alien_movement(self, dt)
                     end
                 end
 
-                if dist <= step then
-                    go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
-                    local from_cell_before_step = alien.cell_id
+                if is_vent_jump or dist <= step then
+                    if is_vent_jump then
+                        local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+                        local vx = cx + (to_vent.offsetX or 0)
+                        local vy = cy + (to_vent.offsetY or 0)
+                        go.set_position(vmath.vector3(vx, vy, 0.6), alien.go_id)
+                    else
+                        go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
+                    end
                     alien.cell_id = target_cell_id
-                    local from_cell = self.world_grid[from_cell_before_step]
-                    local to_cell = self.world_grid[target_cell_id]
-                    local from_vent = get_vent_object_on_cell(from_cell)
-                    local to_vent = get_vent_object_on_cell(to_cell)
                     if from_vent and to_vent and from_cell_before_step ~= target_cell_id then
                         local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
                         local vx = cx + (to_vent.offsetX or 0)
@@ -2275,7 +2286,7 @@ local function process_alien_turn(self)
     end
 
     local any_step = false
-    local step_mode = self.reactive_combat_enabled or self.alien_turn_manual_pause
+    local step_mode = self.alien_turn_manual_pause
     for _, alien in ipairs(self.aliens) do
         if (not alien.is_dead) and (alien.turn_ap_remaining or 0) > 0 then
             local ap_budget = alien.turn_ap_remaining or 0
@@ -2310,7 +2321,7 @@ local function process_alien_turn(self)
     if any_step then
         MELEE_RUNTIME.begin_phase(self)
         begin_spitter_attack_phase(self)
-        if step_mode and (self.alien_turn_manual_pause or (self.reactive_combat_enabled and can_any_human_reactively_attack(self))) then
+        if step_mode and self.alien_turn_manual_pause then
             self.alien_turn_waiting_for_advance = true
         end
         if not step_mode then
@@ -3106,7 +3117,7 @@ local function update_selected_unit_ui(self)
             30,
             30
         )
-        if self.alien_turn_active and (self.reactive_combat_enabled or self.alien_turn_manual_pause or self.alien_turn_waiting_for_advance) then
+        if self.alien_turn_active and (not self.reactive_combat_enabled) then
             local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
             set_ui_square_transform(
                 self,
@@ -3330,7 +3341,7 @@ local function update_selected_unit_ui(self)
         30,
         30
     )
-    if self.alien_turn_active and (self.reactive_combat_enabled or self.alien_turn_manual_pause or self.alien_turn_waiting_for_advance) then
+    if self.alien_turn_active and (not self.reactive_combat_enabled) then
         local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
         set_ui_square_transform(
             self,
@@ -3395,7 +3406,9 @@ function try_toggle_reactive_combat(self, screen_x, screen_y)
     local ty = SCREEN_HEIGHT - 40
     if screen_x >= (tx - 15) and screen_x <= (tx + 15) and screen_y >= (ty - 15) and screen_y <= (ty + 15) then
         self.reactive_combat_enabled = not self.reactive_combat_enabled
-        if not self.reactive_combat_enabled and self.alien_turn_active then
+        if self.alien_turn_active then
+            -- Reactive ON should never depend on manual step-through state.
+            self.alien_turn_manual_pause = false
             self.alien_turn_waiting_for_advance = false
         end
         print("Reactive combat: " .. (self.reactive_combat_enabled and "ON" or "OFF"))
@@ -3406,6 +3419,9 @@ end
 
 function try_advance_reactive_alien_turn(self, screen_x, screen_y)
     if not self.alien_turn_active then
+        return false
+    end
+    if self.reactive_combat_enabled then
         return false
     end
     local ax = 105

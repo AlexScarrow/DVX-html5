@@ -73,3 +73,6 @@ images {
 images {
   image: "/assets/images/human_blood_drop.png"
 }
+images {
+  image: "/assets/images/vent_unwelded.png"
+}

@@ -88,3 +88,12 @@ images {
 images {
   image: "/assets/images/wiregap_corner_on.png"
 }
+images {
+  image: "/assets/images/door_closed_on.png"
+}
+images {
+  image: "/assets/images/door_open.png"
+}
+images {
+  image: "/assets/images/door_closed_off.png"
+}

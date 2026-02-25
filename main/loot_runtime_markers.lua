@@ -240,6 +240,116 @@ function M.extend(runtime, ctx)
         end
     end
 
+    runtime.refresh_door_markers = function(self)
+        self.door_objects = self.door_objects or {}
+        self.door_visual_state = self.door_visual_state or {}
+
+        if not self.world_grid then
+            return
+        end
+
+        local function get_door_obj(cell)
+            local objs = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objs) do
+                if obj and obj.name == hash("door") then
+                    return obj
+                end
+            end
+            return nil
+        end
+
+        local function dependency_met(world_grid, obj)
+            if not obj then
+                return false
+            end
+            local dep = obj.dependsOn or 0
+            if dep <= 0 then
+                return true
+            end
+            for _, cell in ipairs(world_grid or {}) do
+                local scan = { cell.object1, cell.object2, cell.object3 }
+                for _, other in ipairs(scan) do
+                    if other and other.objectId == dep then
+                        return other.isFixed == true
+                    end
+                end
+            end
+            return false
+        end
+
+        local seen = {}
+        for cell_id, cell in ipairs(self.world_grid) do
+            if cell.tileID ~= hash("empty") then
+                local door = get_door_obj(cell)
+                if door then
+                    seen[cell_id] = true
+                    local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    local dx = x + (door.offsetX or 0)
+                    local dy = y + (door.offsetY or 0)
+                    local powered = cell.isPowered == true
+                    local fixed = door.isFixed == true
+                    local deps_met = dependency_met(self.world_grid, door)
+                    local functional = powered and fixed and deps_met
+                    local closed = functional and (door.isOpen ~= true)
+                    local visual_state = "open"
+                    local anim = hash("door_open")
+                    local z = 0.555
+                    if closed then
+                        visual_state = powered and "closed_on" or "closed_off"
+                        anim = (visual_state == "closed_on") and hash("door_closed_on") or hash("door_closed_off")
+                        z = 0.565
+                    end
+                    local marker_id = self.door_objects[cell_id]
+                    if not marker_id then
+                        marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(dx, dy, z))
+                        if marker_id then
+                            self.door_objects[cell_id] = marker_id
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                            go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                        end
+                    end
+                    if marker_id then
+                        go.set_position(vmath.vector3(dx, dy, z), marker_id)
+                        local prev_state = self.door_visual_state[cell_id]
+                        if prev_state ~= visual_state then
+                            go.cancel_animations(marker_id, "scale")
+                            if visual_state == "open" then
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("door_open") })
+                                go.set_scale(vmath.vector3(0.08, 1, 1), marker_id)
+                                go.animate(marker_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1, 1, 1), go.EASING_INOUTSINE, 0.28)
+                            elseif prev_state == "open" then
+                                -- Closing: collapse open panel first, then switch to closed sprite.
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("door_open") })
+                                go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                                go.animate(marker_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.08, 1, 1), go.EASING_INOUTSINE, 0.22)
+                                timer.delay(0.22, false, function()
+                                    if self.door_objects and self.door_objects[cell_id] == marker_id then
+                                        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                                        go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                                    end
+                                end)
+                            else
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                                go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                            end
+                            self.door_visual_state[cell_id] = visual_state
+                        end
+                    end
+                end
+            end
+        end
+
+        for cell_id, marker in pairs(self.door_objects) do
+            if not seen[cell_id] then
+                if marker then
+                    go.delete(marker)
+                end
+                self.door_objects[cell_id] = nil
+                self.door_visual_state[cell_id] = nil
+            end
+        end
+    end
+
     runtime.update_power_node_flicker = function(self, dt)
         if not self.power_node_flicker_state then
             return

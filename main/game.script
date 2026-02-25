@@ -406,7 +406,7 @@ local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
     return to_cell.moveValue
 end
 
-local function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
+function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
     local from_cell = world_grid[from_cell_id]
     local to_cell = world_grid[to_cell_id]
     if not from_cell or not to_cell then
@@ -429,6 +429,184 @@ local function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
     return false
 end
 
+function get_door_object_on_cell(cell)
+    if not cell then
+        return nil
+    end
+    local candidates = { cell.object1, cell.object2, cell.object3 }
+    for _, obj in ipairs(candidates) do
+        if obj and obj.name == hash("door") then
+            return obj
+        end
+    end
+    return nil
+end
+
+function is_object_dependency_met_for_door(world_grid, obj)
+    if not obj then
+        return false
+    end
+    local dependency_id = obj.dependsOn or 0
+    if dependency_id <= 0 then
+        return true
+    end
+    for _, cell in ipairs(world_grid or {}) do
+        local scan = { cell.object1, cell.object2, cell.object3 }
+        for _, other in ipairs(scan) do
+            if other and other.objectId == dependency_id then
+                return other.isFixed == true
+            end
+        end
+    end
+    return false
+end
+
+function is_door_closed_runtime(world_grid, owner_cell, door_obj)
+    if not owner_cell or not door_obj then
+        return false
+    end
+    local functional = is_door_functional_runtime(world_grid, owner_cell, door_obj)
+    if not functional then
+        return false
+    end
+    return door_obj.isOpen ~= true
+end
+
+function is_door_functional_runtime(world_grid, owner_cell, door_obj)
+    if not owner_cell or not door_obj then
+        return false
+    end
+    local powered = owner_cell.isPowered == true
+    local fixed = door_obj.isFixed == true
+    local deps_met = is_object_dependency_met_for_door(world_grid, door_obj)
+    return powered and fixed and deps_met
+end
+
+function get_edge_door_context(world_grid, from_cell_id, to_cell_id)
+    local from_cell = world_grid[from_cell_id]
+    local to_cell = world_grid[to_cell_id]
+    if not from_cell or not to_cell then
+        return nil, nil, false
+    end
+    local dx = to_cell.xCell - from_cell.xCell
+    local dy = to_cell.yCell - from_cell.yCell
+    -- Doors currently represent horizontal accessRight edges only.
+    if dy ~= 0 then
+        return nil, nil, false
+    end
+    local owner_cell = nil
+    if dx == 1 then
+        owner_cell = from_cell
+    elseif dx == -1 then
+        owner_cell = to_cell
+    else
+        return nil, nil, false
+    end
+    local door_obj = get_door_object_on_cell(owner_cell)
+    if not door_obj then
+        return nil, nil, false
+    end
+    return owner_cell, door_obj, is_door_closed_runtime(world_grid, owner_cell, door_obj)
+end
+
+function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type)
+    if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
+        return false
+    end
+    local _, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
+    if not door_obj or not door_closed then
+        return true
+    end
+    return alien_type == ALIEN_TYPE_BRUTE
+end
+
+function can_human_cross_between_cells(world_grid, from_cell_id, to_cell_id)
+    if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
+        return false
+    end
+    local _, _, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
+    if door_closed then
+        return false
+    end
+    return true
+end
+
+function get_clicked_door_on_light(self, world_x, world_y)
+    if not self or not self.world_grid then
+        return nil, nil
+    end
+    local best_obj = nil
+    local best_cell = nil
+    local best_dist = math.huge
+    for _, cell in ipairs(self.world_grid) do
+        local door_obj = get_door_object_on_cell(cell)
+        if door_obj then
+            local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
+            local dx = cx + (door_obj.offsetX or 0)
+            local dy = cy + (door_obj.offsetY or 0)
+            local w = door_obj.hitW or 42
+            local h = door_obj.hitH or 72
+            local half_w = w * 0.5
+            local half_h = h * 0.5
+            if world_x >= (dx - half_w) and world_x <= (dx + half_w) and world_y >= (dy - half_h) and world_y <= (dy + half_h) then
+                -- For testing clarity, accept clicks on the whole door hitbox.
+                local ddx = world_x - dx
+                local ddy = world_y - dy
+                local dist = math.sqrt(ddx * ddx + ddy * ddy)
+                if dist < best_dist then
+                    best_dist = dist
+                    best_obj = door_obj
+                    best_cell = cell
+                end
+            end
+        end
+    end
+    return best_cell, best_obj
+end
+
+function can_unit_reach_door_toggle(unit, owner_cell_id)
+    if not unit or not unit.cell_id or not owner_cell_id then
+        return false
+    end
+    if unit.cell_id == owner_cell_id then
+        return true
+    end
+    local right_id = get_adjacent_cell(owner_cell_id, "right")
+    if right_id and unit.cell_id == right_id then
+        return true
+    end
+    return false
+end
+
+function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
+    if not unit or (unit.current_health or 0) <= 0 then
+        return false
+    end
+    local owner_cell, door_obj = get_clicked_door_on_light(self, world_x, world_y)
+    if not owner_cell or not door_obj then
+        return false
+    end
+    if not can_unit_reach_door_toggle(unit, owner_cell.idNumber) then
+        print("too far away")
+        return true
+    end
+    if unit.current_ap <= 0 then
+        print("Unable to toggle door: no AP")
+        return true
+    end
+    if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
+        print("Door is offline or broken and cannot be toggled.")
+        return true
+    end
+    door_obj.isOpen = not (door_obj.isOpen == true)
+    unit.current_ap = unit.current_ap - 1
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+        LOOT_RUNTIME.refresh_door_markers(self)
+    end
+    print(string.format("%s %s door object #%d. (AP -1)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0))
+    return true
+end
+
 local function get_alien_neighbors(cell_id, world_grid, alien_type)
     local neighbors = {}
     local directions = { "right", "left", "up", "down" }
@@ -441,7 +619,7 @@ local function get_alien_neighbors(cell_id, world_grid, alien_type)
             local adj_cell = world_grid[adj_id]
             local can_enter_void = can_traverse_void == true
             local is_void = adj_cell.tileID == hash("empty")
-            if (not is_void or can_enter_void) and can_cross_between_cells(world_grid, cell_id, adj_id) then
+            if (not is_void or can_enter_void) and can_alien_cross_between_cells(world_grid, cell_id, adj_id, alien_type) then
                 local step_cost = 1
                 if alien_type ~= ALIEN_TYPE_BLIP then
                     step_cost = get_alien_step_move_cost(world_grid, cell_id, adj_id)
@@ -466,31 +644,8 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
         if adj_id then
             local cell = world_grid[adj_id]
             -- Check if cell is not VOID (part of a valid tile)
-            if cell.tileID ~= hash("empty") then
-                -- Check access permissions
-                local can_access = false
-                if dir == "right" and world_grid[cell_id].accessRight then
-                    can_access = true
-                elseif dir == "left" and cell.accessRight then
-                    can_access = true
-                elseif dir == "up" and world_grid[cell_id].accessDown then
-                    can_access = false  -- Moving up means crossing bottom border of target
-                elseif dir == "down" and cell.accessDown then
-                    can_access = false  -- Moving down means crossing our bottom border
-                end
-
-                -- Actually for up/down we need to think differently
-                -- Moving UP: check if current cell's TOP is open (but we store right/down only)
-                -- Moving DOWN: check if current cell's accessDown
-                if dir == "up" and cell.accessDown then  -- Target's bottom must be open
-                    can_access = true
-                elseif dir == "down" and world_grid[cell_id].accessDown then  -- Our bottom must be open
-                    can_access = true
-                end
-
-                if can_access then
-                    table.insert(neighbors, { id = adj_id, cost = get_step_move_cost(world_grid, cell_id, adj_id) })
-                end
+            if cell.tileID ~= hash("empty") and can_human_cross_between_cells(world_grid, cell_id, adj_id) then
+                table.insert(neighbors, { id = adj_id, cost = get_step_move_cost(world_grid, cell_id, adj_id) })
             end
         end
     end
@@ -776,6 +931,23 @@ function create_tile_library()
         hitW = 32,
         hitH = 32,
         requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+    armoury.cells[5].object3 = {
+        name = hash("door"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 6301,
+        isDependentOn = {},
+        objectId = 6401,
+        offsetX = 98,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 42,
+        hitH = 72,
+        requiredComponent = COMPONENT_UI.component_plate
     }
     -- Temporary fixable object for Phase 1 fixing loop tests.
     armoury.cells[6].object1 = {
@@ -2169,6 +2341,18 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
                     end
                     alien.cell_id = target_cell_id
+                    local door_owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
+                    if door_obj and door_closed and alien.type == ALIEN_TYPE_BRUTE then
+                        door_obj.isFixed = false
+                        door_obj.isOpen = true
+                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                            LOOT_RUNTIME.refresh_fix_markers(self)
+                        end
+                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+                            LOOT_RUNTIME.refresh_door_markers(self)
+                        end
+                        print(string.format("Brute #%d smashed door object #%d open.", alien.id, door_obj.objectId or 0))
+                    end
                     if from_vent and to_vent and from_cell_before_step ~= target_cell_id then
                         local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
                         local vx = cx + (to_vent.offsetX or 0)
@@ -4107,6 +4291,12 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     end
 
     if unit.is_selected then
+        if try_toggle_door_with_selected_human(self, unit, world_x, world_y) then
+            self.ui_close_on_next_non_unit_click = false
+            update_human_visual_state(self)
+            update_human_ap_debug_label(self)
+            return true
+        end
         if try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y) then
             self.ui_close_on_next_non_unit_click = false
             return true
@@ -4338,6 +4528,7 @@ end
         LOOT_RUNTIME.refresh_machine_markers(self)
         LOOT_RUNTIME.refresh_fix_markers(self)
         LOOT_RUNTIME.refresh_power_node_markers(self)
+        LOOT_RUNTIME.refresh_door_markers(self)
         LOOT_RUNTIME.refresh_wiregap_markers(self)
         LOOT_RUNTIME.refresh_vent_markers(self)
         LOOT_RUNTIME.refresh_light_value_markers(self)

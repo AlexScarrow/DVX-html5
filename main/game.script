@@ -196,6 +196,7 @@ end
 function create_tile_prototype(tile_id)
     local tile = {
         tileID = hash(tile_id),
+        visualTile = tile_id,
         cells = {}
     }
 
@@ -1086,6 +1087,101 @@ function create_tile_library()
     library["armoury"] = armoury
 
 ------ Add more tiles as needed...--------------------------------------------------------------------------
+------ EXPERIMENTAL LEVEL-2 TILE DEFS (easy to purge) ------------------------------------------------------
+------ Remove block start -----------------------------------------------------------------------------------
+    local lvl2_open = create_tile_prototype("lvl2_open")
+    lvl2_open.visualTile = "armoury" -- Reuse existing art while gameplay layout is experimental.
+    for i = 1, 9 do
+        lvl2_open.cells[i].lightValue = 3
+        lvl2_open.cells[i].moveValue = 1
+        lvl2_open.cells[i].coverValue = 2
+    end
+    lvl2_open.cells[2].object1 = {
+        name = hash("power_node"),
+        isFixed = true,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = -90,
+        offsetY = 10,
+        fxOffsetX = 20,
+        fxOffsetY = -20,
+        fxRotation = -90,
+        hitW = 64,
+        hitH = 124,
+        requiredComponent = nil
+    }
+    assign_random_loot_cell(lvl2_open)
+    library["lvl2_open"] = lvl2_open
+
+    local lvl2_choke = create_tile_prototype("lvl2_choke")
+    lvl2_choke.visualTile = "corridor"
+    for i = 1, 9 do
+        lvl2_choke.cells[i].lightValue = 2
+        lvl2_choke.cells[i].moveValue = 1
+        lvl2_choke.cells[i].coverValue = 1
+    end
+    -- Keep broad access while introducing a single interior choke marker.
+    lvl2_choke.cells[5].object1 = {
+        name = hash("wiregap"),
+        isFixed = false,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 7201,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+    lvl2_choke.cells[2].object1 = {
+        name = hash("power_node"),
+        isFixed = true,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = -90,
+        offsetY = 10,
+        fxOffsetX = 20,
+        fxOffsetY = -20,
+        fxRotation = -90,
+        hitW = 64,
+        hitH = 124,
+        requiredComponent = nil
+    }
+    assign_random_loot_cell(lvl2_choke)
+    library["lvl2_choke"] = lvl2_choke
+
+    local lvl2_support = create_tile_prototype("lvl2_support")
+    lvl2_support.visualTile = "canteen"
+    for i = 1, 9 do
+        lvl2_support.cells[i].lightValue = 4
+        lvl2_support.cells[i].moveValue = 1
+        lvl2_support.cells[i].coverValue = 2
+    end
+    lvl2_support.cells[5].object1 = {
+        name = hash("power_node"),
+        isFixed = true,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 0,
+        offsetX = 0,
+        offsetY = 10,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 64,
+        hitH = 124,
+        requiredComponent = nil
+    }
+    assign_random_loot_cell(lvl2_support)
+    library["lvl2_support"] = lvl2_support
+------ Remove block end -------------------------------------------------------------------------------------
 
     return library
 end
@@ -1118,10 +1214,13 @@ function create_level_library()
     }
 
     -- Example Level 2
+    -- EXPERIMENTAL layout: temporary playtest board, intended to be easy to replace.
     levels[2] = {
-        { x = 8, y = 8, tile = "corridor" },
-        { x = 8, y = 11, tile = "canteen" },
-        { x = 8, y = 5, tile = "armoury" }
+        { x = 8, y = 8, tile = "lvl2_open" },
+        { x = 5, y = 8, tile = "lvl2_choke" },
+        { x = 11, y = 8, tile = "lvl2_choke" },
+        { x = 8, y = 11, tile = "lvl2_support" },
+        { x = 8, y = 5, tile = "lvl2_support" }
     }
 
     -- Add more levels...
@@ -5088,9 +5187,11 @@ end
             local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
             local pos = vmath.vector3(center_x, center_y, 0.02)
 
+            local tile_def = self.tile_library and self.tile_library[placement.tile] or nil
+            local visual_tile_name = (tile_def and tile_def.visualTile) or placement.tile
             local id = factory.create("/tile_factory#tile_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
             if id then
-                local anim = "tile_" .. placement.tile
+                local anim = "tile_" .. visual_tile_name
                 msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = hash(anim) })
                 go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, TILE_OPACITY))
                 table.insert(tile_objects, id)
@@ -5098,7 +5199,7 @@ end
                 print("Tile factory create failed for: " .. placement.tile)
             end
 
-            if placement.tile == "armoury" then
+            if visual_tile_name == "armoury" then
                 local light_id = factory.create("/tile_factory#tile_factory", vmath.vector3(center_x, center_y, 0.3), nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
                 if light_id then
                     msg.post(msg.url(nil, light_id, "sprite"), "play_animation", { id = hash("tile_armoury_off") })

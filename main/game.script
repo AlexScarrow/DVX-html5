@@ -126,7 +126,7 @@ local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy 
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
 local ALIEN_REVEAL_WEIGHT_SPITTER = 2
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
-local TILE_OPACITY = 1.0
+local TILE_OPACITY = 0.5
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = true, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },

@@ -2349,6 +2349,7 @@ function collect_reactive_turret_targets(self)
                     table.insert(moved, {
                         kind = "human",
                         id = unit_id,
+                        prev_cell_id = prev,
                         cell_id = unit.cell_id,
                         hp = unit.current_health or 0
                     })
@@ -2367,6 +2368,7 @@ function collect_reactive_turret_targets(self)
                     table.insert(moved, {
                         kind = "alien",
                         id = alien.id,
+                        prev_cell_id = prev,
                         cell_id = alien.cell_id,
                         hp = alien.hp_current or 1
                     })
@@ -2381,8 +2383,11 @@ end
 function choose_turret_target(self, turret_cell_id, candidates)
     local valid = {}
     for _, target in ipairs(candidates or {}) do
-        if target and target.cell_id and has_unobstructed_los(self.world_grid, turret_cell_id, target.cell_id) then
-            local dist = manhattan_distance_by_id(turret_cell_id, target.cell_id)
+        local has_current_los = target and target.cell_id and has_unobstructed_los(self.world_grid, turret_cell_id, target.cell_id)
+        local has_prev_los = target and target.prev_cell_id and has_unobstructed_los(self.world_grid, turret_cell_id, target.prev_cell_id)
+        if target and (has_current_los or has_prev_los) then
+            local los_cell_id = has_current_los and target.cell_id or target.prev_cell_id
+            local dist = manhattan_distance_by_id(turret_cell_id, los_cell_id)
             table.insert(valid, {
                 target = target,
                 dist = dist,
@@ -3891,7 +3896,7 @@ function reset_and_load_level(self, level_index)
     safe_delete_array(self.light_value_objects)
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
-            safe_delete(alien and alien.marker_path)
+            safe_delete(alien and alien.go_id)
         end
     end
     if self.spitter_projectiles then

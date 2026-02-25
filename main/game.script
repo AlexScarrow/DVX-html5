@@ -886,6 +886,25 @@ function create_tile_library()
     armoury.cells[2].accessDown = false   -- Wall on bottom of cell 2
     armoury.cells[8].accessDown = false   -- Wall on bottom of cell 8
 
+    armoury.cells[4].object1 = {
+        name = hash("gun_turret"),
+        isFixed = false,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6601,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        -- Keep drag/fix hit point centered on the gun sprite.
+        hitW = 48,
+        hitH = 48,
+        requiredComponent = COMPONENT_UI.component_sensor
+    }
+
     armoury.cells[2].object1 = {
         name = hash("power_node"),
         isFixed = true,
@@ -3478,6 +3497,8 @@ local function update_selected_unit_ui(self)
             icon_anim = hash("fuse")
         elseif item_type == COMPONENT_UI.component_plate then
             icon_anim = hash("plate")
+        elseif item_type == COMPONENT_UI.component_sensor then
+            icon_anim = hash("sensor")
         end
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
@@ -3720,7 +3741,15 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     coords_to_world_pos = coords_to_world_pos,
     screen_to_world = screen_to_world,
     get_loot_objects = function() return loot_objects end,
-    get_machine_objects = function() return machine_objects end
+    get_machine_objects = function() return machine_objects end,
+    get_turret_tripod_objects = function(self_ref)
+        self_ref.turret_tripod_objects = self_ref.turret_tripod_objects or {}
+        return self_ref.turret_tripod_objects
+    end,
+    get_turret_gun_objects = function(self_ref)
+        self_ref.turret_gun_objects = self_ref.turret_gun_objects or {}
+        return self_ref.turret_gun_objects
+    end
 })
 LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     LOOT_UI = LOOT_UI,
@@ -4510,6 +4539,8 @@ end
         self.tile_alpha_power_state = {}
         loot_objects = {}
         machine_objects = {}
+        self.turret_tripod_objects = {}
+        self.turret_gun_objects = {}
         self.power_node_objects = {}
         self.vent_objects = {}
         self.light_value_objects = {}
@@ -4591,6 +4622,7 @@ end
         print("Spawned " .. spawned_count .. " cells")
         LOOT_RUNTIME.refresh_loot_markers(self)
         LOOT_RUNTIME.refresh_machine_markers(self)
+        LOOT_RUNTIME.refresh_turret_markers(self)
         LOOT_RUNTIME.refresh_fix_markers(self)
         LOOT_RUNTIME.refresh_power_node_markers(self)
         LOOT_RUNTIME.refresh_door_markers(self)

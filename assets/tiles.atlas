@@ -112,3 +112,12 @@ images {
 images {
   image: "/assets/images/vent_welded.png"
 }
+images {
+  image: "/assets/images/sensor.png"
+}
+images {
+  image: "/assets/images/gun_turret_tripod.png"
+}
+images {
+  image: "/assets/images/gun_turret.png"
+}

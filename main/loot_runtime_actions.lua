@@ -306,6 +306,7 @@ function M.extend(runtime, ctx)
                 and obj.name
                 and obj.name ~= hash("empty")
                 and obj.name ~= hash("machine")
+                and obj.name ~= hash("gun_turret")
                 and obj.name ~= hash("power_node")
                 and obj.isFixed ~= true then
                 local requires = obj.requiredComponent or ctx.COMPONENT_UI.item_type_blue
@@ -478,6 +479,7 @@ function M.extend(runtime, ctx)
         local loot_results = {
             ctx.COMPONENT_UI.component_wiring_straight,
             ctx.COMPONENT_UI.component_plate,
+            ctx.COMPONENT_UI.component_sensor,
             ctx.COMPONENT_UI.component_fuse,
             ctx.COMPONENT_UI.component_fuse
         }
@@ -703,6 +705,7 @@ function M.extend(runtime, ctx)
         -- FUTURE HOOK: trigger object-fix effects (fx/sound/gameplay event chain).
         runtime.refresh_fix_markers(self)
         runtime.refresh_machine_markers(self)
+        runtime.refresh_turret_markers(self)
         runtime.refresh_door_markers(self)
         runtime.refresh_wiregap_markers(self)
         ctx.update_human_visual_state(self)
@@ -767,6 +770,7 @@ function M.extend(runtime, ctx)
         print(string.format("%s retrieved a power unit from the node. Tile is now unpowered.", unit.display_name))
         runtime.refresh_loot_markers(self)
         runtime.refresh_machine_markers(self)
+        runtime.refresh_turret_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_power_node_markers(self)
         runtime.refresh_door_markers(self)
@@ -1199,6 +1203,7 @@ function M.extend(runtime, ctx)
                                 runtime.spawn_power_node_activation_fx(self, target_power_cell, power_node)
                                 runtime.refresh_loot_markers(self)
                                 runtime.refresh_machine_markers(self)
+                                runtime.refresh_turret_markers(self)
                                 runtime.refresh_fix_markers(self)
                                 runtime.refresh_power_node_markers(self)
                                 runtime.refresh_door_markers(self)
@@ -1262,6 +1267,39 @@ function M.extend(runtime, ctx)
                         end
                         if drop_cell_id and source_unit.cell_id and is_component_item and not consumed then
                             component_target = runtime.find_fix_object_drop_target(self, world_x, world_y, drop_cell_id, source_item)
+                            if not component_target and source_item == ctx.COMPONENT_UI.component_sensor then
+                                local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                                if drop_cell then
+                                    local scan = { drop_cell.object1, drop_cell.object2, drop_cell.object3 }
+                                    local best = nil
+                                    local best_dist = math.huge
+                                    for _, obj in ipairs(scan) do
+                                        if obj and obj.name == hash("gun_turret") and obj.isFixed ~= true then
+                                            local cx, cy = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                                            local ox = obj.offsetX or 0
+                                            local oy = obj.offsetY or 0
+                                            local half_w = ((obj.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                                            local half_h = ((obj.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                                            local x = cx + ox
+                                            local y = cy + oy
+                                            local inside = world_x >= (x - half_w)
+                                                and world_x <= (x + half_w)
+                                                and world_y >= (y - half_h)
+                                                and world_y <= (y + half_h)
+                                            if inside then
+                                                local dx = x - world_x
+                                                local dy = y - world_y
+                                                local dist = math.sqrt(dx * dx + dy * dy)
+                                                if dist < best_dist then
+                                                    best = obj
+                                                    best_dist = dist
+                                                end
+                                            end
+                                        end
+                                    end
+                                    component_target = best
+                                end
+                            end
                             if component_target then
                                 if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
                                     print("Only the Techie can fix objects.")
@@ -1284,6 +1322,7 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_fix_markers(self)
                                     runtime.refresh_door_markers(self)
                                     runtime.refresh_wiregap_markers(self)
+                                    runtime.refresh_turret_markers(self)
                                     runtime.refresh_world_item_visuals(self)
                                     print(string.format(
                                         "%s installed 1 %s on object #%d. (AP -%d)",

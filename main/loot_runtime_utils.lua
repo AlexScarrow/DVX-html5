@@ -7,6 +7,9 @@ function M.create(ctx)
             or name_hash == hash("ammo_vending_machine")
             or name_hash == hash("med_vending_machine")
     end
+    local function is_turret_name(name_hash)
+        return name_hash == hash("gun_turret")
+    end
 
     runtime.get_backpack_item_color = function(item_type)
         if item_type == "ammo" then
@@ -112,7 +115,7 @@ function M.create(ctx)
         end
         local slots = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(slots) do
-            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and obj.name ~= hash("power_node") then
+            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and obj.name ~= hash("power_node") then
                 table.insert(out, obj)
             end
         end

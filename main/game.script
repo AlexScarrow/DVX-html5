@@ -791,6 +791,11 @@ function create_tile_library()
         local idx = math.random(1, 9)
         tile.cells[idx].hasLoot = true
     end
+    local function assign_fixed_loot_cell(tile, cell_index)
+        for i = 1, 9 do
+            tile.cells[i].hasLoot = (i == cell_index)
+        end
+    end
 
 ------ Example Tile 1: "corridor" - simple passage--------------------------------------------------
     local corridor = create_tile_prototype("corridor")
@@ -1111,7 +1116,8 @@ function create_tile_library()
         hitH = 124,
         requiredComponent = nil
     }
-    assign_random_loot_cell(lvl2_open)
+    -- Deterministic starter loot in center tile for repeatable testing.
+    assign_fixed_loot_cell(lvl2_open, 5)
     library["lvl2_open"] = lvl2_open
 
     local lvl2_choke = create_tile_prototype("lvl2_choke")
@@ -1121,6 +1127,16 @@ function create_tile_library()
         lvl2_choke.cells[i].moveValue = 1
         lvl2_choke.cells[i].coverValue = 1
     end
+    -- Constrain this tile into a horizontal lane to create intentional routing.
+    lvl2_choke.cells[1].accessDown = false
+    lvl2_choke.cells[2].accessDown = false
+    lvl2_choke.cells[3].accessDown = false
+    lvl2_choke.cells[4].accessDown = false
+    lvl2_choke.cells[5].accessDown = false
+    lvl2_choke.cells[6].accessDown = false
+    lvl2_choke.cells[3].accessRight = false
+    lvl2_choke.cells[6].accessRight = false
+    lvl2_choke.cells[9].accessRight = false
     -- Keep broad access while introducing a single interior choke marker.
     lvl2_choke.cells[5].object1 = {
         name = hash("wiregap"),
@@ -1154,7 +1170,7 @@ function create_tile_library()
         hitH = 124,
         requiredComponent = nil
     }
-    assign_random_loot_cell(lvl2_choke)
+    assign_fixed_loot_cell(lvl2_choke, 8)
     library["lvl2_choke"] = lvl2_choke
 
     local lvl2_support = create_tile_prototype("lvl2_support")
@@ -1179,7 +1195,8 @@ function create_tile_library()
         hitH = 124,
         requiredComponent = nil
     }
-    assign_random_loot_cell(lvl2_support)
+    -- Keep support rooms deterministic for level-flow testing.
+    assign_fixed_loot_cell(lvl2_support, 2)
     library["lvl2_support"] = lvl2_support
 ------ Remove block end -------------------------------------------------------------------------------------
 
@@ -1220,7 +1237,9 @@ function create_level_library()
         { x = 5, y = 8, tile = "lvl2_choke" },
         { x = 11, y = 8, tile = "lvl2_choke" },
         { x = 8, y = 11, tile = "lvl2_support" },
-        { x = 8, y = 5, tile = "lvl2_support" }
+        { x = 8, y = 5, tile = "lvl2_support" },
+        { x = 5, y = 11, tile = "lvl2_support" },
+        { x = 11, y = 11, tile = "lvl2_support" }
     }
 
     -- Add more levels...

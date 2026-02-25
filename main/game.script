@@ -949,6 +949,23 @@ function create_tile_library()
         hitH = 72,
         requiredComponent = COMPONENT_UI.component_plate
     }
+    armoury.cells[8].object1 = {
+        name = hash("door"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6402,
+        offsetX = 98,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 42,
+        hitH = 72,
+        requiredComponent = COMPONENT_UI.component_plate
+    }
     -- Temporary fixable object for Phase 1 fixing loop tests.
     armoury.cells[6].object1 = {
         name = hash("console"),
@@ -1148,7 +1165,11 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
     end
 
     local next_object_id = 1
+    local id_remap_by_tile = {}
     for _, cell in ipairs(world_grid) do
+        local tile_instance = cell.tileInstanceId or 0
+        id_remap_by_tile[tile_instance] = id_remap_by_tile[tile_instance] or {}
+        local tile_remap = id_remap_by_tile[tile_instance]
         local objects = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(objects) do
             if obj then
@@ -1165,12 +1186,31 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                 obj.hitH = obj.hitH or 32
                 obj.requiredComponent = obj.requiredComponent
                 if obj.name and obj.name ~= hash("empty") then
-                    if not obj.objectId or obj.objectId == 0 then
+                    local source_id = obj.objectId or 0
+                    if source_id > 0 and tile_remap[source_id] then
+                        obj.objectId = tile_remap[source_id]
+                    else
                         obj.objectId = next_object_id
+                        if source_id > 0 then
+                            tile_remap[source_id] = next_object_id
+                        end
                         next_object_id = next_object_id + 1
                     end
                 else
                     obj.objectId = obj.objectId or 0
+                end
+            end
+        end
+    end
+    for _, cell in ipairs(world_grid) do
+        local tile_instance = cell.tileInstanceId or 0
+        local tile_remap = id_remap_by_tile[tile_instance] or {}
+        local objects = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(objects) do
+            if obj and obj.name and obj.name ~= hash("empty") then
+                local dep = obj.dependsOn or 0
+                if dep > 0 and tile_remap[dep] then
+                    obj.dependsOn = tile_remap[dep]
                 end
             end
         end
@@ -1488,7 +1528,7 @@ local function has_unobstructed_los(world_grid, from_id, to_id)
         local current_id = from_id
         while current_id ~= to_id do
             local next_id = current_id + (GRID_COLS * step)
-            if not can_cross_between_cells(world_grid, current_id, next_id) then
+            if not can_human_cross_between_cells(world_grid, current_id, next_id) then
                 return false
             end
             current_id = next_id
@@ -1500,7 +1540,7 @@ local function has_unobstructed_los(world_grid, from_id, to_id)
     local current_id = from_id
     while current_id ~= to_id do
         local next_id = current_id + step
-        if not can_cross_between_cells(world_grid, current_id, next_id) then
+        if not can_human_cross_between_cells(world_grid, current_id, next_id) then
             return false
         end
         current_id = next_id

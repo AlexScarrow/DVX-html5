@@ -279,7 +279,7 @@ function M.extend(runtime, ctx)
 
         local seen = {}
         for cell_id, cell in ipairs(self.world_grid) do
-            if cell.tileID ~= hash("empty") then
+            if cell.tileID ~= hash("empty") and cell.isPowered == true then
                 local door = get_door_obj(cell)
                 if door then
                     seen[cell_id] = true
@@ -318,16 +318,9 @@ function M.extend(runtime, ctx)
                                 go.set_scale(vmath.vector3(0.08, 1, 1), marker_id)
                                 go.animate(marker_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1, 1, 1), go.EASING_INOUTSINE, 0.28)
                             elseif prev_state == "open" then
-                                -- Closing: collapse open panel first, then switch to closed sprite.
-                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("door_open") })
+                                -- Do not animate closed sprites; switch to closed state directly.
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                                 go.set_scale(vmath.vector3(1, 1, 1), marker_id)
-                                go.animate(marker_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.08, 1, 1), go.EASING_INOUTSINE, 0.22)
-                                timer.delay(0.22, false, function()
-                                    if self.door_objects and self.door_objects[cell_id] == marker_id then
-                                        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
-                                        go.set_scale(vmath.vector3(1, 1, 1), marker_id)
-                                    end
-                                end)
                             else
                                 msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                                 go.set_scale(vmath.vector3(1, 1, 1), marker_id)

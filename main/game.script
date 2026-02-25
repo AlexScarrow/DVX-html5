@@ -112,6 +112,11 @@ local SPITTER_SHOT_AP_COST = 1
 local SPITTER_SHOT_INTERVAL_SECONDS = 0.5
 local SPITTER_PROJECTILE_SPEED = 900
 local SPITTER_PROJECTILE_SIZE = 8
+TURRET_REACTIVE_FIRE_INTERVAL_SECONDS = 0.72
+TURRET_PROJECTILE_SPEED = 1200
+TURRET_BURST_PROJECTILE_COUNT = 6
+TURRET_BURST_PROJECTILE_DELAY = 0.11
+TURRET_BURST_SPREAD_PIXELS = 6
 local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy testing
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
 local ALIEN_REVEAL_WEIGHT_SPITTER = 2
@@ -886,7 +891,7 @@ function create_tile_library()
     armoury.cells[2].accessDown = false   -- Wall on bottom of cell 2
     armoury.cells[8].accessDown = false   -- Wall on bottom of cell 8
 
-    armoury.cells[4].object1 = {
+    armoury.cells[8].object2 = {
         name = hash("gun_turret"),
         isFixed = false,
         isWelded = false,
@@ -2161,6 +2166,314 @@ local function update_spitter_projectiles(self, dt)
                 table.remove(self.spitter_projectiles, i)
             end
         end
+    end
+end
+
+function get_target_world_pos_for_turret(self, target)
+    if not target then
+        return nil
+    end
+    if target.kind == "human" then
+        local unit = self.squad_units and self.squad_units[target.id]
+        if unit and unit.go_path and (unit.current_health or 0) > 0 then
+            return go.get_position(unit.go_path)
+        end
+    elseif target.kind == "alien" then
+        if self.aliens then
+            for _, alien in ipairs(self.aliens) do
+                if alien.id == target.id and (not alien.is_dead) and alien.go_id then
+                    return go.get_position(alien.go_id)
+                end
+            end
+        end
+    end
+    local cell = self.world_grid and self.world_grid[target.cell_id]
+    if not cell then
+        return nil
+    end
+    local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
+    return vmath.vector3(x, y, 0.75)
+end
+
+function turret_dependency_met(world_grid, turret_obj)
+    local dep = turret_obj and (turret_obj.dependsOn or 0) or 0
+    if dep <= 0 then
+        return true
+    end
+    for _, cell in ipairs(world_grid or {}) do
+        local scan = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(scan) do
+            if obj and obj.objectId == dep then
+                return obj.isFixed == true
+            end
+        end
+    end
+    return false
+end
+
+function collect_reactive_turret_targets(self)
+    self.turret_last_human_cell_by_id = self.turret_last_human_cell_by_id or {}
+    self.turret_last_alien_cell_by_id = self.turret_last_alien_cell_by_id or {}
+    local moved = {}
+
+    if self.squad_units then
+        for unit_id, unit in pairs(self.squad_units) do
+            if unit and unit.cell_id and (unit.current_health or 0) > 0 then
+                local prev = self.turret_last_human_cell_by_id[unit_id]
+                self.turret_last_human_cell_by_id[unit_id] = unit.cell_id
+                if prev and prev ~= unit.cell_id then
+                    table.insert(moved, {
+                        kind = "human",
+                        id = unit_id,
+                        cell_id = unit.cell_id,
+                        hp = unit.current_health or 0
+                    })
+                end
+            end
+        end
+    end
+
+    if self.aliens then
+        for _, alien in ipairs(self.aliens) do
+            if alien and (not alien.is_dead) and alien.cell_id then
+                local key = tostring(alien.id)
+                local prev = self.turret_last_alien_cell_by_id[key]
+                self.turret_last_alien_cell_by_id[key] = alien.cell_id
+                if prev and prev ~= alien.cell_id then
+                    table.insert(moved, {
+                        kind = "alien",
+                        id = alien.id,
+                        cell_id = alien.cell_id,
+                        hp = alien.hp_current or 1
+                    })
+                end
+            end
+        end
+    end
+
+    return moved
+end
+
+function choose_turret_target(self, turret_cell_id, candidates)
+    local valid = {}
+    for _, target in ipairs(candidates or {}) do
+        if target and target.cell_id and has_unobstructed_los(self.world_grid, turret_cell_id, target.cell_id) then
+            local dist = manhattan_distance_by_id(turret_cell_id, target.cell_id)
+            table.insert(valid, {
+                target = target,
+                dist = dist,
+                hp = target.hp or 0,
+                alien_first = (target.kind == "alien") and 0 or 1,
+                stable_id = tostring(target.id)
+            })
+        end
+    end
+    table.sort(valid, function(a, b)
+        if a.dist ~= b.dist then
+            return a.dist < b.dist
+        end
+        if a.hp ~= b.hp then
+            return a.hp < b.hp
+        end
+        if a.alien_first ~= b.alien_first then
+            return a.alien_first < b.alien_first
+        end
+        return a.stable_id < b.stable_id
+    end)
+    if #valid > 0 then
+        return valid[1].target
+    end
+    return nil
+end
+
+function spawn_turret_projectile_burst(self, from_pos, to_pos)
+    if not from_pos or not to_pos then
+        return
+    end
+    self.turret_projectiles = self.turret_projectiles or {}
+    local dx = to_pos.x - from_pos.x
+    local dy = to_pos.y - from_pos.y
+    local len = math.max(0.001, math.sqrt(dx * dx + dy * dy))
+    local nx = -dy / len
+    local ny = dx / len
+    local spread = { -5, -3, -1, 1, 3, 5 }
+    for i = 1, TURRET_BURST_PROJECTILE_COUNT do
+        local offset = (spread[i] or 0) * (TURRET_BURST_SPREAD_PIXELS * 0.2)
+        local sx = from_pos.x + (nx * offset)
+        local sy = from_pos.y + (ny * offset)
+        local tx = to_pos.x + (nx * offset)
+        local ty = to_pos.y + (ny * offset)
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(sx, sy, 0.76))
+        if projectile_id then
+            go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.16, SPITTER_PROJECTILE_SIZE * 0.16, 1), projectile_id)
+            msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
+            go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+            local dir_x = tx - sx
+            local dir_y = ty - sy
+            if math.abs(dir_x) > 0.001 or math.abs(dir_y) > 0.001 then
+                go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+            end
+            table.insert(self.turret_projectiles, {
+                go_id = projectile_id,
+                from = vmath.vector3(sx, sy, 0.76),
+                to = vmath.vector3(tx, ty, 0.76),
+                t = 0,
+                delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY
+            })
+        end
+    end
+end
+
+function update_turret_projectiles(self, dt)
+    if not self.turret_projectiles then
+        return
+    end
+    for i = #self.turret_projectiles, 1, -1 do
+        local p = self.turret_projectiles[i]
+        if not p.go_id then
+            table.remove(self.turret_projectiles, i)
+        else
+            p.delay = (p.delay or 0) - dt
+            if p.delay > 0 then
+                go.set_position(vmath.vector3(-9999, -9999, 0.76), p.go_id)
+            else
+                local dx = p.to.x - p.from.x
+                local dy = p.to.y - p.from.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                local travel_time = math.max(0.05, dist / TURRET_PROJECTILE_SPEED)
+                p.t = math.min(1, p.t + (dt / travel_time))
+                local px = p.from.x + (dx * p.t)
+                local py = p.from.y + (dy * p.t)
+                go.set_position(vmath.vector3(px, py, 0.76), p.go_id)
+                if p.t >= 1 then
+                    go.delete(p.go_id)
+                    table.remove(self.turret_projectiles, i)
+                end
+            end
+        end
+    end
+end
+
+function process_turret_reactive_fire(self, dt)
+    self.turret_fire_cooldown_by_object_id = self.turret_fire_cooldown_by_object_id or {}
+    for object_id, cooldown in pairs(self.turret_fire_cooldown_by_object_id) do
+        cooldown = cooldown - dt
+        if cooldown <= 0 then
+            self.turret_fire_cooldown_by_object_id[object_id] = nil
+        else
+            self.turret_fire_cooldown_by_object_id[object_id] = cooldown
+        end
+    end
+
+    local moved_targets = collect_reactive_turret_targets(self)
+    if #moved_targets == 0 or not self.world_grid then
+        return
+    end
+
+    local killed_any_alien = false
+    for turret_cell_id, cell in ipairs(self.world_grid) do
+        if cell and cell.tileID ~= hash("empty") and cell.isPowered then
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for _, turret_obj in ipairs(objects) do
+                if turret_obj
+                    and turret_obj.name == hash("gun_turret")
+                    and turret_obj.isFixed == true
+                    and turret_dependency_met(self.world_grid, turret_obj)
+                then
+                    local turret_object_id = turret_obj.objectId or turret_cell_id
+                    if not self.turret_fire_cooldown_by_object_id[turret_object_id] then
+                        local target = choose_turret_target(self, turret_cell_id, moved_targets)
+                        if target then
+                            local tx, ty = coords_to_world_pos(cell.xCell, cell.yCell)
+                            local turret_pos = vmath.vector3(tx + (turret_obj.offsetX or 0), ty + (turret_obj.offsetY or 0), 0.76)
+                            local target_pos = get_target_world_pos_for_turret(self, target)
+                            if target_pos then
+                                spawn_turret_projectile_burst(self, turret_pos, target_pos)
+                                local gun_markers = self.turret_gun_objects or {}
+                                local gun_go = gun_markers[turret_cell_id]
+                                if gun_go then
+                                    local gx = target_pos.x - turret_pos.x
+                                    local gy = target_pos.y - turret_pos.y
+                                    if math.abs(gx) > 0.001 or math.abs(gy) > 0.001 then
+                                        local fire_rot = math.atan2(gy, gx)
+                                        local ok_rot = pcall(go.set_rotation, vmath.quat_rotation_z(fire_rot), gun_go)
+                                        if ok_rot then
+                                            pcall(go.cancel_animations, gun_go, "euler.z")
+                                            local return_delay = (TURRET_BURST_PROJECTILE_COUNT - 1) * TURRET_BURST_PROJECTILE_DELAY
+                                            pcall(go.animate, gun_go, "euler.z", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INOUTSINE, 0.35, return_delay)
+                                        else
+                                            -- Turret marker may have been rebuilt this frame; skip rotation safely.
+                                            gun_markers[turret_cell_id] = nil
+                                        end
+                                    end
+                                end
+
+                                local target_cell = self.world_grid[target.cell_id]
+                                local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
+                                local ranged_model = require("main.config").RANGED_HIT_MODEL
+                                local hit_chance = math.max(
+                                    ranged_model.min_hit_chance,
+                                    math.min(ranged_model.max_hit_chance, ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus))
+                                )
+                                local roll = math.random(1, 100)
+                                if roll <= hit_chance then
+                                    if target.kind == "human" then
+                                        local unit = self.squad_units and self.squad_units[target.id]
+                                        if unit and (unit.current_health or 0) > 0 then
+                                            unit.current_health = math.max(0, (unit.current_health or 0) - 1)
+                                            if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
+                                                MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, unit)
+                                            end
+                                            print(string.format(
+                                                "Turret #%d HIT %s (HP now %d) [light=%d chance=%d%% roll=%d]",
+                                                turret_object_id, unit.display_name, unit.current_health, active_light, hit_chance, roll
+                                            ))
+                                        end
+                                    else
+                                        local target_alien = nil
+                                        if self.aliens then
+                                            for _, alien in ipairs(self.aliens) do
+                                                if alien.id == target.id then
+                                                    target_alien = alien
+                                                    break
+                                                end
+                                            end
+                                        end
+                                        if target_alien and (not target_alien.is_dead) then
+                                            target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                                            if target_alien.hp_current <= 0 then
+                                                target_alien.is_dead = true
+                                                target_alien.is_moving = false
+                                                target_alien.move_path = nil
+                                                target_alien.move_path_index = 0
+                                                killed_any_alien = true
+                                                if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
+                                                    MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target_alien)
+                                                end
+                                            end
+                                            print(string.format(
+                                                "Turret #%d HIT alien #%d (HP now %d) [light=%d chance=%d%% roll=%d]",
+                                                turret_object_id, target_alien.id, target_alien.hp_current or 0, active_light, hit_chance, roll
+                                            ))
+                                        end
+                                    end
+                                else
+                                    print(string.format(
+                                        "Turret #%d MISSED %s [light=%d chance=%d%% roll=%d]",
+                                        turret_object_id, tostring(target.id), active_light, hit_chance, roll
+                                    ))
+                                end
+
+                                self.turret_fire_cooldown_by_object_id[turret_object_id] = TURRET_REACTIVE_FIRE_INTERVAL_SECONDS
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if killed_any_alien then
+        remove_dead_aliens(self)
     end
 end
 
@@ -4739,6 +5052,10 @@ function init(self)
     self.spitter_attack_timer = 0
     self.spitter_attack_queue = {}
     self.spitter_projectiles = {}
+    self.turret_projectiles = {}
+    self.turret_last_human_cell_by_id = {}
+    self.turret_last_alien_cell_by_id = {}
+    self.turret_fire_cooldown_by_object_id = {}
     self.pending_melee_attack_phase = false
     self.melee_attack_started = false
     self.melee_attack_timer = 0
@@ -4868,7 +5185,9 @@ function update(self, dt)
     MELEE_RUNTIME.update_swipe_fx(self, dt)
     MELEE_RUNTIME.update_phase(self, dt)
     update_spitter_projectiles(self, dt)
+    update_turret_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
+    process_turret_reactive_fire(self, dt)
     if self.alien_turn_active and (not self.alien_turn_waiting_for_advance) and (not any_alien_is_moving(self)) and (not self.pending_spitter_attack_phase) and (not self.pending_melee_attack_phase) then
         process_alien_turn(self)
     end

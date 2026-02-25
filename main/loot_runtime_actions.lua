@@ -1099,6 +1099,12 @@ function M.extend(runtime, ctx)
                         if drop_cell_id and source_unit.cell_id and is_component_item then
                             component_target = runtime.find_fix_object_drop_target(self, world_x, world_y, drop_cell_id, source_item)
                             if component_target then
+                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
+                                    print("Only the Techie can fix objects.")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
                                 local sx, sy = ctx.id_to_coords(source_unit.cell_id)
                                 local tx, ty = ctx.id_to_coords(drop_cell_id)
                                 local manhattan = math.abs(sx - tx) + math.abs(sy - ty)

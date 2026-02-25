@@ -77,6 +77,11 @@ local UI_FOOTER_X = 244
 local UI_FOOTER_Y = 220
 local UI_FOOTER_W = 118
 local UI_FOOTER_H = 146
+LEVEL_BUTTON_Y = SCREEN_HEIGHT - 18
+LEVEL_BUTTON_W = 84
+LEVEL_BUTTON_H = 24
+LEVEL1_BUTTON_X = 240
+LEVEL_BUTTON_Z = 0.845
 local UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
 local UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 local UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
@@ -3499,7 +3504,11 @@ end
 
 local function set_unit_scale(unit, scale_x, scale_y)
     if unit and unit.go_path then
-        go.set_scale(vmath.vector3(scale_x, scale_y, 1), unit.go_path)
+        local ok = pcall(go.set_scale, vmath.vector3(scale_x, scale_y, 1), unit.go_path)
+        if not ok then
+            unit.go_path = nil
+            unit.sprite_path = nil
+        end
     end
 end
 
@@ -3510,24 +3519,31 @@ local function update_human_visual_state(self)
 
     for _, unit in pairs(self.squad_units) do
         if unit.sprite_path then
+            local function safe_set_tint(color)
+                local ok = pcall(go.set, unit.sprite_path, "tint", color)
+                if not ok then
+                    unit.go_path = nil
+                    unit.sprite_path = nil
+                end
+            end
             local flash_timer = unit.hit_flash_timer or 0
             if not (unit and (unit.current_health or 0) > 0) then
-                go.set(unit.sprite_path, "tint", vmath.vector4(0.18, 0.18, 0.18, 1))
+                safe_set_tint(vmath.vector4(0.18, 0.18, 0.18, 1))
             elseif flash_timer > 0 then
                 local flash_band = math.floor(flash_timer * 24) % 2
                 if flash_band == 0 then
-                    go.set(unit.sprite_path, "tint", vmath.vector4(1, 0.15, 0.15, 1))
+                    safe_set_tint(vmath.vector4(1, 0.15, 0.15, 1))
                 else
-                    go.set(unit.sprite_path, "tint", vmath.vector4(0.65, 0.05, 0.05, 1))
+                    safe_set_tint(vmath.vector4(0.65, 0.05, 0.05, 1))
                 end
             elseif unit.current_ap <= 0 then
-                go.set(unit.sprite_path, "tint", HUMAN_TINT_NO_AP)
+                safe_set_tint(HUMAN_TINT_NO_AP)
             else
                 local base_tint = get_unit_base_tint(unit)
                 if unit.is_selected then
-                    go.set(unit.sprite_path, "tint", get_selected_tint(base_tint))
+                    safe_set_tint(get_selected_tint(base_tint))
                 else
-                    go.set(unit.sprite_path, "tint", base_tint)
+                    safe_set_tint(base_tint)
                 end
             end
         end
@@ -3608,6 +3624,7 @@ local function initialize_unit_ui(self)
         loot_button = nil,
         retrieve_button = nil,
         close_button = nil,
+        level_buttons = {},
         reactive_toggle_button = nil,
         reactive_advance_button = nil,
         drag_pip = nil
@@ -3634,6 +3651,8 @@ local function initialize_unit_ui(self)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.retrieve_button = create_ui_square(0, 0, 0.82, LOOT_UI.retrieve_button_color, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     self.ui.close_button = create_ui_square(0, 0, 0.83, vmath.vector4(0.8, 0.2, 0.2, 0.95), 28, 28)
+    self.ui.level_buttons[1] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+    self.ui.level_buttons[2] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
     self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -3670,6 +3689,13 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     set_ui_square_transform(self, self.ui.close_button, -9999, -9999, 0.83, hidden, 28, 28)
+    if self.ui.level_buttons then
+        for i, btn in ipairs(self.ui.level_buttons) do
+            if btn then
+                set_ui_square_transform(self, btn, -9999, -9999, LEVEL_BUTTON_Z, hidden, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+            end
+        end
+    end
     set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -3685,6 +3711,182 @@ local function get_selected_unit(self)
         end
     end
     return nil
+end
+
+function reset_and_load_level(self, level_index)
+    if not self.level_library or not self.level_library[level_index] then
+        print("Level index not found: " .. tostring(level_index))
+        return false
+    end
+
+    self.current_level_index = level_index
+    clear_path_visuals(self)
+    self.selected_start_cell = nil
+    self.path_highlight_cells = {}
+    self.ui_close_on_next_non_unit_click = false
+    self.awaiting_slot_shuffle_click = false
+
+    local function safe_delete(go_id)
+        if go_id then
+            pcall(go.delete, go_id)
+        end
+    end
+    local function safe_delete_map(map_table)
+        if not map_table then
+            return
+        end
+        for key, go_id in pairs(map_table) do
+            safe_delete(go_id)
+            map_table[key] = nil
+        end
+    end
+    local function safe_delete_array(list_table)
+        if not list_table then
+            return
+        end
+        for i, go_id in ipairs(list_table) do
+            safe_delete(go_id)
+            list_table[i] = nil
+        end
+    end
+
+    if self.sheen_overlay then
+        go.delete(self.sheen_overlay)
+        self.sheen_overlay = nil
+    end
+    safe_delete_array(tile_objects)
+    safe_delete_map(cell_objects)
+    safe_delete_map(loot_objects)
+    safe_delete_map(machine_objects)
+    safe_delete_map(self.tile_light_layers)
+    safe_delete_map(self.tile_alpha_layers)
+    safe_delete_map(self.fix_objects)
+    safe_delete_map(self.power_node_objects)
+    safe_delete_map(self.vent_objects)
+    safe_delete_map(self.door_objects)
+    safe_delete_map(self.turret_tripod_objects)
+    safe_delete_map(self.turret_gun_objects)
+    safe_delete_array(self.wiregap_objects)
+    safe_delete_array(self.light_value_objects)
+    if self.aliens then
+        for _, alien in ipairs(self.aliens) do
+            safe_delete(alien and alien.marker_path)
+        end
+    end
+    if self.spitter_projectiles then
+        for _, p in ipairs(self.spitter_projectiles) do
+            if p and p.go_id then
+                go.delete(p.go_id)
+            end
+        end
+    end
+    if self.turret_projectiles then
+        for _, p in ipairs(self.turret_projectiles) do
+            if p and p.go_id then
+                go.delete(p.go_id)
+            end
+        end
+    end
+
+    if self.world_item_visuals then
+        for _, go_id in pairs(self.world_item_visuals) do
+            if go_id then
+                go.delete(go_id)
+            end
+        end
+    end
+    if self.power_node_loop_fx then
+        for _, fx_id in pairs(self.power_node_loop_fx) do
+            if fx_id then
+                go.delete(fx_id)
+            end
+        end
+    end
+    if self.melee_swipe_fx then
+        for _, fx in pairs(self.melee_swipe_fx) do
+            if fx and fx.go_id then
+                go.delete(fx.go_id)
+            end
+        end
+    end
+
+    self.tile_library = create_tile_library()
+    self.level_library = create_level_library()
+    self.world_grid = create_world_grid()
+    self.world_grid = bake_level_to_world_grid(self.world_grid, self.level_library[level_index], self.tile_library)
+
+    self.alien_turn_active = false
+    self.alien_turn_waiting_for_advance = false
+    self.alien_turn_manual_pause = false
+    self.pending_spitter_attack_phase = false
+    self.spitter_attack_started = false
+    self.spitter_attack_timer = 0
+    self.spitter_attack_queue = {}
+    self.spitter_projectiles = {}
+    self.pending_melee_attack_phase = false
+    self.melee_attack_started = false
+    self.melee_attack_timer = 0
+    self.melee_action_queue = {}
+    self.melee_ap_left_by_alien_id = {}
+    self.turret_projectiles = {}
+    self.turret_last_human_cell_by_id = {}
+    self.turret_last_alien_cell_by_id = {}
+    self.turret_fire_cooldown_by_object_id = {}
+    self.loot_pickup_blips = {}
+    self.world_item_instances = {}
+    self.world_item_visuals = {}
+    self.next_world_item_id = 0
+    self.drag_resource = { active = false }
+    self.power_node_loop_fx = {}
+    self.melee_swipe_fx = {}
+    self.melee_swipe_next_id = 0
+
+    self.squad_units = create_squad_units()
+    self.controlled_unit_id = "sarge"
+    self.aliens = {}
+    self.next_alien_id = 0
+
+    spawn_visuals(self)
+    if not self.sheen_overlay then
+        local sheen_id = factory.create("/ui_factory#ui_factory", vmath.vector3(self.camera_pos.x + self.sheen_offset_x, self.camera_pos.y + self.sheen_offset_y, self.sheen_z))
+        if sheen_id then
+            msg.post(msg.url(nil, sheen_id, "sprite"), "play_animation", { id = hash("DVX_sheen") })
+            go.set(msg.url(nil, sheen_id, "sprite"), "tint", vmath.vector4(1, 1, 1, self.sheen_alpha))
+            self.sheen_overlay = sheen_id
+        end
+    end
+    if self.spawn_human_unit_fn then
+        self.spawn_human_unit_fn(self)
+    else
+        spawn_human_unit(self)
+    end
+    spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    update_human_visual_state(self)
+    update_selected_unit_ui(self)
+    print("Loaded level " .. tostring(level_index))
+    return true
+end
+
+function try_select_level_button(self, screen_x, screen_y)
+    if not self.ui or not self.ui.level_buttons then
+        return false
+    end
+    local half_w = LEVEL_BUTTON_W * 0.5
+    local half_h = LEVEL_BUTTON_H * 0.5
+    for level_index, btn in ipairs(self.ui.level_buttons) do
+        if btn then
+            local bx = LEVEL1_BUTTON_X + ((level_index - 1) * (LEVEL_BUTTON_W + 10))
+            local by = LEVEL_BUTTON_Y
+            if screen_x >= (bx - half_w)
+                and screen_x <= (bx + half_w)
+                and screen_y >= (by - half_h)
+                and screen_y <= (by + half_h)
+            then
+                return reset_and_load_level(self, level_index)
+            end
+        end
+    end
+    return false
 end
 
 LOOT_RUNTIME = require("main.loot_runtime_utils").create({
@@ -3708,13 +3910,35 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
     id_to_coords = id_to_coords
 })
 
-local function update_selected_unit_ui(self)
+function update_selected_unit_ui(self)
     local unit = get_selected_unit(self)
     if not self.ui then
         return
     end
+    if self.ui.level_buttons then
+        local current_idx = self.current_level_index or 1
+        for i, btn in ipairs(self.ui.level_buttons) do
+            if btn then
+                local bx = LEVEL1_BUTTON_X + ((i - 1) * (LEVEL_BUTTON_W + 10))
+                local active = (i == current_idx)
+                local col = active and vmath.vector4(0.2, 0.85, 0.35, 0.95) or vmath.vector4(0.2, 0.6, 0.95, 0.9)
+                set_ui_square_transform(self, btn, bx, LEVEL_BUTTON_Y, LEVEL_BUTTON_Z, col, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+            end
+        end
+    end
     if not unit then
         set_ui_hidden(self)
+        if self.ui.level_buttons then
+            local current_idx = self.current_level_index or 1
+            for i, btn in ipairs(self.ui.level_buttons) do
+                if btn then
+                    local bx = LEVEL1_BUTTON_X + ((i - 1) * (LEVEL_BUTTON_W + 10))
+                    local active = (i == current_idx)
+                    local col = active and vmath.vector4(0.2, 0.85, 0.35, 0.95) or vmath.vector4(0.2, 0.6, 0.95, 0.9)
+                    set_ui_square_transform(self, btn, bx, LEVEL_BUTTON_Y, LEVEL_BUTTON_Z, col, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                end
+            end
+        end
         local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
         set_ui_square_transform(
             self,
@@ -4184,7 +4408,7 @@ local function move_human_to_cell(self, unit, cell_id)
     refresh_unit_positions_in_cell(self, cell_id)
 end
 
-local function spawn_human_unit(self)
+function spawn_human_unit(self)
     if not self.squad_units then
         print("No squad units available for spawn.")
         return
@@ -4859,7 +5083,7 @@ end
         self.light_value_objects = {}
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
-        local selected_level = self.level_library[1]
+        local selected_level = self.level_library[self.current_level_index or 1]
         for placement_index, placement in ipairs(selected_level) do
             local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
             local pos = vmath.vector3(center_x, center_y, 0.02)
@@ -4975,7 +5199,8 @@ function init(self)
     print("Level library created")
 
     -- Select a random level (for now, just use level 1)
-    local selected_level = self.level_library[1]
+    self.current_level_index = 1
+    local selected_level = self.level_library[self.current_level_index]
     print("Selected level 1 for baking")
 
     -- Bake the level onto the worldGrid
@@ -5043,6 +5268,7 @@ function init(self)
     self.ui_close_on_next_non_unit_click = false
     self.squad_units = create_squad_units()
     self.controlled_unit_id = "sarge"
+    self.spawn_human_unit_fn = spawn_human_unit
     print_squad_debug_overview(self)
     spawn_human_unit(self)
     self.aliens = {}
@@ -5267,6 +5493,9 @@ function on_input(self, action_id, action)
         elseif action.released then
             if not self.did_drag then
                 if try_toggle_reactive_combat(self, action.x, action.y) then
+                    return true
+                end
+                if try_select_level_button(self, action.x, action.y) then
                     return true
                 end
                 if try_advance_reactive_alien_turn(self, action.x, action.y) then

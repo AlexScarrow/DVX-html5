@@ -336,6 +336,33 @@ function M.extend(runtime, ctx)
         return best
     end
 
+    runtime.find_vent_weld_drop_target = function(self, world_x, world_y, cell_id)
+        if not self.world_grid or not cell_id then
+            return nil
+        end
+        local cell = self.world_grid[cell_id]
+        if not cell then
+            return nil
+        end
+        local vent = runtime.get_vent_object(cell)
+        if not vent or vent.isWelded == true then
+            return nil
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local x = cx + (vent.offsetX or 0)
+        local y = cy + (vent.offsetY or 0)
+        local half_w = ((vent.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+        local half_h = ((vent.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+        local inside = world_x >= (x - half_w)
+            and world_x <= (x + half_w)
+            and world_y >= (y - half_h)
+            and world_y <= (y + half_h)
+        if inside then
+            return vent
+        end
+        return nil
+    end
+
     runtime.play_power_node_activation_sound = function(self, cell, power_node)
         -- FUTURE HOOK: trigger power-node activation SFX when audio assets are ready.
     end
@@ -349,6 +376,14 @@ function M.extend(runtime, ctx)
             go.delete(fx_id)
             self.power_node_loop_fx[cell_id] = nil
         end
+    end
+
+    runtime.spawn_vent_weld_fx = function(self, cell, vent_obj)
+        -- FUTURE HOOK: spawn one-shot vent welding particle FX here.
+        -- Suggested future behavior:
+        -- 1) Resolve world position from cell + vent offset.
+        -- 2) factory.create("/vent_weld_fx_factory#vent_weld_fx_factory", ...).
+        -- 3) trigger particlefx play, then stop/delete after short duration.
     end
 
     runtime.spawn_power_node_activation_fx = function(self, cell, power_node)
@@ -442,6 +477,7 @@ function M.extend(runtime, ctx)
 
         local loot_results = {
             ctx.COMPONENT_UI.component_wiring_straight,
+            ctx.COMPONENT_UI.component_plate,
             ctx.COMPONENT_UI.component_fuse,
             ctx.COMPONENT_UI.component_fuse
         }
@@ -1176,6 +1212,7 @@ function M.extend(runtime, ctx)
                         end
                     end
                     if not consumed then
+                        local vent_target = nil
                         local component_target = nil
                         local is_component_item = source_item == ctx.COMPONENT_UI.item_type_blue
                             or source_item == ctx.COMPONENT_UI.component_wiring_straight
@@ -1183,7 +1220,47 @@ function M.extend(runtime, ctx)
                             or source_item == ctx.COMPONENT_UI.component_plate
                             or source_item == ctx.COMPONENT_UI.component_fuse
                             or source_item == ctx.COMPONENT_UI.component_sensor
-                        if drop_cell_id and source_unit.cell_id and is_component_item then
+                        if drop_cell_id and source_unit.cell_id and source_item == ctx.COMPONENT_UI.component_plate then
+                            vent_target = runtime.find_vent_weld_drop_target(self, world_x, world_y, drop_cell_id)
+                            if vent_target then
+                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
+                                    print("Only the Techie can fix objects.")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
+                                local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                                local tx, ty = ctx.id_to_coords(drop_cell_id)
+                                local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                                if manhattan == 0 then
+                                    if not try_consume_drag_ap(source_unit, nil) then
+                                        self.drag_resource = { active = false }
+                                        return true
+                                    end
+                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    vent_target.isWelded = true
+                                    consumed = true
+                                    runtime.refresh_fix_markers(self)
+                                    runtime.refresh_door_markers(self)
+                                    runtime.refresh_wiregap_markers(self)
+                                    runtime.refresh_vent_markers(self)
+                                    runtime.refresh_world_item_visuals(self)
+                                    runtime.spawn_vent_weld_fx(self, drop_cell, vent_target)
+                                    print(string.format(
+                                        "%s welded vent object #%d using 1 %s. (AP -%d)",
+                                        source_unit.display_name,
+                                        vent_target.objectId or 0,
+                                        source_item,
+                                        get_drag_ap_cost()
+                                    ))
+                                else
+                                    print("too far away")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                end
+                            end
+                        end
+                        if drop_cell_id and source_unit.cell_id and is_component_item and not consumed then
                             component_target = runtime.find_fix_object_drop_target(self, world_x, world_y, drop_cell_id, source_item)
                             if component_target then
                                 if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE then

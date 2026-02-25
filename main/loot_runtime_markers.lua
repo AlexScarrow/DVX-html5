@@ -237,13 +237,14 @@ function M.extend(runtime, ctx)
 
         for cell_id, cell in ipairs(self.world_grid) do
             local vent = runtime.get_vent_object(cell)
-            if vent and cell.tileID ~= hash("empty") and cell.isPowered and vent.isWelded ~= true then
+            if vent and cell.tileID ~= hash("empty") and cell.isPowered then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local vent_x = x + (vent.offsetX or 0)
                 local vent_y = y + (vent.offsetY or 0)
                 local marker_id = factory.create("/alien_blip_factory#alien_blip_factory", vmath.vector3(vent_x, vent_y, 0.9))
                 if marker_id then
-                    msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("vent_unwelded") })
+                    local anim = vent.isWelded == true and hash("vent_welded") or hash("vent_unwelded")
+                    msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                     go.set_scale(vmath.vector3(0.6, 0.6, 1), marker_id)
                     self.vent_objects[cell_id] = marker_id
                 end

@@ -106,3 +106,9 @@ images {
 images {
   image: "/assets/images/fuse.png"
 }
+images {
+  image: "/assets/images/plate.png"
+}
+images {
+  image: "/assets/images/vent_welded.png"
+}

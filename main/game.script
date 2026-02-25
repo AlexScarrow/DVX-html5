@@ -979,6 +979,23 @@ function create_tile_library()
         hitH = 32,
         requiredComponent = COMPONENT_UI.item_type_blue
     }
+    armoury.cells[6].object2 = {
+        name = hash("ammo_vending_machine"),
+        isFixed = false,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6501,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 64,
+        hitH = 124,
+        requiredComponent = COMPONENT_UI.component_fuse
+    }
     -- Temporary dependent object for dependency-rule tests.
     -- This object cannot be fixed until object #6101 is fixed first.
     armoury.cells[7].object1 = {
@@ -992,6 +1009,23 @@ function create_tile_library()
         hitW = 32,
         hitH = 32,
         requiredComponent = COMPONENT_UI.item_type_blue
+    }
+    armoury.cells[7].object2 = {
+        name = hash("med_vending_machine"),
+        isFixed = false,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 6502,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 64,
+        hitH = 124,
+        requiredComponent = COMPONENT_UI.component_fuse
     }
     armoury.cells[9].object1 = {
         name = hash("vent"),
@@ -3440,6 +3474,8 @@ local function update_selected_unit_ui(self)
             icon_anim = hash("wiregap_straight_on")
         elseif item_type == COMPONENT_UI.component_wiring_corner then
             icon_anim = hash("wiregap_corner_on")
+        elseif item_type == COMPONENT_UI.component_fuse then
+            icon_anim = hash("fuse")
         end
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
@@ -3458,9 +3494,13 @@ local function update_selected_unit_ui(self)
     end
 
     local current_cell = unit.cell_id and self.world_grid and self.world_grid[unit.cell_id] or nil
-    local show_component_button = current_cell
-        and LOOT_RUNTIME.cell_has_component_machine(current_cell)
-        and current_cell.isPowered
+    local show_component_button = false
+    if current_cell and current_cell.isPowered and LOOT_RUNTIME.cell_has_any_vending_machine(current_cell) then
+        local vm = LOOT_RUNTIME.get_vending_machine_on_cell(current_cell)
+        if vm and vm.isFixed == true and LOOT_RUNTIME.is_object_dependency_met(self.world_grid, vm) then
+            show_component_button = true
+        end
+    end
     if show_component_button then
         set_ui_square_transform(
             self,
@@ -3485,33 +3525,16 @@ local function update_selected_unit_ui(self)
         )
     end
 
-    local show_fix_button = unit.class_id == UNIT_CLASS_TECHIE
-        and current_cell
-        and current_cell.isPowered
-        and LOOT_RUNTIME.cell_has_fixable_object(current_cell)
-    if show_fix_button then
-        set_ui_square_transform(
-            self,
-            self.ui.fix_button,
-            COMPONENT_UI.fix_button_x,
-            COMPONENT_UI.fix_button_y,
-            0.82,
-            COMPONENT_UI.fix_button_color,
-            COMPONENT_UI.fix_button_size,
-            COMPONENT_UI.fix_button_size
-        )
-    else
-        set_ui_square_transform(
-            self,
-            self.ui.fix_button,
-            -9999,
-            -9999,
-            0.82,
-            vmath.vector4(0, 0, 0, 0),
-            COMPONENT_UI.fix_button_size,
-            COMPONENT_UI.fix_button_size
-        )
-    end
+    set_ui_square_transform(
+        self,
+        self.ui.fix_button,
+        -9999,
+        -9999,
+        0.82,
+        vmath.vector4(0, 0, 0, 0),
+        COMPONENT_UI.fix_button_size,
+        COMPONENT_UI.fix_button_size
+    )
 
     if current_cell and current_cell.hasLoot and current_cell.isPowered then
         set_ui_square_transform(
@@ -4901,9 +4924,6 @@ function on_input(self, action_id, action)
                         return
                     end
                     if LOOT_RUNTIME.try_retrieve_power_selected_unit(self, action.x, action.y) then
-                        return
-                    end
-                    if LOOT_RUNTIME.try_fix_selected_unit(self, action.x, action.y) then
                         return
                     end
                     if LOOT_RUNTIME.try_use_component_vending(self, action.x, action.y) then

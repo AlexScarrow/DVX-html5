@@ -103,3 +103,6 @@ images {
 images {
   image: "/assets/images/med_vend_machine.png"
 }
+images {
+  image: "/assets/images/fuse.png"
+}

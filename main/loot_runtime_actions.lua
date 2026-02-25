@@ -440,7 +440,11 @@ function M.extend(runtime, ctx)
         local added = 0
         local dropped = 0
 
-        local loot_results = { ctx.COMPONENT_UI.component_wiring_straight }
+        local loot_results = {
+            ctx.COMPONENT_UI.component_wiring_straight,
+            ctx.COMPONENT_UI.component_fuse,
+            ctx.COMPONENT_UI.component_fuse
+        }
         for _ = 2, roll_count do
             -- Temporary test weighting for combat loop:
             -- make ammo the most common pickup.
@@ -486,12 +490,21 @@ function M.extend(runtime, ctx)
         end
 
         local cell = self.world_grid and self.world_grid[unit.cell_id]
-        if not runtime.cell_has_component_machine(cell) then
-            print("No component vending machine here.")
+        local machine = runtime.get_vending_machine_on_cell(cell)
+        if not machine then
+            print("No vending machine here.")
             return true
         end
         if not cell.isPowered then
             print("Vending machine is offline (tile has no power).")
+            return true
+        end
+        if machine.isFixed ~= true then
+            print("Vending machine is broken and must be fixed first.")
+            return true
+        end
+        if not runtime.is_object_dependency_met(self.world_grid, machine) then
+            print("Vending machine dependency is not met.")
             return true
         end
 
@@ -510,9 +523,16 @@ function M.extend(runtime, ctx)
         end
 
         table.remove(unit.backpack_items, material_slot)
-        local component_pool = { ctx.COMPONENT_UI.item_type_blue }
-        local produced_component = component_pool[math.random(1, #component_pool)]
-        table.insert(unit.backpack_items, produced_component)
+        local produced_item = ctx.COMPONENT_UI.item_type_blue
+        local produced_label = "component"
+        if machine.name == hash("ammo_vending_machine") then
+            produced_item = "ammo"
+            produced_label = "ammo unit"
+        elseif machine.name == hash("med_vending_machine") then
+            produced_item = "meds"
+            produced_label = "med unit"
+        end
+        table.insert(unit.backpack_items, produced_item)
         unit.backpack_used = #unit.backpack_items
 
         local machine_x, machine_y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
@@ -520,11 +540,11 @@ function M.extend(runtime, ctx)
             self,
             unit.cell_id,
             #unit.backpack_items,
-            produced_component,
-            machine_x,
-            machine_y + 18
+            produced_item,
+            machine_x + (machine.offsetX or 0),
+            machine_y + (machine.offsetY or 0) + 18
         )
-        print(string.format("%s used 1 material and produced 1 component.", unit.display_name))
+        print(string.format("%s used 1 material and produced 1 %s.", unit.display_name, produced_label))
         return true
     end
 
@@ -646,6 +666,9 @@ function M.extend(runtime, ctx)
         end
         -- FUTURE HOOK: trigger object-fix effects (fx/sound/gameplay event chain).
         runtime.refresh_fix_markers(self)
+        runtime.refresh_machine_markers(self)
+        runtime.refresh_door_markers(self)
+        runtime.refresh_wiregap_markers(self)
         ctx.update_human_visual_state(self)
         return true
     end
@@ -959,6 +982,8 @@ function M.extend(runtime, ctx)
                 end
             else
                 local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+                local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
+                local vending_attempted = false
                 local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
                 if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                     -- Prioritize self-heal when the drop lands on/near the medic sprite.
@@ -1030,7 +1055,70 @@ function M.extend(runtime, ctx)
                         flash_invalid_drag_units(source_unit, target_unit)
                     end
                 else
-                    local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+                    if source_item == "material" and drop_cell_id and source_unit.cell_id then
+                        local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                        local vending_machine = drop_cell and runtime.get_vending_machine_on_cell(drop_cell) or nil
+                        if vending_machine then
+                            local cx, cy = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                            local vx = cx + (vending_machine.offsetX or 0)
+                            local vy = cy + (vending_machine.offsetY or 0)
+                            local half_w = ((vending_machine.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                            local half_h = ((vending_machine.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                            local inside_machine = world_x >= (vx - half_w)
+                                and world_x <= (vx + half_w)
+                                and world_y >= (vy - half_h)
+                                and world_y <= (vy + half_h)
+                            if inside_machine then
+                                vending_attempted = true
+                                local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                                local tx, ty = ctx.id_to_coords(drop_cell_id)
+                                local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                                if manhattan ~= 0 then
+                                    print("too far away")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                elseif drop_cell.isPowered ~= true then
+                                    print("Vending machine is offline (tile has no power).")
+                                elseif vending_machine.isFixed ~= true then
+                                    print("Vending machine is broken and must be fixed first.")
+                                elseif not runtime.is_object_dependency_met(self.world_grid, vending_machine) then
+                                    print("Vending machine dependency is not met.")
+                                else
+                                    if not try_consume_drag_ap(source_unit, nil) then
+                                        self.drag_resource = { active = false }
+                                        return true
+                                    end
+                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    local produced_item = ctx.COMPONENT_UI.item_type_blue
+                                    local produced_label = "component"
+                                    if vending_machine.name == hash("ammo_vending_machine") then
+                                        produced_item = "ammo"
+                                        produced_label = "ammo unit"
+                                    elseif vending_machine.name == hash("med_vending_machine") then
+                                        produced_item = "meds"
+                                        produced_label = "med unit"
+                                    end
+                                    table.insert(source_unit.backpack_items, produced_item)
+                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    runtime.spawn_loot_pickup_blip(
+                                        self,
+                                        source_unit.cell_id,
+                                        #source_unit.backpack_items,
+                                        produced_item,
+                                        vx,
+                                        vy + 18
+                                    )
+                                    consumed = true
+                                    print(string.format(
+                                        "%s used 1 material and produced 1 %s. (AP -%d)",
+                                        source_unit.display_name,
+                                        produced_label,
+                                        get_drag_ap_cost()
+                                    ))
+                                end
+                            end
+                        end
+                    end
                     local target_power_cell = runtime.find_power_node_drop_target(self, world_x, world_y)
                     if target_power_cell and source_item == "power" then
                         if not source_unit.cell_id then
@@ -1089,7 +1177,6 @@ function M.extend(runtime, ctx)
                     end
                     if not consumed then
                         local component_target = nil
-                        local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
                         local is_component_item = source_item == ctx.COMPONENT_UI.item_type_blue
                             or source_item == ctx.COMPONENT_UI.component_wiring_straight
                             or source_item == ctx.COMPONENT_UI.component_wiring_corner
@@ -1134,7 +1221,7 @@ function M.extend(runtime, ctx)
                                 end
                             end
                         end
-                        if (not consumed) and drop_cell_id and source_unit.cell_id then
+                        if (not consumed) and (not vending_attempted) and drop_cell_id and source_unit.cell_id then
                             local sx, sy = ctx.id_to_coords(source_unit.cell_id)
                             local tx, ty = ctx.id_to_coords(drop_cell_id)
                             local manhattan = math.abs(sx - tx) + math.abs(sy - ty)

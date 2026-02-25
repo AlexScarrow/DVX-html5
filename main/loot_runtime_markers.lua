@@ -51,12 +51,23 @@ function M.extend(runtime, ctx)
         end
 
         for cell_id, cell in ipairs(self.world_grid) do
-            if runtime.cell_has_component_machine(cell) and cell.tileID ~= hash("empty") and cell.isPowered then
+            local machine = runtime.get_vending_machine_on_cell(cell)
+            if machine and cell.tileID ~= hash("empty") and cell.isPowered then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y + 10, 0.045))
+                local mx = x + (machine.offsetX or 0)
+                local my = y + (machine.offsetY or 0)
+                local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(mx, my, 0.56))
                 if marker_id then
-                    go.set_scale(vmath.vector3(ctx.COMPONENT_UI.machine_marker_size, ctx.COMPONENT_UI.machine_marker_size, 1), marker_id)
-                    go.set(msg.url(nil, marker_id, "sprite"), "tint", ctx.COMPONENT_UI.machine_marker_color)
+                    local anim = hash("wiregap_straight_off")
+                    if machine.name == hash("ammo_vending_machine") then
+                        anim = hash("ammo_vend_machine")
+                    elseif machine.name == hash("med_vending_machine") then
+                        anim = hash("med_vend_machine")
+                    elseif machine.name == hash("machine") then
+                        anim = hash("wiregap_straight_on")
+                    end
+                    msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                    go.set_scale(vmath.vector3(1, 1, 1), marker_id)
                     machine_objects[cell_id] = marker_id
                 end
             end

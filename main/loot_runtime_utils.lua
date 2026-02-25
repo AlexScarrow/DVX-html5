@@ -2,6 +2,11 @@ local M = {}
 
 function M.create(ctx)
     local runtime = {}
+    local function is_any_vending_machine_name(name_hash)
+        return name_hash == hash("machine")
+            or name_hash == hash("ammo_vending_machine")
+            or name_hash == hash("med_vending_machine")
+    end
 
     runtime.get_backpack_item_color = function(item_type)
         if item_type == "ammo" then
@@ -83,6 +88,23 @@ function M.create(ctx)
             or (cell.object3 and cell.object3.name == hash("machine"))
     end
 
+    runtime.get_vending_machine_on_cell = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name and is_any_vending_machine_name(obj.name) then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    runtime.cell_has_any_vending_machine = function(cell)
+        return runtime.get_vending_machine_on_cell(cell) ~= nil
+    end
+
     runtime.get_fixable_objects_in_cell = function(cell)
         local out = {}
         if not cell then
@@ -90,7 +112,7 @@ function M.create(ctx)
         end
         local slots = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(slots) do
-            if obj and obj.name and obj.name ~= hash("empty") and obj.name ~= hash("machine") and obj.name ~= hash("power_node") then
+            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and obj.name ~= hash("power_node") then
                 table.insert(out, obj)
             end
         end

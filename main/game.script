@@ -920,6 +920,20 @@ function create_tile_library()
     --armoury.cells[8].accessDown = false   -- Wall on bottom of cell 8
 
     --    
+    armoury.cells[1].object1 = {
+        name = hash("loot_crate"),
+        isFixed = true,
+        isWelded = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 101,
+        offsetX = -100,
+        offsetY = -35,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
+
 
     armoury.cells[2].object1 = {
         name = hash("vent"),
@@ -968,19 +982,19 @@ function create_tile_library()
         requiredComponent = nil
     }
     
-    -- armoury.cells[3].object2 = {
-    --     name = hash("vent"),
-    --     isFixed = true,
-    --     isWelded = false,
-    --     dependsOn = 0,
-    --     isDependentOn = {},
-    --     objectId = 302,
-    --     offsetX = 0,
-    --     offsetY = 45,
-    --     hitW = 32,
-    --     hitH = 32,
-    --     requiredComponent = nil
-    -- }
+    armoury.cells[4].object1 = {
+        name = hash("loot_crate"),
+        isFixed = true,
+        isWelded = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 401,
+        offsetX = 0,
+        offsetY = -35,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
 
     -- armoury.cells[3].object2 = {
     --     name = hash("door"),
@@ -1171,6 +1185,24 @@ function create_tile_library()
         isDependentOn = {},
         objectId = 901,
         offsetX = 110,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 42,
+        hitH = 72,
+        requiredComponent = COMPONENT_UI.component_plate
+    }
+
+    armoury.cells[9].object2 = {
+        name = hash("gun_turret"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 902,
+        offsetX = 0,
         offsetY = 0,
         fxOffsetX = 0,
         fxOffsetY = 0,
@@ -4334,7 +4366,7 @@ function update_selected_unit_ui(self)
         COMPONENT_UI.fix_button_size
     )
 
-    if current_cell and current_cell.hasLoot and current_cell.isPowered then
+    if current_cell and LOOT_RUNTIME.cell_has_loot_available(current_cell) and current_cell.isPowered then
         set_ui_square_transform(
             self,
             self.ui.loot_button,

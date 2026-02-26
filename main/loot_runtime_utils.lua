@@ -10,6 +10,9 @@ function M.create(ctx)
     local function is_turret_name(name_hash)
         return name_hash == hash("gun_turret")
     end
+    local function is_loot_crate_name(name_hash)
+        return name_hash == hash("loot_crate")
+    end
 
     runtime.get_backpack_item_color = function(item_type)
         if item_type == "ammo" then
@@ -115,11 +118,31 @@ function M.create(ctx)
         end
         local slots = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(slots) do
-            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and obj.name ~= hash("power_node") then
+            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and (not is_loot_crate_name(obj.name)) and obj.name ~= hash("power_node") then
                 table.insert(out, obj)
             end
         end
         return out
+    end
+
+    runtime.get_loot_crate_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name and is_loot_crate_name(obj.name) then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    runtime.cell_has_loot_available = function(cell)
+        if not cell then
+            return false
+        end
+        return (cell.hasLoot == true) or (runtime.get_loot_crate_object(cell) ~= nil)
     end
 
     runtime.cell_has_fixable_object = function(cell)

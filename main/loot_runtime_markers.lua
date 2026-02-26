@@ -24,10 +24,11 @@ function M.extend(runtime, ctx)
         end
 
         for cell_id, cell in ipairs(self.world_grid) do
-            if cell.hasLoot and cell.tileID ~= hash("empty") and cell.isPowered then
+            if runtime.cell_has_loot_available(cell) and cell.tileID ~= hash("empty") and cell.isPowered then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                local marker_x = x + (cell.lootOffsetX or 0)
-                local marker_y = y + (cell.lootOffsetY or 0)
+                local crate_obj = runtime.get_loot_crate_object(cell)
+                local marker_x = x + ((crate_obj and crate_obj.offsetX) or cell.lootOffsetX or 0)
+                local marker_y = y + ((crate_obj and crate_obj.offsetY) or cell.lootOffsetY or 0)
                 local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(marker_x, marker_y, ctx.LOOT_UI.marker_z))
                 if marker_id then
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.marker_size, ctx.LOOT_UI.marker_size, 1), marker_id)

@@ -454,7 +454,9 @@ function M.extend(runtime, ctx)
         end
 
         local cell = self.world_grid and self.world_grid[unit.cell_id]
-        if not cell or not cell.hasLoot then
+        local crate_obj = cell and runtime.get_loot_crate_object(cell) or nil
+        local has_loot_here = cell and runtime.cell_has_loot_available(cell)
+        if not cell or not has_loot_here then
             print("No loot available here.")
             return true
         end
@@ -505,6 +507,23 @@ function M.extend(runtime, ctx)
             end
         end
 
+        if crate_obj then
+            crate_obj.name = hash("empty")
+            crate_obj.isFixed = false
+            crate_obj.isWelded = false
+            crate_obj.isOpen = false
+            crate_obj.dependsOn = 0
+            crate_obj.isDependentOn = {}
+            crate_obj.objectId = 0
+            crate_obj.offsetX = 0
+            crate_obj.offsetY = 0
+            crate_obj.fxOffsetX = 0
+            crate_obj.fxOffsetY = 0
+            crate_obj.fxRotation = 0
+            crate_obj.hitW = 32
+            crate_obj.hitH = 32
+            crate_obj.requiredComponent = nil
+        end
         cell.hasLoot = false
         runtime.clear_loot_marker(unit.cell_id)
 

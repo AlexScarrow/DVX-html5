@@ -934,6 +934,24 @@ function create_tile_library()
         hitH = 32,
         requiredComponent = nil
     }
+
+    armoury.cells[2].object2 = {
+        name = hash("door"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 202,
+        offsetX = 115,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 42,
+        hitH = 72,
+        requiredComponent = COMPONENT_UI.component_plate
+    }
     armoury.cells[3].object1 = {
         name = hash("power_node"),
         isFixed = true,
@@ -964,23 +982,23 @@ function create_tile_library()
     --     requiredComponent = nil
     -- }
 
-    armoury.cells[3].object2 = {
-        name = hash("door"),
-        isFixed = true,
-        isWelded = false,
-        isOpen = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 302,
-        offsetX = -115,
-        offsetY = 0,
-        fxOffsetX = 0,
-        fxOffsetY = 0,
-        fxRotation = 0,
-        hitW = 42,
-        hitH = 72,
-        requiredComponent = COMPONENT_UI.component_plate
-    }
+    -- armoury.cells[3].object2 = {
+    --     name = hash("door"),
+    --     isFixed = true,
+    --     isWelded = false,
+    --     isOpen = false,
+    --     dependsOn = 0,
+    --     isDependentOn = {},
+    --     objectId = 302,
+    --     offsetX = -115,
+    --     offsetY = 0,
+    --     fxOffsetX = 0,
+    --     fxOffsetY = 0,
+    --     fxRotation = 0,
+    --     hitW = 42,
+    --     hitH = 72,
+    --     requiredComponent = COMPONENT_UI.component_plate
+    -- }
 
     -- -- Add a machine to center cell (cell 5)
     -- armoury.cells[5].object1 = {

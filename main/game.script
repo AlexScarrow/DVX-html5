@@ -887,10 +887,19 @@ function create_tile_library()
 ------ Example Tile 3: "armoury" - room with objects--------------------------------------------------------
     local armoury = create_tile_prototype("armoury")
     for i = 1, 9 do
-        armoury.cells[i].lightValue = 3
+        --armoury.cells[i].lightValue = 3
         armoury.cells[i].moveValue = 1
-        armoury.cells[i].coverValue = 3
+        armoury.cells[i].coverValue = 1
     end
+    armoury.cells[1].lightValue = 1
+    armoury.cells[2].lightValue = 0
+    armoury.cells[3].lightValue = 0
+    armoury.cells[4].lightValue = 2
+    armoury.cells[5].lightValue = 3
+    armoury.cells[6].lightValue = 1
+    armoury.cells[7].lightValue = 3
+    armoury.cells[8].lightValue = 3
+    armoury.cells[9].lightValue = 0
     
     -- Add walls to specific cells (example: create a corridor pattern)
     --     -- Cell layout: 7 8 9
@@ -898,37 +907,40 @@ function create_tile_library()
     --     --              1 2 3
     armoury.cells[1].accessDown = false  -- Wall on right of cell 4
     armoury.cells[2].accessDown = false  -- Wall on right of cell 4
+    armoury.cells[3].accessDown = false  -- Wall on right of cell 4
+    armoury.cells[3].accessRight = false  -- Wall on right of cell 4
     armoury.cells[4].accessRight = false  -- Wall on right of cell 4
+    armoury.cells[5].accessRight = false  -- Wall on right of cell 4
     armoury.cells[6].accessRight = false  -- Wall on right of cell 6
-    armoury.cells[2].accessDown = false   -- Wall on bottom of cell 2
-    armoury.cells[8].accessDown = false   -- Wall on bottom of cell 8
+    armoury.cells[6].accessDown = false  -- Wall on right of cell 6
+    armoury.cells[7].accessRight = false  -- Wall on right of cell 6
+    armoury.cells[9].accessDown = false  -- Wall on right of cell 6
+    --armoury.cells[8].accessRight = false  -- Wall on right of cell 6
+    --armoury.cells[2].accessDown = false   -- Wall on bottom of cell 2
+    --armoury.cells[8].accessDown = false   -- Wall on bottom of cell 8
 
-    armoury.cells[8].object2 = {
-        name = hash("gun_turret"),
-        isFixed = false,
-        isWelded = false,
-        isOpen = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 6601,
-        offsetX = 0,
-        offsetY = 0,
-        fxOffsetX = 0,
-        fxOffsetY = 0,
-        fxRotation = 0,
-        -- Keep drag/fix hit point centered on the gun sprite.
-        hitW = 48,
-        hitH = 48,
-        requiredComponent = COMPONENT_UI.component_sensor
-    }
+    --    
 
     armoury.cells[2].object1 = {
+        name = hash("vent"),
+        isFixed = true,
+        isWelded = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 201,
+        offsetX = -100,
+        offsetY = 35,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
+    armoury.cells[3].object1 = {
         name = hash("power_node"),
         isFixed = true,
         dependsOn = 0,
         isDependentOn = {},
-        objectId = 0,
-        offsetX = -90,
+        objectId = 301,
+        offsetX = 0,
         offsetY = 10,
         fxOffsetX = 20,
         fxOffsetY = -20,
@@ -937,46 +949,30 @@ function create_tile_library()
         hitH = 124,
         requiredComponent = nil
     }
+    
+    -- armoury.cells[3].object2 = {
+    --     name = hash("vent"),
+    --     isFixed = true,
+    --     isWelded = false,
+    --     dependsOn = 0,
+    --     isDependentOn = {},
+    --     objectId = 302,
+    --     offsetX = 0,
+    --     offsetY = 45,
+    --     hitW = 32,
+    --     hitH = 32,
+    --     requiredComponent = nil
+    -- }
 
-    -- Add a machine to center cell (cell 5)
-    armoury.cells[5].object1 = {
-        name = hash("machine"),
-        isFixed = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 0,
-        offsetX = 0,
-        offsetY = 0,
-        hitW = 32,
-        hitH = 32,
-        requiredComponent = nil
-    }
-    armoury.cells[5].object2 = {
-        name = hash("wiregap"),
-        isFixed = false,
-        isWelded = false,
-        isOpen = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 6301,
-        offsetX = 0,
-        offsetY = 0,
-        fxOffsetX = 0,
-        fxOffsetY = 0,
-        fxRotation = 0,
-        hitW = 32,
-        hitH = 32,
-        requiredComponent = COMPONENT_UI.component_wiring_straight
-    }
-    armoury.cells[5].object3 = {
+    armoury.cells[3].object2 = {
         name = hash("door"),
         isFixed = true,
         isWelded = false,
         isOpen = false,
-        dependsOn = 6301,
+        dependsOn = 0,
         isDependentOn = {},
-        objectId = 6401,
-        offsetX = 98,
+        objectId = 302,
+        offsetX = -115,
         offsetY = 0,
         fxOffsetX = 0,
         fxOffsetY = 0,
@@ -985,46 +981,79 @@ function create_tile_library()
         hitH = 72,
         requiredComponent = COMPONENT_UI.component_plate
     }
-    armoury.cells[8].object1 = {
-        name = hash("door"),
-        isFixed = true,
-        isWelded = false,
-        isOpen = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 6402,
-        offsetX = 98,
-        offsetY = 0,
-        fxOffsetX = 0,
-        fxOffsetY = 0,
-        fxRotation = 0,
-        hitW = 42,
-        hitH = 72,
-        requiredComponent = COMPONENT_UI.component_plate
-    }
-    -- Temporary fixable object for Phase 1 fixing loop tests.
-    armoury.cells[6].object1 = {
-        name = hash("console"),
-        isFixed = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 6101,
-        offsetX = -12,
-        offsetY = 4,
-        hitW = 32,
-        hitH = 32,
-        requiredComponent = COMPONENT_UI.item_type_blue
-    }
-    armoury.cells[6].object2 = {
+
+    -- -- Add a machine to center cell (cell 5)
+    -- armoury.cells[5].object1 = {
+    --     name = hash("machine"),
+    --     isFixed = false,
+    --     dependsOn = 0,
+    --     isDependentOn = {},
+    --     objectId = 0,
+    --     offsetX = 0,
+    --     offsetY = 0,
+    --     hitW = 32,
+    --     hitH = 32,
+    --     requiredComponent = nil
+    -- }
+    -- armoury.cells[5].object2 = {
+    --     name = hash("wiregap"),
+    --     isFixed = false,
+    --     isWelded = false,
+    --     isOpen = false,
+    --     dependsOn = 0,
+    --     isDependentOn = {},
+    --     objectId = 6301,
+    --     offsetX = 0,
+    --     offsetY = 0,
+    --     fxOffsetX = 0,
+    --     fxOffsetY = 0,
+    --     fxRotation = 0,
+    --     hitW = 32,
+    --     hitH = 32,
+    --     requiredComponent = COMPONENT_UI.component_wiring_straight
+    -- }
+    -- armoury.cells[5].object3 = {
+    --     name = hash("door"),
+    --     isFixed = true,
+    --     isWelded = false,
+    --     isOpen = false,
+    --     dependsOn = 6301,
+    --     isDependentOn = {},
+    --     objectId = ???6401,
+    --     offsetX = 98,
+    --     offsetY = 0,
+    --     fxOffsetX = 0,
+    --     fxOffsetY = 0,
+    --     fxRotation = 0,
+    --     hitW = 42,
+    --     hitH = 72,
+    --     requiredComponent = COMPONENT_UI.component_plate
+    -- }
+
+    -- -- Temporary fixable object for Phase 1 fixing loop tests.
+    -- armoury.cells[6].object1 = {
+    --     name = hash("console"),
+    --     isFixed = false,
+    --     dependsOn = 0,
+    --     isDependentOn = {},
+    --     objectId = ???6101,
+    --     offsetX = -12,
+    --     offsetY = 4,
+    --     hitW = 32,
+    --     hitH = 32,
+    --     requiredComponent = COMPONENT_UI.item_type_blue
+    -- }
+
+    armoury.cells[7].object1 = {
         name = hash("ammo_vending_machine"),
         isFixed = false,
         isWelded = false,
         isOpen = false,
         dependsOn = 0,
         isDependentOn = {},
-        objectId = 6501,
-        offsetX = 0,
-        offsetY = 0,
+        objectId = 701,
+        offsetX = -90,
+        offsetY = 8,
         fxOffsetX = 0,
         fxOffsetY = 0,
         fxRotation = 0,
@@ -1034,61 +1063,105 @@ function create_tile_library()
     }
     -- Temporary dependent object for dependency-rule tests.
     -- This object cannot be fixed until object #6101 is fixed first.
-    armoury.cells[7].object1 = {
+    armoury.cells[7].object2 = {
         name = hash("relay"),
         isFixed = false,
         dependsOn = 6101,
         isDependentOn = {},
-        objectId = 6102,
+        objectId = 702,
         offsetX = 10,
         offsetY = 8,
         hitW = 32,
         hitH = 32,
         requiredComponent = COMPONENT_UI.item_type_blue
     }
-    armoury.cells[7].object2 = {
-        name = hash("med_vending_machine"),
-        isFixed = false,
+    -- armoury.cells[7].object2 = {
+    --     name = hash("med_vending_machine"),
+    --     isFixed = false,
+    --     isWelded = false,
+    --     isOpen = false,
+    --     dependsOn = 0,
+    --     isDependentOn = {},
+    --     objectId = ??6502,
+    --     offsetX = 0,
+    --     offsetY = 0,
+    --     fxOffsetX = 0,
+    --     fxOffsetY = 0,
+    --     fxRotation = 0,
+    --     hitW = 64,
+    --     hitH = 124,
+    --     requiredComponent = COMPONENT_UI.component_fuse
+    -- }
+    armoury.cells[8].object1 = {
+        name = hash("door"),
+        isFixed = true,
         isWelded = false,
         isOpen = false,
         dependsOn = 0,
         isDependentOn = {},
-        objectId = 6502,
-        offsetX = 0,
+        objectId = 801,
+        offsetX = 98,
         offsetY = 0,
         fxOffsetX = 0,
         fxOffsetY = 0,
         fxRotation = 0,
-        hitW = 64,
-        hitH = 124,
-        requiredComponent = COMPONENT_UI.component_fuse
+        hitW = 42,
+        hitH = 72,
+        requiredComponent = COMPONENT_UI.component_plate
     }
+    
+   -- armoury.cells[8].object2 = {
+        --         name = hash("gun_turret"),
+        --         isFixed = false,
+        --         isWelded = false,
+        --         isOpen = false,
+        --         dependsOn = 0,
+        --         isDependentOn = {},
+        --         objectId = 6601,
+        --         offsetX = 0,
+        --         offsetY = 0,
+        --         fxOffsetX = 0,
+        --         fxOffsetY = 0,
+        --         fxRotation = 0,
+        --         -- Keep drag/fix hit point centered on the gun sprite.
+        --         hitW = 48,
+        --         hitH = 48,
+        --         requiredComponent = COMPONENT_UI.component_sensor
+        --     }
+        -- 
+   
+    armoury.cells[8].object2 = {
+        name = hash("vent"),
+        isFixed = true,
+        isWelded = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 802,
+        offsetX = -100,
+        offsetY = -35,
+        hitW = 32,
+        hitH = 32,
+        requiredComponent = nil
+    }
+
     armoury.cells[9].object1 = {
-        name = hash("vent"),
+        name = hash("door"),
         isFixed = true,
         isWelded = false,
+        isOpen = false,
         dependsOn = 0,
         isDependentOn = {},
-        objectId = 6201,
-        offsetX = -115,
-        offsetY = 45,
-        hitW = 32,
-        hitH = 32,
-        requiredComponent = nil
+        objectId = 901,
+        offsetX = 110,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 42,
+        hitH = 72,
+        requiredComponent = COMPONENT_UI.component_plate
     }
-    armoury.cells[3].object2 = {
-        name = hash("vent"),
-        isFixed = true,
-        isWelded = false,
-        dependsOn = 0,
-        isDependentOn = {},
-        objectId = 6202,
-        offsetX = -115,
-        offsetY = 45,
-        hitW = 32,
-        hitH = 32,
-        requiredComponent = nil
-    }
+   
     assign_random_loot_cell(armoury)
     library["armoury"] = armoury
 
@@ -5388,7 +5461,7 @@ function init(self)
     msg.post("/camera#camera", "acquire_camera_focus")
 
     self.sheen_z = 0.4--0.3
-    self.sheen_alpha = 0--0.8--0.22
+    self.sheen_alpha = 0.4--0.8--0.22
     self.sheen_art_w = 550--768
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0

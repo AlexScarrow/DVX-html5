@@ -1,0 +1,270 @@
+local M = {}
+
+-- =============================================================================
+-- TILE PROTOTYPE STRUCTURE
+-- =============================================================================
+local function create_tile_prototype(tile_id)
+    local tile = {
+        tileID = hash(tile_id),
+        visualTile = tile_id,
+        cells = {}
+    }
+
+    -- Layout: 7 8 9
+    --         4 5 6
+    --         1 2 3
+    for i = 1, 9 do
+        tile.cells[i] = {
+            lightValue = 3,
+            moveValue = 1,
+            coverValue = 1,
+            accessRight = true,
+            accessDown = true,
+            isPowered = false,
+            tileInstanceId = 0,
+            isOccupied = hash("empty"),
+            hasLoot = false,
+            lootOffsetX = -32,
+            lootOffsetY = -32,
+            object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+            object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
+            object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        }
+    end
+
+    return tile
+end
+
+-- =============================================================================
+-- TILE LIBRARY
+-- =============================================================================
+function M.create_tile_library(COMPONENT_UI)
+    local library = {}
+
+    local function assign_random_loot_cell(tile)
+        for i = 1, 9 do
+            tile.cells[i].hasLoot = false
+        end
+        local idx = math.random(1, 9)
+        tile.cells[idx].hasLoot = true
+    end
+
+    local function assign_fixed_loot_cell(tile, cell_index)
+        for i = 1, 9 do
+            tile.cells[i].hasLoot = (i == cell_index)
+        end
+    end
+
+    -- corridor
+    local corridor = create_tile_prototype("corridor")
+    for i = 1, 9 do
+        corridor.cells[i].lightValue = 2
+        corridor.cells[i].moveValue = 1
+        corridor.cells[i].coverValue = 1
+    end
+    corridor.cells[1].accessDown = false
+    corridor.cells[2].accessDown = false
+    corridor.cells[3].accessDown = false
+    corridor.cells[3].accessRight = false
+    corridor.cells[4].accessDown = false
+    corridor.cells[6].accessDown = false
+    corridor.cells[7].accessDown = false
+    corridor.cells[8].accessDown = false
+    corridor.cells[9].accessRight = false
+    corridor.cells[5].object1 = {
+        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+        offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    corridor.cells[8].object2 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    assign_random_loot_cell(corridor)
+    library["corridor"] = corridor
+
+    -- canteen
+    local canteen = create_tile_prototype("canteen")
+    for i = 1, 9 do
+        canteen.cells[i].lightValue = 4
+        canteen.cells[i].moveValue = 1
+        canteen.cells[i].coverValue = 2
+    end
+    canteen.cells[1].accessDown = false
+    canteen.cells[1].accessRight = false
+    canteen.cells[2].accessDown = false
+    canteen.cells[3].accessRight = false
+    canteen.cells[4].accessRight = false
+    canteen.cells[6].accessRight = false
+    canteen.cells[2].accessDown = false
+    canteen.cells[8].accessDown = false
+    canteen.cells[5].object1 = {
+        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+        offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    canteen.cells[8].object2 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 1802,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    assign_random_loot_cell(canteen)
+    library["canteen"] = canteen
+
+    -- armoury
+    local armoury = create_tile_prototype("armoury")
+    for i = 1, 9 do
+        armoury.cells[i].moveValue = 1
+        armoury.cells[i].coverValue = 1
+    end
+    armoury.cells[1].lightValue = 1
+    armoury.cells[2].lightValue = 0
+    armoury.cells[3].lightValue = 0
+    armoury.cells[4].lightValue = 2
+    armoury.cells[5].lightValue = 3
+    armoury.cells[6].lightValue = 1
+    armoury.cells[7].lightValue = 3
+    armoury.cells[8].lightValue = 3
+    armoury.cells[9].lightValue = 0
+
+    armoury.cells[1].accessDown = false
+    armoury.cells[2].accessDown = false
+    armoury.cells[3].accessDown = false
+    armoury.cells[3].accessRight = false
+    armoury.cells[4].accessRight = false
+    armoury.cells[5].accessRight = false
+    armoury.cells[6].accessRight = false
+    armoury.cells[6].accessDown = false
+    armoury.cells[7].accessRight = false
+    armoury.cells[9].accessDown = false
+
+    armoury.cells[1].object1 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "ammo", "ammo", "meds", "material", COMPONENT_UI.component_fuse }
+    }
+    armoury.cells[2].object1 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+        offsetX = -100, offsetY = 35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    armoury.cells[2].object2 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    armoury.cells[2].object3 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    armoury.cells[3].object1 = {
+        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        offsetX = 0, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    armoury.cells[4].object1 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "ammo", "ammo", "meds", "material", COMPONENT_UI.component_fuse }
+    }
+    armoury.cells[7].object1 = {
+        name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
+        offsetX = -90, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+    }
+    armoury.cells[7].object2 = {
+        name = hash("relay"), isFixed = false, dependsOn = 6101, isDependentOn = {}, objectId = 702,
+        offsetX = 10, offsetY = 8, hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.item_type_blue
+    }
+    armoury.cells[8].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
+        offsetX = 98, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    armoury.cells[8].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    armoury.cells[8].object3 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 803,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    armoury.cells[9].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 901,
+        offsetX = 110, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    armoury.cells[9].object2 = {
+        name = hash("gun_turret"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    armoury.cells[9].object3 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    assign_random_loot_cell(armoury)
+    library["armoury"] = armoury
+
+    -- EXPERIMENTAL LEVEL-2 TILE DEFS (easy to purge)
+    local lvl2_open = create_tile_prototype("lvl2_open")
+    lvl2_open.visualTile = "armoury"
+    for i = 1, 9 do
+        lvl2_open.cells[i].lightValue = 3
+        lvl2_open.cells[i].moveValue = 1
+        lvl2_open.cells[i].coverValue = 2
+    end
+    lvl2_open.cells[2].object1 = {
+        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+        offsetX = -90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    lvl2_open.cells[8].object2 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2802,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    assign_fixed_loot_cell(lvl2_open, 5)
+    library["lvl2_open"] = lvl2_open
+
+    local lvl2_choke = create_tile_prototype("lvl2_choke")
+    lvl2_choke.visualTile = "corridor"
+    for i = 1, 9 do
+        lvl2_choke.cells[i].lightValue = 2
+        lvl2_choke.cells[i].moveValue = 1
+        lvl2_choke.cells[i].coverValue = 1
+    end
+    lvl2_choke.cells[1].accessDown = false
+    lvl2_choke.cells[2].accessDown = false
+    lvl2_choke.cells[3].accessDown = false
+    lvl2_choke.cells[4].accessDown = false
+    lvl2_choke.cells[5].accessDown = false
+    lvl2_choke.cells[6].accessDown = false
+    lvl2_choke.cells[3].accessRight = false
+    lvl2_choke.cells[6].accessRight = false
+    lvl2_choke.cells[9].accessRight = false
+    lvl2_choke.cells[5].object1 = {
+        name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 7201,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+    lvl2_choke.cells[2].object1 = {
+        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+        offsetX = -90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    lvl2_choke.cells[8].object2 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 3802,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    assign_fixed_loot_cell(lvl2_choke, 8)
+    library["lvl2_choke"] = lvl2_choke
+
+    local lvl2_support = create_tile_prototype("lvl2_support")
+    lvl2_support.visualTile = "canteen"
+    for i = 1, 9 do
+        lvl2_support.cells[i].lightValue = 4
+        lvl2_support.cells[i].moveValue = 1
+        lvl2_support.cells[i].coverValue = 2
+    end
+    lvl2_support.cells[5].object1 = {
+        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+        offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    lvl2_support.cells[8].object2 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 4802,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+    assign_fixed_loot_cell(lvl2_support, 2)
+    library["lvl2_support"] = lvl2_support
+
+    return library
+end
+
+return M

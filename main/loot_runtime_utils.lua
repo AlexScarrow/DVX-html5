@@ -28,6 +28,8 @@ function M.create(ctx)
             return ctx.LOOT_UI.material_color
         elseif item_type == "corpse" then
             return vmath.vector4(0.75, 0.12, 0.12, 1)
+        elseif item_type == "turret_packed" then
+            return vmath.vector4(0.55, 0.75, 0.95, 1)
         elseif item_type == ctx.COMPONENT_UI.item_type_blue
             or item_type == ctx.COMPONENT_UI.component_wiring_straight
             or item_type == ctx.COMPONENT_UI.component_wiring_corner

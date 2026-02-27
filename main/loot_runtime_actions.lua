@@ -2,6 +2,8 @@ local M = {}
 
 function M.extend(runtime, ctx)
     local WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM = 34
+    local TURRET_PACKED_ITEM = "turret_packed"
+    local TURRET_ARMING_TURNS_ON_DEPLOY = 2
 
     local function get_drag_ap_cost()
         return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
@@ -39,8 +41,123 @@ function M.extend(runtime, ctx)
             return hash("ammo_unit")
         elseif item_type == "power" then
             return hash("power_unit")
+        elseif item_type == TURRET_PACKED_ITEM then
+            return hash("gun_turret")
         end
         return nil
+    end
+
+    local function get_turret_object_on_cell(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("gun_turret") then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    local function get_empty_object_slot(cell)
+        if not cell then
+            return nil
+        end
+        if cell.object1 and cell.object1.name == hash("empty") then
+            return cell.object1
+        end
+        if cell.object2 and cell.object2.name == hash("empty") then
+            return cell.object2
+        end
+        if cell.object3 and cell.object3.name == hash("empty") then
+            return cell.object3
+        end
+        -- Allow deploy to replace non-interactive spawn markers when no empty slot exists.
+        if cell.object1 and (cell.object1.name == hash("blip_spawn") or cell.object1.name == hash("blip")) then
+            return cell.object1
+        end
+        if cell.object2 and (cell.object2.name == hash("blip_spawn") or cell.object2.name == hash("blip")) then
+            return cell.object2
+        end
+        if cell.object3 and (cell.object3.name == hash("blip_spawn") or cell.object3.name == hash("blip")) then
+            return cell.object3
+        end
+        return nil
+    end
+
+    local function fill_backpack_with_packed_turret(unit, cap)
+        unit.backpack_items = {}
+        for _ = 1, cap do
+            table.insert(unit.backpack_items, TURRET_PACKED_ITEM)
+        end
+        unit.backpack_used = #unit.backpack_items
+    end
+
+    local function clear_packed_turret_from_backpack(unit)
+        if not unit or not unit.backpack_items then
+            return
+        end
+        local keep = {}
+        for _, item in ipairs(unit.backpack_items) do
+            if item ~= TURRET_PACKED_ITEM then
+                table.insert(keep, item)
+            end
+        end
+        unit.backpack_items = keep
+        unit.backpack_used = #unit.backpack_items
+    end
+
+    local function allocate_runtime_object_id(world_grid)
+        local max_id = 0
+        for _, cell in ipairs(world_grid or {}) do
+            local objs = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objs) do
+                local id = (obj and obj.objectId) or 0
+                if id > max_id then
+                    max_id = id
+                end
+            end
+        end
+        return max_id + 1
+    end
+
+    local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
+        if not self.world_grid then
+            return nil, nil
+        end
+        local best_cell = nil
+        local best_obj = nil
+        local best_dist = math.huge
+        for _, cell in ipairs(self.world_grid) do
+            if cell and cell.tileID ~= hash("empty") and (not required_cell_id or required_cell_id == cell.idNumber) then
+                local turret = get_turret_object_on_cell(cell)
+                if turret then
+                    local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    local tx = cx + (turret.offsetX or 0)
+                    local ty = cy + (turret.offsetY or 0)
+                    local hit_w = math.max(turret.hitW or 42, 84)
+                    local hit_h = math.max(turret.hitH or 72, 84)
+                    local half_w = hit_w * 0.5
+                    local half_h = hit_h * 0.5
+                    local inside = world_x >= (tx - half_w)
+                        and world_x <= (tx + half_w)
+                        and world_y >= (ty - half_h)
+                        and world_y <= (ty + half_h)
+                    if inside then
+                        local dx = tx - world_x
+                        local dy = ty - world_y
+                        local dist = math.sqrt(dx * dx + dy * dy)
+                        if dist < best_dist then
+                            best_dist = dist
+                            best_cell = cell
+                            best_obj = turret
+                        end
+                    end
+                end
+            end
+        end
+        return best_cell, best_obj
     end
 
     runtime.ensure_item_runtime_state = function(self)
@@ -985,10 +1102,67 @@ function M.extend(runtime, ctx)
         return true
     end
 
-    runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y)
+    runtime.try_pickup_world_turret_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        if clicked_cell_id and unit.cell_id ~= clicked_cell_id then
+            -- Do not consume clicks on other cells; allow normal movement/selection flow.
+            return false
+        end
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local cell, turret_obj = find_turret_pickup_target(self, world_x, world_y, unit.cell_id)
+        if not cell or not turret_obj then
+            return false
+        end
+        if cell.idNumber ~= unit.cell_id then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if #unit.backpack_items > 0 then
+            print("Backpack must be emptied before carrying a turret.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        if not try_consume_drag_ap(unit, nil) then
+            return true
+        end
+        -- Disable immediately on pickup action, then store as packed turret.
+        turret_obj.name = hash("empty")
+        turret_obj.isFixed = false
+        turret_obj.isWelded = false
+        turret_obj.isOpen = false
+        turret_obj.dependsOn = 0
+        turret_obj.isDependentOn = {}
+        turret_obj.objectId = 0
+        turret_obj.offsetX = 0
+        turret_obj.offsetY = 0
+        turret_obj.fxOffsetX = 0
+        turret_obj.fxOffsetY = 0
+        turret_obj.fxRotation = 0
+        turret_obj.hitW = 32
+        turret_obj.hitH = 32
+        turret_obj.requiredComponent = nil
+        turret_obj.turretArmingTurns = nil
+        fill_backpack_with_packed_turret(unit, cap)
+        runtime.refresh_turret_markers(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, get_drag_ap_cost()))
+        return true
+    end
+
+    runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
         -- Deterministic click order for crowded cells:
-        -- 1) corpse interaction, 2) deployed world item pickup.
+        -- 1) corpse interaction, 2) deployed turret pickup, 3) deployed world item pickup.
         if runtime.try_store_dead_human_corpse_selected_unit(self, screen_x, screen_y) then
+            return true
+        end
+        if runtime.try_pickup_world_turret_selected_unit(self, screen_x, screen_y, clicked_cell_id) then
             return true
         end
         if runtime.try_pickup_world_item_selected_unit(self, screen_x, screen_y) then
@@ -1017,6 +1191,7 @@ function M.extend(runtime, ctx)
         end
 
         local consumed = false
+        local suppress_generic_world_drop = false
         if drag.drag_type == "command" then
             local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
             local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
@@ -1059,6 +1234,10 @@ function M.extend(runtime, ctx)
                 local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
                 local vending_attempted = false
                 local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
+                if source_item == TURRET_PACKED_ITEM then
+                    -- Packed turret deployment is cell-targeted, not human-targeted.
+                    target_unit = nil
+                end
                 if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                     -- Prioritize self-heal when the drop lands on/near the medic sprite.
                     -- This avoids nearby allies stealing the target in crowded cells.
@@ -1078,6 +1257,10 @@ function M.extend(runtime, ctx)
                     end
                 end
                 if target_unit then
+                    if source_item == TURRET_PACKED_ITEM then
+                        print("Packed turret cannot be handed to another unit. Drop on your current cell to deploy.")
+                        flash_invalid_drag_units(source_unit, target_unit)
+                    else
                     if runtime.can_transfer_between_units(source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                             if target_unit.current_health >= target_unit.max_health then
@@ -1128,7 +1311,11 @@ function M.extend(runtime, ctx)
                         print("too far away")
                         flash_invalid_drag_units(source_unit, target_unit)
                     end
+                    end
                 else
+                    if source_item == TURRET_PACKED_ITEM then
+                        suppress_generic_world_drop = true
+                    end
                     if source_item == "material" and drop_cell_id and source_unit.cell_id then
                         local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
                         local vending_machine = drop_cell and runtime.get_vending_machine_on_cell(drop_cell) or nil
@@ -1248,6 +1435,66 @@ function M.extend(runtime, ctx)
                         else
                             print("too far away")
                             flash_invalid_drag_units(source_unit, nil)
+                        end
+                    end
+                    if not consumed then
+                        if source_item == TURRET_PACKED_ITEM then
+                            if drop_cell_id then
+                                local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                                if not drop_cell or drop_cell.tileID == hash("empty") then
+                                    print("Invalid turret deploy cell.")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                else
+                                    local turret_on_cell = get_turret_object_on_cell(drop_cell)
+                                    if turret_on_cell then
+                                        print("A turret is already deployed on this cell.")
+                                        flash_invalid_drag_units(source_unit, nil)
+                                    else
+                                        local slot = get_empty_object_slot(drop_cell)
+                                        if not slot then
+                                            print("No object slot available on this cell for turret deploy.")
+                                            flash_invalid_drag_units(source_unit, nil)
+                                        else
+                                            if not try_consume_drag_ap(source_unit, nil) then
+                                                self.drag_resource = { active = false }
+                                                return true
+                                            end
+                                            clear_packed_turret_from_backpack(source_unit)
+                                            local replacing_spawn_marker = slot.name == hash("blip_spawn") or slot.name == hash("blip")
+                                            if replacing_spawn_marker then
+                                                -- Preserve spawn capability even if its marker slot is reused.
+                                                drop_cell.blipSpawnEnabled = true
+                                            end
+                                            slot.name = hash("gun_turret")
+                                            slot.isFixed = true
+                                            slot.isWelded = false
+                                            slot.isOpen = false
+                                            slot.dependsOn = 0
+                                            slot.isDependentOn = {}
+                                            slot.objectId = allocate_runtime_object_id(self.world_grid)
+                                            slot.offsetX = 0
+                                            slot.offsetY = 0
+                                            slot.fxOffsetX = 0
+                                            slot.fxOffsetY = 0
+                                            slot.fxRotation = 0
+                                            slot.hitW = 48
+                                            slot.hitH = 48
+                                            slot.requiredComponent = nil
+                                            slot.turretArmingTurns = TURRET_ARMING_TURNS_ON_DEPLOY
+                                            runtime.refresh_turret_markers(self)
+                                            runtime.refresh_fix_markers(self)
+                                            runtime.refresh_world_item_visuals(self)
+                                            consumed = true
+                                            print(string.format(
+                                                "%s deployed a turret (arming %d turns). (AP -%d)",
+                                                source_unit.display_name,
+                                                TURRET_ARMING_TURNS_ON_DEPLOY,
+                                                get_drag_ap_cost()
+                                            ))
+                                        end
+                                    end
+                                end
+                            end
                         end
                     end
                     if not consumed then
@@ -1371,7 +1618,7 @@ function M.extend(runtime, ctx)
                                 end
                             end
                         end
-                        if (not consumed) and (not vending_attempted) and drop_cell_id and source_unit.cell_id then
+                        if (not consumed) and (not suppress_generic_world_drop) and (not vending_attempted) and drop_cell_id and source_unit.cell_id then
                             local sx, sy = ctx.id_to_coords(source_unit.cell_id)
                             local tx, ty = ctx.id_to_coords(drop_cell_id)
                             local manhattan = math.abs(sx - tx) + math.abs(sy - ty)

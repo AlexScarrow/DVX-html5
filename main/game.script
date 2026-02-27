@@ -130,7 +130,7 @@ local ALIEN_REVEAL_WEIGHT_BRUTE = 1
 local TILE_OPACITY = 0.5
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 local ALIEN_TYPE_CONFIG = {
-    [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = true, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
+    [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = false, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
     [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
     [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
     [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
@@ -1240,6 +1240,48 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
         return best_target, best_path
     end
     return nil, nil
+end
+
+get_blip_fallback_staging_target = function(self, from_cell_id)
+    if not self.world_grid or not self.world_grid[from_cell_id] then
+        return nil, nil
+    end
+    local human_ids = get_human_cell_ids(self)
+    if #human_ids == 0 then
+        return nil, nil
+    end
+
+    local best_target = nil
+    local best_path = nil
+    local best_human_dist = math.huge
+    local best_path_cost = math.huge
+
+    for candidate_id, candidate_cell in ipairs(self.world_grid) do
+        if candidate_id ~= from_cell_id and candidate_cell and candidate_cell.tileID ~= hash("empty") then
+            local candidate_path, candidate_cost = find_alien_path(self.world_grid, ALIEN_TYPE_BLIP, from_cell_id, candidate_id, nil)
+            if candidate_path and candidate_cost and candidate_cost > 0 then
+                local nearest_human_dist = math.huge
+                for _, human_id in ipairs(human_ids) do
+                    local d = heuristic(candidate_id, human_id)
+                    if d < nearest_human_dist then
+                        nearest_human_dist = d
+                    end
+                end
+
+                if nearest_human_dist < best_human_dist
+                    or (nearest_human_dist == best_human_dist and candidate_cost < best_path_cost)
+                    or (nearest_human_dist == best_human_dist and candidate_cost == best_path_cost and (best_target == nil or candidate_id < best_target))
+                then
+                    best_target = candidate_id
+                    best_path = candidate_path
+                    best_human_dist = nearest_human_dist
+                    best_path_cost = candidate_cost
+                end
+            end
+        end
+    end
+
+    return best_target, best_path
 end
 
 local function has_unobstructed_los(world_grid, from_id, to_id)
@@ -2640,6 +2682,11 @@ local function process_alien_turn(self)
         if (not alien.is_dead) and (alien.turn_ap_remaining or 0) > 0 then
             local ap_budget = alien.turn_ap_remaining or 0
             local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
+            local used_fallback_staging = false
+            if not target_cell_id and alien.type == ALIEN_TYPE_BLIP then
+                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id)
+                used_fallback_staging = target_cell_id ~= nil
+            end
             if target_cell_id then
                 local step_budget = ap_budget
                 if step_mode then
@@ -2657,8 +2704,9 @@ local function process_alien_turn(self)
                     begin_alien_path_animation(alien, segment_path)
                 end
                 print(string.format(
-                    "Alien #%d (%s) target=%d moved=%s spent=%d rem=%d",
-                    alien.id, alien.type, target_cell_id, tostring(segment_path ~= nil), spent, alien.turn_ap_remaining or 0
+                    "Alien #%d (%s) target=%d moved=%s spent=%d rem=%d%s",
+                    alien.id, alien.type, target_cell_id, tostring(segment_path ~= nil), spent, alien.turn_ap_remaining or 0,
+                    used_fallback_staging and " [fallback-staging]" or ""
                 ))
             else
                 alien.turn_ap_remaining = 0

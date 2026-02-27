@@ -472,28 +472,37 @@ function M.extend(runtime, ctx)
 
         unit.current_ap = unit.current_ap - ctx.LOOT_UI.ap_cost
 
-        local roll_count = math.random(4, 9)
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         unit.backpack_items = unit.backpack_items or {}
         local added = 0
         local dropped = 0
 
-        local loot_results = {
-            ctx.COMPONENT_UI.component_wiring_straight,
-            ctx.COMPONENT_UI.component_plate,
-            ctx.COMPONENT_UI.component_sensor,
-            ctx.COMPONENT_UI.component_fuse,
-            ctx.COMPONENT_UI.component_fuse
-        }
-        for _ = 2, roll_count do
-            -- Temporary test weighting for combat loop:
-            -- make ammo the most common pickup.
-            local loot_roll = math.random(1, 12)
-            local item_type = (loot_roll <= 7 and "ammo")
-                or (loot_roll <= 9 and "material")
-                or (loot_roll == 10 and "power")
-                or "meds"
-            table.insert(loot_results, item_type)
+        local loot_results = {}
+        local used_authored_loot = false
+        if crate_obj and type(crate_obj.lootItems) == "table" and #crate_obj.lootItems > 0 then
+            used_authored_loot = true
+            for _, item_type in ipairs(crate_obj.lootItems) do
+                table.insert(loot_results, item_type)
+            end
+        else
+            local roll_count = math.random(4, 9)
+            loot_results = {
+                ctx.COMPONENT_UI.component_wiring_straight,
+                ctx.COMPONENT_UI.component_plate,
+                ctx.COMPONENT_UI.component_sensor,
+                ctx.COMPONENT_UI.component_fuse,
+                ctx.COMPONENT_UI.component_fuse
+            }
+            for _ = 2, roll_count do
+                -- Temporary test weighting for combat loop:
+                -- make ammo the most common pickup.
+                local loot_roll = math.random(1, 12)
+                local item_type = (loot_roll <= 7 and "ammo")
+                    or (loot_roll <= 9 and "material")
+                    or (loot_roll == 10 and "power")
+                    or "meds"
+                table.insert(loot_results, item_type)
+            end
         end
 
         for _, item_type in ipairs(loot_results) do
@@ -523,13 +532,19 @@ function M.extend(runtime, ctx)
             crate_obj.hitW = 32
             crate_obj.hitH = 32
             crate_obj.requiredComponent = nil
+            crate_obj.lootItems = nil
         end
         cell.hasLoot = false
         runtime.clear_loot_marker(unit.cell_id)
 
         print(string.format(
-            "%s scavenged loot: rolled=%d added=%d dropped=%d (AP -%d)",
-            unit.display_name, roll_count, added, dropped, ctx.LOOT_UI.ap_cost
+            "%s scavenged loot: mode=%s rolled=%d added=%d dropped=%d (AP -%d)",
+            unit.display_name,
+            used_authored_loot and "authored" or "random",
+            #loot_results,
+            added,
+            dropped,
+            ctx.LOOT_UI.ap_cost
         ))
 
         ctx.update_human_visual_state(self)

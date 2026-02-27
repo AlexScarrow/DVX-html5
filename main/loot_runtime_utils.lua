@@ -142,7 +142,8 @@ function M.create(ctx)
         if not cell then
             return false
         end
-        return (cell.hasLoot == true) or (runtime.get_loot_crate_object(cell) ~= nil)
+        -- Loot is now fully authored via tile object defs.
+        return runtime.get_loot_crate_object(cell) ~= nil
     end
 
     runtime.cell_has_fixable_object = function(cell)

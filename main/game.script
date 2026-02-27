@@ -931,7 +931,16 @@ function create_tile_library()
         offsetY = -35,
         hitW = 32,
         hitH = 32,
-        requiredComponent = nil
+        requiredComponent = nil,
+
+        -- Optional authored loot contents (item keys, NOT hash)
+        lootItems = {
+            "ammo",
+            "ammo",
+            "meds",
+            "material",
+            COMPONENT_UI.component_fuse
+        }
     }
 
 
@@ -993,7 +1002,16 @@ function create_tile_library()
         offsetY = -35,
         hitW = 32,
         hitH = 32,
-        requiredComponent = nil
+        requiredComponent = nil,
+
+        -- Optional authored loot contents (item keys, NOT hash)
+        lootItems = {
+            "ammo",
+            "ammo",
+            "meds",
+            "material",
+            COMPONENT_UI.component_fuse
+        }
     }
 
     -- armoury.cells[3].object2 = {
@@ -1382,6 +1400,17 @@ end
 ]]
 
 function bake_level_to_world_grid(world_grid, level_design, tile_library)
+    local function clone_loot_items(items)
+        if type(items) ~= "table" then
+            return nil
+        end
+        local out = {}
+        for i, item in ipairs(items) do
+            out[i] = item
+        end
+        return out
+    end
+
     local function clone_object(obj)
         local dep_list = {}
         if obj and obj.isDependentOn then
@@ -1404,7 +1433,8 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
             fxRotation = (obj and obj.fxRotation) or 0,
             hitW = (obj and obj.hitW) or 32,
             hitH = (obj and obj.hitH) or 32,
-            requiredComponent = obj and obj.requiredComponent or nil
+            requiredComponent = obj and obj.requiredComponent or nil,
+            lootItems = clone_loot_items(obj and obj.lootItems)
         }
     end
 

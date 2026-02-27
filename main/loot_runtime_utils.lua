@@ -13,6 +13,9 @@ function M.create(ctx)
     local function is_loot_crate_name(name_hash)
         return name_hash == hash("loot_crate")
     end
+    local function is_blip_spawn_name(name_hash)
+        return name_hash == hash("blip_spawn") or name_hash == hash("blip")
+    end
 
     runtime.get_backpack_item_color = function(item_type)
         if item_type == "ammo" then
@@ -118,7 +121,7 @@ function M.create(ctx)
         end
         local slots = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(slots) do
-            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and (not is_loot_crate_name(obj.name)) and obj.name ~= hash("power_node") then
+            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and (not is_loot_crate_name(obj.name)) and (not is_blip_spawn_name(obj.name)) and obj.name ~= hash("power_node") then
                 table.insert(out, obj)
             end
         end

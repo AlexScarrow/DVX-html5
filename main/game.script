@@ -839,6 +839,23 @@ function create_tile_library()
         hitH = 124,
         requiredComponent = nil
     }
+    corridor.cells[8].object2 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 802,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
+        requiredComponent = nil
+    }
 
     assign_random_loot_cell(corridor)
     library["corridor"] = corridor
@@ -878,6 +895,23 @@ function create_tile_library()
         fxRotation = 0,
         hitW = 64,
         hitH = 124,
+        requiredComponent = nil
+    }
+    canteen.cells[8].object2 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 1802,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
         requiredComponent = nil
     }
 
@@ -974,6 +1008,23 @@ function create_tile_library()
         hitW = 42,
         hitH = 72,
         requiredComponent = COMPONENT_UI.component_plate
+    }
+    armoury.cells[2].object3 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 203,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
+        requiredComponent = nil
     }
     armoury.cells[3].object1 = {
         name = hash("power_node"),
@@ -1193,6 +1244,23 @@ function create_tile_library()
         hitH = 32,
         requiredComponent = nil
     }
+    armoury.cells[8].object3 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 803,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
+        requiredComponent = nil
+    }
 
     armoury.cells[9].object1 = {
         name = hash("door"),
@@ -1229,6 +1297,23 @@ function create_tile_library()
         hitH = 72,
         requiredComponent = COMPONENT_UI.component_plate
     }
+    armoury.cells[9].object3 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 903,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
+        requiredComponent = nil
+    }
    
     assign_random_loot_cell(armoury)
     library["armoury"] = armoury
@@ -1256,6 +1341,23 @@ function create_tile_library()
         fxRotation = -90,
         hitW = 64,
         hitH = 124,
+        requiredComponent = nil
+    }
+    lvl2_open.cells[8].object2 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 2802,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
         requiredComponent = nil
     }
     -- Deterministic starter loot in center tile for repeatable testing.
@@ -1312,6 +1414,23 @@ function create_tile_library()
         hitH = 124,
         requiredComponent = nil
     }
+    lvl2_choke.cells[8].object2 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 3802,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
+        requiredComponent = nil
+    }
     assign_fixed_loot_cell(lvl2_choke, 8)
     library["lvl2_choke"] = lvl2_choke
 
@@ -1335,6 +1454,23 @@ function create_tile_library()
         fxRotation = 0,
         hitW = 64,
         hitH = 124,
+        requiredComponent = nil
+    }
+    lvl2_support.cells[8].object2 = {
+        name = hash("blip_spawn"),
+        isFixed = true,
+        isWelded = false,
+        isOpen = false,
+        dependsOn = 0,
+        isDependentOn = {},
+        objectId = 4802,
+        offsetX = 0,
+        offsetY = 0,
+        fxOffsetX = 0,
+        fxOffsetY = 0,
+        fxRotation = 0,
+        hitW = 16,
+        hitH = 16,
         requiredComponent = nil
     }
     -- Keep support rooms deterministic for level-flow testing.
@@ -1886,8 +2022,14 @@ end
 local function get_edge_spawn_cell_ids(world_grid)
     local ids = {}
     for cell_id, cell in ipairs(world_grid) do
-        if cell.xCell == 1 or cell.xCell == GRID_COLS or cell.yCell == 1 or cell.yCell == GRID_ROWS then
-            table.insert(ids, cell_id)
+        if cell and cell.tileID ~= hash("empty") and cell.isPowered ~= true then
+            local objs = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objs) do
+                if obj and obj.name and (obj.name == hash("blip_spawn") or obj.name == hash("blip")) then
+                    table.insert(ids, cell_id)
+                    break
+                end
+            end
         end
     end
     return ids

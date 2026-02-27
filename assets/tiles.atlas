@@ -121,3 +121,9 @@ images {
 images {
   image: "/assets/images/gun_turret.png"
 }
+images {
+  image: "/assets/images/tile_medbay_off.png"
+}
+images {
+  image: "/assets/images/tile_medbay_on.png"
+}

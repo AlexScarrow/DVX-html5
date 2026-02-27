@@ -216,12 +216,19 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_wiregap_markers = function(self)
         self.wiregap_objects = self.wiregap_objects or {}
+        self.wiregap_fx_objects = self.wiregap_fx_objects or {}
         for _, marker in ipairs(self.wiregap_objects) do
             if marker then
                 go.delete(marker)
             end
         end
+        for _, fx_id in ipairs(self.wiregap_fx_objects) do
+            if fx_id then
+                go.delete(fx_id)
+            end
+        end
         self.wiregap_objects = {}
+        self.wiregap_fx_objects = {}
 
         if not self.world_grid then
             return
@@ -264,6 +271,16 @@ function M.extend(runtime, ctx)
                             msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                             go.set_scale(vmath.vector3(1, 1, 1), marker_id)
                             table.insert(self.wiregap_objects, marker_id)
+                        end
+                        if obj.isFixed ~= true and obj.fxFactory then
+                            local fx_x = wx + (obj.fxOffsetX or 0)
+                            local fx_y = wy + (obj.fxOffsetY or 0)
+                            local fx_id = factory.create(obj.fxFactory, vmath.vector3(fx_x, fx_y, 0.57))
+                            if fx_id then
+                                go.set_rotation(vmath.quat_rotation_z(math.rad(obj.fxRotation or 0)), fx_id)
+                                particlefx.play(msg.url(nil, fx_id, "particlefx"))
+                                table.insert(self.wiregap_fx_objects, fx_id)
+                            end
                         end
                     end
                 end

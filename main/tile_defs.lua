@@ -26,9 +26,9 @@ local function create_tile_prototype(tile_id)
             hasLoot = false,
             lootOffsetX = -32,
             lootOffsetY = -32,
-            object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-            object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-            object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+            object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil },
+            object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil },
+            object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil }
         }
     end
 
@@ -110,6 +110,8 @@ function M.create_tile_library(COMPONENT_UI)
 
     -- armoury
     local armoury = create_tile_prototype("armoury")
+    armoury.powerLightOffAnim = "tile_armoury_off"
+    armoury.powerLightOnAnim = "tile_armoury_on"
     for i = 1, 9 do
         armoury.cells[i].moveValue = 1
         armoury.cells[i].coverValue = 1
@@ -199,6 +201,8 @@ function M.create_tile_library(COMPONENT_UI)
     -- EXPERIMENTAL LEVEL-2 TILE DEFS (easy to purge)
     local lvl2_open = create_tile_prototype("lvl2_open")
     lvl2_open.visualTile = "armoury"
+    lvl2_open.powerLightOffAnim = "tile_armoury_off"
+    lvl2_open.powerLightOnAnim = "tile_armoury_on"
     for i = 1, 9 do
         lvl2_open.cells[i].lightValue = 3
         lvl2_open.cells[i].moveValue = 1
@@ -263,6 +267,78 @@ function M.create_tile_library(COMPONENT_UI)
     }
     assign_fixed_loot_cell(lvl2_support, 2)
     library["lvl2_support"] = lvl2_support
+
+    -- =====================================================================
+    -- TEMPLATE: medbay tile (copy/edit, then uncomment to enable)
+    -- =====================================================================
+     local medbay = create_tile_prototype("medbay")
+     medbay.visualTile = "medbay"
+     medbay.powerLightOffAnim = "tile_medbay_off"
+     medbay.powerLightOnAnim = "tile_medbay_on"
+    
+     for i = 1, 9 do
+         medbay.cells[i].lightValue = 4
+         medbay.cells[i].moveValue = 1
+         medbay.cells[i].coverValue = 2
+     end
+    
+     -- Example access pattern edits:
+    medbay.cells[2].accessDown = false
+    medbay.cells[3].accessDown = false
+    medbay.cells[3].accessRight = false
+    medbay.cells[4].accessRight = false
+    medbay.cells[5].accessDown = false
+    medbay.cells[8].accessDown = false
+    medbay.cells[9].accessDown = false
+    medbay.cells[9].accessRight = false
+     -- medbay.cells[9].accessRight = false
+    
+    -- Example authored objects:
+    medbay.cells[1].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    medbay.cells[2].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    medbay.cells[4].object1 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "ammo", "ammo", "material", "plate" ,"meds", "material", COMPONENT_UI.component_fuse, COMPONENT_UI.component_wiring_straight}
+    }
+     medbay.cells[5].object1 = {
+         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+         offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    medbay.cells[5].object2 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 502,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    medbay.cells[5].object3 = {
+        name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 503,
+        offsetX = -10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+    medbay.cells[6].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 601,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+
+    medbay.cells[9].object1 = {
+        name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 701,
+        offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+    }
+     -- medbay.cells[8].object2 = {
+     --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 5802,
+     --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+     -- }
+    
+     -- Choose deterministic or random loot behavior:
+     -- assign_fixed_loot_cell(medbay, 5)
+     -- assign_random_loot_cell(medbay)
+    
+     -- Enable when ready:
+     library["medbay"] = medbay
 
     return library
 end

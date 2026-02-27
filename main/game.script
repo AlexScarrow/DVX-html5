@@ -177,9 +177,9 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         hasLoot = false,
         lootOffsetX = -32,
         lootOffsetY = -32,
-        object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-        object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-        object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil },
+        object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil },
+        object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil }
     }
 end
 
@@ -218,9 +218,9 @@ function create_tile_prototype(tile_id)
             hasLoot = false,
             lootOffsetX = -32,
             lootOffsetY = -32,
-            object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-            object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil },
-            object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+            object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil },
+            object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil },
+            object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil }
         }
     end
 
@@ -816,6 +816,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
             fxOffsetX = (obj and obj.fxOffsetX) or 0,
             fxOffsetY = (obj and obj.fxOffsetY) or 0,
             fxRotation = (obj and obj.fxRotation) or 0,
+            fxFactory = (obj and obj.fxFactory) or nil,
             hitW = (obj and obj.hitW) or 32,
             hitH = (obj and obj.hitH) or 32,
             requiredComponent = obj and obj.requiredComponent or nil,
@@ -831,9 +832,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
         world_grid[i].hasLoot = false
         world_grid[i].lootOffsetX = 0
         world_grid[i].lootOffsetY = 0
-        world_grid[i].object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
-        world_grid[i].object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
-        world_grid[i].object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object1 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object2 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil }
+        world_grid[i].object3 = { name = hash("empty"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 0, offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = nil, hitW = 32, hitH = 32, requiredComponent = nil }
     end
 
     -- Place each tile from the level design
@@ -3503,6 +3504,7 @@ function reset_and_load_level(self, level_index)
     safe_delete_map(self.turret_tripod_objects)
     safe_delete_map(self.turret_gun_objects)
     safe_delete_array(self.wiregap_objects)
+    safe_delete_array(self.wiregap_fx_objects)
     safe_delete_array(self.light_value_objects)
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
@@ -4834,6 +4836,7 @@ end
         self.tile_light_layers = {}
         self.tile_light_power_state = {}
         self.tile_light_flicker_state = {}
+        self.tile_light_anim_ids = {}
         self.tile_alpha_layers = {}
         self.tile_alpha_power_state = {}
         loot_objects = {}
@@ -4862,13 +4865,19 @@ end
                 print("Tile factory create failed for: " .. placement.tile)
             end
 
-            if visual_tile_name == "armoury" then
+            local power_light_off_anim = tile_def and tile_def.powerLightOffAnim or nil
+            local power_light_on_anim = tile_def and tile_def.powerLightOnAnim or nil
+            if power_light_off_anim and power_light_on_anim then
                 local light_id = factory.create("/tile_factory#tile_factory", vmath.vector3(center_x, center_y, 0.3), nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
                 if light_id then
-                    msg.post(msg.url(nil, light_id, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
+                    msg.post(msg.url(nil, light_id, "sprite"), "play_animation", { id = hash(power_light_off_anim) })
                     self.tile_light_layers[placement_index] = light_id
                     self.tile_light_power_state[placement_index] = false
                     self.tile_light_flicker_state[placement_index] = nil
+                    self.tile_light_anim_ids[placement_index] = {
+                        on = hash(power_light_on_anim),
+                        off = hash(power_light_off_anim)
+                    }
                 end
             end
 
@@ -5079,53 +5088,58 @@ end
 function update(self, dt)
     if self.world_grid and self.tile_light_layers then
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
-            local tile_powered = false
-            for _, cell in ipairs(self.world_grid) do
-                if cell.tileInstanceId == tile_instance_id and cell.isPowered then
-                    tile_powered = true
-                    break
-                end
-            end
-
-            local was_powered = self.tile_light_power_state[tile_instance_id]
-            if was_powered == nil or was_powered ~= tile_powered then
-                if tile_powered then
-                    -- Fluorescent-style startup flicker: OFF/ON pulses before stabilizing ON.
-                    self.tile_light_flicker_state[tile_instance_id] = {
-                        active = true,
-                        timer = 0.06,
-                        step = 1
-                    }
-                    msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
-                else
-                    self.tile_light_flicker_state[tile_instance_id] = nil
-                    msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
-                end
-                self.tile_light_power_state[tile_instance_id] = tile_powered
-            end
-
-            local flicker = self.tile_light_flicker_state[tile_instance_id]
-            if flicker and flicker.active then
-                flicker.timer = flicker.timer - dt
-                if flicker.timer <= 0 then
-                    if flicker.step == 1 then
-                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_on") })
-                        flicker.timer = 0.05
-                    elseif flicker.step == 2 then
-                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
-                        flicker.timer = 0.06
-                    elseif flicker.step == 3 then
-                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_on") })
-                        flicker.timer = 0.05
-                    elseif flicker.step == 4 then
-                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_off") })
-                        flicker.timer = 0.04
-                    else
-                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = hash("tile_armoury_on") })
-                        flicker.active = false
-                        flicker.timer = 0
+            local light_anim_cfg = self.tile_light_anim_ids and self.tile_light_anim_ids[tile_instance_id] or nil
+            if light_anim_cfg and light_anim_cfg.on and light_anim_cfg.off then
+                local light_anim_on = light_anim_cfg.on
+                local light_anim_off = light_anim_cfg.off
+                local tile_powered = false
+                for _, cell in ipairs(self.world_grid) do
+                    if cell.tileInstanceId == tile_instance_id and cell.isPowered then
+                        tile_powered = true
+                        break
                     end
-                    flicker.step = flicker.step + 1
+                end
+
+                local was_powered = self.tile_light_power_state[tile_instance_id]
+                if was_powered == nil or was_powered ~= tile_powered then
+                    if tile_powered then
+                        -- Fluorescent-style startup flicker: OFF/ON pulses before stabilizing ON.
+                        self.tile_light_flicker_state[tile_instance_id] = {
+                            active = true,
+                            timer = 0.06,
+                            step = 1
+                        }
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
+                    else
+                        self.tile_light_flicker_state[tile_instance_id] = nil
+                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
+                    end
+                    self.tile_light_power_state[tile_instance_id] = tile_powered
+                end
+
+                local flicker = self.tile_light_flicker_state[tile_instance_id]
+                if flicker and flicker.active then
+                    flicker.timer = flicker.timer - dt
+                    if flicker.timer <= 0 then
+                        if flicker.step == 1 then
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
+                            flicker.timer = 0.05
+                        elseif flicker.step == 2 then
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
+                            flicker.timer = 0.06
+                        elseif flicker.step == 3 then
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
+                            flicker.timer = 0.05
+                        elseif flicker.step == 4 then
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
+                            flicker.timer = 0.04
+                        else
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
+                            flicker.active = false
+                            flicker.timer = 0
+                        end
+                        flicker.step = flicker.step + 1
+                    end
                 end
             end
         end

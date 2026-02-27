@@ -646,6 +646,7 @@ function M.extend(runtime, ctx)
             crate_obj.fxOffsetX = 0
             crate_obj.fxOffsetY = 0
             crate_obj.fxRotation = 0
+            crate_obj.fxFactory = nil
             crate_obj.hitW = 32
             crate_obj.hitH = 32
             crate_obj.requiredComponent = nil
@@ -1144,6 +1145,7 @@ function M.extend(runtime, ctx)
         turret_obj.fxOffsetX = 0
         turret_obj.fxOffsetY = 0
         turret_obj.fxRotation = 0
+        turret_obj.fxFactory = nil
         turret_obj.hitW = 32
         turret_obj.hitH = 32
         turret_obj.requiredComponent = nil
@@ -1477,6 +1479,7 @@ function M.extend(runtime, ctx)
                                             slot.fxOffsetX = 0
                                             slot.fxOffsetY = 0
                                             slot.fxRotation = 0
+                                            slot.fxFactory = nil
                                             slot.hitW = 48
                                             slot.hitH = 48
                                             slot.requiredComponent = nil

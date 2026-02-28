@@ -130,3 +130,6 @@ images {
 images {
   image: "/assets/images/sweep_shadow.png"
 }
+images {
+  image: "/assets/images/human_dropShadow.png"
+}

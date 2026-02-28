@@ -142,6 +142,7 @@ AESTHETIC_PROFILES = {
         table_sweep_shadow_pan_speed_y = 0,
         ui_panel_shadow_enabled = false,
         ui_panel_shadow_alpha = 0.0,
+        counter_token_move_enabled = false,
         computer_emissive_enabled = true,
         computer_emissive_tint = vmath.vector4(0.7, 0.92, 1.18, 1),
         computer_emissive_pulse_speed = 0.38,
@@ -166,6 +167,15 @@ AESTHETIC_PROFILES = {
         table_sweep_shadow_pan_speed_y = 0,
         ui_panel_shadow_enabled = true,
         ui_panel_shadow_alpha = 0.35,
+        counter_token_move_enabled = true,
+        counter_lift_scale = 0.42,
+        counter_wobble_scale = 0.015,
+        counter_human_move_z = 0.74,
+        counter_alien_move_z = 0.76,
+        counter_shadow_base_offset_x = 0,
+        counter_shadow_base_offset_y = 0,
+        counter_shadow_lift_extra_x = 130,
+        counter_shadow_lift_extra_y = -130,
         computer_emissive_enabled = false
     }
 }
@@ -1681,6 +1691,7 @@ local function remove_dead_aliens(self)
     for i = #self.aliens, 1, -1 do
         if self.aliens[i].is_dead then
             local alien = self.aliens[i]
+            clear_counter_shadow_proxy(alien)
             if alien.go_id then
                 go.delete(alien.go_id)
                 alien.go_id = nil
@@ -2431,6 +2442,11 @@ local function update_alien_movement(self, dt)
                     local sdy = alien.melee_shuffle_target_y - pos.y
                     local sdist = math.sqrt(sdx * sdx + sdy * sdy)
                     local sstep = ALIEN_MOVE_SPEED * dt
+                    local profile = get_aesthetic_profile(self)
+                    local move_z = 0.6
+                    if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
+                        move_z = profile.counter_alien_move_z or 0.72
+                    end
                     if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                         alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
                         local ping = math.sin(alien.spitter_anim_phase)
@@ -2440,9 +2456,24 @@ local function update_alien_movement(self, dt)
                         end
                         local sx = base_scale
                         local sy = base_scale
-                        if math.abs(sdx) >= math.abs(sdy) then
+                        if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
+                            if not alien.counter_move_total_dist or alien.counter_move_total_dist <= 0 then
+                                alien.counter_move_total_dist = math.max(sdist, 1)
+                            end
+                            local progress = 1 - math.max(0, math.min(1, sdist / alien.counter_move_total_dist))
+                            local lift = math.sin(progress * math.pi)
+                            local move_arc = 4 * progress * (1 - progress)
+                            local wobble = math.sin((alien.spitter_anim_phase or 0) * 2.0 + ((sdx < 0) and 1.4 or 0))
+                            local lift_scale = profile.counter_lift_scale or 0.16
+                            local wobble_scale = profile.counter_wobble_scale or 0.04
+                            sx = base_scale * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+                            sy = base_scale * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+                            alien.counter_shadow_offset = get_counter_shadow_offset(profile, move_arc)
+                        elseif math.abs(sdx) >= math.abs(sdy) then
+                            alien.counter_shadow_offset = nil
                             sx = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                         else
+                            alien.counter_shadow_offset = nil
                             sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                         end
                         go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
@@ -2451,6 +2482,8 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(alien.melee_shuffle_target_x, alien.melee_shuffle_target_y, 0.6), alien.go_id)
                         alien.melee_shuffle_target_x = nil
                         alien.melee_shuffle_target_y = nil
+                        alien.counter_shadow_offset = nil
+                        alien.counter_move_total_dist = nil
                         alien.is_moving = false
                         alien.move_path = nil
                         alien.move_path_index = 0
@@ -2460,9 +2493,11 @@ local function update_alien_movement(self, dt)
                     else
                         local nsx = pos.x + (sdx / sdist) * sstep
                         local nsy = pos.y + (sdy / sdist) * sstep
-                        go.set_position(vmath.vector3(nsx, nsy, 0.6), alien.go_id)
+                        go.set_position(vmath.vector3(nsx, nsy, move_z), alien.go_id)
                     end
                 else
+                    alien.counter_shadow_offset = nil
+                    alien.counter_move_total_dist = nil
                     alien.is_moving = false
                     alien.move_path = nil
                     alien.move_path_index = 0
@@ -2529,6 +2564,14 @@ local function update_alien_movement(self, dt)
                 local dy = ty - pos.y
                 local dist = math.sqrt(dx * dx + dy * dy)
                 local step = ALIEN_MOVE_SPEED * dt
+                local profile = get_aesthetic_profile(self)
+                local move_z = 0.6
+                if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
+                    move_z = profile.counter_alien_move_z or 0.72
+                end
+                if is_vent_jump then
+                    alien.counter_shadow_offset = nil
+                end
                 if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
                     alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
                     local ping = math.sin(alien.spitter_anim_phase)
@@ -2538,9 +2581,24 @@ local function update_alien_movement(self, dt)
                     end
                     local sx = base_scale
                     local sy = base_scale
-                    if math.abs(dx) >= math.abs(dy) then
+                    if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
+                        if not alien.counter_move_total_dist or alien.counter_move_total_dist <= 0 then
+                            alien.counter_move_total_dist = math.max(dist, 1)
+                        end
+                        local progress = 1 - math.max(0, math.min(1, dist / alien.counter_move_total_dist))
+                        local lift = math.sin(progress * math.pi)
+                        local move_arc = 4 * progress * (1 - progress)
+                        local wobble = math.sin((alien.spitter_anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
+                        local lift_scale = profile.counter_lift_scale or 0.16
+                        local wobble_scale = profile.counter_wobble_scale or 0.04
+                        sx = base_scale * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+                        sy = base_scale * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+                        alien.counter_shadow_offset = get_counter_shadow_offset(profile, move_arc)
+                    elseif math.abs(dx) >= math.abs(dy) then
+                        alien.counter_shadow_offset = nil
                         sx = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                     else
+                        alien.counter_shadow_offset = nil
                         sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                     end
                     go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
@@ -2575,6 +2633,7 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
                     end
                     alien.cell_id = target_cell_id
+                    alien.counter_move_total_dist = nil
                     local door_owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
                     if door_obj and door_closed and alien.type == ALIEN_TYPE_BRUTE then
                         door_obj.isFixed = false
@@ -2660,6 +2719,8 @@ local function update_alien_movement(self, dt)
                                     alien.melee_shuffle_target_x = final_x
                                     alien.melee_shuffle_target_y = ty_adj
                                 else
+                                    alien.counter_shadow_offset = nil
+                                    alien.counter_move_total_dist = nil
                                     alien.is_moving = false
                                     alien.move_path = nil
                                     alien.move_path_index = 0
@@ -2668,6 +2729,8 @@ local function update_alien_movement(self, dt)
                                     end
                                 end
                             else
+                                alien.counter_shadow_offset = nil
+                                alien.counter_move_total_dist = nil
                                 alien.is_moving = false
                                 alien.move_path = nil
                                 alien.move_path_index = 0
@@ -2680,7 +2743,7 @@ local function update_alien_movement(self, dt)
                 else
                     local nx = pos.x + (dx / dist) * step
                     local ny = pos.y + (dy / dist) * step
-                    go.set_position(vmath.vector3(nx, ny, 0.6), alien.go_id)
+                    go.set_position(vmath.vector3(nx, ny, move_z), alien.go_id)
                 end
             end
         end
@@ -3341,12 +3404,87 @@ local function set_unit_scale(unit, scale_x, scale_y)
     end
 end
 
+get_counter_shadow_offset = function(profile, move_arc)
+    local base_x = (profile and profile.counter_shadow_base_offset_x) or 0
+    local base_y = (profile and profile.counter_shadow_base_offset_y) or 0
+    local extra_x = (profile and profile.counter_shadow_lift_extra_x) or 108
+    local extra_y = (profile and profile.counter_shadow_lift_extra_y) or -104
+    local arc = move_arc or 0
+    return vmath.vector3(
+        30 + base_x + (extra_x * arc),
+        -30 + base_y + (extra_y * arc),
+        -0.01
+    )
+end
+
+get_counter_shadow_anim_for_alien = function(alien_type)
+    if alien_type == ALIEN_TYPE_CANNON then
+        return hash("alien_cannonFodder_shadow")
+    elseif alien_type == ALIEN_TYPE_SPITTER then
+        return hash("alien_spitter_shadow")
+    elseif alien_type == ALIEN_TYPE_SPEEDY then
+        return hash("alien_speedy_shadow")
+    end
+    return nil
+end
+
+ensure_counter_shadow_proxy = function(entity, anim_hash)
+    if not anim_hash then
+        return nil
+    end
+    if entity.shadow_proxy_id then
+        return entity.shadow_proxy_id
+    end
+    local proxy_id = factory.create("/tile_factory#tile_factory", vmath.vector3(0, 0, 0.49))
+    if proxy_id then
+        msg.post(msg.url(nil, proxy_id, "sprite"), "play_animation", { id = anim_hash })
+        go.set_scale(vmath.vector3(0.65, 0.65, 1), proxy_id)
+        go.set(msg.url(nil, proxy_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.5))
+        entity.shadow_proxy_id = proxy_id
+    end
+    return proxy_id
+end
+
+clear_counter_shadow_proxy = function(entity)
+    if entity and entity.shadow_proxy_id then
+        go.delete(entity.shadow_proxy_id)
+        entity.shadow_proxy_id = nil
+    end
+    if entity then
+        entity.shadow_proxy_pending_clear = false
+        entity.shadow_proxy_clear_token = nil
+    end
+end
+
+schedule_counter_shadow_proxy_clear = function(entity, delay_s)
+    if not entity or not entity.shadow_proxy_id then
+        return
+    end
+    if entity.shadow_proxy_pending_clear then
+        return
+    end
+    entity.shadow_proxy_pending_clear = true
+    entity.shadow_proxy_clear_token = (entity.shadow_proxy_clear_token or 0) + 1
+    local token = entity.shadow_proxy_clear_token
+    timer.delay(delay_s or 0.08, false, function()
+        if entity
+            and entity.shadow_proxy_pending_clear
+            and entity.shadow_proxy_id
+            and entity.shadow_proxy_clear_token == token then
+            clear_counter_shadow_proxy(entity)
+        end
+    end)
+end
+
 local function update_human_visual_state(self)
     if not self.squad_units then
         return
     end
 
     local shadow_alpha = get_world_shadow_alpha(self)
+    local profile = get_aesthetic_profile(self)
+    local counter_move_enabled = profile and profile.counter_token_move_enabled == true
+    local shadow_origin = vmath.vector3(30, -30, -0.01)
     for _, unit in pairs(self.squad_units) do
         if unit.sprite_path then
             local function safe_set_tint(color)
@@ -3381,6 +3519,26 @@ local function update_human_visual_state(self)
             local ok = pcall(go.set, unit.shadow_path, "tint", vmath.vector4(1, 1, 1, shadow_alpha))
             if not ok then
                 unit.shadow_path = nil
+            else
+                local shadow_pos = shadow_origin
+                if counter_move_enabled then
+                    shadow_pos = unit.shadow_motion_offset or get_counter_shadow_offset(profile, 0)
+                end
+                local use_proxy_shadow = counter_move_enabled and (unit.is_moving or unit.shadow_proxy_pending_clear) and unit.go_path ~= nil
+                if use_proxy_shadow then
+                    local proxy_id = ensure_counter_shadow_proxy(unit, hash("human_dropShadow"))
+                    if proxy_id and unit.go_path then
+                        local pos = go.get_position(unit.go_path)
+                        go.set_position(vmath.vector3(pos.x + shadow_pos.x, pos.y + shadow_pos.y, pos.z - 0.01), proxy_id)
+                    end
+                    pcall(go.set, unit.shadow_path, "tint", vmath.vector4(1, 1, 1, 0))
+                    if counter_move_enabled and (not unit.is_moving) and unit.shadow_proxy_id then
+                        schedule_counter_shadow_proxy_clear(unit, 0.08)
+                    end
+                else
+                    clear_counter_shadow_proxy(unit)
+                    pcall(go.set, unit.shadow_path, "position", shadow_pos)
+                end
             end
         end
     end
@@ -4456,6 +4614,7 @@ local function next_turn_reset_human_ap(self)
             unit.move_path = nil
             unit.move_path_index = 0
         end
+        clear_counter_shadow_proxy(unit)
         unit.is_selected = false
     end
 
@@ -4556,6 +4715,7 @@ function spawn_human_unit(self)
             unit.move_path = nil
             unit.move_path_index = 0
             unit.anim_phase = 0
+            unit.shadow_motion_offset = nil
             unit.current_ap = unit.max_ap
             if unit.class_id == UNIT_CLASS_TECHIE then
                 unit.backpack_items = { "power" }
@@ -4599,6 +4759,7 @@ local function begin_human_path_move(self, path)
     unit.move_path = path
     unit.move_path_index = 2 -- first element is current cell
     unit.anim_phase = 0
+    unit.shadow_motion_offset = nil
     unit.micro_target_x = nil
     unit.micro_target_y = nil
     unit.micro_move_kind = nil
@@ -4606,6 +4767,7 @@ local function begin_human_path_move(self, path)
     unit.entry_slot_for_index = nil
     unit.entry_slot_index = nil
     unit.last_completed_step_vertical = false
+    unit.counter_move_total_dist = nil
 end
 
 local function update_single_unit_movement(self, unit, dt)
@@ -4623,6 +4785,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.last_completed_step_vertical = false
+        unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         return
     end
@@ -4637,14 +4800,36 @@ local function update_single_unit_movement(self, unit, dt)
         local ping = math.sin(unit.anim_phase)
         local scale_x = HUMAN_VISUAL_SCALE
         local scale_y = HUMAN_VISUAL_SCALE
-        if math.abs(dx) >= math.abs(dy) then
-            scale_x = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+        local profile = get_aesthetic_profile(self)
+        local move_z = 0.5
+        if profile and profile.counter_token_move_enabled == true then
+            move_z = profile.counter_human_move_z or 0.64
+        end
+        if profile and profile.counter_token_move_enabled == true then
+            if not unit.counter_move_total_dist or unit.counter_move_total_dist <= 0 then
+                unit.counter_move_total_dist = math.max(distance, 1)
+            end
+            local progress = 1 - math.max(0, math.min(1, distance / unit.counter_move_total_dist))
+            local lift = math.sin(progress * math.pi)
+            local move_arc = 4 * progress * (1 - progress)
+            local wobble = math.sin((unit.anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
+            local lift_scale = profile.counter_lift_scale or 0.16
+            local wobble_scale = profile.counter_wobble_scale or 0.04
+            scale_x = HUMAN_VISUAL_SCALE * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+            scale_y = HUMAN_VISUAL_SCALE * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+            unit.shadow_motion_offset = get_counter_shadow_offset(profile, move_arc)
         else
-            scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+            unit.shadow_motion_offset = nil
+            if math.abs(dx) >= math.abs(dy) then
+                scale_x = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+            else
+                scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+            end
         end
         set_unit_scale(unit, scale_x, scale_y)
         if distance <= step then
-            go.set_position(vmath.vector3(unit.micro_target_x, unit.micro_target_y, 0.5), unit.go_path)
+            local snap_z = (unit.micro_move_kind == "settle_end") and 0.5 or move_z
+            go.set_position(vmath.vector3(unit.micro_target_x, unit.micro_target_y, snap_z), unit.go_path)
             if unit.micro_move_kind == "settle_end" then
                 unit.is_moving = false
                 unit.move_path = nil
@@ -4652,6 +4837,8 @@ local function update_single_unit_movement(self, unit, dt)
                 unit.micro_target_x = nil
                 unit.micro_target_y = nil
                 unit.micro_move_kind = nil
+                unit.shadow_motion_offset = nil
+                unit.counter_move_total_dist = nil
                 set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
                 print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
                 update_human_visual_state(self)
@@ -4660,11 +4847,12 @@ local function update_single_unit_movement(self, unit, dt)
             unit.micro_target_x = nil
             unit.micro_target_y = nil
             unit.micro_move_kind = nil
+            unit.counter_move_total_dist = nil
             return
         end
         local nx = current_pos.x + (dx / distance) * step
         local ny = current_pos.y + (dy / distance) * step
-        go.set_position(vmath.vector3(nx, ny, 0.5), unit.go_path)
+        go.set_position(vmath.vector3(nx, ny, move_z), unit.go_path)
         return
     end
 
@@ -4677,6 +4865,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.last_completed_step_vertical = false
+        unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         return
     end
@@ -4684,7 +4873,9 @@ local function update_single_unit_movement(self, unit, dt)
     local from_x, from_y = id_to_coords(unit.cell_id)
     local to_x, to_y = id_to_coords(target_cell_id)
     local is_vertical_step = (from_x == to_x) and (from_y ~= to_y)
-    if is_vertical_step and unit.vertical_prep_done_for_index ~= unit.move_path_index then
+    local move_profile = get_aesthetic_profile(self)
+    local counter_move_enabled = move_profile and move_profile.counter_token_move_enabled == true
+    if (not counter_move_enabled) and is_vertical_step and unit.vertical_prep_done_for_index ~= unit.move_path_index then
         if self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
             local assignment = self.cell_slot_assignments[unit.cell_id]
             local right_slot = 1
@@ -4707,7 +4898,7 @@ local function update_single_unit_movement(self, unit, dt)
 
     if unit.entry_slot_for_index ~= unit.move_path_index then
         local selected_slot = math.random(1, #CELL_SLOT_OFFSETS_X)
-        if is_vertical_step then
+        if is_vertical_step and (not counter_move_enabled) then
             local right_slot = 1
             for i = 1, #CELL_SLOT_OFFSETS_X do
                 local slot_offset = CELL_SLOT_OFFSETS_X[i] or 0
@@ -4732,7 +4923,7 @@ local function update_single_unit_movement(self, unit, dt)
                     table.insert(free_slots, i)
                 end
             end
-            if (not is_vertical_step) and #free_slots > 0 then
+            if #free_slots > 0 and (counter_move_enabled or (not is_vertical_step)) then
                 selected_slot = free_slots[math.random(1, #free_slots)]
             end
         end
@@ -4755,6 +4946,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.last_completed_step_vertical = false
+        unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
         print(unit.display_name .. " stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. unit.current_ap .. ")")
         update_human_visual_state(self)
@@ -4772,10 +4964,31 @@ local function update_single_unit_movement(self, unit, dt)
     local ping = math.sin(unit.anim_phase)
     local scale_x = HUMAN_VISUAL_SCALE
     local scale_y = HUMAN_VISUAL_SCALE
-    if math.abs(dx) >= math.abs(dy) then
-        scale_x = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+    local profile = get_aesthetic_profile(self)
+    local move_z = 0.5
+    if profile and profile.counter_token_move_enabled == true then
+        move_z = profile.counter_human_move_z or 0.64
+    end
+    if profile and profile.counter_token_move_enabled == true then
+        if not unit.counter_move_total_dist or unit.counter_move_total_dist <= 0 then
+            unit.counter_move_total_dist = math.max(distance, 1)
+        end
+        local progress = 1 - math.max(0, math.min(1, distance / unit.counter_move_total_dist))
+        local lift = math.sin(progress * math.pi)
+        local move_arc = 4 * progress * (1 - progress)
+        local wobble = math.sin((unit.anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
+        local lift_scale = profile.counter_lift_scale or 0.16
+        local wobble_scale = profile.counter_wobble_scale or 0.04
+        scale_x = HUMAN_VISUAL_SCALE * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+        scale_y = HUMAN_VISUAL_SCALE * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+        unit.shadow_motion_offset = get_counter_shadow_offset(profile, move_arc)
     else
-        scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+        unit.shadow_motion_offset = nil
+        if math.abs(dx) >= math.abs(dy) then
+            scale_x = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+        else
+            scale_y = HUMAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+        end
     end
     set_unit_scale(unit, scale_x, scale_y)
 
@@ -4787,12 +5000,13 @@ local function update_single_unit_movement(self, unit, dt)
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.vertical_prep_done_for_index = nil
-        unit.last_completed_step_vertical = is_vertical_step
+        unit.last_completed_step_vertical = (not counter_move_enabled) and is_vertical_step
+        unit.counter_move_total_dist = nil
         update_human_ap_debug_label(self)
         unit.move_path_index = unit.move_path_index + 1
 
         if unit.move_path_index > #unit.move_path then
-            if unit.last_completed_step_vertical and self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
+            if (not counter_move_enabled) and unit.last_completed_step_vertical and self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
                 local assignment = self.cell_slot_assignments[unit.cell_id]
                 local current_slot = assignment[unit.id] or 1
                 local spare_slots = {}
@@ -4821,6 +5035,8 @@ local function update_single_unit_movement(self, unit, dt)
             unit.move_path = nil
             unit.move_path_index = 0
             unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            unit.counter_move_total_dist = nil
             set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
             print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
             update_human_visual_state(self)
@@ -4828,7 +5044,7 @@ local function update_single_unit_movement(self, unit, dt)
     else
         local nx = current_pos.x + (dx / distance) * step
         local ny = current_pos.y + (dy / distance) * step
-        go.set_position(vmath.vector3(nx, ny, 0.5), unit.go_path)
+        go.set_position(vmath.vector3(nx, ny, move_z), unit.go_path)
     end
 end
 
@@ -5542,12 +5758,37 @@ function update(self, dt)
     update_alien_movement(self, dt)
     if self.aliens then
         local world_shadow_alpha = get_world_shadow_alpha(self)
+        local profile = get_aesthetic_profile(self)
+        local counter_move_enabled = profile and profile.counter_token_move_enabled == true
+        local shadow_origin = vmath.vector3(30, -30, -0.01)
         for _, alien in ipairs(self.aliens) do
             if alien
                 and (not alien.is_dead)
                 and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
                 and alien.go_id then
-                pcall(go.set, msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, world_shadow_alpha))
+                local shadow_pos = shadow_origin
+                if counter_move_enabled then
+                    shadow_pos = alien.counter_shadow_offset or get_counter_shadow_offset(profile, 0)
+                end
+                local use_proxy_shadow = counter_move_enabled and (alien.is_moving or alien.shadow_proxy_pending_clear)
+                if use_proxy_shadow then
+                    local proxy_id = ensure_counter_shadow_proxy(alien, get_counter_shadow_anim_for_alien(alien.type))
+                    if proxy_id then
+                        local apos = go.get_position(alien.go_id)
+                        go.set_position(vmath.vector3(apos.x + shadow_pos.x, apos.y + shadow_pos.y, apos.z - 0.01), proxy_id)
+                    end
+                    pcall(go.set, msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, 0))
+                    if counter_move_enabled and (not alien.is_moving) and alien.shadow_proxy_id then
+                        schedule_counter_shadow_proxy_clear(alien, 0.08)
+                    end
+                else
+                    clear_counter_shadow_proxy(alien)
+                    pcall(go.set, msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, world_shadow_alpha))
+                    pcall(go.set, msg.url(nil, alien.go_id, "shadow"), "position", shadow_pos)
+                end
+                if not alien.is_moving then
+                    alien.counter_shadow_offset = nil
+                end
             end
             if alien
                 and (not alien.is_dead)

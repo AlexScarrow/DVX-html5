@@ -16,6 +16,21 @@ images {
 images {
   image: "/assets/images/human_techie.png"
 }
+images {
+  image: "/assets/images/human_sarge_boardgame.png"
+}
+images {
+  image: "/assets/images/human_techie_boardgame.png"
+}
+images {
+  image: "/assets/images/human_medic_boardgame.png"
+}
+images {
+  image: "/assets/images/human_gunner_boardgame.png"
+}
+images {
+  image: "/assets/images/human_proxyShadow_boardgame.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

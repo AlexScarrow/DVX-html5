@@ -3428,18 +3428,29 @@ get_counter_shadow_anim_for_alien = function(alien_type)
     return nil
 end
 
-ensure_counter_shadow_proxy = function(entity, anim_hash)
+get_counter_shadow_anim_for_human = function(self, unit)
+    if not unit then
+        return hash("human_dropShadow"), vmath.vector4(1, 1, 1, 0.5)
+    end
+    if self and self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+        return hash("human_proxyShadow_boardgame"), vmath.vector4(1, 1, 1, 0.5)
+    end
+    return hash("human_dropShadow"), vmath.vector4(1, 1, 1, 0.5)
+end
+
+ensure_counter_shadow_proxy = function(entity, anim_hash, tint, factory_path)
     if not anim_hash then
         return nil
     end
     if entity.shadow_proxy_id then
         return entity.shadow_proxy_id
     end
-    local proxy_id = factory.create("/tile_factory#tile_factory", vmath.vector3(0, 0, 0.49))
+    local proxy_factory = factory_path or "/tile_factory#tile_factory"
+    local proxy_id = factory.create(proxy_factory, vmath.vector3(0, 0, 0.49))
     if proxy_id then
         msg.post(msg.url(nil, proxy_id, "sprite"), "play_animation", { id = anim_hash })
-        go.set_scale(vmath.vector3(0.65, 0.65, 1), proxy_id)
-        go.set(msg.url(nil, proxy_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.5))
+        go.set_scale(vmath.vector3(0.75, 0.75, 1), proxy_id)
+        go.set(msg.url(nil, proxy_id, "sprite"), "tint", tint or vmath.vector4(1, 1, 1, 0.5))
         entity.shadow_proxy_id = proxy_id
     end
     return proxy_id
@@ -3526,7 +3537,8 @@ local function update_human_visual_state(self)
                 end
                 local use_proxy_shadow = counter_move_enabled and (unit.is_moving or unit.shadow_proxy_pending_clear) and unit.go_path ~= nil
                 if use_proxy_shadow then
-                    local proxy_id = ensure_counter_shadow_proxy(unit, hash("human_dropShadow"))
+                    local proxy_anim, proxy_tint = get_counter_shadow_anim_for_human(self, unit)
+                    local proxy_id = ensure_counter_shadow_proxy(unit, proxy_anim, proxy_tint, "/human_shadow_proxy_factory#human_shadow_proxy_factory")
                     if proxy_id and unit.go_path then
                         local pos = go.get_position(unit.go_path)
                         go.set_position(vmath.vector3(pos.x + shadow_pos.x, pos.y + shadow_pos.y, pos.z - 0.01), proxy_id)
@@ -3919,6 +3931,48 @@ get_ui_panel_shadow_alpha = function(self)
     return profile.ui_panel_shadow_alpha or 0.35
 end
 
+get_human_anim_for_aesthetic = function(self, unit)
+    if not unit then
+        return nil
+    end
+    if unit.class_id == UNIT_CLASS_SARGE then
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            return hash("human_sarge_boardgame")
+        end
+        return hash("human_sarge")
+    elseif unit.class_id == UNIT_CLASS_TECHIE then
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            return hash("human_techie_boardgame")
+        end
+        return hash("human_techie")
+    elseif unit.class_id == UNIT_CLASS_MEDIC then
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            return hash("human_medic_boardgame")
+        end
+        return hash("human_medic")
+    elseif unit.class_id == UNIT_CLASS_GUNNER then
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            return hash("human_gunner_boardgame")
+        end
+        return hash("human_gunner")
+    end
+    return nil
+end
+
+apply_human_aesthetic_animations = function(self)
+    if not self or not self.squad_units then
+        return
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit and unit.sprite_path then
+            local anim = get_human_anim_for_aesthetic(self, unit)
+            if anim then
+                pcall(msg.post, unit.sprite_path, "play_animation", { id = anim })
+            end
+        end
+    end
+end
+
 apply_computer_emissive_accents = function(self, dt)
     local profile = get_aesthetic_profile(self)
     local enabled = profile
@@ -4061,6 +4115,7 @@ apply_aesthetic_mode = function(self)
         go.delete(self.sheen_overlay)
         self.sheen_overlay = nil
     end
+    apply_human_aesthetic_animations(self)
 end
 
 set_aesthetic_mode = function(self, mode)
@@ -4735,6 +4790,7 @@ function spawn_human_unit(self)
     end
 
     update_human_visual_state(self)
+    apply_human_aesthetic_animations(self)
     update_human_ap_debug_label(self)
 end
 
@@ -5582,7 +5638,7 @@ function init(self)
     msg.post("/camera#camera", "acquire_camera_focus")
 
     self.sheen_z = 0.4--0.3
-    self.sheen_alpha = 0.4--0.8--0.22
+    self.sheen_alpha = 0.48--0.8--0.22
     self.sheen_art_w = 550--768
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0
@@ -5772,7 +5828,11 @@ function update(self, dt)
                 end
                 local use_proxy_shadow = counter_move_enabled and (alien.is_moving or alien.shadow_proxy_pending_clear)
                 if use_proxy_shadow then
-                    local proxy_id = ensure_counter_shadow_proxy(alien, get_counter_shadow_anim_for_alien(alien.type))
+                    local proxy_id = ensure_counter_shadow_proxy(
+                        alien,
+                        get_counter_shadow_anim_for_alien(alien.type),
+                        vmath.vector4(1, 1, 1, 0.5)
+                    )
                     if proxy_id then
                         local apos = go.get_position(alien.go_id)
                         go.set_position(vmath.vector3(apos.x + shadow_pos.x, apos.y + shadow_pos.y, apos.z - 0.01), proxy_id)

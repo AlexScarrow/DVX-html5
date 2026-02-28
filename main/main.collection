@@ -191,6 +191,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "human_shadow_proxy_factory"
+  data: "embedded_components {\n"
+  "  id: \"human_shadow_proxy_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/human_shadow_proxy.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "cell_factory"
   data: "embedded_components {\n"
   "  id: \"cell_factory\"\n"

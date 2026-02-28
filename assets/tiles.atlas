@@ -133,3 +133,6 @@ images {
 images {
   image: "/assets/images/human_dropShadow.png"
 }
+images {
+  image: "/assets/images/backdrop_boardgame.png"
+}

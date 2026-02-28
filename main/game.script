@@ -130,6 +130,7 @@ AESTHETIC_PROFILES = {
         sheen_enabled = false,
         backdrop_enabled = true,
         backdrop_anim = "tile_corridor",
+        backdrop_tiled = false,
         backdrop_tint = vmath.vector4(0.5, 0.62, 0.78, 0.45),
         backdrop_pan_speed_x = 10,
         backdrop_pan_speed_y = 4,
@@ -154,7 +155,13 @@ AESTHETIC_PROFILES = {
     [AESTHETIC_MODE_BOARDGAME] = {
         sheen_enabled = true,
         backdrop_enabled = true,
-        backdrop_anim = "tile_canteen",
+        backdrop_anim = "backdrop_boardgame",
+        backdrop_tiled = true,
+        backdrop_tile_cols = 5,
+        backdrop_tile_rows = 5,
+        backdrop_tile_art_w = 256,
+        backdrop_tile_art_h = 256,
+        backdrop_tile_scale = 2,
         backdrop_tint = vmath.vector4(0.55, 0.45, 0.32, 0.55),
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
@@ -3775,6 +3782,9 @@ function reset_and_load_level(self, level_index)
         self.world_backdrop = nil
         self.world_backdrop_anim = nil
     end
+    if self.world_backdrop_tiles then
+        safe_delete_array(self.world_backdrop_tiles)
+    end
     safe_delete_array(tile_objects)
     safe_delete_map(cell_objects)
     safe_delete_map(loot_objects)
@@ -4045,6 +4055,7 @@ apply_aesthetic_mode = function(self)
     local profile = get_aesthetic_profile(self)
     local sheen_enabled = profile and profile.sheen_enabled == true
     local backdrop_enabled = profile and profile.backdrop_enabled == true
+    local backdrop_tiled = profile and profile.backdrop_tiled == true
     local table_sweep_shadow_enabled = profile and profile.table_sweep_shadow_enabled == true
     local backdrop_anim = (profile and profile.backdrop_anim) or "tile_generic_alpha_layer"
     local backdrop_tint = (profile and profile.backdrop_tint) or vmath.vector4(1, 1, 1, 0.2)
@@ -4053,19 +4064,65 @@ apply_aesthetic_mode = function(self)
     local table_sweep_shadow_factory = "/tile_factory#tile_factory"
 
     if backdrop_enabled then
-        if not self.world_backdrop then
-            self.world_backdrop = factory.create("/tile_factory#tile_factory", vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.world_backdrop_z or -0.2))
-        end
-        if self.world_backdrop then
+        if backdrop_tiled then
+            if self.world_backdrop then
+                go.delete(self.world_backdrop)
+                self.world_backdrop = nil
+            end
+            local cols = (profile and profile.backdrop_tile_cols) or 5
+            local rows = (profile and profile.backdrop_tile_rows) or 5
+            local needed = math.max(1, cols * rows)
+            self.world_backdrop_tiles = self.world_backdrop_tiles or {}
+            while #self.world_backdrop_tiles < needed do
+                local tile_id = factory.create("/tile_factory#tile_factory", vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.world_backdrop_z or -0.2))
+                if not tile_id then
+                    break
+                end
+                table.insert(self.world_backdrop_tiles, tile_id)
+            end
+            while #self.world_backdrop_tiles > needed do
+                local idx = #self.world_backdrop_tiles
+                go.delete(self.world_backdrop_tiles[idx])
+                self.world_backdrop_tiles[idx] = nil
+            end
             if self.world_backdrop_anim ~= backdrop_anim then
-                msg.post(msg.url(nil, self.world_backdrop, "sprite"), "play_animation", { id = hash(backdrop_anim) })
+                for _, tile_id in ipairs(self.world_backdrop_tiles) do
+                    msg.post(msg.url(nil, tile_id, "sprite"), "play_animation", { id = hash(backdrop_anim) })
+                end
                 self.world_backdrop_anim = backdrop_anim
             end
-            go.set(msg.url(nil, self.world_backdrop, "sprite"), "tint", backdrop_tint)
+            for _, tile_id in ipairs(self.world_backdrop_tiles) do
+                go.set(msg.url(nil, tile_id, "sprite"), "tint", backdrop_tint)
+            end
+        else
+            if self.world_backdrop_tiles then
+                for i, tile_id in ipairs(self.world_backdrop_tiles) do
+                    go.delete(tile_id)
+                    self.world_backdrop_tiles[i] = nil
+                end
+            end
+            if not self.world_backdrop then
+                self.world_backdrop = factory.create("/tile_factory#tile_factory", vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.world_backdrop_z or -0.2))
+            end
+            if self.world_backdrop then
+                if self.world_backdrop_anim ~= backdrop_anim then
+                    msg.post(msg.url(nil, self.world_backdrop, "sprite"), "play_animation", { id = hash(backdrop_anim) })
+                    self.world_backdrop_anim = backdrop_anim
+                end
+                go.set(msg.url(nil, self.world_backdrop, "sprite"), "tint", backdrop_tint)
+            end
         end
-    elseif self.world_backdrop then
-        go.delete(self.world_backdrop)
-        self.world_backdrop = nil
+    else
+        if self.world_backdrop then
+            go.delete(self.world_backdrop)
+            self.world_backdrop = nil
+        end
+        if self.world_backdrop_tiles then
+            for i, tile_id in ipairs(self.world_backdrop_tiles) do
+                go.delete(tile_id)
+                self.world_backdrop_tiles[i] = nil
+            end
+        end
         self.world_backdrop_anim = nil
     end
 
@@ -5645,6 +5702,7 @@ function init(self)
     self.sheen_offset_y = 100
     self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_BOARDGAME
     self.world_backdrop = nil
+    self.world_backdrop_tiles = nil
     self.world_backdrop_anim = nil
     self.world_backdrop_z = 0.001
     self.world_backdrop_art_w = 550
@@ -5884,7 +5942,7 @@ function update(self, dt)
     update_selected_unit_ui(self)
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
-    if self.world_backdrop then
+    if self.world_backdrop or (self.world_backdrop_tiles and #self.world_backdrop_tiles > 0) then
         local profile = get_aesthetic_profile(self)
         local pan_speed_x = (profile and profile.backdrop_pan_speed_x) or 0
         local pan_speed_y = (profile and profile.backdrop_pan_speed_y) or 0
@@ -5892,10 +5950,38 @@ function update(self, dt)
         self.world_backdrop_pan_y = (self.world_backdrop_pan_y or 0) + (pan_speed_y * dt)
         local bx = self.camera_pos.x + (self.world_backdrop_base_offset_x or 0) + (self.world_backdrop_pan_x or 0)
         local by = self.camera_pos.y + (self.world_backdrop_base_offset_y or 0) + (self.world_backdrop_pan_y or 0)
-        local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.world_backdrop_art_w or 256)
-        local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.world_backdrop_art_h or 256)
-        go.set_position(vmath.vector3(bx, by, self.world_backdrop_z or -0.2), self.world_backdrop)
-        go.set_scale(vmath.vector3(sx, sy, 1), self.world_backdrop)
+        if self.world_backdrop then
+            local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.world_backdrop_art_w or 256)
+            local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.world_backdrop_art_h or 256)
+            go.set_position(vmath.vector3(bx, by, self.world_backdrop_z or -0.2), self.world_backdrop)
+            go.set_scale(vmath.vector3(sx, sy, 1), self.world_backdrop)
+        end
+        if self.world_backdrop_tiles and #self.world_backdrop_tiles > 0 then
+            local cols = (profile and profile.backdrop_tile_cols) or 5
+            local rows = (profile and profile.backdrop_tile_rows) or 5
+            local tile_art_w = (profile and profile.backdrop_tile_art_w) or 256
+            local tile_art_h = (profile and profile.backdrop_tile_art_h) or 256
+            local tile_scale_base = (profile and profile.backdrop_tile_scale) or 1
+            local tile_scale_x = tile_scale_base / self.camera_zoom
+            local tile_scale_y = tile_scale_base / self.camera_zoom
+            local tile_span_x = tile_art_w * tile_scale_x
+            local tile_span_y = tile_art_h * tile_scale_y
+            local x0 = bx - (((cols - 1) * tile_span_x) * 0.5)
+            local y0 = by - (((rows - 1) * tile_span_y) * 0.5)
+            local tile_i = 1
+            for row = 1, rows do
+                for col = 1, cols do
+                    local tile_id = self.world_backdrop_tiles[tile_i]
+                    if tile_id then
+                        local px = x0 + ((col - 1) * tile_span_x)
+                        local py = y0 + ((row - 1) * tile_span_y)
+                        go.set_position(vmath.vector3(px, py, self.world_backdrop_z or -0.2), tile_id)
+                        go.set_scale(vmath.vector3(tile_scale_x, tile_scale_y, 1), tile_id)
+                    end
+                    tile_i = tile_i + 1
+                end
+            end
+        end
     end
     if self.table_sweep_shadow_overlay then
         local profile = get_aesthetic_profile(self)

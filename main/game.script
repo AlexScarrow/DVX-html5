@@ -141,7 +141,14 @@ AESTHETIC_PROFILES = {
         table_sweep_shadow_pan_speed_x = 0,
         table_sweep_shadow_pan_speed_y = 0,
         ui_panel_shadow_enabled = false,
-        ui_panel_shadow_alpha = 0.0
+        ui_panel_shadow_alpha = 0.0,
+        computer_emissive_enabled = true,
+        computer_emissive_tint = vmath.vector4(0.7, 0.92, 1.18, 1),
+        computer_emissive_pulse_speed = 0.38,
+        computer_emissive_min_mul = 0.84,
+        computer_emissive_max_mul = 1.22,
+        computer_emissive_variation_amount = 0.22,
+        computer_emissive_variation_speed = 0.2
     },
     [AESTHETIC_MODE_BOARDGAME] = {
         sheen_enabled = true,
@@ -158,7 +165,8 @@ AESTHETIC_PROFILES = {
         table_sweep_shadow_pan_speed_x = 800,
         table_sweep_shadow_pan_speed_y = 0,
         ui_panel_shadow_enabled = true,
-        ui_panel_shadow_alpha = 0.35
+        ui_panel_shadow_alpha = 0.35,
+        computer_emissive_enabled = false
     }
 }
 local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy testing
@@ -3753,6 +3761,74 @@ get_ui_panel_shadow_alpha = function(self)
     return profile.ui_panel_shadow_alpha or 0.35
 end
 
+apply_computer_emissive_accents = function(self, dt)
+    local profile = get_aesthetic_profile(self)
+    local enabled = profile
+        and profile.computer_emissive_enabled == true
+        and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
+
+    local white_tint = vmath.vector4(1, 1, 1, 1)
+    local base = profile and profile.computer_emissive_tint or vmath.vector4(0.7, 0.92, 1.18, 1)
+    local min_mul = profile and profile.computer_emissive_min_mul or 0.84
+    local max_mul = profile and profile.computer_emissive_max_mul or 1.22
+    local variation_amount = profile and profile.computer_emissive_variation_amount or 0.2
+    local global_intensity_mul = 1
+    if enabled then
+        self.computer_emissive_variation_phase = (self.computer_emissive_variation_phase or 0) + (dt * ((profile.computer_emissive_variation_speed or 0.2) * math.pi * 2))
+        local variation_wave = math.sin(self.computer_emissive_variation_phase)
+        local speed_mul = 1 + (variation_wave * variation_amount)
+        global_intensity_mul = 1 + (math.cos(self.computer_emissive_variation_phase * 0.73) * variation_amount)
+        local speed = (profile.computer_emissive_pulse_speed or 1.25) * speed_mul * math.pi * 2
+        self.computer_emissive_phase = (self.computer_emissive_phase or 0) + (dt * speed)
+    end
+
+    local function get_instance_tint(instance_key, powered)
+        if not enabled or not powered then
+            return white_tint
+        end
+        local n = tonumber(instance_key) or 0
+        local phase_offset = (0.5 + (0.5 * math.sin((n + 1) * 12.9898))) * math.pi * 2
+        local drift = (self.computer_emissive_variation_phase or 0) + phase_offset
+        local speed_jitter = 1
+            + (math.sin((n + 1) * 4.123 + 1.7) * variation_amount * 1.2)
+            + (math.sin(drift * 0.55 + (n * 0.17)) * variation_amount * 0.35)
+        local intensity_jitter = 1
+            + (math.cos((n + 1) * 7.777 + 0.3) * variation_amount * 1.35)
+            + (math.cos(drift * 0.42 + (n * 0.11)) * variation_amount * 0.4)
+        local wave = 0.5 + (0.5 * math.sin((self.computer_emissive_phase or 0) * speed_jitter + phase_offset))
+        local mul = (min_mul + ((max_mul - min_mul) * wave)) * global_intensity_mul * intensity_jitter
+        return vmath.vector4(base.x * mul, base.y * mul, base.z * mul, 1)
+    end
+
+    if self.tile_light_layers then
+        for tile_instance_id, light_go in pairs(self.tile_light_layers) do
+            local powered = self.tile_light_power_state and self.tile_light_power_state[tile_instance_id] == true
+            local tint = get_instance_tint(tile_instance_id, powered)
+            pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", tint)
+        end
+    end
+
+    for cell_id, marker_id in pairs(machine_objects or {}) do
+        local tint = get_instance_tint(cell_id, true)
+        pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", tint)
+    end
+
+    if self.power_node_objects then
+        for cell_id, marker_id in pairs(self.power_node_objects) do
+            local powered = self.power_node_power_state and self.power_node_power_state[cell_id] == true
+            local tint = get_instance_tint(cell_id, powered)
+            pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", tint)
+        end
+    end
+
+    if self.wiregap_objects then
+        for i, marker_id in ipairs(self.wiregap_objects) do
+            local tint = get_instance_tint(i * 97, true)
+            pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", tint)
+        end
+    end
+end
+
 apply_aesthetic_mode = function(self)
     local profile = get_aesthetic_profile(self)
     local sheen_enabled = profile and profile.sheen_enabled == true
@@ -3838,6 +3914,8 @@ set_aesthetic_mode = function(self, mode)
     self.world_backdrop_pan_y = 0
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
+    self.computer_emissive_phase = 0
+    self.computer_emissive_variation_phase = 0
     apply_aesthetic_mode(self)
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
         LOOT_RUNTIME.refresh_world_item_visuals(self)
@@ -5458,6 +5536,7 @@ function update(self, dt)
             end
         end
     end
+    apply_computer_emissive_accents(self, dt)
 
     update_human_movement(self, dt)
     update_alien_movement(self, dt)

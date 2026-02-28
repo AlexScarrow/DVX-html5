@@ -163,6 +163,7 @@ function M.extend(runtime, ctx)
     runtime.ensure_item_runtime_state = function(self)
         self.world_item_instances = self.world_item_instances or {}
         self.world_item_visuals = self.world_item_visuals or {}
+        self.world_item_shadow_visuals = self.world_item_shadow_visuals or {}
         self.next_world_item_id = self.next_world_item_id or 0
     end
 
@@ -193,6 +194,11 @@ function M.extend(runtime, ctx)
         if visual then
             go.delete(visual)
             self.world_item_visuals[world_item_id] = nil
+        end
+        local shadow_visual = self.world_item_shadow_visuals[world_item_id]
+        if shadow_visual then
+            go.delete(shadow_visual)
+            self.world_item_shadow_visuals[world_item_id] = nil
         end
     end
 
@@ -268,9 +274,16 @@ function M.extend(runtime, ctx)
             end
             self.world_item_visuals[item_id] = nil
         end
+        for item_id, go_id in pairs(self.world_item_shadow_visuals) do
+            if go_id then
+                go.delete(go_id)
+            end
+            self.world_item_shadow_visuals[item_id] = nil
+        end
         if not self.world_item_instances or not self.world_grid then
             return
         end
+        local world_shadows_enabled = (self.aesthetic_mode == "boardgame")
         for _, cell in ipairs(self.world_grid) do
             if cell and cell.tileID ~= hash("empty") then
                 local items = runtime.get_world_items_on_cell(self, cell.idNumber)
@@ -282,6 +295,17 @@ function M.extend(runtime, ctx)
                     local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.56))
                     if marker_id then
                         local anim = get_world_item_animation(item.item_type)
+                        if world_shadows_enabled then
+                            local shadow_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx + 6, wy - 8, 0.5))
+                            if shadow_id then
+                                if anim then
+                                    msg.post(msg.url(nil, shadow_id, "sprite"), "play_animation", { id = anim })
+                                end
+                                go.set(msg.url(nil, shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0.45))
+                                go.set_scale(vmath.vector3(0.85, 0.85, 1), shadow_id)
+                                self.world_item_shadow_visuals[item.id] = shadow_id
+                            end
+                        end
                         if anim then
                             msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                             go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
@@ -653,7 +677,7 @@ function M.extend(runtime, ctx)
             crate_obj.lootItems = nil
         end
         cell.hasLoot = false
-        runtime.clear_loot_marker(unit.cell_id)
+        runtime.clear_loot_marker(self, unit.cell_id)
 
         print(string.format(
             "%s scavenged loot: mode=%s rolled=%d added=%d dropped=%d (AP -%d)",

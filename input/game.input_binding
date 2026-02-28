@@ -14,6 +14,10 @@ key_trigger {
   input: KEY_N
   action: "next_turn"
 }
+key_trigger {
+  input: KEY_ENTER
+  action: "toggle_aesthetic_mode"
+}
 mouse_trigger {
   input: MOUSE_BUTTON_1
   action: "touch"

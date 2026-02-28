@@ -140,7 +140,7 @@ function M.create_tile_library(COMPONENT_UI)
     armoury.cells[1].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
         offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "meds", "material", COMPONENT_UI.component_fuse }
+        lootItems = { "ammo", "ammo", "meds", "material","power", COMPONENT_UI.component_fuse }
     }
     armoury.cells[2].object1 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,

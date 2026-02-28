@@ -127,3 +127,6 @@ images {
 images {
   image: "/assets/images/tile_medbay_on.png"
 }
+images {
+  image: "/assets/images/sweep_shadow.png"
+}

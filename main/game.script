@@ -123,6 +123,44 @@ TURRET_PROJECTILE_SPEED = 1200
 TURRET_BURST_PROJECTILE_COUNT = 6
 TURRET_BURST_PROJECTILE_DELAY = 0.11
 TURRET_BURST_SPREAD_PIXELS = 6
+AESTHETIC_MODE_COMPUTER = "computer"
+AESTHETIC_MODE_BOARDGAME = "boardgame"
+AESTHETIC_PROFILES = {
+    [AESTHETIC_MODE_COMPUTER] = {
+        sheen_enabled = false,
+        backdrop_enabled = true,
+        backdrop_anim = "tile_corridor",
+        backdrop_tint = vmath.vector4(0.5, 0.62, 0.78, 0.45),
+        backdrop_pan_speed_x = 10,
+        backdrop_pan_speed_y = 4,
+        world_drop_shadows_enabled = false,
+        world_shadow_alpha = 0.0,
+        table_sweep_shadow_enabled = false,
+        table_sweep_shadow_anim = "tile_generic_alpha_layer",
+        table_sweep_shadow_tint = vmath.vector4(0, 0, 0, 0),
+        table_sweep_shadow_pan_speed_x = 0,
+        table_sweep_shadow_pan_speed_y = 0,
+        ui_panel_shadow_enabled = false,
+        ui_panel_shadow_alpha = 0.0
+    },
+    [AESTHETIC_MODE_BOARDGAME] = {
+        sheen_enabled = true,
+        backdrop_enabled = true,
+        backdrop_anim = "tile_canteen",
+        backdrop_tint = vmath.vector4(0.55, 0.45, 0.32, 0.55),
+        backdrop_pan_speed_x = 0,
+        backdrop_pan_speed_y = 0,
+        world_drop_shadows_enabled = true,
+        world_shadow_alpha = 0.5,
+        table_sweep_shadow_enabled = true,
+        table_sweep_shadow_anim = "sweep_shadow",
+        table_sweep_shadow_tint = vmath.vector4(1, 1, 1, 0.4),
+        table_sweep_shadow_pan_speed_x = 800,
+        table_sweep_shadow_pan_speed_y = 0,
+        ui_panel_shadow_enabled = true,
+        ui_panel_shadow_alpha = 0.35
+    }
+}
 local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy testing
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
 local ALIEN_REVEAL_WEIGHT_SPITTER = 2
@@ -1420,7 +1458,7 @@ local function ensure_alien_visual(self, alien)
                 end
                 sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
                 sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
-                go.set(msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, 0.5))
+                go.set(msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, get_world_shadow_alpha(self)))
                 alien.spitter_flip = false
                 go.set_scale(vmath.vector3(scale, scale, 1), alien.go_id)
             else
@@ -3300,6 +3338,7 @@ local function update_human_visual_state(self)
         return
     end
 
+    local shadow_alpha = get_world_shadow_alpha(self)
     for _, unit in pairs(self.squad_units) do
         if unit.sprite_path then
             local function safe_set_tint(color)
@@ -3328,6 +3367,12 @@ local function update_human_visual_state(self)
                 else
                     safe_set_tint(base_tint)
                 end
+            end
+        end
+        if unit.shadow_path then
+            local ok = pcall(go.set, unit.shadow_path, "tint", vmath.vector4(1, 1, 1, shadow_alpha))
+            if not ok then
+                unit.shadow_path = nil
             end
         end
     end
@@ -3381,7 +3426,7 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
     go.set(msg.url(nil, go_id, "sprite"), "tint", color)
 end
 
-local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_x, scale_y)
+local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_x, scale_y, tint)
     if not go_id then
         return
     end
@@ -3390,12 +3435,13 @@ local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_
     local sy = (scale_y / UI_PANEL_ART_H) / self.camera_zoom
     go.set_position(vmath.vector3(wx, wy, z), go_id)
     go.set_scale(vmath.vector3(sx, sy, 1), go_id)
-    go.set(msg.url(nil, go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    go.set(msg.url(nil, go_id, "sprite"), "tint", tint or vmath.vector4(1, 1, 1, 1))
 end
 
 local function initialize_unit_ui(self)
     self.ui = {
         panel_art = nil,
+        panel_shadow = nil,
         ap_pips = {},
         hp_pips = {},
         ammo_pips = {},
@@ -3414,6 +3460,7 @@ local function initialize_unit_ui(self)
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
+    self.ui.panel_shadow = create_ui_panel_sprite(UI_PANEL_X + 14, UI_PANEL_Y - 12, 0.79, UI_PANEL_W, UI_PANEL_H)
 
     for i = 1, UI_MAX_PIPS do
         self.ui.ap_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_AP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
@@ -3456,7 +3503,8 @@ local function set_ui_hidden(self)
     end
 
     local hidden = vmath.vector4(0, 0, 0, 0)
-    set_ui_panel_transform(self, self.ui.panel_art, -9999, -9999, 0.8, UI_PANEL_W, UI_PANEL_H)
+    set_ui_panel_transform(self, self.ui.panel_art, -9999, -9999, 0.8, UI_PANEL_W, UI_PANEL_H, vmath.vector4(1, 1, 1, 1))
+    set_ui_panel_transform(self, self.ui.panel_shadow, -9999, -9999, 0.79, UI_PANEL_W, UI_PANEL_H, vmath.vector4(0, 0, 0, 0))
     for i = 1, UI_MAX_PIPS do
         set_ui_square_transform(self, self.ui.ap_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
         set_ui_square_transform(self, self.ui.hp_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
@@ -3539,9 +3587,20 @@ function reset_and_load_level(self, level_index)
         go.delete(self.sheen_overlay)
         self.sheen_overlay = nil
     end
+    if self.table_sweep_shadow_overlay then
+        go.delete(self.table_sweep_shadow_overlay)
+        self.table_sweep_shadow_overlay = nil
+        self.table_sweep_shadow_anim = nil
+    end
+    if self.world_backdrop then
+        go.delete(self.world_backdrop)
+        self.world_backdrop = nil
+        self.world_backdrop_anim = nil
+    end
     safe_delete_array(tile_objects)
     safe_delete_map(cell_objects)
     safe_delete_map(loot_objects)
+    safe_delete_map(self.loot_shadow_objects)
     safe_delete_map(machine_objects)
     safe_delete_map(self.tile_light_layers)
     safe_delete_map(self.tile_alpha_layers)
@@ -3549,9 +3608,15 @@ function reset_and_load_level(self, level_index)
     safe_delete_map(self.power_node_objects)
     safe_delete_map(self.vent_objects)
     safe_delete_map(self.door_objects)
+    safe_delete_map(self.machine_shadow_objects)
+    safe_delete_map(self.turret_shadow_objects)
+    safe_delete_map(self.power_node_shadow_objects)
+    safe_delete_map(self.vent_shadow_objects)
+    safe_delete_map(self.door_shadow_objects)
     safe_delete_map(self.turret_tripod_objects)
     safe_delete_map(self.turret_gun_objects)
     safe_delete_array(self.wiregap_objects)
+    safe_delete_array(self.wiregap_shadow_objects)
     safe_delete_array(self.wiregap_fx_objects)
     safe_delete_array(self.light_value_objects)
     if self.aliens then
@@ -3576,6 +3641,13 @@ function reset_and_load_level(self, level_index)
 
     if self.world_item_visuals then
         for _, go_id in pairs(self.world_item_visuals) do
+            if go_id then
+                go.delete(go_id)
+            end
+        end
+    end
+    if self.world_item_shadow_visuals then
+        for _, go_id in pairs(self.world_item_shadow_visuals) do
             if go_id then
                 go.delete(go_id)
             end
@@ -3623,6 +3695,14 @@ function reset_and_load_level(self, level_index)
     self.loot_pickup_blips = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
+    self.world_item_shadow_visuals = {}
+    self.loot_shadow_objects = {}
+    self.machine_shadow_objects = {}
+    self.turret_shadow_objects = {}
+    self.power_node_shadow_objects = {}
+    self.vent_shadow_objects = {}
+    self.door_shadow_objects = {}
+    self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
     self.power_node_loop_fx = {}
@@ -3635,14 +3715,7 @@ function reset_and_load_level(self, level_index)
     self.next_alien_id = 0
 
     spawn_visuals(self)
-    if not self.sheen_overlay then
-        local sheen_id = factory.create("/ui_factory#ui_factory", vmath.vector3(self.camera_pos.x + self.sheen_offset_x, self.camera_pos.y + self.sheen_offset_y, self.sheen_z))
-        if sheen_id then
-            msg.post(msg.url(nil, sheen_id, "sprite"), "play_animation", { id = hash("DVX_sheen") })
-            go.set(msg.url(nil, sheen_id, "sprite"), "tint", vmath.vector4(1, 1, 1, self.sheen_alpha))
-            self.sheen_overlay = sheen_id
-        end
-    end
+    apply_aesthetic_mode(self)
     if self.spawn_human_unit_fn then
         self.spawn_human_unit_fn(self)
     else
@@ -3657,6 +3730,150 @@ end
 
 local function get_level_button_screen_x(level_index)
     return LEVEL1_BUTTON_X + ((level_index - 1) * (LEVEL_BUTTON_W + LEVEL_BUTTON_GAP))
+end
+
+get_aesthetic_profile = function(self)
+    local mode = self.aesthetic_mode or AESTHETIC_MODE_BOARDGAME
+    return AESTHETIC_PROFILES[mode] or AESTHETIC_PROFILES[AESTHETIC_MODE_BOARDGAME]
+end
+
+get_world_shadow_alpha = function(self)
+    local profile = get_aesthetic_profile(self)
+    if not profile or profile.world_drop_shadows_enabled ~= true then
+        return 0
+    end
+    return profile.world_shadow_alpha or 0.5
+end
+
+get_ui_panel_shadow_alpha = function(self)
+    local profile = get_aesthetic_profile(self)
+    if not profile or profile.ui_panel_shadow_enabled ~= true then
+        return 0
+    end
+    return profile.ui_panel_shadow_alpha or 0.35
+end
+
+apply_aesthetic_mode = function(self)
+    local profile = get_aesthetic_profile(self)
+    local sheen_enabled = profile and profile.sheen_enabled == true
+    local backdrop_enabled = profile and profile.backdrop_enabled == true
+    local table_sweep_shadow_enabled = profile and profile.table_sweep_shadow_enabled == true
+    local backdrop_anim = (profile and profile.backdrop_anim) or "tile_generic_alpha_layer"
+    local backdrop_tint = (profile and profile.backdrop_tint) or vmath.vector4(1, 1, 1, 0.2)
+    local table_sweep_shadow_anim = (profile and profile.table_sweep_shadow_anim) or "tile_generic_alpha_layer"
+    local table_sweep_shadow_tint = (profile and profile.table_sweep_shadow_tint) or vmath.vector4(0.2, 0.17, 0.13, 0.2)
+    local table_sweep_shadow_factory = "/tile_factory#tile_factory"
+
+    if backdrop_enabled then
+        if not self.world_backdrop then
+            self.world_backdrop = factory.create("/tile_factory#tile_factory", vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.world_backdrop_z or -0.2))
+        end
+        if self.world_backdrop then
+            if self.world_backdrop_anim ~= backdrop_anim then
+                msg.post(msg.url(nil, self.world_backdrop, "sprite"), "play_animation", { id = hash(backdrop_anim) })
+                self.world_backdrop_anim = backdrop_anim
+            end
+            go.set(msg.url(nil, self.world_backdrop, "sprite"), "tint", backdrop_tint)
+        end
+    elseif self.world_backdrop then
+        go.delete(self.world_backdrop)
+        self.world_backdrop = nil
+        self.world_backdrop_anim = nil
+    end
+
+    if table_sweep_shadow_enabled then
+        if self.table_sweep_shadow_overlay and self.table_sweep_shadow_factory ~= table_sweep_shadow_factory then
+            go.delete(self.table_sweep_shadow_overlay)
+            self.table_sweep_shadow_overlay = nil
+            self.table_sweep_shadow_anim = nil
+        end
+        if not self.table_sweep_shadow_overlay then
+            self.table_sweep_shadow_overlay = factory.create(
+                table_sweep_shadow_factory,
+                vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.table_sweep_shadow_z or 0.74)
+            )
+            self.table_sweep_shadow_factory = table_sweep_shadow_factory
+        end
+        if self.table_sweep_shadow_overlay then
+            if self.table_sweep_shadow_anim ~= table_sweep_shadow_anim then
+                msg.post(msg.url(nil, self.table_sweep_shadow_overlay, "sprite"), "play_animation", { id = hash(table_sweep_shadow_anim) })
+                self.table_sweep_shadow_anim = table_sweep_shadow_anim
+            end
+            go.set(msg.url(nil, self.table_sweep_shadow_overlay, "sprite"), "tint", table_sweep_shadow_tint)
+        end
+    elseif self.table_sweep_shadow_overlay then
+        go.delete(self.table_sweep_shadow_overlay)
+        self.table_sweep_shadow_overlay = nil
+        self.table_sweep_shadow_anim = nil
+        self.table_sweep_shadow_factory = nil
+    end
+
+    if sheen_enabled then
+        if not self.sheen_overlay then
+            local sheen_id = factory.create("/ui_factory#ui_factory", vmath.vector3(self.camera_pos.x + (self.sheen_offset_x or 0), self.camera_pos.y + (self.sheen_offset_y or 0), self.sheen_z or 0.4))
+            if sheen_id then
+                msg.post(msg.url(nil, sheen_id, "sprite"), "play_animation", { id = hash("DVX_sheen") })
+                self.sheen_overlay = sheen_id
+            end
+        end
+        if self.sheen_overlay then
+            go.set(msg.url(nil, self.sheen_overlay, "sprite"), "tint", vmath.vector4(1, 1, 1, self.sheen_alpha or 0.4))
+            local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.sheen_art_w or 550)
+            local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.sheen_art_h or 300)
+            go.set_position(vmath.vector3(self.camera_pos.x + (self.sheen_offset_x or 0), self.camera_pos.y + (self.sheen_offset_y or 0), self.sheen_z or 0.4), self.sheen_overlay)
+            go.set_scale(vmath.vector3(sx, sy, 1), self.sheen_overlay)
+        end
+    elseif self.sheen_overlay then
+        go.delete(self.sheen_overlay)
+        self.sheen_overlay = nil
+    end
+end
+
+set_aesthetic_mode = function(self, mode)
+    if mode ~= AESTHETIC_MODE_COMPUTER and mode ~= AESTHETIC_MODE_BOARDGAME then
+        return
+    end
+    self.aesthetic_mode = mode
+    self.world_backdrop_pan_x = 0
+    self.world_backdrop_pan_y = 0
+    self.table_sweep_shadow_pan_x = nil
+    self.table_sweep_shadow_pan_y = 0
+    apply_aesthetic_mode(self)
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    if LOOT_RUNTIME then
+        if LOOT_RUNTIME.refresh_loot_markers then
+            LOOT_RUNTIME.refresh_loot_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_machine_markers then
+            LOOT_RUNTIME.refresh_machine_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_turret_markers then
+            LOOT_RUNTIME.refresh_turret_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_power_node_markers then
+            LOOT_RUNTIME.refresh_power_node_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_door_markers then
+            LOOT_RUNTIME.refresh_door_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_wiregap_markers then
+            LOOT_RUNTIME.refresh_wiregap_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_vent_markers then
+            LOOT_RUNTIME.refresh_vent_markers(self)
+        end
+    end
+    print("Aesthetic mode set to: " .. tostring(mode))
+end
+
+toggle_aesthetic_mode = function(self)
+    if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+        set_aesthetic_mode(self, AESTHETIC_MODE_COMPUTER)
+    else
+        set_aesthetic_mode(self, AESTHETIC_MODE_BOARDGAME)
+    end
 end
 
 function request_level_load(self, level_index, source_tag)
@@ -3786,7 +4003,18 @@ function update_selected_unit_ui(self)
         return
     end
 
-    set_ui_panel_transform(self, self.ui.panel_art, UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
+    local panel_shadow_alpha = get_ui_panel_shadow_alpha(self)
+    set_ui_panel_transform(
+        self,
+        self.ui.panel_shadow,
+        UI_PANEL_X + 14,
+        UI_PANEL_Y - 12,
+        0.79,
+        UI_PANEL_W,
+        UI_PANEL_H,
+        vmath.vector4(0, 0, 0, panel_shadow_alpha)
+    )
+    set_ui_panel_transform(self, self.ui.panel_art, UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H, vmath.vector4(1, 1, 1, 1))
 
     for i = 1, UI_MAX_PIPS do
         local pip_y = UI_BAR_START_Y - (i - 1) * (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP)
@@ -5065,23 +5293,32 @@ function init(self)
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0
     self.sheen_offset_y = 100
+    self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_BOARDGAME
+    self.world_backdrop = nil
+    self.world_backdrop_anim = nil
+    self.world_backdrop_z = 0.001
+    self.world_backdrop_art_w = 550
+    self.world_backdrop_art_h = 300
+    self.world_backdrop_base_offset_x = 0
+    self.world_backdrop_base_offset_y = 0
+    self.world_backdrop_pan_x = 0
+    self.world_backdrop_pan_y = 0
+    self.table_sweep_shadow_overlay = nil
+    self.table_sweep_shadow_anim = nil
+    self.table_sweep_shadow_factory = nil
+    self.table_sweep_shadow_z = 0.78
+    self.table_sweep_shadow_art_w = 256
+    self.table_sweep_shadow_art_h = 256
+    self.table_sweep_shadow_scale_x = 0.6
+    self.table_sweep_shadow_scale_y = 0.5
+    self.table_sweep_shadow_base_offset_x = 0
+    self.table_sweep_shadow_base_offset_y = 180
+    self.table_sweep_shadow_pan_x = nil
+    self.table_sweep_shadow_pan_y = 0
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
-    if not self.sheen_overlay then
-        local sheen_id = factory.create("/ui_factory#ui_factory", vmath.vector3(self.camera_pos.x + self.sheen_offset_x, self.camera_pos.y + self.sheen_offset_y, self.sheen_z))
-        if sheen_id then
-            msg.post(msg.url(nil, sheen_id, "sprite"), "play_animation", { id = hash("DVX_sheen") })
-            go.set(msg.url(nil, sheen_id, "sprite"), "tint", vmath.vector4(1, 1, 1, self.sheen_alpha))
-            self.sheen_overlay = sheen_id
-        end
-    end
-    if self.sheen_overlay then
-        local sx = (SCREEN_WIDTH / self.camera_zoom) / self.sheen_art_w
-        local sy = (SCREEN_HEIGHT / self.camera_zoom) / self.sheen_art_h
-        go.set_position(vmath.vector3(self.camera_pos.x + self.sheen_offset_x, self.camera_pos.y + self.sheen_offset_y, self.sheen_z), self.sheen_overlay)
-        go.set_scale(vmath.vector3(sx, sy, 1), self.sheen_overlay)
-    end
+    apply_aesthetic_mode(self)
     initialize_unit_ui(self)
     set_ui_hidden(self)
     self.selected_start_cell = nil
@@ -5117,6 +5354,14 @@ function init(self)
     self.loot_pickup_blips = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
+    self.world_item_shadow_visuals = {}
+    self.loot_shadow_objects = {}
+    self.machine_shadow_objects = {}
+    self.turret_shadow_objects = {}
+    self.power_node_shadow_objects = {}
+    self.vent_shadow_objects = {}
+    self.door_shadow_objects = {}
+    self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
@@ -5217,7 +5462,14 @@ function update(self, dt)
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
     if self.aliens then
+        local world_shadow_alpha = get_world_shadow_alpha(self)
         for _, alien in ipairs(self.aliens) do
+            if alien
+                and (not alien.is_dead)
+                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
+                and alien.go_id then
+                pcall(go.set, msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, world_shadow_alpha))
+            end
             if alien
                 and (not alien.is_dead)
                 and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
@@ -5252,6 +5504,45 @@ function update(self, dt)
     update_selected_unit_ui(self)
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
+    if self.world_backdrop then
+        local profile = get_aesthetic_profile(self)
+        local pan_speed_x = (profile and profile.backdrop_pan_speed_x) or 0
+        local pan_speed_y = (profile and profile.backdrop_pan_speed_y) or 0
+        self.world_backdrop_pan_x = (self.world_backdrop_pan_x or 0) + (pan_speed_x * dt)
+        self.world_backdrop_pan_y = (self.world_backdrop_pan_y or 0) + (pan_speed_y * dt)
+        local bx = self.camera_pos.x + (self.world_backdrop_base_offset_x or 0) + (self.world_backdrop_pan_x or 0)
+        local by = self.camera_pos.y + (self.world_backdrop_base_offset_y or 0) + (self.world_backdrop_pan_y or 0)
+        local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.world_backdrop_art_w or 256)
+        local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.world_backdrop_art_h or 256)
+        go.set_position(vmath.vector3(bx, by, self.world_backdrop_z or -0.2), self.world_backdrop)
+        go.set_scale(vmath.vector3(sx, sy, 1), self.world_backdrop)
+    end
+    if self.table_sweep_shadow_overlay then
+        local profile = get_aesthetic_profile(self)
+        local pan_speed_x = (profile and profile.table_sweep_shadow_pan_speed_x) or 0
+        local pan_speed_y = (profile and profile.table_sweep_shadow_pan_speed_y) or 0
+        -- Treat sweep offsets/speed as screen-space so motion feels identical across zoom levels.
+        local start_x = -SCREEN_WIDTH * 0.6
+        local end_x = SCREEN_WIDTH * 0.6
+        local pan_x = self.table_sweep_shadow_pan_x
+        if pan_x == nil then
+            pan_x = start_x
+        else
+            pan_x = pan_x + (pan_speed_x * dt)
+            if pan_x > end_x then
+                pan_x = start_x
+            end
+        end
+        local pan_y = (self.table_sweep_shadow_pan_y or 0) + (pan_speed_y * dt)
+        self.table_sweep_shadow_pan_x = pan_x
+        self.table_sweep_shadow_pan_y = pan_y
+        local sx = ((SCREEN_WIDTH / self.camera_zoom) / (self.table_sweep_shadow_art_w or 256)) * (self.table_sweep_shadow_scale_x or 1)
+        local sy = ((SCREEN_HEIGHT / self.camera_zoom) / (self.table_sweep_shadow_art_h or 256)) * (self.table_sweep_shadow_scale_y or 1)
+        local ox = ((self.table_sweep_shadow_base_offset_x or 0) + pan_x) / self.camera_zoom
+        local oy = ((self.table_sweep_shadow_base_offset_y or 0) + pan_y) / self.camera_zoom
+        go.set_position(vmath.vector3(self.camera_pos.x + ox, self.camera_pos.y + oy, self.table_sweep_shadow_z or 0.74), self.table_sweep_shadow_overlay)
+        go.set_scale(vmath.vector3(sx, sy, 1), self.table_sweep_shadow_overlay)
+    end
     if self.sheen_overlay then
         local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.sheen_art_w or 768)
         local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.sheen_art_h or 576)
@@ -5401,6 +5692,9 @@ function on_input(self, action_id, action)
         local focus_x = action.x or (SCREEN_WIDTH * 0.5)
         local focus_y = action.y or (SCREEN_HEIGHT * 0.5)
         zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
+    elseif action_id == hash("toggle_aesthetic_mode") and action.pressed then
+        toggle_aesthetic_mode(self)
+        return true
     elseif action_id == hash("next_turn") and action.pressed then
         next_turn_reset_human_ap(self)
         process_alien_turn(self)

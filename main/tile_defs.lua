@@ -110,6 +110,7 @@ function M.create_tile_library(COMPONENT_UI)
 
     -- armoury
     local armoury = create_tile_prototype("armoury")
+    armoury.visualTile = "armoury_off"
     armoury.powerLightOffAnim = "tile_armoury_off"
     armoury.powerLightOnAnim = "tile_armoury_on"
     for i = 1, 9 do
@@ -200,7 +201,7 @@ function M.create_tile_library(COMPONENT_UI)
 
     -- EXPERIMENTAL LEVEL-2 TILE DEFS (easy to purge)
     local lvl2_open = create_tile_prototype("lvl2_open")
-    lvl2_open.visualTile = "armoury"
+    lvl2_open.visualTile = "armoury_off"
     lvl2_open.powerLightOffAnim = "tile_armoury_off"
     lvl2_open.powerLightOnAnim = "tile_armoury_on"
     for i = 1, 9 do

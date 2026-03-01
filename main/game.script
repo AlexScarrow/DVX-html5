@@ -143,6 +143,7 @@ AESTHETIC_PROFILES = {
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
         backdrop_parallax_factor = 0.05,
+        backdrop_clouds_enabled = true,
         world_drop_shadows_enabled = false,
         world_shadow_alpha = 0.0,
         table_sweep_shadow_enabled = false,
@@ -174,6 +175,7 @@ AESTHETIC_PROFILES = {
         backdrop_tint = vmath.vector4(0.55, 0.45, 0.32, 0.55),
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
+        backdrop_clouds_enabled = false,
         world_drop_shadows_enabled = true,
         world_shadow_alpha = 0.5,
         table_sweep_shadow_enabled = true,
@@ -199,7 +201,7 @@ local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy 
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
 local ALIEN_REVEAL_WEIGHT_SPITTER = 2
 local ALIEN_REVEAL_WEIGHT_BRUTE = 1
-local TILE_OPACITY = 0.5
+local TILE_OPACITY = 1
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = false, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
@@ -1686,6 +1688,30 @@ local function get_alien_turn_movement_segment(self, alien, path, max_ap)
     return segment, ap_spent
 end
 
+apply_blip_pulse_scale = function(alien, dt)
+    if not alien or alien.type ~= ALIEN_TYPE_BLIP or alien.is_dead or not alien.go_id then
+        return
+    end
+    if alien.blip_pulse_phase == nil then
+        alien.blip_pulse_phase = math.random() * math.pi * 2
+    end
+    if alien.blip_pulse_speed == nil then
+        alien.blip_pulse_speed = 0.14 + (math.random() * 0.12) -- cycles/sec (slow)
+    end
+    if alien.blip_pulse_amount == nil then
+        alien.blip_pulse_amount = 0.07 + (math.random() * 0.14)
+    end
+    if alien.blip_pulse_base_scale == nil then
+        alien.blip_pulse_base_scale = 0.92 + (math.random() * 0.18)
+    end
+    local speed_mul = 2
+    local scale_mul = 1.25
+    alien.blip_pulse_phase = alien.blip_pulse_phase + (dt * alien.blip_pulse_speed * speed_mul * math.pi * 2)
+    local wave = math.sin(alien.blip_pulse_phase)
+    local s = alien.blip_pulse_base_scale * (1 + (wave * alien.blip_pulse_amount)) * scale_mul
+    go.set_scale(vmath.vector3(s, s, 1), alien.go_id)
+end
+
 local function get_vent_object_on_cell(cell)
     if not cell then
         return nil
@@ -2468,6 +2494,7 @@ local function update_alien_movement(self, dt)
         if alien.type == ALIEN_TYPE_SPEEDY and alien.go_id and (not alien.is_moving) then
             go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
         end
+        apply_blip_pulse_scale(alien, dt)
         if (not alien.is_dead) and alien.is_moving and alien.move_path and alien.go_id then
             local target_cell_id = alien.move_path[alien.move_path_index]
             if not target_cell_id then
@@ -3825,6 +3852,10 @@ function reset_and_load_level(self, level_index)
         self.world_backdrop = nil
         self.world_backdrop_anim = nil
     end
+    if self.backdrop_cloud_fx then
+        go.delete(self.backdrop_cloud_fx)
+        self.backdrop_cloud_fx = nil
+    end
     if self.world_backdrop_tiles then
         safe_delete_array(self.world_backdrop_tiles)
     end
@@ -4099,6 +4130,7 @@ apply_aesthetic_mode = function(self)
     local sheen_enabled = profile and profile.sheen_enabled == true
     local backdrop_enabled = profile and profile.backdrop_enabled == true
     local backdrop_tiled = profile and profile.backdrop_tiled == true
+    local backdrop_clouds_enabled = profile and profile.backdrop_clouds_enabled == true
     local table_sweep_shadow_enabled = profile and profile.table_sweep_shadow_enabled == true
     local backdrop_anim = (profile and profile.backdrop_anim) or "tile_generic_alpha_layer"
     local backdrop_tint = (profile and profile.backdrop_tint) or vmath.vector4(1, 1, 1, 0.2)
@@ -4167,6 +4199,22 @@ apply_aesthetic_mode = function(self)
             end
         end
         self.world_backdrop_anim = nil
+    end
+
+    if backdrop_clouds_enabled then
+        if not self.backdrop_cloud_fx then
+            self.backdrop_cloud_fx = factory.create(
+                "/swirling_clouds1_fx_factory#swirling_clouds1_fx_factory",
+                vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.backdrop_cloud_fx_z or 0.015)
+            )
+            if self.backdrop_cloud_fx then
+                go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), self.backdrop_cloud_fx)
+                pcall(particlefx.play, msg.url(nil, self.backdrop_cloud_fx, "particlefx"))
+            end
+        end
+    elseif self.backdrop_cloud_fx then
+        go.delete(self.backdrop_cloud_fx)
+        self.backdrop_cloud_fx = nil
     end
 
     if table_sweep_shadow_enabled then
@@ -4264,6 +4312,17 @@ apply_backdrop_emissive_tint = function(self, dt, profile)
     )
 end
 
+update_backdrop_cloud_fx = function(self)
+    if not self.backdrop_cloud_fx then
+        return
+    end
+    local left_margin_world = (self.backdrop_cloud_fx_left_margin_screen or 80) / self.camera_zoom
+    local px = self.camera_pos.x - ((SCREEN_WIDTH * 0.5) / self.camera_zoom) - left_margin_world
+    local py = self.camera_pos.y
+    go.set_position(vmath.vector3(px, py, self.backdrop_cloud_fx_z or 0.015), self.backdrop_cloud_fx)
+    go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), self.backdrop_cloud_fx)
+end
+
 set_aesthetic_mode = function(self, mode)
     if mode ~= AESTHETIC_MODE_COMPUTER and mode ~= AESTHETIC_MODE_BOARDGAME then
         return
@@ -4276,6 +4335,12 @@ set_aesthetic_mode = function(self, mode)
     self.world_backdrop_parallax_x = nil
     self.world_backdrop_parallax_y = nil
     self.world_backdrop_anchor_camera_y = nil
+    if self.backdrop_cloud_fx then
+        go.delete(self.backdrop_cloud_fx)
+    end
+    self.backdrop_cloud_fx = nil
+    self.backdrop_cloud_fx_z = 0.015
+    self.backdrop_cloud_fx_left_margin_screen = 80
     self.backdrop_emissive_phase = 0
     self.backdrop_emissive_speed_timer = nil
     self.backdrop_emissive_speed_mul_target = nil
@@ -6168,6 +6233,7 @@ function update(self, dt)
             end
         end
     end
+    update_backdrop_cloud_fx(self)
     if self.table_sweep_shadow_overlay then
         local profile = get_aesthetic_profile(self)
         local pan_speed_x = (profile and profile.table_sweep_shadow_pan_speed_x) or 0

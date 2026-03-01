@@ -16,7 +16,7 @@ emitters {
   properties {
     key: EMITTER_KEY_SIZE_X
     points {
-      y: 500.0
+      y: 750.0
     }
   }
   properties {
@@ -34,15 +34,15 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 300.0
+      y: 500.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SIZE
     points {
-      y: 50.0
+      y: 160.0
     }
-    spread: 80.0
+    spread: 160.0
   }
   properties {
     key: EMITTER_KEY_PARTICLE_RED
@@ -65,19 +65,13 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_ALPHA
     points {
-      y: 1.0
-    }
-  }
-  properties {
-    key: EMITTER_KEY_PARTICLE_ROTATION
-    points {
-      y: 35.0
+      y: 0.1
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_STRETCH_FACTOR_Y
     points {
-      y: 2.0
+      y: 1.0
     }
   }
   properties {
@@ -114,13 +108,7 @@ emitters {
   particle_properties {
     key: PARTICLE_KEY_ALPHA
     points {
-      y: 0.5
-    }
-  }
-  particle_properties {
-    key: PARTICLE_KEY_ROTATION
-    points {
-      y: 500.0
+      y: 1.0
     }
   }
 }

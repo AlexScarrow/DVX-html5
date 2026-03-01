@@ -4316,9 +4316,12 @@ update_backdrop_cloud_fx = function(self)
     if not self.backdrop_cloud_fx then
         return
     end
+    if self.backdrop_cloud_fx_anchor_y == nil then
+        self.backdrop_cloud_fx_anchor_y = self.camera_pos.y + 100
+    end
     local left_margin_world = (self.backdrop_cloud_fx_left_margin_screen or 80) / self.camera_zoom
     local px = self.camera_pos.x - ((SCREEN_WIDTH * 0.5) / self.camera_zoom) - left_margin_world
-    local py = self.camera_pos.y
+    local py = self.backdrop_cloud_fx_anchor_y
     go.set_position(vmath.vector3(px, py, self.backdrop_cloud_fx_z or 0.015), self.backdrop_cloud_fx)
     go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), self.backdrop_cloud_fx)
 end
@@ -4339,6 +4342,7 @@ set_aesthetic_mode = function(self, mode)
         go.delete(self.backdrop_cloud_fx)
     end
     self.backdrop_cloud_fx = nil
+    self.backdrop_cloud_fx_anchor_y = nil
     self.backdrop_cloud_fx_z = 0.015
     self.backdrop_cloud_fx_left_margin_screen = 80
     self.backdrop_emissive_phase = 0
@@ -5695,10 +5699,6 @@ end
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[self.current_level_index or 1]
-        local placement_map = {}
-        for _, placement in ipairs(selected_level) do
-            placement_map[tostring(placement.x) .. "," .. tostring(placement.y)] = true
-        end
         for placement_index, placement in ipairs(selected_level) do
             local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
             local pos = vmath.vector3(center_x, center_y, 0.02)
@@ -5715,8 +5715,33 @@ end
                 print("Tile factory create failed for: " .. placement.tile)
             end
 
-            local has_tile_above = placement_map[tostring(placement.x) .. "," .. tostring(placement.y + 3)] == true
-            local has_tile_left = placement_map[tostring(placement.x - 3) .. "," .. tostring(placement.y)] == true
+            -- Exterior details are only for truly exposed silhouettes:
+            -- roof: no overlapping tile anywhere above; left wall: no overlapping tile anywhere to the left.
+            local has_tile_above = false
+            local has_tile_left = false
+            local p_left = placement.x - 1
+            local p_right = placement.x + 1
+            local p_bottom = placement.y - 1
+            local p_top = placement.y + 1
+            for _, scan in ipairs(selected_level) do
+                if scan ~= placement then
+                    local s_left = scan.x - 1
+                    local s_right = scan.x + 1
+                    local s_bottom = scan.y - 1
+                    local s_top = scan.y + 1
+                    local overlaps_x = not (s_right < p_left or s_left > p_right)
+                    local overlaps_y = not (s_top < p_bottom or s_bottom > p_top)
+                    if (not has_tile_above) and overlaps_x and scan.y > placement.y then
+                        has_tile_above = true
+                    end
+                    if (not has_tile_left) and overlaps_y and scan.x < placement.x then
+                        has_tile_left = true
+                    end
+                    if has_tile_above and has_tile_left then
+                        break
+                    end
+                end
+            end
             if not has_tile_above then
                 local roof_id = factory.create(
                     "/tile_factory#tile_factory",

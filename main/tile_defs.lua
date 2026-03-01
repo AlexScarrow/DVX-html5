@@ -309,7 +309,7 @@ function M.create_tile_library(COMPONENT_UI)
         lootItems = { "ammo", "ammo", "material", "plate" ,"meds", "material", COMPONENT_UI.component_fuse, COMPONENT_UI.component_wiring_straight}
     }
      medbay.cells[5].object1 = {
-         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 501,
          offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
     }
     medbay.cells[5].object2 = {
@@ -326,7 +326,7 @@ function M.create_tile_library(COMPONENT_UI)
     }
 
     medbay.cells[9].object1 = {
-        name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 701,
+        name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 901,
         offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
     }
      -- medbay.cells[8].object2 = {

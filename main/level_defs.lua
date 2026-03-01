@@ -17,7 +17,8 @@ function M.create_level_library()
         { x = 8, y = 11, tile = "medbay" },
         { x = 8, y = 8, tile = "armoury" },
         { x = 11, y = 8, tile = "armoury" },
-        { x = 5, y = 8, tile = "armoury" }
+        { x = 5, y = 8, tile = "armoury" },
+        { x = 5, y = 5, tile = "medbay" }
     }
 
     -- Example Level 2

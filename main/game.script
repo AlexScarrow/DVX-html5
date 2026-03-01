@@ -129,11 +129,14 @@ AESTHETIC_PROFILES = {
     [AESTHETIC_MODE_COMPUTER] = {
         sheen_enabled = false,
         backdrop_enabled = true,
-        backdrop_anim = "tile_corridor",
+        backdrop_anim = "backdrop_computer",
         backdrop_tiled = false,
+        backdrop_scale = 3,
+        backdrop_align_bottom_world_y = 958,
         backdrop_tint = vmath.vector4(0.5, 0.62, 0.78, 0.45),
-        backdrop_pan_speed_x = 10,
-        backdrop_pan_speed_y = 4,
+        backdrop_pan_speed_x = 0,
+        backdrop_pan_speed_y = 0,
+        backdrop_parallax_factor = 0.05,
         world_drop_shadows_enabled = false,
         world_shadow_alpha = 0.0,
         table_sweep_shadow_enabled = false,
@@ -1347,6 +1350,17 @@ get_blip_fallback_staging_target = function(self, from_cell_id)
     return best_target, best_path
 end
 
+get_blip_cell_offset = function(alien)
+    if not alien then
+        return 0, 0
+    end
+    if alien.blip_cell_offset_x == nil or alien.blip_cell_offset_y == nil then
+        alien.blip_cell_offset_x = math.random(-45, 45)
+        alien.blip_cell_offset_y = math.random(-45, 45)
+    end
+    return alien.blip_cell_offset_x or 0, alien.blip_cell_offset_y or 0
+end
+
 local function has_unobstructed_los(world_grid, from_id, to_id)
     local from_cell = world_grid[from_id]
     local to_cell = world_grid[to_id]
@@ -1409,7 +1423,11 @@ local function ensure_alien_visual(self, alien)
     end
 
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
-    if alien.type ~= ALIEN_TYPE_BLIP then
+    if alien.type == ALIEN_TYPE_BLIP then
+        local off_x, off_y = get_blip_cell_offset(alien)
+        x = x + off_x
+        y = y + off_y
+    else
         x = x + (CELL_WIDTH * 0.25)
         local human_count = 0
         if self.squad_units then
@@ -1519,7 +1537,11 @@ local function refresh_alien_visual(self, alien)
 
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
-    if alien.type ~= ALIEN_TYPE_BLIP then
+    if alien.type == ALIEN_TYPE_BLIP then
+        local off_x, off_y = get_blip_cell_offset(alien)
+        x = x + off_x
+        y = y + off_y
+    else
         x = x + (CELL_WIDTH * 0.25)
         local human_count = 0
         if self.squad_units then
@@ -2521,7 +2543,15 @@ local function update_alien_movement(self, dt)
                 local to_vent = get_vent_object_on_cell(to_cell)
                 local is_vent_jump = from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-                if alien.type ~= ALIEN_TYPE_BLIP then
+                if alien.type == ALIEN_TYPE_BLIP then
+                    if alien.blip_step_for_index ~= alien.move_path_index then
+                        alien.blip_step_for_index = alien.move_path_index
+                        alien.blip_step_offset_x = math.random(-45, 45)
+                        alien.blip_step_offset_y = math.random(-45, 45)
+                    end
+                    tx = tx + (alien.blip_step_offset_x or 0)
+                    ty = ty + (alien.blip_step_offset_y or 0)
+                else
                     tx = tx + (CELL_WIDTH * 0.25)
                     local human_count = 0
                     if self.squad_units then
@@ -2640,6 +2670,13 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
                     end
                     alien.cell_id = target_cell_id
+                    if alien.type == ALIEN_TYPE_BLIP then
+                        alien.blip_cell_offset_x = alien.blip_step_offset_x or alien.blip_cell_offset_x
+                        alien.blip_cell_offset_y = alien.blip_step_offset_y or alien.blip_cell_offset_y
+                        alien.blip_step_for_index = nil
+                        alien.blip_step_offset_x = nil
+                        alien.blip_step_offset_y = nil
+                    end
                     alien.counter_move_total_dist = nil
                     local door_owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
                     if door_obj and door_closed and alien.type == ALIEN_TYPE_BRUTE then
@@ -4182,6 +4219,11 @@ set_aesthetic_mode = function(self, mode)
     self.aesthetic_mode = mode
     self.world_backdrop_pan_x = 0
     self.world_backdrop_pan_y = 0
+    self.world_backdrop_prev_camera_x = nil
+    self.world_backdrop_prev_camera_y = nil
+    self.world_backdrop_parallax_x = nil
+    self.world_backdrop_parallax_y = nil
+    self.world_backdrop_anchor_camera_y = nil
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
     self.computer_emissive_phase = 0
@@ -5705,12 +5747,17 @@ function init(self)
     self.world_backdrop_tiles = nil
     self.world_backdrop_anim = nil
     self.world_backdrop_z = 0.001
-    self.world_backdrop_art_w = 550
-    self.world_backdrop_art_h = 300
+    self.world_backdrop_art_w = 1024
+    self.world_backdrop_art_h = 576
     self.world_backdrop_base_offset_x = 0
     self.world_backdrop_base_offset_y = 0
     self.world_backdrop_pan_x = 0
     self.world_backdrop_pan_y = 0
+    self.world_backdrop_prev_camera_x = nil
+    self.world_backdrop_prev_camera_y = nil
+    self.world_backdrop_parallax_x = nil
+    self.world_backdrop_parallax_y = nil
+    self.world_backdrop_anchor_camera_y = nil
     self.table_sweep_shadow_overlay = nil
     self.table_sweep_shadow_anim = nil
     self.table_sweep_shadow_factory = nil
@@ -5946,14 +5993,56 @@ function update(self, dt)
         local profile = get_aesthetic_profile(self)
         local pan_speed_x = (profile and profile.backdrop_pan_speed_x) or 0
         local pan_speed_y = (profile and profile.backdrop_pan_speed_y) or 0
+        local parallax_factor = (profile and profile.backdrop_parallax_factor) or 1
         self.world_backdrop_pan_x = (self.world_backdrop_pan_x or 0) + (pan_speed_x * dt)
         self.world_backdrop_pan_y = (self.world_backdrop_pan_y or 0) + (pan_speed_y * dt)
-        local bx = self.camera_pos.x + (self.world_backdrop_base_offset_x or 0) + (self.world_backdrop_pan_x or 0)
-        local by = self.camera_pos.y + (self.world_backdrop_base_offset_y or 0) + (self.world_backdrop_pan_y or 0)
+        if self.world_backdrop_prev_camera_x == nil or self.world_backdrop_prev_camera_y == nil then
+            self.world_backdrop_prev_camera_x = self.camera_pos.x
+            self.world_backdrop_prev_camera_y = self.camera_pos.y
+            self.world_backdrop_parallax_x = self.camera_pos.x
+            self.world_backdrop_parallax_y = self.camera_pos.y
+        else
+            local camera_dx = self.camera_pos.x - self.world_backdrop_prev_camera_x
+            local camera_dy = self.camera_pos.y - self.world_backdrop_prev_camera_y
+            self.world_backdrop_parallax_x = (self.world_backdrop_parallax_x or self.camera_pos.x) + (camera_dx * parallax_factor)
+            self.world_backdrop_parallax_y = (self.world_backdrop_parallax_y or self.camera_pos.y) + (camera_dy * parallax_factor)
+            self.world_backdrop_prev_camera_x = self.camera_pos.x
+            self.world_backdrop_prev_camera_y = self.camera_pos.y
+        end
+        local backdrop_cam_x = (parallax_factor == 1) and self.camera_pos.x or (self.world_backdrop_parallax_x or self.camera_pos.x)
+        local backdrop_cam_y = (parallax_factor == 1) and self.camera_pos.y or (self.world_backdrop_parallax_y or self.camera_pos.y)
+        local bx = backdrop_cam_x + (self.world_backdrop_base_offset_x or 0) + (self.world_backdrop_pan_x or 0)
+        local by = backdrop_cam_y + (self.world_backdrop_base_offset_y or 0) + (self.world_backdrop_pan_y or 0)
         if self.world_backdrop then
-            local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.world_backdrop_art_w or 256)
-            local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.world_backdrop_art_h or 256)
-            go.set_position(vmath.vector3(bx, by, self.world_backdrop_z or -0.2), self.world_backdrop)
+            local backdrop_scale = (profile and profile.backdrop_scale) or 1
+            local sx = (SCREEN_WIDTH / (self.world_backdrop_art_w or 256)) * backdrop_scale
+            local sy = (SCREEN_HEIGHT / (self.world_backdrop_art_h or 256)) * backdrop_scale
+            local final_by = by
+            local align_bottom_world_y = profile and profile.backdrop_align_bottom_world_y
+            if align_bottom_world_y == nil and profile and profile.backdrop_align_to_lowest_tile_floor == true and self.world_grid then
+                local lowest_y_cell = nil
+                for _, cell in ipairs(self.world_grid) do
+                    if cell and cell.tileID and cell.tileID ~= hash("empty") then
+                        local y_cell = cell.yCell or 1
+                        if lowest_y_cell == nil or y_cell < lowest_y_cell then
+                            lowest_y_cell = y_cell
+                        end
+                    end
+                end
+                if lowest_y_cell ~= nil then
+                    local _, lowest_row_center_y = coords_to_world_pos(1, lowest_y_cell)
+                    align_bottom_world_y = lowest_row_center_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + ((profile.backdrop_floor_align_offset_y) or 0)
+                end
+            end
+            if align_bottom_world_y ~= nil then
+                if self.world_backdrop_anchor_camera_y == nil then
+                    self.world_backdrop_anchor_camera_y = backdrop_cam_y
+                end
+                local parallax_delta_y = backdrop_cam_y - self.world_backdrop_anchor_camera_y
+                local backdrop_height = (self.world_backdrop_art_h or 256) * sy
+                final_by = align_bottom_world_y + (backdrop_height * 0.5) + parallax_delta_y + (self.world_backdrop_pan_y or 0)
+            end
+            go.set_position(vmath.vector3(bx, final_by, self.world_backdrop_z or -0.2), self.world_backdrop)
             go.set_scale(vmath.vector3(sx, sy, 1), self.world_backdrop)
         end
         if self.world_backdrop_tiles and #self.world_backdrop_tiles > 0 then

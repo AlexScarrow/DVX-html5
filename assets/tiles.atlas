@@ -136,3 +136,6 @@ images {
 images {
   image: "/assets/images/backdrop_boardgame.png"
 }
+images {
+  image: "/assets/images/backdrop_computer.png"
+}

@@ -5630,6 +5630,10 @@ end
 
         -- Spawn tile sprites slightly above cell debug layer (50% opacity).
         local selected_level = self.level_library[self.current_level_index or 1]
+        local placement_map = {}
+        for _, placement in ipairs(selected_level) do
+            placement_map[tostring(placement.x) .. "," .. tostring(placement.y)] = true
+        end
         for placement_index, placement in ipairs(selected_level) do
             local center_x, center_y = coords_to_world_pos(placement.x, placement.y)
             local pos = vmath.vector3(center_x, center_y, 0.02)
@@ -5644,6 +5648,37 @@ end
                 table.insert(tile_objects, id)
             else
                 print("Tile factory create failed for: " .. placement.tile)
+            end
+
+            local has_tile_above = placement_map[tostring(placement.x) .. "," .. tostring(placement.y + 3)] == true
+            local has_tile_left = placement_map[tostring(placement.x - 3) .. "," .. tostring(placement.y)] == true
+            if not has_tile_above then
+                local roof_id = factory.create(
+                    "/tile_factory#tile_factory",
+                    vmath.vector3(center_x, center_y + (CELL_HEIGHT * 3), 0.02),
+                    nil,
+                    {},
+                    vmath.vector3(visual_scale, visual_scale, 1)
+                )
+                if roof_id then
+                    msg.post(msg.url(nil, roof_id, "sprite"), "play_animation", { id = hash("exterior_roof1") })
+                    go.set(msg.url(nil, roof_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                    table.insert(tile_objects, roof_id)
+                end
+            end
+            if not has_tile_left then
+                local left_wall_id = factory.create(
+                    "/tile_factory#tile_factory",
+                    vmath.vector3(center_x - (CELL_WIDTH * 3), center_y, 0.02),
+                    nil,
+                    {},
+                    vmath.vector3(visual_scale, visual_scale, 1)
+                )
+                if left_wall_id then
+                    msg.post(msg.url(nil, left_wall_id, "sprite"), "play_animation", { id = hash("exterior_leftWall1") })
+                    go.set(msg.url(nil, left_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                    table.insert(tile_objects, left_wall_id)
+                end
             end
 
             local power_light_off_anim = tile_def and tile_def.powerLightOffAnim or nil

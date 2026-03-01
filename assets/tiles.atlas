@@ -139,3 +139,9 @@ images {
 images {
   image: "/assets/images/backdrop_computer.png"
 }
+images {
+  image: "/assets/images/exterior_leftWall1.png"
+}
+images {
+  image: "/assets/images/exterior_roof1.png"
+}

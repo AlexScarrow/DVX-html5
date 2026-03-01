@@ -134,6 +134,12 @@ AESTHETIC_PROFILES = {
         backdrop_scale = 3,
         backdrop_align_bottom_world_y = 958,
         backdrop_tint = vmath.vector4(0.5, 0.62, 0.78, 0.45),
+        backdrop_emissive_enabled = true,
+        backdrop_emissive_speed = 0.22,
+        backdrop_emissive_amount = 0.3,
+        backdrop_emissive_speed_variation_amount = 0.28,
+        backdrop_emissive_speed_variation_min_seconds = 3.0,
+        backdrop_emissive_speed_variation_max_seconds = 8.0,
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
         backdrop_parallax_factor = 0.05,
@@ -4212,6 +4218,52 @@ apply_aesthetic_mode = function(self)
     apply_human_aesthetic_animations(self)
 end
 
+apply_backdrop_emissive_tint = function(self, dt, profile)
+    if not self.world_backdrop then
+        return
+    end
+    local base = (profile and profile.backdrop_tint) or vmath.vector4(1, 1, 1, 1)
+    if not (profile and profile.backdrop_emissive_enabled == true and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER) then
+        go.set(msg.url(nil, self.world_backdrop, "sprite"), "tint", base)
+        return
+    end
+    local base_speed = profile.backdrop_emissive_speed or 0.03
+    local speed_variation = profile.backdrop_emissive_speed_variation_amount or 0
+    local speed = base_speed
+    if speed_variation > 0 then
+        self.backdrop_emissive_speed_timer = (self.backdrop_emissive_speed_timer or 0) - dt
+        if self.backdrop_emissive_speed_mul_target == nil then
+            self.backdrop_emissive_speed_mul_target = 1
+        end
+        if self.backdrop_emissive_speed_mul_current == nil then
+            self.backdrop_emissive_speed_mul_current = self.backdrop_emissive_speed_mul_target
+        end
+        if self.backdrop_emissive_speed_timer <= 0 then
+            self.backdrop_emissive_speed_mul_target = 1 + (math.random() * 2 - 1) * speed_variation
+            local min_s = profile.backdrop_emissive_speed_variation_min_seconds or 3.0
+            local max_s = profile.backdrop_emissive_speed_variation_max_seconds or 8.0
+            self.backdrop_emissive_speed_timer = min_s + (math.random() * math.max(0, max_s - min_s))
+        end
+        local blend = math.min(1, dt * 1.25)
+        self.backdrop_emissive_speed_mul_current = self.backdrop_emissive_speed_mul_current
+            + ((self.backdrop_emissive_speed_mul_target - self.backdrop_emissive_speed_mul_current) * blend)
+        speed = base_speed * self.backdrop_emissive_speed_mul_current
+    end
+    speed = speed * math.pi * 2
+    local amount = profile.backdrop_emissive_amount or 0.015
+    self.backdrop_emissive_phase = (self.backdrop_emissive_phase or 0) + (dt * speed)
+    local wave_a = math.sin(self.backdrop_emissive_phase)
+    local wave_b = math.sin((self.backdrop_emissive_phase * 0.37) + 1.2)
+    local wave = (wave_a * 0.75) + (wave_b * 0.25)
+    local mul = 1 + (wave * amount)
+    local alpha = math.max(0, math.min(1, base.w * (1 + (wave * amount * 0.45))))
+    go.set(
+        msg.url(nil, self.world_backdrop, "sprite"),
+        "tint",
+        vmath.vector4(base.x * mul, base.y * mul, base.z * mul, alpha)
+    )
+end
+
 set_aesthetic_mode = function(self, mode)
     if mode ~= AESTHETIC_MODE_COMPUTER and mode ~= AESTHETIC_MODE_BOARDGAME then
         return
@@ -4224,6 +4276,10 @@ set_aesthetic_mode = function(self, mode)
     self.world_backdrop_parallax_x = nil
     self.world_backdrop_parallax_y = nil
     self.world_backdrop_anchor_camera_y = nil
+    self.backdrop_emissive_phase = 0
+    self.backdrop_emissive_speed_timer = nil
+    self.backdrop_emissive_speed_mul_target = nil
+    self.backdrop_emissive_speed_mul_current = nil
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
     self.computer_emissive_phase = 0
@@ -5758,6 +5814,10 @@ function init(self)
     self.world_backdrop_parallax_x = nil
     self.world_backdrop_parallax_y = nil
     self.world_backdrop_anchor_camera_y = nil
+    self.backdrop_emissive_phase = 0
+    self.backdrop_emissive_speed_timer = nil
+    self.backdrop_emissive_speed_mul_target = nil
+    self.backdrop_emissive_speed_mul_current = nil
     self.table_sweep_shadow_overlay = nil
     self.table_sweep_shadow_anim = nil
     self.table_sweep_shadow_factory = nil
@@ -6044,6 +6104,7 @@ function update(self, dt)
             end
             go.set_position(vmath.vector3(bx, final_by, self.world_backdrop_z or -0.2), self.world_backdrop)
             go.set_scale(vmath.vector3(sx, sy, 1), self.world_backdrop)
+            apply_backdrop_emissive_tint(self, dt, profile)
         end
         if self.world_backdrop_tiles and #self.world_backdrop_tiles > 0 then
             local cols = (profile and profile.backdrop_tile_cols) or 5

@@ -4078,7 +4078,64 @@ apply_computer_emissive_accents = function(self, dt)
         self.computer_emissive_phase = (self.computer_emissive_phase or 0) + (dt * speed)
     end
 
-    local function get_instance_tint(instance_key, powered)
+    local human_tile_instances = {}
+    local nearby_human_tile_instances = {}
+    if self.world_grid and self.squad_units then
+        for _, unit in pairs(self.squad_units) do
+            if unit and (unit.current_health or 0) > 0 and unit.cell_id then
+                local cell = self.world_grid[unit.cell_id]
+                local tile_id = cell and cell.tileInstanceId or nil
+                if tile_id and tile_id > 0 then
+                    human_tile_instances[tile_id] = true
+                    nearby_human_tile_instances[tile_id] = true
+                end
+            end
+        end
+    end
+    local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if selected_level and next(human_tile_instances) ~= nil then
+        for human_tile_id, _ in pairs(human_tile_instances) do
+            local a = selected_level[human_tile_id]
+            if a then
+                local a_left = a.x - 1
+                local a_right = a.x + 1
+                local a_bottom = a.y - 1
+                local a_top = a.y + 1
+                for tile_id, b in ipairs(selected_level) do
+                    if tile_id ~= human_tile_id then
+                        local b_left = b.x - 1
+                        local b_right = b.x + 1
+                        local b_bottom = b.y - 1
+                        local b_top = b.y + 1
+                        local overlap_y = not (b_top < a_bottom or b_bottom > a_top)
+                        local overlap_x = not (b_right < a_left or b_left > a_right)
+                        local horizontal_adjacent = overlap_y and (b_left == (a_right + 1) or b_right == (a_left - 1))
+                        local vertical_adjacent = overlap_x and (b_bottom == (a_top + 1) or b_top == (a_bottom - 1))
+                        if horizontal_adjacent or vertical_adjacent then
+                            nearby_human_tile_instances[tile_id] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local function get_instance_tint(instance_key, powered, apply_off_human_proximity_rule)
+        if apply_off_human_proximity_rule and not powered then
+            local n = tonumber(instance_key) or 0
+            self.tile_off_proximity_mul_state = self.tile_off_proximity_mul_state or {}
+            local target_mul = nearby_human_tile_instances[n] and 1 or 0.5
+            local current_mul = self.tile_off_proximity_mul_state[n]
+            if current_mul == nil then
+                current_mul = target_mul
+            else
+                local fade_speed = 5.5
+                local blend = math.min(1, dt * fade_speed)
+                current_mul = current_mul + ((target_mul - current_mul) * blend)
+            end
+            self.tile_off_proximity_mul_state[n] = current_mul
+            return vmath.vector4(current_mul, current_mul, current_mul, 1)
+        end
         if not enabled or not powered then
             return white_tint
         end
@@ -4099,7 +4156,7 @@ apply_computer_emissive_accents = function(self, dt)
     if self.tile_light_layers then
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local powered = self.tile_light_power_state and self.tile_light_power_state[tile_instance_id] == true
-            local tint = get_instance_tint(tile_instance_id, powered)
+            local tint = get_instance_tint(tile_instance_id, powered, true)
             pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", tint)
         end
     end
@@ -4314,13 +4371,28 @@ end
 
 update_backdrop_cloud_fx = function(self)
     if not self.backdrop_cloud_fx then
-        return
+        local profile = get_aesthetic_profile(self)
+        if profile and profile.backdrop_clouds_enabled == true then
+            self.backdrop_cloud_fx = factory.create(
+                "/swirling_clouds1_fx_factory#swirling_clouds1_fx_factory",
+                vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.backdrop_cloud_fx_z or 0.015)
+            )
+            if self.backdrop_cloud_fx then
+                go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), self.backdrop_cloud_fx)
+                pcall(particlefx.play, msg.url(nil, self.backdrop_cloud_fx, "particlefx"))
+            else
+                return
+            end
+        else
+            return
+        end
     end
     if self.backdrop_cloud_fx_anchor_y == nil then
         self.backdrop_cloud_fx_anchor_y = self.camera_pos.y + 100
     end
     local left_margin_world = (self.backdrop_cloud_fx_left_margin_screen or 80) / self.camera_zoom
-    local px = self.camera_pos.x - ((SCREEN_WIDTH * 0.5) / self.camera_zoom) - left_margin_world
+    local left_extra_world = (self.backdrop_cloud_fx_left_extra_screen or 1500) / self.camera_zoom
+    local px = self.camera_pos.x - ((SCREEN_WIDTH * 0.5) / self.camera_zoom) - left_margin_world - left_extra_world
     local py = self.backdrop_cloud_fx_anchor_y
     go.set_position(vmath.vector3(px, py, self.backdrop_cloud_fx_z or 0.015), self.backdrop_cloud_fx)
     go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), self.backdrop_cloud_fx)
@@ -4345,6 +4417,7 @@ set_aesthetic_mode = function(self, mode)
     self.backdrop_cloud_fx_anchor_y = nil
     self.backdrop_cloud_fx_z = 0.015
     self.backdrop_cloud_fx_left_margin_screen = 80
+    self.backdrop_cloud_fx_left_extra_screen = 1500
     self.backdrop_emissive_phase = 0
     self.backdrop_emissive_speed_timer = nil
     self.backdrop_emissive_speed_mul_target = nil
@@ -5689,6 +5762,7 @@ end
         self.tile_light_anim_ids = {}
         self.tile_alpha_layers = {}
         self.tile_alpha_power_state = {}
+        self.tile_off_proximity_mul_state = {}
         loot_objects = {}
         machine_objects = {}
         self.turret_tripod_objects = {}

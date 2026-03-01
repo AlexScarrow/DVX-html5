@@ -28,7 +28,7 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 8.0
+      y: 16.0
     }
   }
   properties {

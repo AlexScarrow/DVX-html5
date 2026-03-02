@@ -5,6 +5,12 @@ function M.create(ctx)
     local HUMAN_MELEE_LURCH_DISTANCE = 28
     local HUMAN_MELEE_LURCH_OUT_TIME = 0.06
     local HUMAN_MELEE_LURCH_BACK_TIME = 0.08
+    local HUMAN_MELEE_LURCH_Z_BONUS = 0.08
+    local HUMAN_MELEE_TARGET_FLASH_TIME = 0.09
+    local ALIEN_MELEE_LURCH_DISTANCE = 26
+    local ALIEN_MELEE_LURCH_OUT_TIME = 0.05
+    local ALIEN_MELEE_LURCH_BACK_TIME = 0.08
+    local ALIEN_MELEE_LURCH_Z_BONUS = 0.06
 
     local function clamp(v, lo, hi)
         if v < lo then return lo end
@@ -78,6 +84,9 @@ function M.create(ctx)
 
     local function mark_human_hit(unit)
         unit.hit_flash_timer = ctx.MELEE_MODEL.human_hit_flash_duration
+        if unit.sprite_path then
+            pcall(go.set, unit.sprite_path, "tint", vmath.vector4(1, 0.15, 0.15, 1))
+        end
     end
 
     local function spawn_alien_melee_swipe_fx(self, target)
@@ -146,6 +155,25 @@ function M.create(ctx)
         end)
     end
 
+    local function play_target_red_flash(target_alien)
+        if not target_alien or not target_alien.go_id then
+            return
+        end
+        local sprite_url = msg.url(nil, target_alien.go_id, "sprite")
+        local ok_tint, base_tint = pcall(go.get, sprite_url, "tint")
+        if not ok_tint or not base_tint then
+            base_tint = vmath.vector4(1, 1, 1, 1)
+        end
+        local flash_tint = vmath.vector4(1, 0.25, 0.25, base_tint.w or 1)
+        target_alien.melee_flash_active = true
+        go.cancel_animations(sprite_url, "tint")
+        go.set(sprite_url, "tint", flash_tint)
+        timer.delay(HUMAN_MELEE_TARGET_FLASH_TIME, false, function()
+            target_alien.melee_flash_active = false
+            pcall(go.set, sprite_url, "tint", base_tint)
+        end)
+    end
+
     local function play_human_melee_lurch(human, target_alien)
         if not human or not human.go_path or human.is_moving then
             return
@@ -165,10 +193,38 @@ function M.create(ctx)
         local step_x = (dx / len) * HUMAN_MELEE_LURCH_DISTANCE
         local step_y = (dy / len) * HUMAN_MELEE_LURCH_DISTANCE
         local origin = go.get_position(human.go_path)
-        local lurch_target = vmath.vector3(origin.x + step_x, origin.y + step_y, origin.z)
+        local lurch_z = math.max(origin.z, (target_pos.z or origin.z) + HUMAN_MELEE_LURCH_Z_BONUS)
+        local lurch_target = vmath.vector3(origin.x + step_x, origin.y + step_y, lurch_z)
         go.cancel_animations(human.go_path, "position")
         go.animate(human.go_path, "position", go.PLAYBACK_ONCE_FORWARD, lurch_target, go.EASING_OUTQUAD, HUMAN_MELEE_LURCH_OUT_TIME, 0, function()
             go.animate(human.go_path, "position", go.PLAYBACK_ONCE_FORWARD, origin, go.EASING_INQUAD, HUMAN_MELEE_LURCH_BACK_TIME)
+        end)
+    end
+
+    local function play_alien_melee_lurch(alien, target_human)
+        if not alien or not alien.go_id or alien.is_moving then
+            return
+        end
+        if not target_human or not target_human.go_path then
+            return
+        end
+        local attacker_pos = go.get_position(alien.go_id)
+        local target_pos = go.get_position(target_human.go_path)
+        local dx = target_pos.x - attacker_pos.x
+        local dy = target_pos.y - attacker_pos.y
+        local len = math.sqrt((dx * dx) + (dy * dy))
+        if len <= 0.001 then
+            return
+        end
+
+        local step_x = (dx / len) * ALIEN_MELEE_LURCH_DISTANCE
+        local step_y = (dy / len) * ALIEN_MELEE_LURCH_DISTANCE
+        local origin = go.get_position(alien.go_id)
+        local lurch_z = math.max(origin.z, (target_pos.z or origin.z) + ALIEN_MELEE_LURCH_Z_BONUS)
+        local lurch_target = vmath.vector3(origin.x + step_x, origin.y + step_y, lurch_z)
+        go.cancel_animations(alien.go_id, "position")
+        go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, lurch_target, go.EASING_OUTQUAD, ALIEN_MELEE_LURCH_OUT_TIME, 0, function()
+            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, origin, go.EASING_INQUAD, ALIEN_MELEE_LURCH_BACK_TIME)
         end)
     end
 
@@ -184,6 +240,7 @@ function M.create(ctx)
         end
 
         play_human_melee_lurch(human, target_alien)
+        play_target_red_flash(target_alien)
         human.current_ap = human.current_ap - 1
         local hit_chance = clamp(ctx.MELEE_MODEL.human_base_hit_chance, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)
@@ -231,6 +288,7 @@ function M.create(ctx)
         local roll = math.random(1, 100)
         self.melee_ap_left_by_alien_id[alien.id] = ap_left - 1
         spawn_alien_melee_swipe_fx(self, target)
+        play_alien_melee_lurch(alien, target)
 
         if roll <= hit_chance then
             target.current_health = math.max(0, (target.current_health or 0) - 1)

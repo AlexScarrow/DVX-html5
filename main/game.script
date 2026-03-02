@@ -1593,7 +1593,13 @@ local function refresh_alien_visual(self, alien)
         y = y + 0
     end
     go.set_position(vmath.vector3(x, y, 0.6), alien.go_id)
-    if (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
+    if alien.melee_flash_active then
+        local flash_alpha = 1
+        if cfg and cfg.marker_tint then
+            flash_alpha = cfg.marker_tint.w
+        end
+        go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 0.2, 0.2, flash_alpha))
+    elseif (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
     end
 end
@@ -5517,11 +5523,8 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
 
     local best_alien = nil
     local best_dist = math.huge
-    local count_on_cell = 0
-
     for _, alien in ipairs(self.aliens) do
         if (not alien.is_dead) and alien.cell_id == cell_id then
-            count_on_cell = count_on_cell + 1
             if alien.go_id then
                 local pos = go.get_position(alien.go_id)
                 local dx = pos.x - world_x
@@ -5535,10 +5538,6 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
                 best_alien = alien
             end
         end
-    end
-
-    if count_on_cell == 1 then
-        return best_alien
     end
 
     if best_dist <= UNIT_CLICK_SELECT_RADIUS then

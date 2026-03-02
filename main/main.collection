@@ -340,3 +340,13 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "weld_overlay_factory"
+  data: "embedded_components {\n"
+  "  id: \"weld_overlay_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/weld_overlay.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

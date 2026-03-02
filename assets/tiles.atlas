@@ -113,6 +113,9 @@ images {
   image: "/assets/images/vent_welded.png"
 }
 images {
+  image: "/assets/images/weld_overlay.png"
+}
+images {
   image: "/assets/images/sensor.png"
 }
 images {

@@ -1,6 +1,10 @@
 local M = {}
 
 function M.extend(runtime, ctx)
+    local WELD_OVERLAY_OFFSET_X = -0.5
+    local WELD_OVERLAY_OFFSET_Y = -0.5
+    local WELD_OVERLAY_Z = 0.54
+
     local function boardgame_shadows_enabled(self)
         return self and self.aesthetic_mode == "boardgame"
     end
@@ -387,14 +391,29 @@ function M.extend(runtime, ctx)
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local vent_x = x + (vent.offsetX or 0)
                 local vent_y = y + (vent.offsetY or 0)
+                local fx_active = self.vent_weld_fx_cells and self.vent_weld_fx_cells[cell_id]
+                local marker_x = fx_active and (x + WELD_OVERLAY_OFFSET_X) or vent_x
+                local marker_y = fx_active and (y + WELD_OVERLAY_OFFSET_Y) or vent_y
                 if boardgame_shadows_enabled(self) then
                     self.vent_shadow_objects[cell_id] = spawn_world_shadow(vent_x + 4, vent_y - 6, 0.5, 0.45, 0.18, 0.32)
                 end
-                local marker_id = factory.create("/alien_blip_factory#alien_blip_factory", vmath.vector3(vent_x, vent_y, 0.48))
+                local marker_z = fx_active and WELD_OVERLAY_Z or 0.48
+                local marker_factory = fx_active and "/weld_overlay_factory#weld_overlay_factory" or "/alien_blip_factory#alien_blip_factory"
+                local marker_id = factory.create(marker_factory, vmath.vector3(marker_x, marker_y, marker_z))
                 if marker_id then
-                    local anim = vent.isWelded == true and hash("vent_welded") or hash("vent_unwelded")
+                    local anim = fx_active and hash("weld_overlay") or (vent.isWelded == true and hash("vent_welded") or hash("vent_unwelded"))
                     msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
-                    go.set_scale(vmath.vector3(0.6, 0.6, 1), marker_id)
+                    if fx_active then
+                        local sprite_url = msg.url(nil, marker_id, "sprite")
+                        local dim_tint = vmath.vector4(0, 0, 0, 1)
+                        local bright_tint = vmath.vector4(0, 1, 1, 1)
+                        local pulse_speed = 0.03 + (math.random() * 0.11)
+                        go.set(sprite_url, "tint", dim_tint)
+                        go.animate(sprite_url, "tint", go.PLAYBACK_LOOP_PINGPONG, bright_tint, go.EASING_INOUTSINE, pulse_speed)
+                        go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                    else
+                        go.set_scale(vmath.vector3(0.6, 0.6, 1), marker_id)
+                    end
                     self.vent_objects[cell_id] = marker_id
                 end
             end

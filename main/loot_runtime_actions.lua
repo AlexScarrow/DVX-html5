@@ -521,11 +521,20 @@ function M.extend(runtime, ctx)
     end
 
     runtime.spawn_vent_weld_fx = function(self, cell, vent_obj)
-        -- FUTURE HOOK: spawn one-shot vent welding particle FX here.
-        -- Suggested future behavior:
-        -- 1) Resolve world position from cell + vent offset.
-        -- 2) factory.create("/vent_weld_fx_factory#vent_weld_fx_factory", ...).
-        -- 3) trigger particlefx play, then stop/delete after short duration.
+        if not self or not cell or not cell.idNumber then
+            return
+        end
+        local weld_fx_duration = 1.5
+        self.vent_weld_fx_cells = self.vent_weld_fx_cells or {}
+        self.vent_weld_fx_cells[cell.idNumber] = true
+        print(string.format("WELD FX FLAG: cell %d active", cell.idNumber))
+        runtime.refresh_vent_markers(self)
+        timer.delay(weld_fx_duration, false, function()
+            if self and self.vent_weld_fx_cells then
+                self.vent_weld_fx_cells[cell.idNumber] = nil
+            end
+            runtime.refresh_vent_markers(self)
+        end)
     end
 
     runtime.spawn_power_node_activation_fx = function(self, cell, power_node)
@@ -1559,7 +1568,9 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_vent_markers(self)
                                     runtime.refresh_world_item_visuals(self)
-                                    runtime.spawn_vent_weld_fx(self, drop_cell, vent_target)
+                                    local weld_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
+                                    print(string.format("WELD FX CALLSITE: triggering overlay on cell %d", drop_cell_id or 0))
+                                    runtime.spawn_vent_weld_fx(self, weld_cell, vent_target)
                                     print(string.format(
                                         "%s welded vent object #%d using 1 %s. (AP -%d)",
                                         source_unit.display_name,

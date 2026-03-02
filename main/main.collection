@@ -191,6 +191,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "human_shadow_proxy_factory"
+  data: "embedded_components {\n"
+  "  id: \"human_shadow_proxy_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/human_shadow_proxy.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "cell_factory"
   data: "embedded_components {\n"
   "  id: \"cell_factory\"\n"
@@ -266,6 +276,16 @@ embedded_instances {
   "  id: \"sparks_small_fx_factory\"\n"
   "  type: \"factory\"\n"
   "  data: \"prototype: \\\"/main/sparks_small_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "swirling_clouds1_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"swirling_clouds1_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/swirling_clouds1_fx.go\\\"\\n"
   "\"\n"
   "}\n"
   ""

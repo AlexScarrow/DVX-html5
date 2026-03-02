@@ -127,3 +127,27 @@ images {
 images {
   image: "/assets/images/tile_medbay_on.png"
 }
+images {
+  image: "/assets/images/sweep_shadow.png"
+}
+images {
+  image: "/assets/images/human_dropShadow.png"
+}
+images {
+  image: "/assets/images/backdrop_boardgame.png"
+}
+images {
+  image: "/assets/images/backdrop_computer.png"
+}
+images {
+  image: "/assets/images/exterior_leftWall1.png"
+}
+images {
+  image: "/assets/images/exterior_roof1.png"
+}
+images {
+  image: "/assets/images/tile_passage1_off.png"
+}
+images {
+  image: "/assets/images/tile_passage1_on.png"
+}

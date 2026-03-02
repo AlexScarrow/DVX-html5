@@ -1,17 +1,44 @@
 local M = {}
 
 function M.extend(runtime, ctx)
-    runtime.clear_loot_marker = function(cell_id)
+    local function boardgame_shadows_enabled(self)
+        return self and self.aesthetic_mode == "boardgame"
+    end
+
+    local function spawn_world_shadow(x, y, z, sx, sy, alpha)
+        local shadow_id = factory.create("/ui_factory#ui_factory", vmath.vector3(x, y, z))
+        if shadow_id then
+            go.set_scale(vmath.vector3(sx, sy, 1), shadow_id)
+            go.set(msg.url(nil, shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, alpha or 0.32))
+        end
+        return shadow_id
+    end
+
+    runtime.clear_loot_marker = function(self, cell_id)
         local loot_objects = ctx.get_loot_objects()
         local marker = loot_objects[cell_id]
         if marker then
             go.delete(marker)
             loot_objects[cell_id] = nil
         end
+        if self and self.loot_shadow_objects then
+            local shadow = self.loot_shadow_objects[cell_id]
+            if shadow then
+                go.delete(shadow)
+                self.loot_shadow_objects[cell_id] = nil
+            end
+        end
     end
 
     runtime.refresh_loot_markers = function(self)
         local loot_objects = ctx.get_loot_objects()
+        self.loot_shadow_objects = self.loot_shadow_objects or {}
+        for cell_id, marker in pairs(self.loot_shadow_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.loot_shadow_objects[cell_id] = nil
+        end
         for cell_id, marker in pairs(loot_objects) do
             if marker then
                 go.delete(marker)
@@ -29,6 +56,9 @@ function M.extend(runtime, ctx)
                 local crate_obj = runtime.get_loot_crate_object(cell)
                 local marker_x = x + ((crate_obj and crate_obj.offsetX) or cell.lootOffsetX or 0)
                 local marker_y = y + ((crate_obj and crate_obj.offsetY) or cell.lootOffsetY or 0)
+                if boardgame_shadows_enabled(self) then
+                    self.loot_shadow_objects[cell_id] = spawn_world_shadow(marker_x + 5, marker_y - 7, 0.5, 0.6, 0.22, 0.34)
+                end
                 local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(marker_x, marker_y, ctx.LOOT_UI.marker_z))
                 if marker_id then
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.marker_size, ctx.LOOT_UI.marker_size, 1), marker_id)
@@ -40,6 +70,13 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_machine_markers = function(self)
         local machine_objects = ctx.get_machine_objects()
+        self.machine_shadow_objects = self.machine_shadow_objects or {}
+        for cell_id, marker in pairs(self.machine_shadow_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.machine_shadow_objects[cell_id] = nil
+        end
         for cell_id, marker in pairs(machine_objects) do
             if marker then
                 go.delete(marker)
@@ -57,6 +94,9 @@ function M.extend(runtime, ctx)
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local mx = x + (machine.offsetX or 0)
                 local my = y + (machine.offsetY or 0)
+                if boardgame_shadows_enabled(self) then
+                    self.machine_shadow_objects[cell_id] = spawn_world_shadow(mx + 5, my - 7, 0.5, 0.62, 0.24, 0.34)
+                end
                 local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(mx, my, 0.56))
                 if marker_id then
                     local anim = hash("wiregap_straight_off")
@@ -78,6 +118,13 @@ function M.extend(runtime, ctx)
     runtime.refresh_turret_markers = function(self)
         local turret_tripod_objects = ctx.get_turret_tripod_objects(self)
         local turret_gun_objects = ctx.get_turret_gun_objects(self)
+        self.turret_shadow_objects = self.turret_shadow_objects or {}
+        for cell_id, marker in pairs(self.turret_shadow_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.turret_shadow_objects[cell_id] = nil
+        end
         for cell_id, marker in pairs(turret_tripod_objects) do
             if marker then
                 go.delete(marker)
@@ -103,6 +150,9 @@ function M.extend(runtime, ctx)
                         local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                         local tx = x + (obj.offsetX or 0)
                         local ty = y + (obj.offsetY or 0)
+                        if boardgame_shadows_enabled(self) then
+                            self.turret_shadow_objects[cell_id] = spawn_world_shadow(tx + 7, ty - 10, 0.5, 0.74, 0.3, 0.36)
+                        end
                         local tripod_id = factory.create("/tile_factory#tile_factory", vmath.vector3(tx, ty, 0.56))
                         local gun_id = factory.create("/tile_factory#tile_factory", vmath.vector3(tx, ty, 0.561))
                         if tripod_id then
@@ -169,9 +219,16 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_power_node_markers = function(self)
         self.power_node_objects = self.power_node_objects or {}
+        self.power_node_shadow_objects = self.power_node_shadow_objects or {}
         self.power_node_power_state = self.power_node_power_state or {}
         self.power_node_flicker_state = self.power_node_flicker_state or {}
         local power_node_objects = self.power_node_objects
+        for cell_id, marker in pairs(self.power_node_shadow_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.power_node_shadow_objects[cell_id] = nil
+        end
         for cell_id, marker in pairs(power_node_objects) do
             if marker then
                 go.delete(marker)
@@ -189,6 +246,9 @@ function M.extend(runtime, ctx)
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local marker_x = x + (power_node.offsetX or 0)
                 local marker_y = y + (power_node.offsetY or 0)
+                if boardgame_shadows_enabled(self) then
+                    self.power_node_shadow_objects[cell_id] = spawn_world_shadow(marker_x + 4, marker_y - 7, 0.5, 0.56, 0.22, 0.33)
+                end
                 local marker_id = factory.create("/power_node_marker_factory#power_node_marker_factory", vmath.vector3(marker_x, marker_y, ctx.LOOT_UI.power_node_marker_z or 0.55))
                 if marker_id then
                     local was_powered = self.power_node_power_state[cell_id]
@@ -216,7 +276,13 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_wiregap_markers = function(self)
         self.wiregap_objects = self.wiregap_objects or {}
+        self.wiregap_shadow_objects = self.wiregap_shadow_objects or {}
         self.wiregap_fx_objects = self.wiregap_fx_objects or {}
+        for _, marker in ipairs(self.wiregap_shadow_objects) do
+            if marker then
+                go.delete(marker)
+            end
+        end
         for _, marker in ipairs(self.wiregap_objects) do
             if marker then
                 go.delete(marker)
@@ -227,6 +293,7 @@ function M.extend(runtime, ctx)
                 go.delete(fx_id)
             end
         end
+        self.wiregap_shadow_objects = {}
         self.wiregap_objects = {}
         self.wiregap_fx_objects = {}
 
@@ -266,6 +333,12 @@ function M.extend(runtime, ctx)
                         local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                         local wx = x + (obj.offsetX or 0)
                         local wy = y + (obj.offsetY or 0)
+                        if boardgame_shadows_enabled(self) then
+                            local shadow_id = spawn_world_shadow(wx + 4, wy - 6, 0.5, 0.48, 0.19, 0.32)
+                            if shadow_id then
+                                table.insert(self.wiregap_shadow_objects, shadow_id)
+                            end
+                        end
                         local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(wx, wy, 0.56))
                         if marker_id then
                             msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
@@ -290,6 +363,13 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_vent_markers = function(self)
         self.vent_objects = self.vent_objects or {}
+        self.vent_shadow_objects = self.vent_shadow_objects or {}
+        for cell_id, marker in pairs(self.vent_shadow_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.vent_shadow_objects[cell_id] = nil
+        end
         for cell_id, marker in pairs(self.vent_objects) do
             if marker then
                 go.delete(marker)
@@ -307,6 +387,9 @@ function M.extend(runtime, ctx)
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local vent_x = x + (vent.offsetX or 0)
                 local vent_y = y + (vent.offsetY or 0)
+                if boardgame_shadows_enabled(self) then
+                    self.vent_shadow_objects[cell_id] = spawn_world_shadow(vent_x + 4, vent_y - 6, 0.5, 0.45, 0.18, 0.32)
+                end
                 local marker_id = factory.create("/alien_blip_factory#alien_blip_factory", vmath.vector3(vent_x, vent_y, 0.48))
                 if marker_id then
                     local anim = vent.isWelded == true and hash("vent_welded") or hash("vent_unwelded")
@@ -320,6 +403,7 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_door_markers = function(self)
         self.door_objects = self.door_objects or {}
+        self.door_shadow_objects = self.door_shadow_objects or {}
         self.door_visual_state = self.door_visual_state or {}
 
         if not self.world_grid then
@@ -378,6 +462,7 @@ function M.extend(runtime, ctx)
                         z = 0.565
                     end
                     local marker_id = self.door_objects[cell_id]
+                    local shadow_id = self.door_shadow_objects[cell_id]
                     if not marker_id then
                         marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(dx, dy, z))
                         if marker_id then
@@ -385,6 +470,17 @@ function M.extend(runtime, ctx)
                             msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                             go.set_scale(vmath.vector3(1, 1, 1), marker_id)
                         end
+                    end
+                    if boardgame_shadows_enabled(self) then
+                        if not shadow_id then
+                            shadow_id = spawn_world_shadow(dx + 7, dy - 10, 0.5, 0.72, 0.27, 0.35)
+                            self.door_shadow_objects[cell_id] = shadow_id
+                        elseif shadow_id then
+                            go.set_position(vmath.vector3(dx + 7, dy - 10, 0.5), shadow_id)
+                        end
+                    elseif shadow_id then
+                        go.delete(shadow_id)
+                        self.door_shadow_objects[cell_id] = nil
                     end
                     if marker_id then
                         go.set_position(vmath.vector3(dx, dy, z), marker_id)
@@ -446,6 +542,11 @@ function M.extend(runtime, ctx)
                 end
                 self.door_objects[cell_id] = nil
                 self.door_visual_state[cell_id] = nil
+                local shadow_id = self.door_shadow_objects[cell_id]
+                if shadow_id then
+                    go.delete(shadow_id)
+                end
+                self.door_shadow_objects[cell_id] = nil
             end
         end
     end

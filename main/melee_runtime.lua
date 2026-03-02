@@ -2,6 +2,9 @@ local M = {}
 
 function M.create(ctx)
     local runtime = {}
+    local HUMAN_MELEE_LURCH_DISTANCE = 28
+    local HUMAN_MELEE_LURCH_OUT_TIME = 0.06
+    local HUMAN_MELEE_LURCH_BACK_TIME = 0.08
 
     local function clamp(v, lo, hi)
         if v < lo then return lo end
@@ -143,6 +146,32 @@ function M.create(ctx)
         end)
     end
 
+    local function play_human_melee_lurch(human, target_alien)
+        if not human or not human.go_path or human.is_moving then
+            return
+        end
+        if not target_alien or not target_alien.go_id then
+            return
+        end
+        local attacker_pos = go.get_position(human.go_path)
+        local target_pos = go.get_position(target_alien.go_id)
+        local dx = target_pos.x - attacker_pos.x
+        local dy = target_pos.y - attacker_pos.y
+        local len = math.sqrt((dx * dx) + (dy * dy))
+        if len <= 0.001 then
+            return
+        end
+
+        local step_x = (dx / len) * HUMAN_MELEE_LURCH_DISTANCE
+        local step_y = (dy / len) * HUMAN_MELEE_LURCH_DISTANCE
+        local origin = go.get_position(human.go_path)
+        local lurch_target = vmath.vector3(origin.x + step_x, origin.y + step_y, origin.z)
+        go.cancel_animations(human.go_path, "position")
+        go.animate(human.go_path, "position", go.PLAYBACK_ONCE_FORWARD, lurch_target, go.EASING_OUTQUAD, HUMAN_MELEE_LURCH_OUT_TIME, 0, function()
+            go.animate(human.go_path, "position", go.PLAYBACK_ONCE_FORWARD, origin, go.EASING_INQUAD, HUMAN_MELEE_LURCH_BACK_TIME)
+        end)
+    end
+
     local function resolve_human_melee_strike(self, human, target_alien, source_tag)
         if not human or not target_alien then
             return
@@ -154,6 +183,7 @@ function M.create(ctx)
             return
         end
 
+        play_human_melee_lurch(human, target_alien)
         human.current_ap = human.current_ap - 1
         local hit_chance = clamp(ctx.MELEE_MODEL.human_base_hit_chance, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)

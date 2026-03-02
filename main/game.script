@@ -133,7 +133,7 @@ AESTHETIC_PROFILES = {
         backdrop_tiled = false,
         backdrop_scale = 3,
         backdrop_align_bottom_world_y = 958,
-        backdrop_tint = vmath.vector4(0.5, 0.62, 0.78, 0.45),
+        backdrop_tint = vmath.vector4(1, 1, 1, 1),
         backdrop_emissive_enabled = true,
         backdrop_emissive_speed = 0.22,
         backdrop_emissive_amount = 0.3,
@@ -155,11 +155,12 @@ AESTHETIC_PROFILES = {
         ui_panel_shadow_alpha = 0.0,
         counter_token_move_enabled = false,
         computer_emissive_enabled = true,
-        computer_emissive_tint = vmath.vector4(0.7, 0.92, 1.18, 1),
+        computer_emissive_tint = vmath.vector4(1, 1, 1, 1),
         computer_emissive_pulse_speed = 0.38,
         computer_emissive_min_mul = 0.84,
         computer_emissive_max_mul = 1.22,
         computer_emissive_variation_amount = 0.22,
+        computer_emissive_max_speed_jitter = 1.04,
         computer_emissive_variation_speed = 0.2
     },
     [AESTHETIC_MODE_BOARDGAME] = {
@@ -2063,15 +2064,7 @@ function collect_reactive_turret_targets(self)
             if unit and unit.cell_id and (unit.current_health or 0) > 0 then
                 local prev = self.turret_last_human_cell_by_id[unit_id]
                 self.turret_last_human_cell_by_id[unit_id] = unit.cell_id
-                if prev and prev ~= unit.cell_id then
-                    table.insert(moved, {
-                        kind = "human",
-                        id = unit_id,
-                        prev_cell_id = prev,
-                        cell_id = unit.cell_id,
-                        hp = unit.current_health or 0
-                    })
-                end
+                -- Turrets should never target humans.
             end
         end
     end
@@ -4145,6 +4138,10 @@ apply_computer_emissive_accents = function(self, dt)
         local speed_jitter = 1
             + (math.sin((n + 1) * 4.123 + 1.7) * variation_amount * 1.2)
             + (math.sin(drift * 0.55 + (n * 0.17)) * variation_amount * 0.35)
+        local max_speed_jitter = profile and profile.computer_emissive_max_speed_jitter or 1.08
+        if speed_jitter > max_speed_jitter then
+            speed_jitter = max_speed_jitter
+        end
         local intensity_jitter = 1
             + (math.cos((n + 1) * 7.777 + 0.3) * variation_amount * 1.35)
             + (math.cos(drift * 0.42 + (n * 0.11)) * variation_amount * 0.4)
@@ -5044,15 +5041,37 @@ function spawn_human_unit(self)
     end
 
     local spawn_cells = {}
-    for cell_id, cell in ipairs(self.world_grid) do
-        if cell.tileID ~= hash("empty") then
-            table.insert(spawn_cells, cell_id)
+    local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    local leftmost_tile = nil
+    if selected_level then
+        for _, placement in ipairs(selected_level) do
+            if (not leftmost_tile)
+                or placement.x < leftmost_tile.x
+                or (placement.x == leftmost_tile.x and placement.y < leftmost_tile.y)
+            then
+                leftmost_tile = placement
+            end
         end
     end
 
-    if #spawn_cells < 4 then
-        print("Not enough walkable cells to spawn the full squad.")
-        return
+    local leftmost_spawn_cell_id = nil
+    if leftmost_tile then
+        leftmost_spawn_cell_id = coords_to_id(leftmost_tile.x, leftmost_tile.y)
+    end
+    if leftmost_spawn_cell_id and self.world_grid[leftmost_spawn_cell_id] and self.world_grid[leftmost_spawn_cell_id].tileID ~= hash("empty") then
+        for i = 1, 4 do
+            spawn_cells[i] = leftmost_spawn_cell_id
+        end
+    else
+        for cell_id, cell in ipairs(self.world_grid) do
+            if cell.tileID ~= hash("empty") then
+                table.insert(spawn_cells, cell_id)
+            end
+        end
+        if #spawn_cells < 4 then
+            print("Not enough walkable cells to spawn the full squad.")
+            return
+        end
     end
 
     self.cell_slot_assignments = {}

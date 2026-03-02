@@ -145,3 +145,9 @@ images {
 images {
   image: "/assets/images/exterior_roof1.png"
 }
+images {
+  image: "/assets/images/tile_passage1_off.png"
+}
+images {
+  image: "/assets/images/tile_passage1_on.png"
+}

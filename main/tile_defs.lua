@@ -341,6 +341,92 @@ function M.create_tile_library(COMPONENT_UI)
      -- Enable when ready:
      library["medbay"] = medbay
 
+
+    -- =====================================================================
+    -- TEMPLATE: passage 1 (vertical shaft on right with cave on left tile (copy/edit, then uncomment to enable)
+    -- =====================================================================
+    local passage1 = create_tile_prototype("passage1")
+    passage1.visualTile = "passage1_off"
+    passage1.powerLightOffAnim = "tile_passage1_off"
+    passage1.powerLightOnAnim = "tile_passage1_on"
+
+    for i = 1, 9 do
+        passage1.cells[i].lightValue = 0
+        passage1.cells[i].moveValue = 0
+        passage1.cells[i].coverValue = 0
+    end
+
+    passage1.cells[4].lightValue = 1
+    passage1.cells[4].moveValue = 1
+    passage1.cells[3].moveValue = 3
+    passage1.cells[6].moveValue = 3
+    passage1.cells[9].moveValue = 3
+
+    -- Internal connectivity:
+    -- - Vertical shaft only on right column: 3 <-> 6 <-> 9
+    -- - Single isolated accessible cell: 4
+    -- - Cell 4 remains enterable from left neighbor tile via edge rules.
+    passage1.cells[2].accessRight = false   -- blocks 2 <-> 3
+    passage1.cells[3].accessRight = false   -- blocks right boundary from 3
+    passage1.cells[4].accessRight = false   -- blocks 4 <-> 5
+    passage1.cells[4].accessDown = false    -- blocks 4 <-> 1
+    passage1.cells[5].accessRight = false   -- blocks 5 <-> 6
+    passage1.cells[6].accessRight = false   -- blocks right boundary from 6
+    passage1.cells[6].accessDown = true     -- allows 6 <-> 3
+    passage1.cells[7].accessRight = false   -- blocks 7 <-> 8
+    passage1.cells[7].accessDown = false    -- blocks 7 <-> 4
+    passage1.cells[8].accessRight = false   -- blocks 8 <-> 9
+    passage1.cells[9].accessRight = false   -- blocks right boundary from 9
+    passage1.cells[9].accessDown = true     -- allows 9 <-> 6
+
+    -- Example authored objects:
+--     medbay.cells[1].object1 = {
+--         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+--         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--     }
+--     medbay.cells[2].object1 = {
+--         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+--         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--     }
+--     medbay.cells[4].object1 = {
+--         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+--         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+--         lootItems = { "ammo", "ammo", "material", "plate" ,"meds", "material", COMPONENT_UI.component_fuse, COMPONENT_UI.component_wiring_straight}
+--     }
+passage1.cells[6].object1 = {
+    name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+}
+--     medbay.cells[5].object2 = {
+--         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 502,
+--         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--     }
+--     medbay.cells[5].object3 = {
+--         name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 503,
+--         offsetX = -10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+--     }
+--     medbay.cells[6].object1 = {
+--         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 601,
+--         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--     }
+-- 
+--     medbay.cells[9].object1 = {
+--         name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 901,
+--         offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+--     }
+    -- medbay.cells[8].object2 = {
+    --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 5802,
+    --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    -- }
+
+    -- Choose deterministic or random loot behavior:
+    -- assign_fixed_loot_cell(medbay, 5)
+    -- assign_random_loot_cell(medbay)
+
+    -- Enable when ready:
+    library["passage1"] = passage1
+
+    
     return library
 end
 

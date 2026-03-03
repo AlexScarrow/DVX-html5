@@ -148,6 +148,7 @@ AESTHETIC_PROFILES = {
         backdrop_clouds_enabled = true,
         world_drop_shadows_enabled = false,
         world_shadow_alpha = 0.0,
+        tile_room_shadow_alpha = 0.0,
         table_sweep_shadow_enabled = false,
         table_sweep_shadow_anim = "tile_generic_alpha_layer",
         table_sweep_shadow_tint = vmath.vector4(0, 0, 0, 0),
@@ -170,8 +171,8 @@ AESTHETIC_PROFILES = {
         backdrop_enabled = true,
         backdrop_anim = "backdrop_boardgame",
         backdrop_tiled = true,
-        backdrop_tile_cols = 10,
-        backdrop_tile_rows = 10,
+        backdrop_tile_cols = 18,
+        backdrop_tile_rows = 15,
         backdrop_tile_art_w = 256,
         backdrop_tile_art_h = 256,
         backdrop_tile_scale = 1,
@@ -182,6 +183,7 @@ AESTHETIC_PROFILES = {
         backdrop_clouds_enabled = false,
         world_drop_shadows_enabled = true,
         world_shadow_alpha = 0.5,
+        tile_room_shadow_alpha = 0.59375,
         table_sweep_shadow_enabled = true,
         table_sweep_shadow_anim = "sweep_shadow",
         table_sweep_shadow_tint = vmath.vector4(1, 1, 1, 0.4),
@@ -3915,6 +3917,7 @@ function reset_and_load_level(self, level_index)
         safe_delete_array(self.world_backdrop_tiles)
     end
     safe_delete_array(tile_objects)
+    safe_delete_map(self.tile_room_shadows)
     safe_delete_map(cell_objects)
     safe_delete_map(loot_objects)
     safe_delete_map(self.loot_shadow_objects)
@@ -4379,6 +4382,15 @@ apply_aesthetic_mode = function(self)
         go.delete(self.sheen_overlay)
         self.sheen_overlay = nil
     end
+    if self.tile_room_shadows then
+        local tile_shadow_alpha = (profile and profile.tile_room_shadow_alpha) or 0
+        local tile_shadow_tint = vmath.vector4(0, 0, 0, tile_shadow_alpha)
+        for _, shadow_id in pairs(self.tile_room_shadows) do
+            if shadow_id then
+                pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", tile_shadow_tint)
+            end
+        end
+    end
     apply_human_aesthetic_animations(self)
 end
 
@@ -4485,6 +4497,7 @@ set_aesthetic_mode = function(self, mode)
     self.backdrop_emissive_speed_mul_current = nil
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
+    self.table_sweep_shadow_pause_timer = nil
     self.computer_emissive_phase = 0
     self.computer_emissive_variation_phase = 0
     apply_aesthetic_mode(self)
@@ -5837,6 +5850,7 @@ end
         self.tile_light_flicker_state = {}
         self.tile_light_anim_ids = {}
         self.tile_alpha_layers = {}
+        self.tile_room_shadows = {}
         self.tile_alpha_power_state = {}
         self.tile_off_proximity_mul_state = {}
         loot_objects = {}
@@ -5863,6 +5877,18 @@ end
                 table.insert(tile_objects, id)
             else
                 print("Tile factory create failed for: " .. placement.tile)
+            end
+
+            local tile_shadow_id = factory.create(
+                "/shadow_box_factory#shadow_box_factory",
+                vmath.vector3(center_x + 12, center_y - 12, 0.005),
+                nil,
+                {},
+                vmath.vector3(750, 450, 1)
+            )
+            if tile_shadow_id then
+                go.set(msg.url(nil, tile_shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+                self.tile_room_shadows[placement_index] = tile_shadow_id
             end
 
             -- Exterior details are only for truly exposed silhouettes:
@@ -6100,12 +6126,13 @@ function init(self)
     self.table_sweep_shadow_z = 1.3
     self.table_sweep_shadow_art_w = 256
     self.table_sweep_shadow_art_h = 256
-    self.table_sweep_shadow_scale_x = 0.6
-    self.table_sweep_shadow_scale_y = 0.5
+    self.table_sweep_shadow_scale_x = 1.2
+    self.table_sweep_shadow_scale_y = 1.0
     self.table_sweep_shadow_base_offset_x = 0
     self.table_sweep_shadow_base_offset_y = 180
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
+    self.table_sweep_shadow_pause_timer = nil
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
@@ -6435,20 +6462,25 @@ function update(self, dt)
         local pan_speed_x = (profile and profile.table_sweep_shadow_pan_speed_x) or 0
         local pan_speed_y = (profile and profile.table_sweep_shadow_pan_speed_y) or 0
         -- Treat sweep offsets/speed as screen-space so motion feels identical across zoom levels.
-        local start_x = -SCREEN_WIDTH * 0.6
-        local end_x = SCREEN_WIDTH * 0.6
+        local start_x = (-SCREEN_WIDTH * 0.6) - 1000
+        local end_x = (SCREEN_WIDTH * 0.6) + 1000
         local pan_x = self.table_sweep_shadow_pan_x
+        local pause_timer = self.table_sweep_shadow_pause_timer or 0
         if pan_x == nil then
             pan_x = start_x
+        elseif pause_timer > 0 then
+            pause_timer = math.max(0, pause_timer - dt)
         else
             pan_x = pan_x + (pan_speed_x * dt)
             if pan_x > end_x then
                 pan_x = start_x
+                pause_timer = 10 + (math.random() * 10)
             end
         end
         local pan_y = (self.table_sweep_shadow_pan_y or 0) + (pan_speed_y * dt)
         self.table_sweep_shadow_pan_x = pan_x
         self.table_sweep_shadow_pan_y = pan_y
+        self.table_sweep_shadow_pause_timer = pause_timer
         local sx = ((SCREEN_WIDTH / self.camera_zoom) / (self.table_sweep_shadow_art_w or 256)) * (self.table_sweep_shadow_scale_x or 1)
         local sy = ((SCREEN_HEIGHT / self.camera_zoom) / (self.table_sweep_shadow_art_h or 256)) * (self.table_sweep_shadow_scale_y or 1)
         local ox = ((self.table_sweep_shadow_base_offset_x or 0) + pan_x) / self.camera_zoom

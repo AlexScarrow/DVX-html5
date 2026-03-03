@@ -1562,6 +1562,13 @@ local function refresh_alien_visual(self, alien)
     if not alien.go_id then
         return
     end
+    local alien_anim = get_alien_anim_for_aesthetic(self, alien.type)
+    if alien_anim and alien.current_aesthetic_anim ~= alien_anim then
+        msg.post(msg.url(nil, alien.go_id, "sprite"), "play_animation", { id = alien_anim })
+        alien.current_aesthetic_anim = alien_anim
+    elseif not alien_anim then
+        alien.current_aesthetic_anim = nil
+    end
 
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
@@ -3576,6 +3583,29 @@ get_counter_shadow_anim_for_alien = function(alien_type)
     return nil
 end
 
+get_alien_anim_for_aesthetic = function(self, alien_type)
+    if not self then
+        return nil
+    end
+    if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+        if alien_type == ALIEN_TYPE_CANNON then
+            return hash("alien_cannonFodder_boardgame")
+        elseif alien_type == ALIEN_TYPE_SPITTER then
+            return hash("alien_spitter_boardgame")
+        elseif alien_type == ALIEN_TYPE_SPEEDY then
+            return hash("alien_speedy_boardgame")
+        end
+    end
+    if alien_type == ALIEN_TYPE_CANNON then
+        return hash("alien_cannonFodder")
+    elseif alien_type == ALIEN_TYPE_SPITTER then
+        return hash("alien_spitter")
+    elseif alien_type == ALIEN_TYPE_SPEEDY then
+        return hash("alien_speedy")
+    end
+    return nil
+end
+
 get_counter_shadow_anim_for_human = function(self, unit)
     if not unit then
         return hash("human_dropShadow"), vmath.vector4(1, 1, 1, 0.5)
@@ -4165,6 +4195,23 @@ apply_human_aesthetic_animations = function(self)
     end
 end
 
+apply_alien_aesthetic_animations = function(self)
+    if not self or not self.aliens then
+        return
+    end
+    for _, alien in ipairs(self.aliens) do
+        if alien and (not alien.is_dead) and alien.go_id then
+            local anim = get_alien_anim_for_aesthetic(self, alien.type)
+            if anim then
+                pcall(msg.post, msg.url(nil, alien.go_id, "sprite"), "play_animation", { id = anim })
+                alien.current_aesthetic_anim = anim
+            else
+                alien.current_aesthetic_anim = nil
+            end
+        end
+    end
+end
+
 apply_computer_emissive_accents = function(self, dt)
     local profile = get_aesthetic_profile(self)
     local enabled = profile
@@ -4460,6 +4507,7 @@ apply_aesthetic_mode = function(self)
         end
     end
     apply_human_aesthetic_animations(self)
+    apply_alien_aesthetic_animations(self)
 end
 
 apply_backdrop_emissive_tint = function(self, dt, profile)

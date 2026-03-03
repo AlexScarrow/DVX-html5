@@ -41,16 +41,25 @@ images {
   image: "/assets/images/alien_spitter.png"
 }
 images {
+  image: "/assets/images/alien_spitter_boardgame.png"
+}
+images {
   image: "/assets/images/alien_spitter_shadow.png"
 }
 images {
   image: "/assets/images/alien_speedy.png"
 }
 images {
+  image: "/assets/images/alien_speedy_boardgame.png"
+}
+images {
   image: "/assets/images/alien_speedy_shadow.png"
 }
 images {
   image: "/assets/images/alien_cannonFodder.png"
+}
+images {
+  image: "/assets/images/alien_cannonFodder_boardgame.png"
 }
 images {
   image: "/assets/images/alien_cannonFodder_shadow.png"

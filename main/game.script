@@ -144,6 +144,7 @@ AESTHETIC_PROFILES = {
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
         backdrop_parallax_factor = 0.05,
+        backdrop_follow_camera = true,
         backdrop_clouds_enabled = true,
         world_drop_shadows_enabled = false,
         world_shadow_alpha = 0.0,
@@ -169,14 +170,15 @@ AESTHETIC_PROFILES = {
         backdrop_enabled = true,
         backdrop_anim = "backdrop_boardgame",
         backdrop_tiled = true,
-        backdrop_tile_cols = 5,
-        backdrop_tile_rows = 5,
+        backdrop_tile_cols = 10,
+        backdrop_tile_rows = 10,
         backdrop_tile_art_w = 256,
         backdrop_tile_art_h = 256,
-        backdrop_tile_scale = 2,
-        backdrop_tint = vmath.vector4(0.55, 0.45, 0.32, 0.55),
+        backdrop_tile_scale = 1,
+        backdrop_tint = vmath.vector4(1, 1, 1, 1),
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
+        backdrop_follow_camera = false,
         backdrop_clouds_enabled = false,
         world_drop_shadows_enabled = true,
         world_shadow_alpha = 0.5,
@@ -4467,6 +4469,8 @@ set_aesthetic_mode = function(self, mode)
     self.world_backdrop_parallax_x = nil
     self.world_backdrop_parallax_y = nil
     self.world_backdrop_anchor_camera_y = nil
+    self.world_backdrop_anchor_world_x = nil
+    self.world_backdrop_anchor_world_y = nil
     if self.backdrop_cloud_fx then
         go.delete(self.backdrop_cloud_fx)
     end
@@ -6064,7 +6068,7 @@ function init(self)
     msg.post("@render:", "use_camera_projection")
     msg.post("/camera#camera", "acquire_camera_focus")
 
-    self.sheen_z = 0.4--0.3
+    self.sheen_z = 1.2--0.3
     self.sheen_alpha = 0.48--0.8--0.22
     self.sheen_art_w = 550--768
     self.sheen_art_h = 300--576
@@ -6093,7 +6097,7 @@ function init(self)
     self.table_sweep_shadow_overlay = nil
     self.table_sweep_shadow_anim = nil
     self.table_sweep_shadow_factory = nil
-    self.table_sweep_shadow_z = 0.78
+    self.table_sweep_shadow_z = 1.3
     self.table_sweep_shadow_art_w = 256
     self.table_sweep_shadow_art_h = 256
     self.table_sweep_shadow_scale_x = 0.6
@@ -6327,23 +6331,42 @@ function update(self, dt)
         local pan_speed_x = (profile and profile.backdrop_pan_speed_x) or 0
         local pan_speed_y = (profile and profile.backdrop_pan_speed_y) or 0
         local parallax_factor = (profile and profile.backdrop_parallax_factor) or 1
+        local follow_camera = not (profile and profile.backdrop_follow_camera == false)
         self.world_backdrop_pan_x = (self.world_backdrop_pan_x or 0) + (pan_speed_x * dt)
         self.world_backdrop_pan_y = (self.world_backdrop_pan_y or 0) + (pan_speed_y * dt)
-        if self.world_backdrop_prev_camera_x == nil or self.world_backdrop_prev_camera_y == nil then
-            self.world_backdrop_prev_camera_x = self.camera_pos.x
-            self.world_backdrop_prev_camera_y = self.camera_pos.y
-            self.world_backdrop_parallax_x = self.camera_pos.x
-            self.world_backdrop_parallax_y = self.camera_pos.y
+        if follow_camera then
+            if self.world_backdrop_prev_camera_x == nil or self.world_backdrop_prev_camera_y == nil then
+                self.world_backdrop_prev_camera_x = self.camera_pos.x
+                self.world_backdrop_prev_camera_y = self.camera_pos.y
+                self.world_backdrop_parallax_x = self.camera_pos.x
+                self.world_backdrop_parallax_y = self.camera_pos.y
+            else
+                local camera_dx = self.camera_pos.x - self.world_backdrop_prev_camera_x
+                local camera_dy = self.camera_pos.y - self.world_backdrop_prev_camera_y
+                self.world_backdrop_parallax_x = (self.world_backdrop_parallax_x or self.camera_pos.x) + (camera_dx * parallax_factor)
+                self.world_backdrop_parallax_y = (self.world_backdrop_parallax_y or self.camera_pos.y) + (camera_dy * parallax_factor)
+                self.world_backdrop_prev_camera_x = self.camera_pos.x
+                self.world_backdrop_prev_camera_y = self.camera_pos.y
+            end
         else
-            local camera_dx = self.camera_pos.x - self.world_backdrop_prev_camera_x
-            local camera_dy = self.camera_pos.y - self.world_backdrop_prev_camera_y
-            self.world_backdrop_parallax_x = (self.world_backdrop_parallax_x or self.camera_pos.x) + (camera_dx * parallax_factor)
-            self.world_backdrop_parallax_y = (self.world_backdrop_parallax_y or self.camera_pos.y) + (camera_dy * parallax_factor)
-            self.world_backdrop_prev_camera_x = self.camera_pos.x
-            self.world_backdrop_prev_camera_y = self.camera_pos.y
+            if self.world_backdrop_anchor_world_x == nil or self.world_backdrop_anchor_world_y == nil then
+                self.world_backdrop_anchor_world_x = self.camera_pos.x
+                self.world_backdrop_anchor_world_y = self.camera_pos.y
+            end
+            self.world_backdrop_prev_camera_x = nil
+            self.world_backdrop_prev_camera_y = nil
+            self.world_backdrop_parallax_x = nil
+            self.world_backdrop_parallax_y = nil
         end
-        local backdrop_cam_x = (parallax_factor == 1) and self.camera_pos.x or (self.world_backdrop_parallax_x or self.camera_pos.x)
-        local backdrop_cam_y = (parallax_factor == 1) and self.camera_pos.y or (self.world_backdrop_parallax_y or self.camera_pos.y)
+        local backdrop_cam_x = nil
+        local backdrop_cam_y = nil
+        if follow_camera then
+            backdrop_cam_x = (parallax_factor == 1) and self.camera_pos.x or (self.world_backdrop_parallax_x or self.camera_pos.x)
+            backdrop_cam_y = (parallax_factor == 1) and self.camera_pos.y or (self.world_backdrop_parallax_y or self.camera_pos.y)
+        else
+            backdrop_cam_x = self.world_backdrop_anchor_world_x or self.camera_pos.x
+            backdrop_cam_y = self.world_backdrop_anchor_world_y or self.camera_pos.y
+        end
         local bx = backdrop_cam_x + (self.world_backdrop_base_offset_x or 0) + (self.world_backdrop_pan_x or 0)
         local by = backdrop_cam_y + (self.world_backdrop_base_offset_y or 0) + (self.world_backdrop_pan_y or 0)
         if self.world_backdrop then
@@ -6385,8 +6408,8 @@ function update(self, dt)
             local tile_art_w = (profile and profile.backdrop_tile_art_w) or 256
             local tile_art_h = (profile and profile.backdrop_tile_art_h) or 256
             local tile_scale_base = (profile and profile.backdrop_tile_scale) or 1
-            local tile_scale_x = tile_scale_base / self.camera_zoom
-            local tile_scale_y = tile_scale_base / self.camera_zoom
+            local tile_scale_x = tile_scale_base
+            local tile_scale_y = tile_scale_base
             local tile_span_x = tile_art_w * tile_scale_x
             local tile_span_y = tile_art_h * tile_scale_y
             local x0 = bx - (((cols - 1) * tile_span_x) * 0.5)

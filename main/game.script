@@ -99,8 +99,8 @@ AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
 AESTHETIC_BUTTON_H = 30
 AESTHETIC_BUTTON_Z = 0.845
-ENTRY_FIRE_OFFSET_X = 0
-ENTRY_FIRE_OFFSET_Y = 0
+ENTRY_FIRE_OFFSET_X = -50
+ENTRY_FIRE_OFFSET_Y = -60
 ENTRY_FIRE_Z = 0.015 -- Match swirling_clouds1 world-FX depth behavior
 ENTRY_FIRE_ROTATION_DEG = -20
 local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
@@ -1526,6 +1526,8 @@ local function ensure_alien_visual(self, alien)
                 local scale = 0.33333334
                 if alien.type == ALIEN_TYPE_CANNON then
                     scale = 0.22
+                elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                    scale = scale * 0.75
                 end
                 sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
                 sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
@@ -2540,6 +2542,8 @@ local function update_alien_movement(self, dt)
                         local base_scale = 0.33333334
                         if alien.type == ALIEN_TYPE_CANNON then
                             base_scale = 0.22
+                        elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                            base_scale = base_scale * 0.75
                         end
                         local sx = base_scale
                         local sy = base_scale
@@ -2673,6 +2677,8 @@ local function update_alien_movement(self, dt)
                     local base_scale = 0.33333334
                     if alien.type == ALIEN_TYPE_CANNON then
                         base_scale = 0.22
+                    elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                        base_scale = base_scale * 0.75
                     end
                     local sx = base_scale
                     local sy = base_scale
@@ -6516,6 +6522,8 @@ function update(self, dt)
                 local base_scale = 0.33333334
                 if alien.type == ALIEN_TYPE_CANNON then
                     base_scale = 0.22
+                elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                    base_scale = base_scale * 0.75
                 end
                 local sx = base_scale * (1 - (0.045 * pulse))
                 local sy = base_scale * (1 + (0.0675 * pulse))

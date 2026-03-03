@@ -169,3 +169,6 @@ images {
 images {
   image: "/assets/images/tile_passage1_on.png"
 }
+margin: 2
+inner_padding: 2
+extrude_borders: 2

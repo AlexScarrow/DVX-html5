@@ -4,6 +4,7 @@ function M.extend(runtime, ctx)
     local WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM = 34
     local TURRET_PACKED_ITEM = "turret_packed"
     local TURRET_ARMING_TURNS_ON_DEPLOY = 2
+    local WELD_SPARKS_Z = 0.62
 
     local function get_drag_ap_cost()
         return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
@@ -525,13 +526,37 @@ function M.extend(runtime, ctx)
             return
         end
         local weld_fx_duration = 1.5
+        local vent = vent_obj or runtime.get_vent_object(cell)
         self.vent_weld_fx_cells = self.vent_weld_fx_cells or {}
         self.vent_weld_fx_cells[cell.idNumber] = true
         print(string.format("WELD FX FLAG: cell %d active", cell.idNumber))
+        if vent then
+            self.vent_weld_sparks_fx = self.vent_weld_sparks_fx or {}
+            local existing_fx = self.vent_weld_sparks_fx[cell.idNumber]
+            if existing_fx then
+                go.delete(existing_fx)
+                self.vent_weld_sparks_fx[cell.idNumber] = nil
+            end
+            local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+            local fx_x = cx + (vent.offsetX or 0)
+            local fx_y = cy + (vent.offsetY or 0)
+            local fx_id = factory.create("/weld_sparks_fx_factory#weld_sparks_fx_factory", vmath.vector3(fx_x, fx_y, WELD_SPARKS_Z))
+            if fx_id then
+                self.vent_weld_sparks_fx[cell.idNumber] = fx_id
+                particlefx.play(msg.url(nil, fx_id, "particlefx"))
+            end
+        end
         runtime.refresh_vent_markers(self)
         timer.delay(weld_fx_duration, false, function()
             if self and self.vent_weld_fx_cells then
                 self.vent_weld_fx_cells[cell.idNumber] = nil
+            end
+            if self and self.vent_weld_sparks_fx then
+                local fx_id = self.vent_weld_sparks_fx[cell.idNumber]
+                if fx_id then
+                    go.delete(fx_id)
+                    self.vent_weld_sparks_fx[cell.idNumber] = nil
+                end
             end
             runtime.refresh_vent_markers(self)
         end)

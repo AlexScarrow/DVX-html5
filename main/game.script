@@ -84,11 +84,21 @@ LEVEL_BUTTON_H = 24
 LEVEL1_BUTTON_X = 240
 LEVEL_BUTTON_GAP = 10
 LEVEL_BUTTON_Z = 0.845
-local UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
-local UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
-local UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
-local UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
-local UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
+UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
+UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
+UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
+UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
+UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
+NEW_TURN_BUTTON_X = 140
+NEW_TURN_BUTTON_Y = 64
+NEW_TURN_BUTTON_W = 180
+NEW_TURN_BUTTON_H = 64
+NEW_TURN_BUTTON_Z = 0.845
+AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
+AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
+AESTHETIC_BUTTON_W = 120
+AESTHETIC_BUTTON_H = 30
+AESTHETIC_BUTTON_Z = 0.845
 ENTRY_FIRE_OFFSET_X = 0
 ENTRY_FIRE_OFFSET_Y = 0
 ENTRY_FIRE_Z = 0.015 -- Match swirling_clouds1 world-FX depth behavior
@@ -3770,6 +3780,8 @@ local function initialize_unit_ui(self)
         retrieve_button = nil,
         close_button = nil,
         level_buttons = {},
+        new_turn_button = nil,
+        aesthetic_toggle_button = nil,
         reactive_toggle_button = nil,
         reactive_advance_button = nil,
         drag_pip = nil
@@ -3801,6 +3813,8 @@ local function initialize_unit_ui(self)
     for i = 1, level_count do
         self.ui.level_buttons[i] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
     end
+    self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+    self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -3845,6 +3859,8 @@ local function set_ui_hidden(self)
             end
         end
     end
+    set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+    set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -4057,6 +4073,33 @@ end
 
 local function get_level_button_screen_x(level_index)
     return LEVEL1_BUTTON_X + ((level_index - 1) * (LEVEL_BUTTON_W + LEVEL_BUTTON_GAP))
+end
+
+function update_global_ui_buttons(self)
+    local new_turn_color = self.alien_turn_active and vmath.vector4(0.3, 0.3, 0.3, 0.85) or vmath.vector4(0.2, 0.75, 0.25, 0.95)
+    set_ui_square_transform(
+        self,
+        self.ui.new_turn_button,
+        NEW_TURN_BUTTON_X,
+        NEW_TURN_BUTTON_Y,
+        NEW_TURN_BUTTON_Z,
+        new_turn_color,
+        NEW_TURN_BUTTON_W,
+        NEW_TURN_BUTTON_H
+    )
+    local aesthetic_color = self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME
+        and vmath.vector4(0.45, 0.35, 0.75, 0.95)
+        or vmath.vector4(0.2, 0.55, 0.9, 0.95)
+    set_ui_square_transform(
+        self,
+        self.ui.aesthetic_toggle_button,
+        AESTHETIC_BUTTON_X,
+        AESTHETIC_BUTTON_Y,
+        AESTHETIC_BUTTON_Z,
+        aesthetic_color,
+        AESTHETIC_BUTTON_W,
+        AESTHETIC_BUTTON_H
+    )
 end
 
 get_aesthetic_profile = function(self)
@@ -4641,6 +4684,7 @@ function update_selected_unit_ui(self)
     end
     if not unit then
         set_ui_hidden(self)
+        update_global_ui_buttons(self)
         if self.ui.level_buttons then
             local current_idx = self.current_level_index or 1
             for i, btn in ipairs(self.ui.level_buttons) do
@@ -4921,6 +4965,7 @@ function update_selected_unit_ui(self)
             30
         )
     end
+    update_global_ui_buttons(self)
 end
 
 local function is_point_in_ui_panel(screen_x, screen_y)
@@ -4991,6 +5036,34 @@ function try_advance_reactive_alien_turn(self, screen_x, screen_y)
             self.alien_turn_waiting_for_advance = true
             print("Alien turn paused. Press again to advance steps.")
         end
+        return true
+    end
+    return false
+end
+
+function try_next_turn_button(self, screen_x, screen_y)
+    local half_w = NEW_TURN_BUTTON_W * 0.5
+    local half_h = NEW_TURN_BUTTON_H * 0.5
+    if screen_x >= (NEW_TURN_BUTTON_X - half_w)
+        and screen_x <= (NEW_TURN_BUTTON_X + half_w)
+        and screen_y >= (NEW_TURN_BUTTON_Y - half_h)
+        and screen_y <= (NEW_TURN_BUTTON_Y + half_h) then
+        if not self.alien_turn_active then
+            msg.post(".", "next_turn")
+        end
+        return true
+    end
+    return false
+end
+
+function try_toggle_aesthetic_ui_button(self, screen_x, screen_y)
+    local half_w = AESTHETIC_BUTTON_W * 0.5
+    local half_h = AESTHETIC_BUTTON_H * 0.5
+    if screen_x >= (AESTHETIC_BUTTON_X - half_w)
+        and screen_x <= (AESTHETIC_BUTTON_X + half_w)
+        and screen_y >= (AESTHETIC_BUTTON_Y - half_h)
+        and screen_y <= (AESTHETIC_BUTTON_Y + half_h) then
+        toggle_aesthetic_mode(self)
         return true
     end
     return false
@@ -6632,6 +6705,12 @@ function on_input(self, action_id, action)
                 return true
             end
             if not self.did_drag then
+                if try_next_turn_button(self, input_x, input_y) then
+                    return true
+                end
+                if try_toggle_aesthetic_ui_button(self, input_x, input_y) then
+                    return true
+                end
                 if try_toggle_reactive_combat(self, input_x, input_y) then
                     return true
                 end

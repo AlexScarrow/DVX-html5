@@ -89,6 +89,10 @@ local UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 local UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
 local UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
 local UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
+ENTRY_FIRE_OFFSET_X = 0
+ENTRY_FIRE_OFFSET_Y = 0
+ENTRY_FIRE_Z = 0.015 -- Match swirling_clouds1 world-FX depth behavior
+ENTRY_FIRE_ROTATION_DEG = -20
 local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     local cfg = require("main.config").create_ui_config(UI_PANEL_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H)
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
@@ -3919,6 +3923,7 @@ function reset_and_load_level(self, level_index)
     self.tile_base_objects = nil
     safe_delete_array(tile_objects)
     safe_delete_map(self.tile_room_shadows)
+    safe_delete_map(self.entry_fire_fx_objects)
     safe_delete_map(cell_objects)
     safe_delete_map(loot_objects)
     safe_delete_map(self.loot_shadow_objects)
@@ -4023,6 +4028,7 @@ function reset_and_load_level(self, level_index)
     self.power_node_shadow_objects = {}
     self.vent_shadow_objects = {}
     self.door_shadow_objects = {}
+    self.entry_fire_fx_objects = {}
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
@@ -5882,6 +5888,7 @@ end
         self.tile_light_anim_ids = {}
         self.tile_alpha_layers = {}
         self.tile_room_shadows = {}
+        self.entry_fire_fx_objects = {}
         self.tile_base_objects = {}
         self.tile_alpha_power_state = {}
         self.tile_off_proximity_mul_state = {}
@@ -5929,6 +5936,22 @@ end
             if tile_shadow_id then
                 go.set(msg.url(nil, tile_shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
                 self.tile_room_shadows[placement_index] = tile_shadow_id
+            end
+
+            if placement.tile == "entry" then
+                local fire_cell_id = coords_to_id(placement.x, placement.y - 1)
+                if fire_cell_id and self.world_grid and self.world_grid[fire_cell_id] and self.world_grid[fire_cell_id].tileID ~= hash("empty") then
+                    local fire_x, fire_y = coords_to_world_pos(placement.x, placement.y - 1)
+                    local fire_fx_id = factory.create(
+                        "/crash_spaceship_fire_fx_factory#crash_spaceship_fire_fx_factory",
+                        vmath.vector3(fire_x + ENTRY_FIRE_OFFSET_X, fire_y + ENTRY_FIRE_OFFSET_Y, ENTRY_FIRE_Z)
+                    )
+                    if fire_fx_id then
+                        self.entry_fire_fx_objects[placement_index] = fire_fx_id
+                        go.set_rotation(vmath.quat_rotation_z(math.rad(ENTRY_FIRE_ROTATION_DEG)), fire_fx_id)
+                        pcall(particlefx.play, msg.url(nil, fire_fx_id, "particlefx"))
+                    end
+                end
             end
 
             if placement.tile ~= "entry" then
@@ -6221,6 +6244,7 @@ function init(self)
     self.power_node_shadow_objects = {}
     self.vent_shadow_objects = {}
     self.door_shadow_objects = {}
+    self.entry_fire_fx_objects = {}
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }

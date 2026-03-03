@@ -3916,6 +3916,7 @@ function reset_and_load_level(self, level_index)
     if self.world_backdrop_tiles then
         safe_delete_array(self.world_backdrop_tiles)
     end
+    self.tile_base_objects = nil
     safe_delete_array(tile_objects)
     safe_delete_map(self.tile_room_shadows)
     safe_delete_map(cell_objects)
@@ -4388,6 +4389,24 @@ apply_aesthetic_mode = function(self)
         for _, shadow_id in pairs(self.tile_room_shadows) do
             if shadow_id then
                 pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", tile_shadow_tint)
+            end
+        end
+    end
+    if self.tile_base_objects and self.level_library and self.current_level_index then
+        local selected_level = self.level_library[self.current_level_index]
+        for placement_index, placement in ipairs(selected_level or {}) do
+            local tile_id = self.tile_base_objects[placement_index]
+            if tile_id then
+                local tile_def = self.tile_library and self.tile_library[placement.tile] or nil
+                local visual_tile_name = (tile_def and tile_def.visualTile) or placement.tile
+                if tile_def then
+                    if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME and tile_def.visualTileBoardgame then
+                        visual_tile_name = tile_def.visualTileBoardgame
+                    elseif self.aesthetic_mode == AESTHETIC_MODE_COMPUTER and tile_def.visualTileComputer then
+                        visual_tile_name = tile_def.visualTileComputer
+                    end
+                end
+                msg.post(msg.url(nil, tile_id, "sprite"), "play_animation", { id = hash("tile_" .. visual_tile_name) })
             end
         end
     end
@@ -5120,8 +5139,12 @@ function spawn_human_unit(self)
     local spawn_cells = {}
     local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
     local leftmost_tile = nil
+    local entry_tile = nil
     if selected_level then
         for _, placement in ipairs(selected_level) do
+            if (not entry_tile) and placement.tile == "entry" then
+                entry_tile = placement
+            end
             if (not leftmost_tile)
                 or placement.x < leftmost_tile.x
                 or (placement.x == leftmost_tile.x and placement.y < leftmost_tile.y)
@@ -5131,11 +5154,19 @@ function spawn_human_unit(self)
         end
     end
 
+    local entry_spawn_cell_id = nil
+    if entry_tile then
+        entry_spawn_cell_id = coords_to_id(entry_tile.x + 1, entry_tile.y)
+    end
     local leftmost_spawn_cell_id = nil
     if leftmost_tile then
         leftmost_spawn_cell_id = coords_to_id(leftmost_tile.x, leftmost_tile.y)
     end
-    if leftmost_spawn_cell_id and self.world_grid[leftmost_spawn_cell_id] and self.world_grid[leftmost_spawn_cell_id].tileID ~= hash("empty") then
+    if entry_spawn_cell_id and self.world_grid[entry_spawn_cell_id] and self.world_grid[entry_spawn_cell_id].tileID ~= hash("empty") then
+        for i = 1, 4 do
+            spawn_cells[i] = entry_spawn_cell_id
+        end
+    elseif leftmost_spawn_cell_id and self.world_grid[leftmost_spawn_cell_id] and self.world_grid[leftmost_spawn_cell_id].tileID ~= hash("empty") then
         for i = 1, 4 do
             spawn_cells[i] = leftmost_spawn_cell_id
         end
@@ -5851,6 +5882,7 @@ end
         self.tile_light_anim_ids = {}
         self.tile_alpha_layers = {}
         self.tile_room_shadows = {}
+        self.tile_base_objects = {}
         self.tile_alpha_power_state = {}
         self.tile_off_proximity_mul_state = {}
         loot_objects = {}
@@ -5869,12 +5901,20 @@ end
 
             local tile_def = self.tile_library and self.tile_library[placement.tile] or nil
             local visual_tile_name = (tile_def and tile_def.visualTile) or placement.tile
+            if tile_def then
+                if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME and tile_def.visualTileBoardgame then
+                    visual_tile_name = tile_def.visualTileBoardgame
+                elseif self.aesthetic_mode == AESTHETIC_MODE_COMPUTER and tile_def.visualTileComputer then
+                    visual_tile_name = tile_def.visualTileComputer
+                end
+            end
             local id = factory.create("/tile_factory#tile_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
             if id then
                 local anim = "tile_" .. visual_tile_name
                 msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = hash(anim) })
                 go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, TILE_OPACITY))
                 table.insert(tile_objects, id)
+                self.tile_base_objects[placement_index] = id
             else
                 print("Tile factory create failed for: " .. placement.tile)
             end
@@ -5891,59 +5931,61 @@ end
                 self.tile_room_shadows[placement_index] = tile_shadow_id
             end
 
-            -- Exterior details are only for truly exposed silhouettes:
-            -- roof: no overlapping tile anywhere above; left wall: no overlapping tile anywhere to the left.
-            local has_tile_above = false
-            local has_tile_left = false
-            local p_left = placement.x - 1
-            local p_right = placement.x + 1
-            local p_bottom = placement.y - 1
-            local p_top = placement.y + 1
-            for _, scan in ipairs(selected_level) do
-                if scan ~= placement then
-                    local s_left = scan.x - 1
-                    local s_right = scan.x + 1
-                    local s_bottom = scan.y - 1
-                    local s_top = scan.y + 1
-                    local overlaps_x = not (s_right < p_left or s_left > p_right)
-                    local overlaps_y = not (s_top < p_bottom or s_bottom > p_top)
-                    if (not has_tile_above) and overlaps_x and scan.y > placement.y then
-                        has_tile_above = true
-                    end
-                    if (not has_tile_left) and overlaps_y and scan.x < placement.x then
-                        has_tile_left = true
-                    end
-                    if has_tile_above and has_tile_left then
-                        break
+            if placement.tile ~= "entry" then
+                -- Exterior details are only for truly exposed silhouettes:
+                -- roof: no overlapping tile anywhere above; left wall: no overlapping tile anywhere to the left.
+                local has_tile_above = false
+                local has_tile_left = false
+                local p_left = placement.x - 1
+                local p_right = placement.x + 1
+                local p_bottom = placement.y - 1
+                local p_top = placement.y + 1
+                for _, scan in ipairs(selected_level) do
+                    if scan ~= placement then
+                        local s_left = scan.x - 1
+                        local s_right = scan.x + 1
+                        local s_bottom = scan.y - 1
+                        local s_top = scan.y + 1
+                        local overlaps_x = not (s_right < p_left or s_left > p_right)
+                        local overlaps_y = not (s_top < p_bottom or s_bottom > p_top)
+                        if (not has_tile_above) and overlaps_x and scan.y > placement.y then
+                            has_tile_above = true
+                        end
+                        if (not has_tile_left) and overlaps_y and scan.x < placement.x then
+                            has_tile_left = true
+                        end
+                        if has_tile_above and has_tile_left then
+                            break
+                        end
                     end
                 end
-            end
-            if not has_tile_above then
-                local roof_id = factory.create(
-                    "/tile_factory#tile_factory",
-                    vmath.vector3(center_x, center_y + (CELL_HEIGHT * 3), 0.02),
-                    nil,
-                    {},
-                    vmath.vector3(visual_scale, visual_scale, 1)
-                )
-                if roof_id then
-                    msg.post(msg.url(nil, roof_id, "sprite"), "play_animation", { id = hash("exterior_roof1") })
-                    go.set(msg.url(nil, roof_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
-                    table.insert(tile_objects, roof_id)
+                if not has_tile_above then
+                    local roof_id = factory.create(
+                        "/tile_factory#tile_factory",
+                        vmath.vector3(center_x, center_y + (CELL_HEIGHT * 3), 0.02),
+                        nil,
+                        {},
+                        vmath.vector3(visual_scale, visual_scale, 1)
+                    )
+                    if roof_id then
+                        msg.post(msg.url(nil, roof_id, "sprite"), "play_animation", { id = hash("exterior_roof1") })
+                        go.set(msg.url(nil, roof_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        table.insert(tile_objects, roof_id)
+                    end
                 end
-            end
-            if not has_tile_left then
-                local left_wall_id = factory.create(
-                    "/tile_factory#tile_factory",
-                    vmath.vector3(center_x - (CELL_WIDTH * 3), center_y, 0.02),
-                    nil,
-                    {},
-                    vmath.vector3(visual_scale, visual_scale, 1)
-                )
-                if left_wall_id then
-                    msg.post(msg.url(nil, left_wall_id, "sprite"), "play_animation", { id = hash("exterior_leftWall1") })
-                    go.set(msg.url(nil, left_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
-                    table.insert(tile_objects, left_wall_id)
+                if not has_tile_left then
+                    local left_wall_id = factory.create(
+                        "/tile_factory#tile_factory",
+                        vmath.vector3(center_x - (CELL_WIDTH * 3), center_y, 0.02),
+                        nil,
+                        {},
+                        vmath.vector3(visual_scale, visual_scale, 1)
+                    )
+                    if left_wall_id then
+                        msg.post(msg.url(nil, left_wall_id, "sprite"), "play_animation", { id = hash("exterior_leftWall1") })
+                        go.set(msg.url(nil, left_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        table.insert(tile_objects, left_wall_id)
+                    end
                 end
             end
 

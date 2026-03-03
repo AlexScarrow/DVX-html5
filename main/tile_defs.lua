@@ -108,6 +108,35 @@ function M.create_tile_library(COMPONENT_UI)
     assign_random_loot_cell(canteen)
     library["canteen"] = canteen
 
+    -- entry (aesthetic-specific base tile; no power on/off layer)
+    local entry = create_tile_prototype("entry")
+    entry.visualTile = "entry_computerGame"
+    entry.visualTileComputer = "entry_computerGame"
+    entry.visualTileBoardgame = "entry_boardGame"
+    for i = 1, 9 do
+        entry.cells[i].lightValue = 2
+        entry.cells[i].moveValue = 1
+        entry.cells[i].coverValue = 1
+    end
+    entry.cells[3].moveValue = 3
+    entry.cells[6].moveValue = 3
+
+    entry.cells[1].accessDown = false
+    entry.cells[2].accessDown = false
+    entry.cells[3].accessRight = false
+    entry.cells[3].accessDown = false
+    entry.cells[4].accessDown = false
+    entry.cells[5].accessDown = false
+    entry.cells[5].accessRight = false
+    entry.cells[6].accessRight = false
+
+    entry.cells[9].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    
+    library["entry"] = entry
+
     -- armoury
     local armoury = create_tile_prototype("armoury")
     armoury.visualTile = "armoury_off"

@@ -10,6 +10,10 @@ local M = {}
 ]]
 function M.create_level_library()
     local levels = {}
+    --5/14,8/14, 11/14, 14/14
+    --5/11,8/11,14/11
+    --5/8,8/8,11/8,14/8
+    --5/5,8/5,11/5,14/5
 
     -- Example Level 1
     levels[1] = {
@@ -17,6 +21,7 @@ function M.create_level_library()
         { x = 8, y = 11, tile = "medbay" },
         { x = 8, y = 8, tile = "armoury" },
         { x = 11, y = 8, tile = "medbay" },
+        { x = 2, y = 8, tile = "entry" },
         { x = 5, y = 8, tile = "armoury" },
         { x = 14, y = 9, tile = "armoury" },
         { x = 14, y = 6, tile = "armoury" },

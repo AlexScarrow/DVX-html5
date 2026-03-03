@@ -5,6 +5,12 @@ images {
   image: "/assets/images/tile_canteen.png"
 }
 images {
+  image: "/assets/images/tile_entry_boardGame.png"
+}
+images {
+  image: "/assets/images/tile_entry_computerGame.png"
+}
+images {
   image: "/assets/images/tile_armoury.png"
 }
 images {

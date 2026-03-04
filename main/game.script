@@ -99,6 +99,16 @@ LAUNCH_BUTTON_Y = 64
 LAUNCH_BUTTON_W = 180
 LAUNCH_BUTTON_H = 64
 LAUNCH_BUTTON_Z = 0.845
+FLOW_UI_OVERLAY_Z = 1.41
+FLOW_UI_PANEL_Z = 1.42
+FLOW_UI_BUTTON_Z = 1.43
+FLOW_UI_SCREEN_W = 1260
+FLOW_UI_SCREEN_H = 720
+FLOW_STATE_TITLE = "title"
+FLOW_STATE_GAME = "game"
+FLOW_STATE_OUTRO = "outro"
+FLOW_STATE_SCORE = "score"
+EXIT_TEST_STASH_ENABLED = true
 AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
 AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
@@ -3812,6 +3822,124 @@ local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_
     go.set(msg.url(nil, go_id, "sprite"), "tint", tint or vmath.vector4(1, 1, 1, 1))
 end
 
+count_non_nil_entries = function(t)
+    if not t then
+        return 0
+    end
+    local n = 0
+    for _, v in pairs(t) do
+        if v ~= nil then
+            n = n + 1
+        end
+    end
+    return n
+end
+
+collect_runtime_reference_counts = function(self)
+    local c = {}
+    c.tile_objects = count_non_nil_entries(tile_objects)
+    c.cell_objects = count_non_nil_entries(cell_objects)
+    c.loot_objects = count_non_nil_entries(loot_objects)
+    c.machine_objects = count_non_nil_entries(machine_objects)
+    c.tile_base_objects = count_non_nil_entries(self.tile_base_objects)
+    c.tile_room_shadows = count_non_nil_entries(self.tile_room_shadows)
+    c.tile_light_layers = count_non_nil_entries(self.tile_light_layers)
+    c.tile_alpha_layers = count_non_nil_entries(self.tile_alpha_layers)
+    c.entry_fire_fx_objects = count_non_nil_entries(self.entry_fire_fx_objects)
+    c.world_item_visuals = count_non_nil_entries(self.world_item_visuals)
+    c.world_item_shadow_visuals = count_non_nil_entries(self.world_item_shadow_visuals)
+    c.loot_shadow_objects = count_non_nil_entries(self.loot_shadow_objects)
+    c.machine_shadow_objects = count_non_nil_entries(self.machine_shadow_objects)
+    c.turret_shadow_objects = count_non_nil_entries(self.turret_shadow_objects)
+    c.power_node_shadow_objects = count_non_nil_entries(self.power_node_shadow_objects)
+    c.vent_shadow_objects = count_non_nil_entries(self.vent_shadow_objects)
+    c.door_shadow_objects = count_non_nil_entries(self.door_shadow_objects)
+    c.fix_objects = count_non_nil_entries(self.fix_objects)
+    c.power_node_objects = count_non_nil_entries(self.power_node_objects)
+    c.vent_objects = count_non_nil_entries(self.vent_objects)
+    c.door_objects = count_non_nil_entries(self.door_objects)
+    c.turret_tripod_objects = count_non_nil_entries(self.turret_tripod_objects)
+    c.turret_gun_objects = count_non_nil_entries(self.turret_gun_objects)
+    c.wiregap_objects = count_non_nil_entries(self.wiregap_objects)
+    c.wiregap_shadow_objects = count_non_nil_entries(self.wiregap_shadow_objects)
+    c.wiregap_fx_objects = count_non_nil_entries(self.wiregap_fx_objects)
+    c.light_value_objects = count_non_nil_entries(self.light_value_objects)
+    c.escape_pod_power_slot_markers = count_non_nil_entries(self.escape_pod_power_slot_markers)
+    c.exit_requirement_markers = count_non_nil_entries(self.exit_requirement_markers)
+    c.world_backdrop_tiles = count_non_nil_entries(self.world_backdrop_tiles)
+    c.loot_pickup_blips = count_non_nil_entries(self.loot_pickup_blips)
+    c.world_item_instances = count_non_nil_entries(self.world_item_instances)
+    c.power_node_loop_fx = count_non_nil_entries(self.power_node_loop_fx)
+    c.melee_swipe_fx = count_non_nil_entries(self.melee_swipe_fx)
+    c.aliens = count_non_nil_entries(self.aliens)
+    c.spitter_projectiles = count_non_nil_entries(self.spitter_projectiles)
+    c.turret_projectiles = count_non_nil_entries(self.turret_projectiles)
+    c.ui_ap_pips = self.ui and self.ui.ap_pips and #self.ui.ap_pips or 0
+    c.ui_hp_pips = self.ui and self.ui.hp_pips and #self.ui.hp_pips or 0
+    c.ui_ammo_pips = self.ui and self.ui.ammo_pips and #self.ui.ammo_pips or 0
+    c.ui_command_pips = self.ui and self.ui.command_pips and #self.ui.command_pips or 0
+    c.ui_backpack_slots = self.ui and self.ui.backpack_slots and #self.ui.backpack_slots or 0
+    c.ui_backpack_item_icons = self.ui and self.ui.backpack_item_icons and #self.ui.backpack_item_icons or 0
+    c.ui_level_buttons = self.ui and self.ui.level_buttons and #self.ui.level_buttons or 0
+    c.ui_flow_rows = self.ui and self.ui.flow_score_rows and #self.ui.flow_score_rows or 0
+    c.ui_named_nodes = 0
+    if self.ui then
+        local named = {
+            "panel_art", "panel_shadow", "component_button", "fix_button", "loot_button", "retrieve_button",
+            "close_button", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
+            "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_panel",
+            "flow_outro_ship", "flow_outro_skip_button", "flow_score_submit_button", "flow_score_title_button",
+            "flow_title_solo_button", "flow_title_multiplayer_button"
+        }
+        for _, k in ipairs(named) do
+            if self.ui[k] ~= nil then
+                c.ui_named_nodes = c.ui_named_nodes + 1
+            end
+        end
+    end
+    c.total = 0
+    for k, v in pairs(c) do
+        if k ~= "total" and type(v) == "number" then
+            c.total = c.total + v
+        end
+    end
+    return c
+end
+
+log_runtime_reference_audit = function(self, phase)
+    self.runtime_ref_audit = self.runtime_ref_audit or {}
+    local c = collect_runtime_reference_counts(self)
+    print(string.format(
+        "REF AUDIT | %s | total=%d tiles=%d cells=%d loot=%d machine=%d worldItems=%d itemVisuals=%d uiIcons=%d uiNamed=%d aliens=%d",
+        phase or "unknown",
+        c.total or 0,
+        c.tile_objects or 0,
+        c.cell_objects or 0,
+        c.loot_objects or 0,
+        c.machine_objects or 0,
+        c.world_item_instances or 0,
+        c.world_item_visuals or 0,
+        c.ui_backpack_item_icons or 0,
+        c.ui_named_nodes or 0,
+        c.aliens or 0
+    ))
+    if phase == "post_load" then
+        local prev = self.runtime_ref_audit.last_post_load
+        if prev and prev.total and c.total and c.total > (prev.total + 120) then
+            print(string.format(
+                "REF AUDIT WARNING | post_load references grew from %d to %d",
+                prev.total or 0,
+                c.total or 0
+            ))
+        end
+        self.runtime_ref_audit.last_post_load = c
+    elseif phase == "pre_clear" then
+        self.runtime_ref_audit.last_pre_clear = c
+    elseif phase == "post_clear" then
+        self.runtime_ref_audit.last_post_clear = c
+    end
+end
+
 local function initialize_unit_ui(self)
     self.ui = {
         panel_art = nil,
@@ -3834,7 +3962,16 @@ local function initialize_unit_ui(self)
         reactive_toggle_button = nil,
         reactive_advance_button = nil,
         drag_command_pip = nil,
-        drag_pip = nil
+        drag_pip = nil,
+        flow_overlay = nil,
+        flow_panel = nil,
+        flow_outro_ship = nil,
+        flow_outro_skip_button = nil,
+        flow_score_submit_button = nil,
+        flow_score_title_button = nil,
+        flow_title_solo_button = nil,
+        flow_title_multiplayer_button = nil,
+        flow_score_rows = {}
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
@@ -3870,6 +4007,17 @@ local function initialize_unit_ui(self)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_command_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     self.ui.drag_pip = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.9))
+    self.ui.flow_overlay = create_ui_square(0, 0, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 0), SCREEN_WIDTH, SCREEN_HEIGHT)
+    self.ui.flow_panel = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+    self.ui.flow_outro_ship = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 280, 120)
+    self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
+    self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
+    self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
+    self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+    self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+    for i = 1, 4 do
+        self.ui.flow_score_rows[i] = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 300, 28)
+    end
 
     print(string.format(
         "UI panel pixels: panel=%dx%d, portrait=%dx%d, footer=%dx%d, pip=%dx%d (max %d), backpack slots=%d (%dx%d each, %dx%d grid)",
@@ -3918,6 +4066,261 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
+    set_ui_square_transform(self, self.ui.flow_overlay, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
+    set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+    set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+    set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+    set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    if self.ui.flow_score_rows then
+        for _, row_id in ipairs(self.ui.flow_score_rows) do
+            set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
+        end
+    end
+end
+
+function is_point_in_screen_rect(screen_x, screen_y, cx, cy, w, h)
+    local half_w = w * 0.5
+    local half_h = h * 0.5
+    return screen_x >= (cx - half_w)
+        and screen_x <= (cx + half_w)
+        and screen_y >= (cy - half_h)
+        and screen_y <= (cy + half_h)
+end
+
+function compute_placeholder_score_breakdown(self)
+    local status = (LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self)) or {}
+    local survivors = 0
+    local seated = 0
+    local dead = 0
+    if self.squad_units then
+        for _, unit in pairs(self.squad_units) do
+            if unit and (unit.current_health or 0) > 0 then
+                survivors = survivors + 1
+                if unit.in_shuttle == true then
+                    seated = seated + 1
+                end
+            else
+                dead = dead + 1
+            end
+        end
+    end
+    local power_units = status.power_loaded or 0
+    local objectives = 0
+    if status.nav_ready then
+        objectives = objectives + 1
+    end
+    if status.supplies_ready then
+        objectives = objectives + 1
+    end
+    local total = (survivors * 100) + (seated * 75) + (power_units * 10) + (objectives * 120) - (dead * 30)
+    if total < 0 then
+        total = 0
+    end
+    return {
+        survivors = survivors,
+        seated = seated,
+        dead = dead,
+        power_units = power_units,
+        objectives = objectives,
+        total = total
+    }
+end
+
+function enter_flow_state(self, next_state)
+    self.game_flow_state = next_state or FLOW_STATE_GAME
+    self.flow_overlay_phase = 0
+    self.flow_submit_done = false
+end
+
+local function spawn_exit_test_stash(self)
+    if EXIT_TEST_STASH_ENABLED ~= true then
+        return
+    end
+    if not (self.world_grid and self.level_library and self.current_level_index and LOOT_RUNTIME and LOOT_RUNTIME.create_world_item_instance) then
+        return
+    end
+    local selected_level = self.level_library[self.current_level_index]
+    if not selected_level then
+        return
+    end
+    local cell5_id = nil
+    for _, placement in ipairs(selected_level) do
+        if placement and placement.tile == "exit" then
+            cell5_id = coords_to_id(placement.x, placement.y)
+            break
+        end
+    end
+    if not (cell5_id and self.world_grid[cell5_id] and self.world_grid[cell5_id].tileID ~= hash("empty")) then
+        return
+    end
+    for _ = 1, 9 do
+        LOOT_RUNTIME.create_world_item_instance(self, "power", cell5_id, nil, { test_stash = true })
+    end
+    LOOT_RUNTIME.create_world_item_instance(self, COMPONENT_UI.component_nav_data, cell5_id, nil, { test_stash = true })
+    LOOT_RUNTIME.create_world_item_instance(self, COMPONENT_UI.component_food_supplies, cell5_id, nil, { test_stash = true })
+    if LOOT_RUNTIME.refresh_world_item_visuals then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    print("TEST STASH | Spawned exit cell-5 items (9x power, nav_data, food_supplies).")
+end
+
+function start_solo_game_flow(self)
+    local level_index = self.current_level_index or 1
+    reset_and_load_level(self, level_index)
+    apply_aesthetic_mode(self)
+    enter_flow_state(self, FLOW_STATE_GAME)
+    self.game_won = false
+end
+
+function enter_outro_flow_from_launch(self)
+    self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
+    self.flow_outro_timer = 0
+    self.flow_submit_done = false
+    self.drag_resource = { active = false }
+    self.is_panning = false
+    self.did_drag = false
+    enter_flow_state(self, FLOW_STATE_OUTRO)
+    print("FLOW | launch -> outro")
+end
+
+function enter_score_flow(self)
+    if not self.flow_score_breakdown then
+        self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
+    end
+    enter_flow_state(self, FLOW_STATE_SCORE)
+    local s = self.flow_score_breakdown
+    print(string.format(
+        "SCORE | total=%d survivors=%d seated=%d power=%d objectives=%d dead=%d",
+        s.total or 0,
+        s.survivors or 0,
+        s.seated or 0,
+        s.power_units or 0,
+        s.objectives or 0,
+        s.dead or 0
+    ))
+end
+
+function update_flow_ui(self, dt)
+    if not self.ui then
+        return
+    end
+    self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
+    local state = self.game_flow_state or FLOW_STATE_GAME
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if state == FLOW_STATE_GAME then
+        set_ui_square_transform(self, self.ui.flow_overlay, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
+        set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 760, 420)
+        set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        if self.ui.flow_score_rows then
+            for _, row_id in ipairs(self.ui.flow_score_rows) do
+                set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
+            end
+        end
+        return
+    end
+    set_ui_square_transform(self, self.ui.flow_overlay, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_OVERLAY_Z, vmath.vector4(0.03, 0.03, 0.06, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+    if state == FLOW_STATE_TITLE then
+        set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.96), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.96), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        if self.ui.flow_score_rows then
+            for _, row_id in ipairs(self.ui.flow_score_rows) do
+                set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
+            end
+        end
+        return
+    end
+    if state == FLOW_STATE_OUTRO then
+        local wobble = math.sin((self.flow_overlay_phase or 0) * 2.4) * 12
+        set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.12, 0.12, 0.18, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0.98), 170, 52)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        if self.ui.flow_score_rows then
+            for _, row_id in ipairs(self.ui.flow_score_rows) do
+                set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
+            end
+        end
+        return
+    end
+    local s = self.flow_score_breakdown or { survivors = 0, seated = 0, power_units = 0, objectives = 0, total = 0 }
+    set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.07, 0.13, 0.09, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+    set_ui_square_transform(self, self.ui.flow_score_submit_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, FLOW_UI_BUTTON_Z, self.flow_submit_done and vmath.vector4(0.2, 0.65, 0.22, 0.95) or vmath.vector4(0.2, 0.45, 0.75, 0.95), 250, 56)
+    set_ui_square_transform(self, self.ui.flow_score_title_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, FLOW_UI_BUTTON_Z, vmath.vector4(0.72, 0.24, 0.24, 0.95), 250, 56)
+    set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+    set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+    if self.ui.flow_score_rows then
+        local vals = {
+            math.max(0, s.survivors or 0) * 28,
+            math.max(0, s.seated or 0) * 28,
+            math.max(0, s.power_units or 0) * 12,
+            math.max(0, s.objectives or 0) * 70
+        }
+        local cols = {
+            vmath.vector4(0.24, 0.78, 0.34, 0.95),
+            vmath.vector4(0.35, 0.75, 0.9, 0.95),
+            vmath.vector4(0.95, 0.85, 0.24, 0.95),
+            vmath.vector4(0.9, 0.48, 0.92, 0.95)
+        }
+        local y = SCREEN_HEIGHT * 0.67
+        for i, row_id in ipairs(self.ui.flow_score_rows) do
+            local w = math.min(300, math.max(90, vals[i] or 90))
+            set_ui_square_transform(self, row_id, SCREEN_WIDTH * 0.5, y - ((i - 1) * 52), FLOW_UI_PANEL_Z, cols[i] or vmath.vector4(0.7, 0.7, 0.7, 0.9), w, 28)
+        end
+    end
+end
+
+function handle_flow_touch(self, input_x, input_y)
+    local state = self.game_flow_state or FLOW_STATE_GAME
+    if state == FLOW_STATE_TITLE then
+        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, 280, 70) then
+            start_solo_game_flow(self)
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, 280, 70) then
+            print("TITLE | multiplayer button pressed (placeholder)")
+            return true
+        end
+        return true
+    end
+    if state == FLOW_STATE_OUTRO then
+        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH - 110, 54, 170, 52) then
+            enter_score_flow(self)
+            return true
+        end
+        return true
+    end
+    if state == FLOW_STATE_SCORE then
+        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, 250, 56) then
+            self.flow_submit_done = true
+            print("SCORE | leaderboard submit hook (placeholder)")
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, 250, 56) then
+            enter_flow_state(self, FLOW_STATE_TITLE)
+            self.game_won = false
+            return true
+        end
+        return true
+    end
+    return false
 end
 
 local function get_selected_unit(self)
@@ -3939,6 +4342,7 @@ function reset_and_load_level(self, level_index)
     end
 
     self.current_level_index = level_index
+    log_runtime_reference_audit(self, "pre_clear")
     clear_path_visuals(self)
     self.selected_start_cell = nil
     self.path_highlight_cells = {}
@@ -3989,6 +4393,7 @@ function reset_and_load_level(self, level_index)
     end
     if self.world_backdrop_tiles then
         safe_delete_array(self.world_backdrop_tiles)
+        self.world_backdrop_anim = nil
     end
     self.tile_base_objects = nil
     safe_delete_array(tile_objects)
@@ -4109,6 +4514,7 @@ function reset_and_load_level(self, level_index)
     self.power_node_loop_fx = {}
     self.melee_swipe_fx = {}
     self.melee_swipe_next_id = 0
+    log_runtime_reference_audit(self, "post_clear")
 
     self.squad_units = create_squad_units()
     self.controlled_unit_id = "sarge"
@@ -4123,9 +4529,11 @@ function reset_and_load_level(self, level_index)
         spawn_human_unit(self)
     end
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    spawn_exit_test_stash(self)
     LOOT_RUNTIME.refresh_exit_objective_state(self)
     update_human_visual_state(self)
     update_selected_unit_ui(self)
+    log_runtime_reference_audit(self, "post_load")
     print("Loaded level " .. tostring(level_index))
     return true
 end
@@ -4135,6 +4543,13 @@ local function get_level_button_screen_x(level_index)
 end
 
 function update_global_ui_buttons(self)
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        local hidden = vmath.vector4(0, 0, 0, 0)
+        set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+        set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+        set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+        return
+    end
     local new_turn_color = self.alien_turn_active and vmath.vector4(0.3, 0.3, 0.3, 0.85) or vmath.vector4(0.2, 0.75, 0.25, 0.95)
     set_ui_square_transform(
         self,
@@ -4762,6 +5177,10 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
 })
 
 function update_selected_unit_ui(self)
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        set_ui_hidden(self)
+        return
+    end
     local unit = get_selected_unit(self)
     if not self.ui then
         return
@@ -5038,6 +5457,9 @@ function try_next_turn_button(self, screen_x, screen_y)
 end
 
 function try_launch_button(self, screen_x, screen_y)
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return false
+    end
     local half_w = LAUNCH_BUTTON_W * 0.5
     local half_h = LAUNCH_BUTTON_H * 0.5
     if screen_x >= (LAUNCH_BUTTON_X - half_w)
@@ -5045,7 +5467,10 @@ function try_launch_button(self, screen_x, screen_y)
         and screen_y >= (LAUNCH_BUTTON_Y - half_h)
         and screen_y <= (LAUNCH_BUTTON_Y + half_h) then
         if LOOT_RUNTIME.try_launch_escape_pod then
-            LOOT_RUNTIME.try_launch_escape_pod(self)
+            local launched = LOOT_RUNTIME.try_launch_escape_pod(self)
+            if launched then
+                enter_outro_flow_from_launch(self)
+            end
         end
         return true
     end
@@ -6319,6 +6744,10 @@ function init(self)
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    self.flow_score_breakdown = { total = 0, survivors = 0, seated = 0, dead = 0, power_units = 0, objectives = 0 }
+    self.flow_outro_timer = 0
+    self.flow_submit_done = false
+    enter_flow_state(self, FLOW_STATE_TITLE)
 
     print("=== Initialization Complete ===")
 
@@ -6492,6 +6921,13 @@ function update(self, dt)
     update_human_visual_state(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
+    if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
+        self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
+        if (self.flow_outro_timer or 0) >= 8.0 then
+            enter_score_flow(self)
+        end
+    end
+    update_flow_ui(self, dt)
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
     if self.world_backdrop or (self.world_backdrop_tiles and #self.world_backdrop_tiles > 0) then
@@ -6663,6 +7099,12 @@ end
 function on_input(self, action_id, action)
     if action_id == hash("touch") then
         local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            if action.released and inside_view and input_x and input_y then
+                handle_flow_touch(self, input_x, input_y)
+            end
+            return true
+        end
         if self.drag_resource and self.drag_resource.active then
             if input_x and input_y then
                 LOOT_RUNTIME.update_resource_drag(self, input_x, input_y)
@@ -6782,6 +7224,9 @@ function on_input(self, action_id, action)
             end
         end
     elseif action_id == hash("zoom_in") then
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return true
+        end
         local target_zoom = math.min(self.camera_zoom + 0.1, self.camera_max_zoom)
         local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y)
         if not inside_view then
@@ -6792,6 +7237,9 @@ function on_input(self, action_id, action)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
         zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
     elseif action_id == hash("zoom_out") then
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return true
+        end
         local target_zoom = math.max(self.camera_zoom - 0.1, self.camera_min_zoom)
         local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y)
         if not inside_view then
@@ -6802,9 +7250,15 @@ function on_input(self, action_id, action)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
         zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
     elseif action_id == hash("toggle_aesthetic_mode") and action.pressed then
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return true
+        end
         toggle_aesthetic_mode(self)
         return true
     elseif action_id == hash("next_turn") and action.pressed then
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return true
+        end
         next_turn_reset_human_ap(self)
         process_alien_turn(self)
     end
@@ -6816,6 +7270,9 @@ end
 
 function on_message(self, message_id, message, sender)
     if message_id == hash("next_turn") then
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return
+        end
         next_turn_reset_human_ap(self)
         process_alien_turn(self)
     end

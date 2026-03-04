@@ -118,6 +118,9 @@ ENTRY_FIRE_OFFSET_X = -50
 ENTRY_FIRE_OFFSET_Y = -60
 ENTRY_FIRE_Z = 0.015 -- Match swirling_clouds1 world-FX depth behavior
 ENTRY_FIRE_ROTATION_DEG = -20
+EXIT_GREEN_SMOKE_Z = 0.56
+EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_X = 0
+EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_Y = -(CELL_HEIGHT * 0.5) + 15
 local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     local cfg = require("main.config").create_ui_config(UI_PANEL_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H)
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
@@ -3846,6 +3849,7 @@ collect_runtime_reference_counts = function(self)
     c.tile_light_layers = count_non_nil_entries(self.tile_light_layers)
     c.tile_alpha_layers = count_non_nil_entries(self.tile_alpha_layers)
     c.entry_fire_fx_objects = count_non_nil_entries(self.entry_fire_fx_objects)
+    c.exit_green_smoke_fx_objects = count_non_nil_entries(self.exit_green_smoke_fx_objects)
     c.world_item_visuals = count_non_nil_entries(self.world_item_visuals)
     c.world_item_shadow_visuals = count_non_nil_entries(self.world_item_shadow_visuals)
     c.loot_shadow_objects = count_non_nil_entries(self.loot_shadow_objects)
@@ -3948,6 +3952,7 @@ local function initialize_unit_ui(self)
         hp_pips = {},
         ammo_pips = {},
         command_pips = {},
+        command_pip_icons = {},
         backpack_slots = {},
         backpack_item_icons = {},
         component_button = nil,
@@ -3985,6 +3990,10 @@ local function initialize_unit_ui(self)
 
     for i = 1, COMMAND_UI.max_pips do
         self.ui.command_pips[i] = create_ui_square(0, 0, 0.81, COMMAND_UI.inactive_color, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        self.ui.command_pip_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.812))
+        if self.ui.command_pip_icons[i] then
+            msg.post(msg.url(nil, self.ui.command_pip_icons[i], "sprite"), "play_animation", { id = hash("command_star") })
+        end
     end
 
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
@@ -4006,6 +4015,9 @@ local function initialize_unit_ui(self)
     self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_command_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
+    if self.ui.drag_command_pip then
+        msg.post(msg.url(nil, self.ui.drag_command_pip, "sprite"), "play_animation", { id = hash("command_star") })
+    end
     self.ui.drag_pip = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.9))
     self.ui.flow_overlay = create_ui_square(0, 0, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 0), SCREEN_WIDTH, SCREEN_HEIGHT)
     self.ui.flow_panel = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
@@ -4042,6 +4054,7 @@ local function set_ui_hidden(self)
     end
     for i = 1, COMMAND_UI.max_pips do
         set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, 0.81, hidden, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, 0.812, hidden, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
     end
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
@@ -4399,6 +4412,7 @@ function reset_and_load_level(self, level_index)
     safe_delete_array(tile_objects)
     safe_delete_map(self.tile_room_shadows)
     safe_delete_map(self.entry_fire_fx_objects)
+    safe_delete_map(self.exit_green_smoke_fx_objects)
     safe_delete_map(cell_objects)
     safe_delete_map(loot_objects)
     safe_delete_map(self.loot_shadow_objects)
@@ -4505,6 +4519,8 @@ function reset_and_load_level(self, level_index)
     self.vent_shadow_objects = {}
     self.door_shadow_objects = {}
     self.entry_fire_fx_objects = {}
+    self.exit_green_smoke_fx_objects = {}
+    self.exit_green_smoke_fx_power_state = {}
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
@@ -5288,9 +5304,11 @@ function update_selected_unit_ui(self)
             command_color = vmath.vector4(command_color.x, command_color.y, command_color.z, 0.25)
         end
         if show_command then
-            set_ui_square_transform(self, self.ui.command_pips[i], cx, cy, 0.81, command_color, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+            set_ui_square_transform(self, self.ui.command_pips[i], cx, cy, 0.81, vmath.vector4(0.08, 0.08, 0.1, 0.22), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+            set_ui_square_transform(self, self.ui.command_pip_icons[i], cx, cy, 0.812, command_color, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
         else
             set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, 0.81, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+            set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, 0.812, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
         end
     end
 
@@ -6384,6 +6402,8 @@ end
         self.tile_alpha_layers = {}
         self.tile_room_shadows = {}
         self.entry_fire_fx_objects = {}
+        self.exit_green_smoke_fx_objects = {}
+        self.exit_green_smoke_fx_power_state = {}
         self.tile_base_objects = {}
         self.tile_alpha_power_state = {}
         self.tile_off_proximity_mul_state = {}
@@ -6445,6 +6465,25 @@ end
                         self.entry_fire_fx_objects[placement_index] = fire_fx_id
                         go.set_rotation(vmath.quat_rotation_z(math.rad(ENTRY_FIRE_ROTATION_DEG)), fire_fx_id)
                         pcall(particlefx.play, msg.url(nil, fire_fx_id, "particlefx"))
+                    end
+                end
+            end
+            if placement.tile == "exit" then
+                local smoke_cell_id = coords_to_id(placement.x + 1, placement.y - 1) -- exit tile cell 3
+                if smoke_cell_id and self.world_grid and self.world_grid[smoke_cell_id] and self.world_grid[smoke_cell_id].tileID ~= hash("empty") then
+                    local smoke_x, smoke_y = coords_to_world_pos(placement.x + 1, placement.y - 1)
+                    local smoke_fx_id = factory.create(
+                        "/escape_pod_green_smoke_fx_factory#escape_pod_green_smoke_fx_factory",
+                        vmath.vector3(
+                            smoke_x + EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_X,
+                            smoke_y + EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_Y,
+                            EXIT_GREEN_SMOKE_Z
+                        )
+                    )
+                    if smoke_fx_id then
+                        self.exit_green_smoke_fx_objects[placement_index] = smoke_fx_id
+                        self.exit_green_smoke_fx_power_state[placement_index] = false
+                        pcall(particlefx.stop, msg.url(nil, smoke_fx_id, "particlefx"), { clear = true })
                     end
                 end
             end
@@ -6582,6 +6621,33 @@ end
         LOOT_RUNTIME.refresh_vent_markers(self)
         LOOT_RUNTIME.refresh_light_value_markers(self)
     end--of spawn visuals fn
+
+local function update_exit_green_smoke_fx(self)
+    if not (self.exit_green_smoke_fx_objects and self.world_grid) then
+        return
+    end
+    self.exit_green_smoke_fx_power_state = self.exit_green_smoke_fx_power_state or {}
+    for tile_instance_id, fx_id in pairs(self.exit_green_smoke_fx_objects) do
+        if fx_id then
+            local tile_powered = false
+            for _, cell in ipairs(self.world_grid) do
+                if cell.tileInstanceId == tile_instance_id and cell.isPowered == true then
+                    tile_powered = true
+                    break
+                end
+            end
+            local was_powered = self.exit_green_smoke_fx_power_state[tile_instance_id]
+            if was_powered == nil or was_powered ~= tile_powered then
+                if tile_powered then
+                    pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+                else
+                    pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = true })
+                end
+                self.exit_green_smoke_fx_power_state[tile_instance_id] = tile_powered
+            end
+        end
+    end
+end
 
 
 
@@ -6919,6 +6985,7 @@ function update(self, dt)
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     update_human_visual_state(self)
+    update_exit_green_smoke_fx(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
     if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then

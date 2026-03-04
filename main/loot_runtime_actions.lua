@@ -5,6 +5,8 @@ function M.extend(runtime, ctx)
     local TURRET_PACKED_ITEM = "turret_packed"
     local TURRET_ARMING_TURNS_ON_DEPLOY = 2
     local WELD_SPARKS_Z = 0.62
+    local RECEIVE_PULSE_DURATION = 0.24
+    local SHUTTLE_HIDE_POS = vmath.vector3(-9999, -9999, 0.5)
 
     local function get_drag_ap_cost()
         return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
@@ -17,6 +19,49 @@ function M.extend(runtime, ctx)
         if target_unit then
             target_unit.hit_flash_timer = math.max(target_unit.hit_flash_timer or 0, 0.25)
         end
+    end
+
+    local function trigger_receive_pulse(target_unit)
+        if not target_unit then
+            return
+        end
+        target_unit.receive_pulse_timer = RECEIVE_PULSE_DURATION
+    end
+
+    local function is_food_supplies_item(item_type)
+        return item_type == ctx.COMPONENT_UI.component_food_supplies
+    end
+
+    local function is_nav_data_item(item_type)
+        return item_type == ctx.COMPONENT_UI.component_nav_data
+    end
+
+    local function unit_has_any_food_supplies(unit)
+        if not unit or not unit.backpack_items then
+            return false
+        end
+        for _, item in ipairs(unit.backpack_items) do
+            if is_food_supplies_item(item) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function set_unit_backpack_to_food_supplies(unit)
+        if not unit then
+            return
+        end
+        unit.backpack_items = { ctx.COMPONENT_UI.component_food_supplies }
+        unit.backpack_used = #unit.backpack_items
+    end
+
+    local function clear_food_supplies_from_backpack(unit)
+        if not unit then
+            return
+        end
+        unit.backpack_items = {}
+        unit.backpack_used = 0
     end
 
     local function try_consume_drag_ap(source_unit, target_unit)
@@ -44,6 +89,10 @@ function M.extend(runtime, ctx)
             return hash("power_unit")
         elseif item_type == TURRET_PACKED_ITEM then
             return hash("gun_turret")
+        elseif is_nav_data_item(item_type) then
+            return hash("nav_data")
+        elseif is_food_supplies_item(item_type) then
+            return hash("food_supplies")
         end
         return nil
     end
@@ -403,9 +452,7 @@ function M.extend(runtime, ctx)
             return true
         end
         if dead_unit.cell_id ~= unit.cell_id then
-            print("too far away")
-            flash_invalid_drag_units(unit, dead_unit)
-            return true
+            return false
         end
         unit.backpack_items = unit.backpack_items or {}
         if #unit.backpack_items > 0 then
@@ -618,17 +665,185 @@ function M.extend(runtime, ctx)
         return best_cell
     end
 
-    runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
-        if not runtime.is_point_in_loot_button(screen_x, screen_y) then
+    runtime.find_escape_pod_power_socket_drop_target = function(self, world_x, world_y)
+        if not self.world_grid then
+            return nil, nil
+        end
+        local best_cell = nil
+        local best_obj = nil
+        local best_dist = math.huge
+        for _, cell in ipairs(self.world_grid) do
+            local socket = runtime.get_escape_pod_power_socket_object and runtime.get_escape_pod_power_socket_object(cell) or nil
+            if socket and cell.tileID ~= hash("empty") then
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local sx = cx + (socket.offsetX or 0)
+                local sy = cy + (socket.offsetY or 0)
+                local half_w = ((socket.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                local half_h = ((socket.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                local inside = world_x >= (sx - half_w)
+                    and world_x <= (sx + half_w)
+                    and world_y >= (sy - half_h)
+                    and world_y <= (sy + half_h)
+                if inside then
+                    local dx = sx - world_x
+                    local dy = sy - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < best_dist then
+                        best_dist = dist
+                        best_cell = cell
+                        best_obj = socket
+                    end
+                end
+            end
+        end
+        return best_cell, best_obj
+    end
+
+    runtime.refresh_exit_objective_state = function(self)
+        self.exit_objective_state = self.exit_objective_state or {}
+        local state = self.exit_objective_state
+        state.seated_humans = 0
+        state.power_loaded = 0
+        state.nav_ready = false
+        state.supplies_ready = false
+        state.exit_tile_powered = false
+        if self.squad_units then
+            for _, unit in pairs(self.squad_units) do
+                if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
+                    state.seated_humans = state.seated_humans + 1
+                end
+            end
+        end
+        if self.world_grid then
+            for _, cell in ipairs(self.world_grid) do
+                local socket = runtime.get_escape_pod_power_socket_object and runtime.get_escape_pod_power_socket_object(cell) or nil
+                if socket then
+                    state.power_loaded = state.power_loaded + math.max(0, socket.powerLoaded or 0)
+                    if cell.isPowered == true then
+                        state.exit_tile_powered = true
+                    end
+                end
+                local nav = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
+                if nav and nav.isFixed == true then
+                    state.nav_ready = true
+                    if cell.isPowered == true then
+                        state.exit_tile_powered = true
+                    end
+                end
+                local loader = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
+                if loader and loader.isFixed == true then
+                    state.supplies_ready = true
+                    if cell.isPowered == true then
+                        state.exit_tile_powered = true
+                    end
+                end
+            end
+        end
+        return state
+    end
+
+    runtime.get_launch_status = function(self)
+        local state = runtime.refresh_exit_objective_state(self)
+        return {
+            can_launch = state.seated_humans >= 1
+                and state.power_loaded >= 9
+                and state.nav_ready == true
+                and state.supplies_ready == true
+                and state.exit_tile_powered == true,
+            seated_humans = state.seated_humans,
+            power_loaded = state.power_loaded,
+            nav_ready = state.nav_ready,
+            supplies_ready = state.supplies_ready,
+            exit_tile_powered = state.exit_tile_powered
+        }
+    end
+
+    runtime.try_launch_escape_pod = function(self)
+        local status = runtime.get_launch_status(self)
+        if not status.can_launch then
+            print(string.format(
+                "Launch blocked | seated=%d (need >=1) power=%d/9 nav=%s supplies=%s",
+                status.seated_humans,
+                status.power_loaded,
+                status.nav_ready and "ready" or "missing",
+                status.supplies_ready and "ready" or "missing"
+            ))
+            if status.exit_tile_powered ~= true then
+                print("Launch blocked | exit tile power is OFF.")
+            end
             return false
         end
+        self.game_won = true
+        self.launch_fx_timer = 1.2
+        print("LAUNCH SUCCESS | Escape pod departed.")
+        return true
+    end
 
-        local unit = ctx.get_selected_unit(self)
+    runtime.update_exit_boarding = function(self)
+        if not self.squad_units or not self.world_grid then
+            return
+        end
+        local boarded_any = false
+        local seated_alive_count = 0
+        for _, unit in pairs(self.squad_units) do
+            if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
+                seated_alive_count = seated_alive_count + 1
+            end
+        end
+        for _, unit in pairs(self.squad_units) do
+            if unit
+                and (unit.current_health or 0) > 0
+                and unit.in_shuttle ~= true
+                and unit.cell_id
+                and seated_alive_count < 4
+            then
+                local cell = self.world_grid[unit.cell_id]
+                local seat_obj = runtime.get_escape_pod_seat_object and runtime.get_escape_pod_seat_object(cell) or nil
+                if seat_obj then
+                    local old_cell = unit.cell_id
+                    if self.cell_slot_assignments and self.cell_slot_assignments[old_cell] then
+                        self.cell_slot_assignments[old_cell][unit.id] = nil
+                    end
+                    unit.in_shuttle = true
+                    unit.is_selected = false
+                    unit.is_moving = false
+                    unit.move_path = nil
+                    unit.move_path_index = 0
+                    unit.cell_id = nil
+                    if unit.go_path then
+                        go.set_position(SHUTTLE_HIDE_POS, unit.go_path)
+                    end
+                    if unit.shadow_path then
+                        go.set_position(SHUTTLE_HIDE_POS, unit.shadow_path)
+                    end
+                    if self.controlled_unit_id == unit.id then
+                        self.controlled_unit_id = nil
+                    end
+                    seated_alive_count = seated_alive_count + 1
+                    boarded_any = true
+                    print(string.format("%s entered the escape pod.", unit.display_name))
+                end
+            end
+        end
+        if boarded_any and self.squad_units then
+            if not self.controlled_unit_id then
+                for _, scan in pairs(self.squad_units) do
+                    if scan and (scan.current_health or 0) > 0 and scan.in_shuttle ~= true then
+                        self.controlled_unit_id = scan.id
+                        scan.is_selected = true
+                        break
+                    end
+                end
+            end
+            ctx.update_human_visual_state(self)
+        end
+        runtime.refresh_exit_objective_state(self)
+    end
+
+    runtime.try_scavenge_selected_unit_on_cell = function(self, unit, cell)
         if not unit or not unit.cell_id then
             return true
         end
-
-        local cell = self.world_grid and self.world_grid[unit.cell_id]
         local crate_obj = cell and runtime.get_loot_crate_object(cell) or nil
         local has_loot_here = cell and runtime.cell_has_loot_available(cell)
         if not cell or not has_loot_here then
@@ -637,6 +852,10 @@ function M.extend(runtime, ctx)
         end
         if not cell.isPowered then
             print("Loot crate is hidden (tile has no power).")
+            return true
+        end
+        if unit_has_any_food_supplies(unit) then
+            print("Backpack occupied by food supplies. Drop/install it before scavenging.")
             return true
         end
 
@@ -681,7 +900,15 @@ function M.extend(runtime, ctx)
         end
 
         for _, item_type in ipairs(loot_results) do
-            if #unit.backpack_items < capacity then
+            if is_food_supplies_item(item_type) then
+                if #unit.backpack_items == 0 then
+                    set_unit_backpack_to_food_supplies(unit)
+                    runtime.spawn_loot_pickup_blip(self, unit.cell_id, 1, item_type)
+                    added = added + 1
+                else
+                    dropped = dropped + 1
+                end
+            elseif #unit.backpack_items < capacity then
                 table.insert(unit.backpack_items, item_type)
                 unit.backpack_used = #unit.backpack_items
                 runtime.spawn_loot_pickup_blip(self, unit.cell_id, #unit.backpack_items, item_type)
@@ -727,73 +954,14 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
+        -- Deprecated button path: scavenging is now driven by direct crate clicks.
+        return false
+    end
+
     runtime.try_use_component_vending = function(self, screen_x, screen_y)
-        if not runtime.is_point_in_component_button(screen_x, screen_y) then
-            return false
-        end
-
-        local unit = ctx.get_selected_unit(self)
-        if not unit or not unit.cell_id then
-            return true
-        end
-
-        local cell = self.world_grid and self.world_grid[unit.cell_id]
-        local machine = runtime.get_vending_machine_on_cell(cell)
-        if not machine then
-            print("No vending machine here.")
-            return true
-        end
-        if not cell.isPowered then
-            print("Vending machine is offline (tile has no power).")
-            return true
-        end
-        if machine.isFixed ~= true then
-            print("Vending machine is broken and must be fixed first.")
-            return true
-        end
-        if not runtime.is_object_dependency_met(self.world_grid, machine) then
-            print("Vending machine dependency is not met.")
-            return true
-        end
-
-        unit.backpack_items = unit.backpack_items or {}
-        local material_slot = nil
-        for i, item in ipairs(unit.backpack_items) do
-            if item == "material" then
-                material_slot = i
-                break
-            end
-        end
-
-        if not material_slot then
-            print("Need 1 material to produce a component.")
-            return true
-        end
-
-        table.remove(unit.backpack_items, material_slot)
-        local produced_item = ctx.COMPONENT_UI.item_type_blue
-        local produced_label = "component"
-        if machine.name == hash("ammo_vending_machine") then
-            produced_item = "ammo"
-            produced_label = "ammo unit"
-        elseif machine.name == hash("med_vending_machine") then
-            produced_item = "meds"
-            produced_label = "med unit"
-        end
-        table.insert(unit.backpack_items, produced_item)
-        unit.backpack_used = #unit.backpack_items
-
-        local machine_x, machine_y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-        runtime.spawn_loot_pickup_blip(
-            self,
-            unit.cell_id,
-            #unit.backpack_items,
-            produced_item,
-            machine_x + (machine.offsetX or 0),
-            machine_y + (machine.offsetY or 0) + 18
-        )
-        print(string.format("%s used 1 material and produced 1 %s.", unit.display_name, produced_label))
-        return true
+        -- Deprecated button path: vending is now driven by direct drag-to-machine interactions.
+        return false
     end
 
     runtime.try_fix_selected_unit = function(self, screen_x, screen_y)
@@ -922,17 +1090,10 @@ function M.extend(runtime, ctx)
         return true
     end
 
-    runtime.try_retrieve_power_selected_unit = function(self, screen_x, screen_y)
-        if not runtime.is_point_in_retrieve_button(screen_x, screen_y) then
-            return false
-        end
-
-        local unit = ctx.get_selected_unit(self)
+    runtime.try_retrieve_power_selected_unit_on_cell = function(self, unit, cell)
         if not unit or not unit.cell_id then
             return true
         end
-
-        local cell = self.world_grid and self.world_grid[unit.cell_id]
         if not cell then
             print("No cell selected for power retrieval.")
             return true
@@ -954,6 +1115,10 @@ function M.extend(runtime, ctx)
         end
 
         unit.backpack_items = unit.backpack_items or {}
+        if unit_has_any_food_supplies(unit) then
+            print("Backpack occupied by food supplies. Cannot retrieve power.")
+            return true
+        end
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items >= capacity then
             print("Backpack full. Cannot retrieve power.")
@@ -989,6 +1154,11 @@ function M.extend(runtime, ctx)
         runtime.refresh_light_value_markers(self)
         ctx.update_human_visual_state(self)
         return true
+    end
+
+    runtime.try_retrieve_power_selected_unit = function(self, screen_x, screen_y)
+        -- Deprecated button path: retrieval is now driven by direct power-node clicks.
+        return false
     end
 
     runtime.begin_command_drag = function(self, screen_x, screen_y)
@@ -1072,7 +1242,11 @@ function M.extend(runtime, ctx)
                 print("Health already full.")
                 return false
             end
-            unit.current_health = math.min(unit.max_health, unit.current_health + 1)
+            if unit.class_id == ctx.UNIT_CLASS_MEDIC then
+                unit.current_health = unit.max_health
+            else
+                unit.current_health = math.min(unit.max_health, unit.current_health + 1)
+            end
             return true
         end
 
@@ -1112,11 +1286,14 @@ function M.extend(runtime, ctx)
             return false
         end
         if item_cell_id ~= unit.cell_id then
-            print("too far away")
+            return false
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        if unit_has_any_food_supplies(unit) and (not is_food_supplies_item(item.item_type)) then
+            print("Cannot carry other items while hauling food supplies.")
             flash_invalid_drag_units(unit, nil)
             return true
         end
-        unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items >= cap then
             print("Backpack full.")
@@ -1144,6 +1321,13 @@ function M.extend(runtime, ctx)
                     go.set_position(vmath.vector3(-9999, -9999, 0.5), corpse_unit.go_path)
                 end
             end
+        elseif is_food_supplies_item(item.item_type) then
+            if #unit.backpack_items > 0 then
+                print("Backpack must be empty for food supplies.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            set_unit_backpack_to_food_supplies(unit)
         else
             table.insert(unit.backpack_items, item.item_type)
         end
@@ -1216,7 +1400,59 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    local function is_point_in_object_hitbox(cell, obj, world_x, world_y)
+        if not cell or not obj then
+            return false
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local x = cx + (obj.offsetX or 0)
+        local y = cy + (obj.offsetY or 0)
+        local half_w = ((obj.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+        local half_h = ((obj.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+        return world_x >= (x - half_w)
+            and world_x <= (x + half_w)
+            and world_y >= (y - half_h)
+            and world_y <= (y + half_h)
+    end
+
+    runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)
+        if not self.world_grid or not clicked_cell_id then
+            return nil, nil, nil
+        end
+        local cell = self.world_grid[clicked_cell_id]
+        if not cell then
+            return nil, nil, nil
+        end
+        local crate = runtime.get_loot_crate_object(cell)
+        if crate and is_point_in_object_hitbox(cell, crate, world_x, world_y) then
+            return "crate", cell, crate
+        end
+        local power_node = runtime.get_power_node_object(cell)
+        if power_node and is_point_in_object_hitbox(cell, power_node, world_x, world_y) then
+            return "power_node", cell, power_node
+        end
+        return nil, nil, nil
+    end
+
     runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local object_kind, clicked_cell = runtime.get_clicked_interactive_object(self, world_x, world_y, clicked_cell_id)
+        if object_kind then
+            if clicked_cell.isPowered ~= true or clicked_cell_id ~= unit.cell_id then
+                return false
+            end
+            if object_kind == "crate" then
+                return runtime.try_scavenge_selected_unit_on_cell(self, unit, clicked_cell)
+            end
+            if object_kind == "power_node" then
+                return runtime.try_retrieve_power_selected_unit_on_cell(self, unit, clicked_cell)
+            end
+            return true
+        end
         -- Deterministic click order for crowded cells:
         -- 1) corpse interaction, 2) deployed turret pickup, 3) deployed world item pickup.
         if runtime.try_store_dead_human_corpse_selected_unit(self, screen_x, screen_y) then
@@ -1256,17 +1492,20 @@ function M.extend(runtime, ctx)
             local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
             local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
             if target_unit then
-                if runtime.can_transfer_between_units(source_unit, target_unit) then
+                if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                     if (source_unit.command_points or 0) > 0 then
                         source_unit.command_points = source_unit.command_points - 1
                         target_unit.current_ap = target_unit.current_ap + 1 -- intentionally uncapped by design
+                        trigger_receive_pulse(target_unit)
                         consumed = true
                         print(string.format("%s granted +1 AP to %s.", source_unit.display_name, target_unit.display_name))
                     else
                         print("No command points available.")
+                        flash_invalid_drag_units(source_unit, target_unit)
                     end
                 else
                     print("too far away")
+                    flash_invalid_drag_units(source_unit, target_unit)
                 end
             end
         else
@@ -1321,10 +1560,11 @@ function M.extend(runtime, ctx)
                         print("Packed turret cannot be handed to another unit. Drop on your current cell to deploy.")
                         flash_invalid_drag_units(source_unit, target_unit)
                     else
-                    if runtime.can_transfer_between_units(source_unit, target_unit) then
+                    if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                             if target_unit.current_health >= target_unit.max_health then
                                 print(target_unit.display_name .. " already has full HP.")
+                                flash_invalid_drag_units(source_unit, target_unit)
                             else
                                 if not try_consume_drag_ap(source_unit, target_unit) then
                                     self.drag_resource = { active = false }
@@ -1333,6 +1573,7 @@ function M.extend(runtime, ctx)
                                 table.remove(source_unit.backpack_items, drag.source_slot_index)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 target_unit.current_health = target_unit.max_health
+                                trigger_receive_pulse(target_unit)
                                 consumed = true
                                 print(string.format(
                                     "%s used 1 meds on %s (full heal). (AP -%d)",
@@ -1342,10 +1583,34 @@ function M.extend(runtime, ctx)
                                 ))
                                 -- FUTURE HOOK: play heal particle effect on target_unit.
                             end
+                        elseif is_food_supplies_item(source_item) then
+                            target_unit.backpack_items = target_unit.backpack_items or {}
+                            if #target_unit.backpack_items > 0 and not unit_has_any_food_supplies(target_unit) then
+                                print(target_unit.display_name .. " backpack must be empty for food supplies.")
+                                flash_invalid_drag_units(source_unit, target_unit)
+                            else
+                                if not try_consume_drag_ap(source_unit, target_unit) then
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
+                                clear_food_supplies_from_backpack(source_unit)
+                                set_unit_backpack_to_food_supplies(target_unit)
+                                trigger_receive_pulse(target_unit)
+                                consumed = true
+                                print(string.format(
+                                    "%s transferred food supplies to %s. (AP -%d)",
+                                    source_unit.display_name,
+                                    target_unit.display_name,
+                                    get_drag_ap_cost()
+                                ))
+                            end
                         else
                             target_unit.backpack_items = target_unit.backpack_items or {}
                             local target_cap = target_unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
-                            if #target_unit.backpack_items < target_cap then
+                            if unit_has_any_food_supplies(target_unit) or unit_has_any_food_supplies(source_unit) then
+                                print("Cannot mix food supplies with other items.")
+                                flash_invalid_drag_units(source_unit, target_unit)
+                            elseif #target_unit.backpack_items < target_cap then
                                 if not try_consume_drag_ap(source_unit, target_unit) then
                                     self.drag_resource = { active = false }
                                     return true
@@ -1354,6 +1619,7 @@ function M.extend(runtime, ctx)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 table.insert(target_unit.backpack_items, source_item)
                                 target_unit.backpack_used = #target_unit.backpack_items
+                                trigger_receive_pulse(target_unit)
                                 consumed = true
                                 print(string.format(
                                     "%s gave 1 %s to %s. (AP -%d)",
@@ -1441,6 +1707,46 @@ function M.extend(runtime, ctx)
                         end
                     end
                     local target_power_cell = runtime.find_power_node_drop_target(self, world_x, world_y)
+                    local target_socket_cell, target_socket_obj = runtime.find_escape_pod_power_socket_drop_target(self, world_x, world_y)
+                    if target_socket_cell and target_socket_obj and source_item == "power" then
+                        if not source_unit.cell_id then
+                            print("Unable to load escape-pod power: source unit has no cell.")
+                            self.drag_resource = { active = false }
+                            return true
+                        end
+                        local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                        local tx, ty = target_socket_cell.xCell, target_socket_cell.yCell
+                        local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                        if manhattan == 0 then
+                            local required = math.max(1, target_socket_obj.powerRequired or 9)
+                            local loaded = math.max(0, target_socket_obj.powerLoaded or 0)
+                            if loaded >= required then
+                                print("Escape pod power socket already full.")
+                                flash_invalid_drag_units(source_unit, nil)
+                            else
+                                if not try_consume_drag_ap(source_unit, nil) then
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
+                                table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                source_unit.backpack_used = #source_unit.backpack_items
+                                target_socket_obj.powerLoaded = math.min(required, loaded + 1)
+                                consumed = true
+                                runtime.refresh_power_node_markers(self)
+                                runtime.refresh_exit_objective_state(self)
+                                print(string.format(
+                                    "%s loaded escape-pod power: %d/%d. (AP -%d)",
+                                    source_unit.display_name,
+                                    target_socket_obj.powerLoaded,
+                                    required,
+                                    get_drag_ap_cost()
+                                ))
+                            end
+                        else
+                            print("too far away")
+                            flash_invalid_drag_units(source_unit, nil)
+                        end
+                    end
                     if target_power_cell and source_item == "power" then
                         if not source_unit.cell_id then
                             print("Unable to activate power node: source unit has no cell.")
@@ -1567,6 +1873,8 @@ function M.extend(runtime, ctx)
                             or source_item == ctx.COMPONENT_UI.component_plate
                             or source_item == ctx.COMPONENT_UI.component_fuse
                             or source_item == ctx.COMPONENT_UI.component_sensor
+                            or source_item == ctx.COMPONENT_UI.component_nav_data
+                            or source_item == ctx.COMPONENT_UI.component_food_supplies
                         if drop_cell_id and source_unit.cell_id and source_item == ctx.COMPONENT_UI.component_plate then
                             vent_target = runtime.find_vent_weld_drop_target(self, world_x, world_y, drop_cell_id)
                             if vent_target then
@@ -1645,7 +1953,9 @@ function M.extend(runtime, ctx)
                                 end
                             end
                             if component_target then
-                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
+                                local is_exit_install_target = component_target.name == hash("nav_computer")
+                                    or component_target.name == hash("supply_loader")
+                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_exit_install_target then
                                     print("Only the Techie can fix objects.")
                                     flash_invalid_drag_units(source_unit, nil)
                                     self.drag_resource = { active = false }
@@ -1659,14 +1969,19 @@ function M.extend(runtime, ctx)
                                         self.drag_resource = { active = false }
                                         return true
                                     end
-                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    if source_item == ctx.COMPONENT_UI.component_food_supplies then
+                                        clear_food_supplies_from_backpack(source_unit)
+                                    else
+                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                        source_unit.backpack_used = #source_unit.backpack_items
+                                    end
                                     component_target.isFixed = true
                                     consumed = true
                                     runtime.refresh_fix_markers(self)
                                     runtime.refresh_door_markers(self)
                                     runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_turret_markers(self)
+                                    runtime.refresh_exit_objective_state(self)
                                     runtime.refresh_world_item_visuals(self)
                                     print(string.format(
                                         "%s installed 1 %s on object #%d. (AP -%d)",
@@ -1750,12 +2065,33 @@ function M.extend(runtime, ctx)
 
         local drag = self.drag_resource
         if not drag or not drag.active then
+            if self.ui.drag_command_pip then
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+            end
             ctx.set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
             return
         end
 
-        local color = (drag.drag_type == "command") and ctx.COMMAND_UI.drag_color or runtime.get_backpack_item_color(drag.item_type)
-        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, color, ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+        local sprite_url = msg.url(nil, self.ui.drag_pip, "sprite")
+        local item_ui_scale = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021)
+        if drag.drag_type == "command" then
+            if self.ui.drag_command_pip then
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, drag.screen_x, drag.screen_y, 0.9, ctx.COMMAND_UI.drag_color, ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+            end
+            ctx.set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), item_ui_scale, item_ui_scale)
+        else
+            if self.ui.drag_command_pip then
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+            end
+            local icon_anim = runtime.get_item_visual_animation and runtime.get_item_visual_animation(drag.item_type) or nil
+            if icon_anim then
+                msg.post(sprite_url, "play_animation", { id = icon_anim })
+                go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+            else
+                go.set(sprite_url, "tint", runtime.get_backpack_item_color(drag.item_type))
+            end
+        end
+        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, vmath.vector4(1, 1, 1, 1), item_ui_scale, item_ui_scale)
     end
 
     return runtime

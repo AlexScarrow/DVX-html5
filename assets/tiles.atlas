@@ -134,6 +134,12 @@ images {
   image: "/assets/images/sensor.png"
 }
 images {
+  image: "/assets/images/nav_data.png"
+}
+images {
+  image: "/assets/images/food_supplies.png"
+}
+images {
   image: "/assets/images/gun_turret_tripod.png"
 }
 images {
@@ -168,6 +174,12 @@ images {
 }
 images {
   image: "/assets/images/tile_passage1_on.png"
+}
+images {
+  image: "/assets/images/tile_exit_off.png"
+}
+images {
+  image: "/assets/images/tile_exit_on.png"
 }
 margin: 2
 inner_padding: 2

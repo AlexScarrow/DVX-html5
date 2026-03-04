@@ -654,17 +654,24 @@ function M.extend(runtime, ctx)
         local slot_x, slot_y = runtime.get_backpack_slot_screen_pos(to_slot_index)
         local to_x, to_y = ctx.screen_to_world(slot_x, slot_y, self.camera_pos, self.camera_zoom)
 
-        local blip_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.83))
+        local blip_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(from_x, from_y, 0.83))
         if not blip_id then
             return
         end
-
-        local color = runtime.get_backpack_item_color(item_type)
-        go.set_scale(vmath.vector3(ctx.LOOT_UI.pickup_blip_size, ctx.LOOT_UI.pickup_blip_size, 1), blip_id)
-        go.set(msg.url(nil, blip_id, "sprite"), "tint", color)
+        local shadow_id = nil
+        local icon_anim = runtime.get_item_visual_animation and runtime.get_item_visual_animation(item_type) or nil
+        if icon_anim then
+            msg.post(msg.url(nil, blip_id, "sprite"), "play_animation", { id = icon_anim })
+            go.set(msg.url(nil, blip_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        else
+            local color = runtime.get_backpack_item_color(item_type)
+            go.set(msg.url(nil, blip_id, "sprite"), "tint", color)
+        end
+        go.set_scale(vmath.vector3(0.85, 0.85, 1), blip_id)
 
         table.insert(self.loot_pickup_blips, {
             go_id = blip_id,
+            shadow_id = shadow_id,
             from = vmath.vector3(from_x, from_y, 0.83),
             to = vmath.vector3(to_x, to_y, 0.83),
             t = 0
@@ -679,6 +686,9 @@ function M.extend(runtime, ctx)
         for i = #self.loot_pickup_blips, 1, -1 do
             local blip = self.loot_pickup_blips[i]
             if not blip.go_id then
+                if blip.shadow_id then
+                    go.delete(blip.shadow_id)
+                end
                 table.remove(self.loot_pickup_blips, i)
             else
                 local dx = blip.to.x - blip.from.x
@@ -691,6 +701,9 @@ function M.extend(runtime, ctx)
                 go.set_position(vmath.vector3(px, py, 0.83), blip.go_id)
                 if blip.t >= 1 then
                     go.delete(blip.go_id)
+                    if blip.shadow_id then
+                        go.delete(blip.shadow_id)
+                    end
                     table.remove(self.loot_pickup_blips, i)
                 end
             end

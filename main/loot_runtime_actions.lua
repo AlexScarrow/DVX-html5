@@ -5,6 +5,7 @@ function M.extend(runtime, ctx)
     local TURRET_PACKED_ITEM = "turret_packed"
     local TURRET_ARMING_TURNS_ON_DEPLOY = 2
     local WELD_SPARKS_Z = 0.62
+    local RECEIVE_PULSE_DURATION = 0.24
 
     local function get_drag_ap_cost()
         return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
@@ -17,6 +18,13 @@ function M.extend(runtime, ctx)
         if target_unit then
             target_unit.hit_flash_timer = math.max(target_unit.hit_flash_timer or 0, 0.25)
         end
+    end
+
+    local function trigger_receive_pulse(target_unit)
+        if not target_unit then
+            return
+        end
+        target_unit.receive_pulse_timer = RECEIVE_PULSE_DURATION
     end
 
     local function try_consume_drag_ap(source_unit, target_unit)
@@ -403,9 +411,7 @@ function M.extend(runtime, ctx)
             return true
         end
         if dead_unit.cell_id ~= unit.cell_id then
-            print("too far away")
-            flash_invalid_drag_units(unit, dead_unit)
-            return true
+            return false
         end
         unit.backpack_items = unit.backpack_items or {}
         if #unit.backpack_items > 0 then
@@ -618,17 +624,10 @@ function M.extend(runtime, ctx)
         return best_cell
     end
 
-    runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
-        if not runtime.is_point_in_loot_button(screen_x, screen_y) then
-            return false
-        end
-
-        local unit = ctx.get_selected_unit(self)
+    runtime.try_scavenge_selected_unit_on_cell = function(self, unit, cell)
         if not unit or not unit.cell_id then
             return true
         end
-
-        local cell = self.world_grid and self.world_grid[unit.cell_id]
         local crate_obj = cell and runtime.get_loot_crate_object(cell) or nil
         local has_loot_here = cell and runtime.cell_has_loot_available(cell)
         if not cell or not has_loot_here then
@@ -727,73 +726,14 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
+        -- Deprecated button path: scavenging is now driven by direct crate clicks.
+        return false
+    end
+
     runtime.try_use_component_vending = function(self, screen_x, screen_y)
-        if not runtime.is_point_in_component_button(screen_x, screen_y) then
-            return false
-        end
-
-        local unit = ctx.get_selected_unit(self)
-        if not unit or not unit.cell_id then
-            return true
-        end
-
-        local cell = self.world_grid and self.world_grid[unit.cell_id]
-        local machine = runtime.get_vending_machine_on_cell(cell)
-        if not machine then
-            print("No vending machine here.")
-            return true
-        end
-        if not cell.isPowered then
-            print("Vending machine is offline (tile has no power).")
-            return true
-        end
-        if machine.isFixed ~= true then
-            print("Vending machine is broken and must be fixed first.")
-            return true
-        end
-        if not runtime.is_object_dependency_met(self.world_grid, machine) then
-            print("Vending machine dependency is not met.")
-            return true
-        end
-
-        unit.backpack_items = unit.backpack_items or {}
-        local material_slot = nil
-        for i, item in ipairs(unit.backpack_items) do
-            if item == "material" then
-                material_slot = i
-                break
-            end
-        end
-
-        if not material_slot then
-            print("Need 1 material to produce a component.")
-            return true
-        end
-
-        table.remove(unit.backpack_items, material_slot)
-        local produced_item = ctx.COMPONENT_UI.item_type_blue
-        local produced_label = "component"
-        if machine.name == hash("ammo_vending_machine") then
-            produced_item = "ammo"
-            produced_label = "ammo unit"
-        elseif machine.name == hash("med_vending_machine") then
-            produced_item = "meds"
-            produced_label = "med unit"
-        end
-        table.insert(unit.backpack_items, produced_item)
-        unit.backpack_used = #unit.backpack_items
-
-        local machine_x, machine_y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-        runtime.spawn_loot_pickup_blip(
-            self,
-            unit.cell_id,
-            #unit.backpack_items,
-            produced_item,
-            machine_x + (machine.offsetX or 0),
-            machine_y + (machine.offsetY or 0) + 18
-        )
-        print(string.format("%s used 1 material and produced 1 %s.", unit.display_name, produced_label))
-        return true
+        -- Deprecated button path: vending is now driven by direct drag-to-machine interactions.
+        return false
     end
 
     runtime.try_fix_selected_unit = function(self, screen_x, screen_y)
@@ -922,17 +862,10 @@ function M.extend(runtime, ctx)
         return true
     end
 
-    runtime.try_retrieve_power_selected_unit = function(self, screen_x, screen_y)
-        if not runtime.is_point_in_retrieve_button(screen_x, screen_y) then
-            return false
-        end
-
-        local unit = ctx.get_selected_unit(self)
+    runtime.try_retrieve_power_selected_unit_on_cell = function(self, unit, cell)
         if not unit or not unit.cell_id then
             return true
         end
-
-        local cell = self.world_grid and self.world_grid[unit.cell_id]
         if not cell then
             print("No cell selected for power retrieval.")
             return true
@@ -989,6 +922,11 @@ function M.extend(runtime, ctx)
         runtime.refresh_light_value_markers(self)
         ctx.update_human_visual_state(self)
         return true
+    end
+
+    runtime.try_retrieve_power_selected_unit = function(self, screen_x, screen_y)
+        -- Deprecated button path: retrieval is now driven by direct power-node clicks.
+        return false
     end
 
     runtime.begin_command_drag = function(self, screen_x, screen_y)
@@ -1072,7 +1010,11 @@ function M.extend(runtime, ctx)
                 print("Health already full.")
                 return false
             end
-            unit.current_health = math.min(unit.max_health, unit.current_health + 1)
+            if unit.class_id == ctx.UNIT_CLASS_MEDIC then
+                unit.current_health = unit.max_health
+            else
+                unit.current_health = math.min(unit.max_health, unit.current_health + 1)
+            end
             return true
         end
 
@@ -1112,9 +1054,7 @@ function M.extend(runtime, ctx)
             return false
         end
         if item_cell_id ~= unit.cell_id then
-            print("too far away")
-            flash_invalid_drag_units(unit, nil)
-            return true
+            return false
         end
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
@@ -1216,7 +1156,59 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    local function is_point_in_object_hitbox(cell, obj, world_x, world_y)
+        if not cell or not obj then
+            return false
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local x = cx + (obj.offsetX or 0)
+        local y = cy + (obj.offsetY or 0)
+        local half_w = ((obj.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+        local half_h = ((obj.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+        return world_x >= (x - half_w)
+            and world_x <= (x + half_w)
+            and world_y >= (y - half_h)
+            and world_y <= (y + half_h)
+    end
+
+    runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)
+        if not self.world_grid or not clicked_cell_id then
+            return nil, nil, nil
+        end
+        local cell = self.world_grid[clicked_cell_id]
+        if not cell then
+            return nil, nil, nil
+        end
+        local crate = runtime.get_loot_crate_object(cell)
+        if crate and is_point_in_object_hitbox(cell, crate, world_x, world_y) then
+            return "crate", cell, crate
+        end
+        local power_node = runtime.get_power_node_object(cell)
+        if power_node and is_point_in_object_hitbox(cell, power_node, world_x, world_y) then
+            return "power_node", cell, power_node
+        end
+        return nil, nil, nil
+    end
+
     runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local object_kind, clicked_cell = runtime.get_clicked_interactive_object(self, world_x, world_y, clicked_cell_id)
+        if object_kind then
+            if clicked_cell.isPowered ~= true or clicked_cell_id ~= unit.cell_id then
+                return false
+            end
+            if object_kind == "crate" then
+                return runtime.try_scavenge_selected_unit_on_cell(self, unit, clicked_cell)
+            end
+            if object_kind == "power_node" then
+                return runtime.try_retrieve_power_selected_unit_on_cell(self, unit, clicked_cell)
+            end
+            return true
+        end
         -- Deterministic click order for crowded cells:
         -- 1) corpse interaction, 2) deployed turret pickup, 3) deployed world item pickup.
         if runtime.try_store_dead_human_corpse_selected_unit(self, screen_x, screen_y) then
@@ -1256,17 +1248,20 @@ function M.extend(runtime, ctx)
             local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
             local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
             if target_unit then
-                if runtime.can_transfer_between_units(source_unit, target_unit) then
+                if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                     if (source_unit.command_points or 0) > 0 then
                         source_unit.command_points = source_unit.command_points - 1
                         target_unit.current_ap = target_unit.current_ap + 1 -- intentionally uncapped by design
+                        trigger_receive_pulse(target_unit)
                         consumed = true
                         print(string.format("%s granted +1 AP to %s.", source_unit.display_name, target_unit.display_name))
                     else
                         print("No command points available.")
+                        flash_invalid_drag_units(source_unit, target_unit)
                     end
                 else
                     print("too far away")
+                    flash_invalid_drag_units(source_unit, target_unit)
                 end
             end
         else
@@ -1321,10 +1316,11 @@ function M.extend(runtime, ctx)
                         print("Packed turret cannot be handed to another unit. Drop on your current cell to deploy.")
                         flash_invalid_drag_units(source_unit, target_unit)
                     else
-                    if runtime.can_transfer_between_units(source_unit, target_unit) then
+                    if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                             if target_unit.current_health >= target_unit.max_health then
                                 print(target_unit.display_name .. " already has full HP.")
+                                flash_invalid_drag_units(source_unit, target_unit)
                             else
                                 if not try_consume_drag_ap(source_unit, target_unit) then
                                     self.drag_resource = { active = false }
@@ -1333,6 +1329,7 @@ function M.extend(runtime, ctx)
                                 table.remove(source_unit.backpack_items, drag.source_slot_index)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 target_unit.current_health = target_unit.max_health
+                                trigger_receive_pulse(target_unit)
                                 consumed = true
                                 print(string.format(
                                     "%s used 1 meds on %s (full heal). (AP -%d)",
@@ -1354,6 +1351,7 @@ function M.extend(runtime, ctx)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 table.insert(target_unit.backpack_items, source_item)
                                 target_unit.backpack_used = #target_unit.backpack_items
+                                trigger_receive_pulse(target_unit)
                                 consumed = true
                                 print(string.format(
                                     "%s gave 1 %s to %s. (AP -%d)",
@@ -1750,12 +1748,33 @@ function M.extend(runtime, ctx)
 
         local drag = self.drag_resource
         if not drag or not drag.active then
+            if self.ui.drag_command_pip then
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+            end
             ctx.set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
             return
         end
 
-        local color = (drag.drag_type == "command") and ctx.COMMAND_UI.drag_color or runtime.get_backpack_item_color(drag.item_type)
-        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, color, ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+        local sprite_url = msg.url(nil, self.ui.drag_pip, "sprite")
+        local item_ui_scale = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021)
+        if drag.drag_type == "command" then
+            if self.ui.drag_command_pip then
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, drag.screen_x, drag.screen_y, 0.9, ctx.COMMAND_UI.drag_color, ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+            end
+            ctx.set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), item_ui_scale, item_ui_scale)
+        else
+            if self.ui.drag_command_pip then
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+            end
+            local icon_anim = runtime.get_item_visual_animation and runtime.get_item_visual_animation(drag.item_type) or nil
+            if icon_anim then
+                msg.post(sprite_url, "play_animation", { id = icon_anim })
+                go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+            else
+                go.set(sprite_url, "tint", runtime.get_backpack_item_color(drag.item_type))
+            end
+        end
+        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, vmath.vector4(1, 1, 1, 1), item_ui_scale, item_ui_scale)
     end
 
     return runtime

@@ -42,6 +42,31 @@ function M.create(ctx)
         return ctx.UI_COLOR_SLOT
     end
 
+    runtime.get_item_visual_animation = function(item_type)
+        if item_type == "material" then
+            return hash("material_unit")
+        elseif item_type == "meds" then
+            return hash("med_unit")
+        elseif item_type == "ammo" then
+            return hash("ammo_unit")
+        elseif item_type == "power" then
+            return hash("power_unit")
+        elseif item_type == ctx.COMPONENT_UI.component_wiring_straight then
+            return hash("wiregap_straight_on")
+        elseif item_type == ctx.COMPONENT_UI.component_wiring_corner then
+            return hash("wiregap_corner_on")
+        elseif item_type == ctx.COMPONENT_UI.component_fuse then
+            return hash("fuse")
+        elseif item_type == ctx.COMPONENT_UI.component_plate then
+            return hash("plate")
+        elseif item_type == ctx.COMPONENT_UI.component_sensor then
+            return hash("sensor")
+        elseif item_type == "turret_packed" then
+            return hash("gun_turret")
+        end
+        return nil
+    end
+
     runtime.get_backpack_slot_screen_pos = function(slot_index)
         local col = (slot_index - 1) % ctx.UI_BACKPACK_COLS
         local row = math.floor((slot_index - 1) / ctx.UI_BACKPACK_COLS)
@@ -302,14 +327,26 @@ function M.create(ctx)
         return nil
     end
 
-    runtime.can_transfer_between_units = function(source_unit, target_unit)
+    runtime.can_transfer_between_units = function(self, source_unit, target_unit)
         if not source_unit or not target_unit or not source_unit.cell_id or not target_unit.cell_id then
             return false
         end
         local sx, sy = ctx.id_to_coords(source_unit.cell_id)
         local tx, ty = ctx.id_to_coords(target_unit.cell_id)
         local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
-        return manhattan <= 1
+        if manhattan == 0 then
+            return true
+        end
+        if manhattan > 1 then
+            return false
+        end
+        if not self or not self.world_grid then
+            return false
+        end
+        if ctx.can_human_cross_between_cells then
+            return ctx.can_human_cross_between_cells(self.world_grid, source_unit.cell_id, target_unit.cell_id)
+        end
+        return true
     end
 
     return runtime

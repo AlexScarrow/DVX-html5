@@ -25,6 +25,7 @@ function M.create_level_library()
         { x = 5, y = 8, tile = "armoury" },
         { x = 14, y = 9, tile = "armoury" },
         { x = 14, y = 6, tile = "armoury" },
+        { x = 11, y = 2, tile = "exit" },
         { x = 9, y = 5, tile = "passage1" },
         --{ x = 11, y = 5, tile = "armoury" },
         --{ x = 8, y = 5, tile = "medbay" },

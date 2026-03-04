@@ -179,11 +179,18 @@ function M.extend(runtime, ctx)
 
     runtime.refresh_fix_markers = function(self)
         self.fix_objects = self.fix_objects or {}
+        self.exit_requirement_markers = self.exit_requirement_markers or {}
         for cell_id, marker in pairs(self.fix_objects) do
             if marker then
                 go.delete(marker)
             end
             self.fix_objects[cell_id] = nil
+        end
+        for i, marker in ipairs(self.exit_requirement_markers) do
+            if marker then
+                go.delete(marker)
+            end
+            self.exit_requirement_markers[i] = nil
         end
 
         if not self.world_grid then
@@ -218,6 +225,38 @@ function M.extend(runtime, ctx)
                     self.fix_objects[cell_id] = marker_id
                 end
             end
+            local nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
+            if nav_obj then
+                local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local wx = x + (nav_obj.offsetX or 0)
+                local wy = y + (nav_obj.offsetY or 0)
+                local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy + 14, 0.57))
+                if marker_id then
+                    msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("nav_data") })
+                    go.set_scale(vmath.vector3(0.62, 0.62, 1), marker_id)
+                    local tint = (nav_obj.isFixed == true)
+                        and vmath.vector4(0.3, 1, 0.45, 0.85)
+                        or vmath.vector4(0.35, 0.85, 1, 0.95)
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+                    table.insert(self.exit_requirement_markers, marker_id)
+                end
+            end
+            local supply_obj = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
+            if supply_obj then
+                local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local wx = x + (supply_obj.offsetX or 0)
+                local wy = y + (supply_obj.offsetY or 0)
+                local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy + 14, 0.57))
+                if marker_id then
+                    msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("food_supplies") })
+                    go.set_scale(vmath.vector3(0.7, 0.7, 1), marker_id)
+                    local tint = (supply_obj.isFixed == true)
+                        and vmath.vector4(0.3, 1, 0.45, 0.85)
+                        or vmath.vector4(1, 0.86, 0.35, 0.95)
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+                    table.insert(self.exit_requirement_markers, marker_id)
+                end
+            end
         end
     end
 
@@ -226,7 +265,14 @@ function M.extend(runtime, ctx)
         self.power_node_shadow_objects = self.power_node_shadow_objects or {}
         self.power_node_power_state = self.power_node_power_state or {}
         self.power_node_flicker_state = self.power_node_flicker_state or {}
+        self.escape_pod_power_slot_markers = self.escape_pod_power_slot_markers or {}
         local power_node_objects = self.power_node_objects
+        for i, marker in ipairs(self.escape_pod_power_slot_markers) do
+            if marker then
+                go.delete(marker)
+            end
+            self.escape_pod_power_slot_markers[i] = nil
+        end
         for cell_id, marker in pairs(self.power_node_shadow_objects) do
             if marker then
                 go.delete(marker)
@@ -273,6 +319,32 @@ function M.extend(runtime, ctx)
                     self.power_node_power_state[cell_id] = cell.isPowered
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.power_node_marker_size, ctx.LOOT_UI.power_node_marker_size, 1), marker_id)
                     power_node_objects[cell_id] = marker_id
+                end
+            end
+            local socket = runtime.get_escape_pod_power_socket_object and runtime.get_escape_pod_power_socket_object(cell) or nil
+            if socket and cell.tileID ~= hash("empty") then
+                local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local cx = x + (socket.offsetX or 0)
+                local cy = y + (socket.offsetY or 0)
+                local loaded = math.max(0, socket.powerLoaded or 0)
+                local required = math.max(1, socket.powerRequired or 9)
+                local spacing = 18
+                local index = 0
+                for row = 1, 3 do
+                    for col = 1, 3 do
+                        index = index + 1
+                        local ox = (col - 2) * spacing
+                        local oy = (2 - row) * spacing
+                        local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + ox, cy + oy, 0.552))
+                        if marker_id then
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("power_unit") })
+                            go.set_scale(vmath.vector3(0.55, 0.55, 1), marker_id)
+                            local lit = index <= math.min(required, loaded)
+                            local tint = lit and vmath.vector4(0.95, 0.95, 1, 0.95) or vmath.vector4(0.2, 0.2, 0.24, 0.35)
+                            go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+                            table.insert(self.escape_pod_power_slot_markers, marker_id)
+                        end
+                    end
                 end
             end
         end

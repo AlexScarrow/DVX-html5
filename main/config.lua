@@ -55,6 +55,8 @@ function M.create_ui_config(ui_panel_x, ui_panel_y, ui_panel_w, ui_panel_h)
         component_plate = "plate",
         component_fuse = "fuse",
         component_sensor = "sensor",
+        component_nav_data = "nav_data",
+        component_food_supplies = "food_supplies",
         -- Legacy placeholder component id kept for backward compatibility.
         item_type_blue = "component_blue",
         component_color = vmath.vector4(0.35, 0.65, 1, 1),

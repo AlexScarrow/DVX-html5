@@ -94,6 +94,11 @@ NEW_TURN_BUTTON_Y = 64
 NEW_TURN_BUTTON_W = 180
 NEW_TURN_BUTTON_H = 64
 NEW_TURN_BUTTON_Z = 0.845
+LAUNCH_BUTTON_X = SCREEN_WIDTH - 140
+LAUNCH_BUTTON_Y = 64
+LAUNCH_BUTTON_W = 180
+LAUNCH_BUTTON_H = 64
+LAUNCH_BUTTON_Z = 0.845
 AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
 AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
@@ -3824,6 +3829,7 @@ local function initialize_unit_ui(self)
         close_button = nil,
         level_buttons = {},
         new_turn_button = nil,
+        launch_button = nil,
         aesthetic_toggle_button = nil,
         reactive_toggle_button = nil,
         reactive_advance_button = nil,
@@ -3858,6 +3864,7 @@ local function initialize_unit_ui(self)
         self.ui.level_buttons[i] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
     end
     self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+    self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
@@ -3905,6 +3912,7 @@ local function set_ui_hidden(self)
         end
     end
     set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+    set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
@@ -3999,6 +4007,7 @@ function reset_and_load_level(self, level_index)
     safe_delete_map(self.machine_shadow_objects)
     safe_delete_map(self.turret_shadow_objects)
     safe_delete_map(self.power_node_shadow_objects)
+    safe_delete_array(self.escape_pod_power_slot_markers)
     safe_delete_map(self.vent_shadow_objects)
     safe_delete_map(self.door_shadow_objects)
     safe_delete_map(self.turret_tripod_objects)
@@ -4094,6 +4103,9 @@ function reset_and_load_level(self, level_index)
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
+    self.exit_objective_state = nil
+    self.launch_fx_timer = 0
+    self.game_won = false
     self.power_node_loop_fx = {}
     self.melee_swipe_fx = {}
     self.melee_swipe_next_id = 0
@@ -4111,6 +4123,7 @@ function reset_and_load_level(self, level_index)
         spawn_human_unit(self)
     end
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    LOOT_RUNTIME.refresh_exit_objective_state(self)
     update_human_visual_state(self)
     update_selected_unit_ui(self)
     print("Loaded level " .. tostring(level_index))
@@ -4132,6 +4145,23 @@ function update_global_ui_buttons(self)
         new_turn_color,
         NEW_TURN_BUTTON_W,
         NEW_TURN_BUTTON_H
+    )
+    local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
+    local launch_color = vmath.vector4(0.72, 0.2, 0.2, 0.95)
+    if self.game_won then
+        launch_color = vmath.vector4(0.95, 0.9, 0.2, 0.98)
+    elseif launch_status and launch_status.can_launch then
+        launch_color = vmath.vector4(0.2, 0.78, 0.3, 0.95)
+    end
+    set_ui_square_transform(
+        self,
+        self.ui.launch_button,
+        LAUNCH_BUTTON_X,
+        LAUNCH_BUTTON_Y,
+        LAUNCH_BUTTON_Z,
+        launch_color,
+        LAUNCH_BUTTON_W,
+        LAUNCH_BUTTON_H
     )
     local aesthetic_color = self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME
         and vmath.vector4(0.45, 0.35, 0.75, 0.95)
@@ -5001,6 +5031,21 @@ function try_next_turn_button(self, screen_x, screen_y)
         and screen_y <= (NEW_TURN_BUTTON_Y + half_h) then
         if not self.alien_turn_active then
             msg.post(".", "next_turn")
+        end
+        return true
+    end
+    return false
+end
+
+function try_launch_button(self, screen_x, screen_y)
+    local half_w = LAUNCH_BUTTON_W * 0.5
+    local half_h = LAUNCH_BUTTON_H * 0.5
+    if screen_x >= (LAUNCH_BUTTON_X - half_w)
+        and screen_x <= (LAUNCH_BUTTON_X + half_w)
+        and screen_y >= (LAUNCH_BUTTON_Y - half_h)
+        and screen_y <= (LAUNCH_BUTTON_Y + half_h) then
+        if LOOT_RUNTIME.try_launch_escape_pod then
+            LOOT_RUNTIME.try_launch_escape_pod(self)
         end
         return true
     end
@@ -6372,6 +6417,9 @@ function update(self, dt)
 
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
+    if LOOT_RUNTIME.update_exit_boarding then
+        LOOT_RUNTIME.update_exit_boarding(self)
+    end
     if self.aliens then
         local world_shadow_alpha = get_world_shadow_alpha(self)
         local profile = get_aesthetic_profile(self)
@@ -6660,6 +6708,9 @@ function on_input(self, action_id, action)
             end
             if not self.did_drag then
                 if try_next_turn_button(self, input_x, input_y) then
+                    return true
+                end
+                if try_launch_button(self, input_x, input_y) then
                     return true
                 end
                 if try_toggle_aesthetic_ui_button(self, input_x, input_y) then

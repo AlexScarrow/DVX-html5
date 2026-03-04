@@ -137,6 +137,57 @@ function M.create_tile_library(COMPONENT_UI)
     
     library["entry"] = entry
 
+    -- exit / escape pod (art hook: tile_exit)
+    local exit = create_tile_prototype("exit")
+    exit.visualTile = "exit_off"
+    exit.powerLightOffAnim = "tile_exit_off"
+    exit.powerLightOnAnim = "tile_exit_on"
+    for i = 1, 9 do
+        exit.cells[i].lightValue = 2
+        exit.cells[i].moveValue = 1
+        exit.cells[i].coverValue = 1
+    end
+
+    exit.cells[1].accessDown = false
+    exit.cells[1].accessRight = false
+    exit.cells[2].accessDown = false
+    exit.cells[3].accessDown = false
+    exit.cells[3].accessRight = false
+    exit.cells[4].accessDown = false
+    exit.cells[6].accessDown = false
+    exit.cells[6].accessRight = false
+    exit.cells[7].accessRight = false
+    exit.cells[8].accessRight = false
+    exit.cells[9].accessRight = false
+    exit.cells[9].accessDown = false
+    
+    exit.cells[3].object1 = {
+        name = hash("escape_pod_power_socket"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2301,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 64, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+
+    exit.cells[4].object1 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2301,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 64, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+    
+    exit.cells[6].object1 = {
+        name = hash("escape_pod_seatbay"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2601,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 132, hitH = 86, requiredComponent = nil,
+        seatCapacity = 4
+    }
+    exit.cells[8].object1 = {
+        name = hash("nav_computer"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2801,
+        offsetX = -52, offsetY = 14, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
+    }
+    exit.cells[8].object2 = {
+        name = hash("supply_loader"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2802,
+        offsetX = 56, offsetY = -6, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 56, requiredComponent = COMPONENT_UI.component_food_supplies
+    }
+    library["exit"] = exit
+
     -- armoury
     local armoury = create_tile_prototype("armoury")
     armoury.visualTile = "armoury_off"

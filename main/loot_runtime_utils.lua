@@ -36,6 +36,8 @@ function M.create(ctx)
             or item_type == ctx.COMPONENT_UI.component_plate
             or item_type == ctx.COMPONENT_UI.component_fuse
             or item_type == ctx.COMPONENT_UI.component_sensor
+            or item_type == ctx.COMPONENT_UI.component_nav_data
+            or item_type == ctx.COMPONENT_UI.component_food_supplies
         then
             return ctx.COMPONENT_UI.component_color
         end
@@ -61,6 +63,10 @@ function M.create(ctx)
             return hash("plate")
         elseif item_type == ctx.COMPONENT_UI.component_sensor then
             return hash("sensor")
+        elseif item_type == ctx.COMPONENT_UI.component_nav_data then
+            return hash("nav_data")
+        elseif item_type == ctx.COMPONENT_UI.component_food_supplies then
+            return hash("food_supplies")
         elseif item_type == "turret_packed" then
             return hash("gun_turret")
         end
@@ -269,6 +275,58 @@ function M.create(ctx)
         end
         if cell.object3 and cell.object3.name == hash("vent") then
             return cell.object3
+        end
+        return nil
+    end
+
+    runtime.get_escape_pod_seat_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("escape_pod_seatbay") then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    runtime.get_escape_pod_power_socket_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("escape_pod_power_socket") then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    runtime.get_nav_computer_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("nav_computer") then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    runtime.get_supply_loader_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("supply_loader") then
+                return obj
+            end
         end
         return nil
     end

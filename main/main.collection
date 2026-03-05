@@ -380,3 +380,13 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "escape_pod_green_smoke_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"escape_pod_green_smoke_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/escape_pod_green_smoke_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

@@ -25,6 +25,9 @@ images {
 images {
   image: "/assets/images/power_unit.png"
 }
+images {
+  image: "/assets/images/command_star.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

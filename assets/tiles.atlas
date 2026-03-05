@@ -140,6 +140,9 @@ images {
   image: "/assets/images/food_supplies.png"
 }
 images {
+  image: "/assets/images/command_star.png"
+}
+images {
   image: "/assets/images/gun_turret_tripod.png"
 }
 images {

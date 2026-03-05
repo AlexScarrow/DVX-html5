@@ -2074,11 +2074,13 @@ function M.extend(runtime, ctx)
 
         local sprite_url = msg.url(nil, self.ui.drag_pip, "sprite")
         local item_ui_scale = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021)
+        local command_ui_scale = item_ui_scale * 0.75
         if drag.drag_type == "command" then
             if self.ui.drag_command_pip then
-                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, drag.screen_x, drag.screen_y, 0.9, ctx.COMMAND_UI.drag_color, ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
+                ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
             end
-            ctx.set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), item_ui_scale, item_ui_scale)
+            msg.post(sprite_url, "play_animation", { id = hash("command_star") })
+            go.set(sprite_url, "tint", ctx.COMMAND_UI.drag_color or vmath.vector4(1, 1, 1, 1))
         else
             if self.ui.drag_command_pip then
                 ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
@@ -2091,7 +2093,8 @@ function M.extend(runtime, ctx)
                 go.set(sprite_url, "tint", runtime.get_backpack_item_color(drag.item_type))
             end
         end
-        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, vmath.vector4(1, 1, 1, 1), item_ui_scale, item_ui_scale)
+        local final_scale = (drag.drag_type == "command") and command_ui_scale or item_ui_scale
+        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, vmath.vector4(1, 1, 1, 1), final_scale, final_scale)
     end
 
     return runtime

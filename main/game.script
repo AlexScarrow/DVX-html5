@@ -115,6 +115,16 @@ AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
 AESTHETIC_BUTTON_H = 30
 AESTHETIC_BUTTON_Z = 0.845
+ZOOM_IN_BUTTON_X = SCREEN_WIDTH - 70
+ZOOM_IN_BUTTON_Y = SCREEN_HEIGHT - 60
+ZOOM_IN_BUTTON_W = 48
+ZOOM_IN_BUTTON_H = 30
+ZOOM_IN_BUTTON_Z = 0.845
+ZOOM_OUT_BUTTON_X = SCREEN_WIDTH - 70
+ZOOM_OUT_BUTTON_Y = SCREEN_HEIGHT - 100
+ZOOM_OUT_BUTTON_W = 48
+ZOOM_OUT_BUTTON_H = 30
+ZOOM_OUT_BUTTON_Z = 0.845
 ENTRY_FIRE_OFFSET_X = -50
 ENTRY_FIRE_OFFSET_Y = -60
 ENTRY_FIRE_Z = 0.08 -- Above entry tile base visuals while still below UI layers
@@ -3283,6 +3293,36 @@ local function zoom_camera_at_screen_point(self, target_zoom, screen_x, screen_y
     apply_camera_transform(self)
 end
 
+request_zoom_to = function(self, target_zoom, focus_x, focus_y)
+    local clamped = clamp(target_zoom, self.camera_min_zoom, self.camera_max_zoom)
+    self.zoom_target = clamped
+    self.zoom_focus_x = focus_x or (SCREEN_WIDTH * 0.5)
+    self.zoom_focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
+end
+
+request_zoom_delta = function(self, delta, focus_x, focus_y)
+    local base = self.zoom_target or self.camera_zoom
+    request_zoom_to(self, base + delta, focus_x, focus_y)
+end
+
+update_smooth_zoom = function(self, dt)
+    local target = self.zoom_target
+    if not target then
+        return
+    end
+    local diff = target - self.camera_zoom
+    if math.abs(diff) < 0.001 then
+        self.camera_zoom = target
+        apply_camera_transform(self)
+        self.zoom_target = nil
+        return
+    end
+    local speed = self.zoom_smooth_speed or 10
+    local alpha = 1 - math.exp(-speed * dt)
+    local next_zoom = self.camera_zoom + (diff * alpha)
+    zoom_camera_at_screen_point(self, next_zoom, self.zoom_focus_x or (SCREEN_WIDTH * 0.5), self.zoom_focus_y or (SCREEN_HEIGHT * 0.5))
+end
+
 local function is_walkable_cell(world_grid, cell_id)
     local cell = world_grid[cell_id]
     return cell and cell.tileID ~= hash("empty")
@@ -4047,6 +4087,8 @@ local function initialize_unit_ui(self)
     self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+    self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
+    self.ui.zoom_out_button = create_ui_square(0, 0, ZOOM_OUT_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
     self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_command_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -4110,6 +4152,8 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+    set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
+    set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
     set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -4599,6 +4643,8 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
         set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+        set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
+        set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
         return
     end
     local new_turn_color = self.alien_turn_active and vmath.vector4(0.3, 0.3, 0.3, 0.85) or vmath.vector4(0.2, 0.75, 0.25, 0.95)
@@ -4641,6 +4687,26 @@ function update_global_ui_buttons(self)
         aesthetic_color,
         AESTHETIC_BUTTON_W,
         AESTHETIC_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.zoom_in_button,
+        ZOOM_IN_BUTTON_X,
+        ZOOM_IN_BUTTON_Y,
+        ZOOM_IN_BUTTON_Z,
+        vmath.vector4(0.2, 0.55, 0.95, 0.95),
+        ZOOM_IN_BUTTON_W,
+        ZOOM_IN_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.zoom_out_button,
+        ZOOM_OUT_BUTTON_X,
+        ZOOM_OUT_BUTTON_Y,
+        ZOOM_OUT_BUTTON_Z,
+        vmath.vector4(0.2, 0.55, 0.95, 0.95),
+        ZOOM_OUT_BUTTON_W,
+        ZOOM_OUT_BUTTON_H
     )
 end
 
@@ -5538,6 +5604,32 @@ function try_toggle_aesthetic_ui_button(self, screen_x, screen_y)
         and screen_y >= (AESTHETIC_BUTTON_Y - half_h)
         and screen_y <= (AESTHETIC_BUTTON_Y + half_h) then
         toggle_aesthetic_mode(self)
+        return true
+    end
+    return false
+end
+
+function try_zoom_in_button(self, screen_x, screen_y)
+    local half_w = ZOOM_IN_BUTTON_W * 0.5
+    local half_h = ZOOM_IN_BUTTON_H * 0.5
+    if screen_x >= (ZOOM_IN_BUTTON_X - half_w)
+        and screen_x <= (ZOOM_IN_BUTTON_X + half_w)
+        and screen_y >= (ZOOM_IN_BUTTON_Y - half_h)
+        and screen_y <= (ZOOM_IN_BUTTON_Y + half_h) then
+        request_zoom_delta(self, 0.12, screen_x, screen_y)
+        return true
+    end
+    return false
+end
+
+function try_zoom_out_button(self, screen_x, screen_y)
+    local half_w = ZOOM_OUT_BUTTON_W * 0.5
+    local half_h = ZOOM_OUT_BUTTON_H * 0.5
+    if screen_x >= (ZOOM_OUT_BUTTON_X - half_w)
+        and screen_x <= (ZOOM_OUT_BUTTON_X + half_w)
+        and screen_y >= (ZOOM_OUT_BUTTON_Y - half_h)
+        and screen_y <= (ZOOM_OUT_BUTTON_Y + half_h) then
+        request_zoom_delta(self, -0.12, screen_x, screen_y)
         return true
     end
     return false
@@ -6741,6 +6833,11 @@ function init(self)
     self.pan_inertia_damping = 1--8
     self.pan_inertia_min_speed = 3
     self.zoom_input_armed = false
+    self.zoom_block_timer = 0.6
+    self.zoom_target = nil
+    self.zoom_focus_x = SCREEN_WIDTH * 0.5
+    self.zoom_focus_y = SCREEN_HEIGHT * 0.5
+    self.zoom_smooth_speed = 12
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")
@@ -6866,9 +6963,13 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    if self.zoom_block_timer and self.zoom_block_timer > 0 then
+        self.zoom_block_timer = math.max(0, self.zoom_block_timer - dt)
+    end
     if not IS_HTML5 then
         enforce_fixed_window_size(self, dt, false)
     end
+    update_smooth_zoom(self, dt)
     if self.world_grid and self.tile_light_layers then
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local light_anim_cfg = self.tile_light_anim_ids and self.tile_light_anim_ids[tile_instance_id] or nil
@@ -7266,6 +7367,12 @@ function on_input(self, action_id, action)
                 if try_toggle_aesthetic_ui_button(self, input_x, input_y) then
                     return true
                 end
+                if try_zoom_in_button(self, input_x, input_y) then
+                    return true
+                end
+                if try_zoom_out_button(self, input_x, input_y) then
+                    return true
+                end
                 if try_toggle_reactive_combat(self, input_x, input_y) then
                     return true
                 end
@@ -7335,10 +7442,12 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
-        if not self.zoom_input_armed then
+        if self.zoom_block_timer and self.zoom_block_timer > 0 then
             return true
         end
-        local target_zoom = math.min(self.camera_zoom + 0.1, self.camera_max_zoom)
+        if not ((action.value and action.value ~= 0) or action.pressed or action.repeated) then
+            return true
+        end
         local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if not inside_view then
             focus_x = SCREEN_WIDTH * 0.5
@@ -7346,15 +7455,17 @@ function on_input(self, action_id, action)
         end
         focus_x = focus_x or (SCREEN_WIDTH * 0.5)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
-        zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
+        request_zoom_delta(self, 0.12, focus_x, focus_y)
     elseif action_id == hash("zoom_out") then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
-        if not self.zoom_input_armed then
+        if self.zoom_block_timer and self.zoom_block_timer > 0 then
             return true
         end
-        local target_zoom = math.max(self.camera_zoom - 0.1, self.camera_min_zoom)
+        if not ((action.value and action.value ~= 0) or action.pressed or action.repeated) then
+            return true
+        end
         local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if not inside_view then
             focus_x = SCREEN_WIDTH * 0.5
@@ -7362,7 +7473,7 @@ function on_input(self, action_id, action)
         end
         focus_x = focus_x or (SCREEN_WIDTH * 0.5)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
-        zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
+        request_zoom_delta(self, -0.12, focus_x, focus_y)
     elseif action_id == hash("toggle_aesthetic_mode") and action.pressed then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true

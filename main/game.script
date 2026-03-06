@@ -18,11 +18,12 @@ local CELL_HEIGHT = 150         -- Height of each cell in pixels
 local GRID_COLS = 15            -- Number of columns in worldGrid
 local GRID_ROWS = 15            -- Number of rows in worldGrid
 local TILE_SIZE = 3             -- Tiles are 3x3 cells
-window = require("window")
+local window = rawget(_G, "window") or {}
 
 -- Screen dimensions
 local SCREEN_WIDTH = 1280
 local SCREEN_HEIGHT = 720
+local IS_HTML5 = (html5 ~= nil)
 
 
 -- Visual rendering
@@ -3087,11 +3088,45 @@ get_fixed_viewport_rect = function()
     return view_x, view_y, view_w, view_h, scale
 end
 
-map_window_input_to_logical = function(screen_x, screen_y)
-    if not screen_x or not screen_y then
+map_window_input_to_logical = function(x, y, screen_x, screen_y)
+    if not x or not y then
         return nil, nil, false
     end
-    return screen_x, screen_y, true
+    if not IS_HTML5 then
+        return x, y, true
+    end
+
+    -- Most HTML5 builds provide canvas-local action.x/y.
+    if x >= 0 and x <= SCREEN_WIDTH and y >= 0 and y <= SCREEN_HEIGHT then
+        return x, y, true
+    end
+
+    -- Fallback: treat x/y as window-space and map into fixed 1280x720 letterbox.
+    local ok_size, win_w, win_h = pcall(window.get_size)
+    if not ok_size or not win_w or not win_h or win_w <= 0 or win_h <= 0 then
+        return nil, nil, false
+    end
+
+    local scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+    if not scale or scale <= 0 then
+        return nil, nil, false
+    end
+
+    local view_w = SCREEN_WIDTH * scale
+    local view_h = SCREEN_HEIGHT * scale
+    local view_x = (win_w - view_w) * 0.5
+    local view_y = (win_h - view_h) * 0.5
+
+    local inside =
+        x >= view_x and x <= (view_x + view_w) and
+        y >= view_y and y <= (view_y + view_h)
+    if not inside then
+        return nil, nil, false
+    end
+
+    local logical_x = (x - view_x) / scale
+    local logical_y = (y - view_y) / scale
+    return logical_x, logical_y, true
 end
 
 enforce_fixed_window_size = function(self, dt, force_now)
@@ -6705,6 +6740,7 @@ function init(self)
     self.pan_velocity_y = 0
     self.pan_inertia_damping = 1--8
     self.pan_inertia_min_speed = 3
+    self.zoom_input_armed = false
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")
@@ -6714,7 +6750,9 @@ function init(self)
 
     -- Enable input
     msg.post(".", "acquire_input_focus")
-    enforce_fixed_window_size(self, 0, true)
+    if not IS_HTML5 then
+        enforce_fixed_window_size(self, 0, true)
+    end
 
     -- Set camera view
     msg.post("@render:", "use_camera_projection")
@@ -6828,7 +6866,9 @@ end
 -- =============================================================================
 
 function update(self, dt)
-    enforce_fixed_window_size(self, dt, false)
+    if not IS_HTML5 then
+        enforce_fixed_window_size(self, dt, false)
+    end
     if self.world_grid and self.tile_light_layers then
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local light_anim_cfg = self.tile_light_anim_ids and self.tile_light_anim_ids[tile_instance_id] or nil
@@ -7165,7 +7205,7 @@ end
 
 function on_input(self, action_id, action)
     if action_id == hash("touch") then
-        local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             if action.released and inside_view and input_x and input_y then
                 handle_flow_touch(self, input_x, input_y)
@@ -7183,6 +7223,7 @@ function on_input(self, action_id, action)
         end
 
         if action.pressed then
+            self.zoom_input_armed = true
             if not inside_view then
                 return true
             end
@@ -7294,8 +7335,11 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
+        if not self.zoom_input_armed then
+            return true
+        end
         local target_zoom = math.min(self.camera_zoom + 0.1, self.camera_max_zoom)
-        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if not inside_view then
             focus_x = SCREEN_WIDTH * 0.5
             focus_y = SCREEN_HEIGHT * 0.5
@@ -7307,8 +7351,11 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
+        if not self.zoom_input_armed then
+            return true
+        end
         local target_zoom = math.max(self.camera_zoom - 0.1, self.camera_min_zoom)
-        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if not inside_view then
             focus_x = SCREEN_WIDTH * 0.5
             focus_y = SCREEN_HEIGHT * 0.5

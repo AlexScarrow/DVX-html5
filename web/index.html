@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, minimal-ui, shrink-to-fit=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>{{project.title}} {{project.version}}</title>
+    <style type="text/css">
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #app-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: {{display.width}}px;
+            height: {{display.height}}px;
+        }
+
+        #canvas {
+            outline: none;
+            border: 0;
+            width: {{display.width}}px;
+            height: {{display.height}}px;
+            display: block;
+            touch-action: none;
+        }
+
+        .buttons-background {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="running-from-file-warning" style="display: none; margin: 1rem; color: #fff;">
+            <h3>Running from local file</h3>
+            <p>Open from an HTTP server instead of file://</p>
+        </div>
+        <div id="webgl-not-supported" style="display: none; margin: 1rem; color: #fff;">
+            <h3>WebGL not supported</h3>
+        </div>
+        <div id="canvas-container">
+            <canvas id="canvas" tabindex="1" width="{{display.width}}" height="{{display.height}}"></canvas>
+        </div>
+        <div class="buttons-background"></div>
+    </div>
+
+    <script>
+        if (typeof globalThis === "undefined") {
+            window.globalThis = window;
+        }
+    </script>
+    <script id="engine-loader" type="text/javascript" src="dmloader.js"></script>
+    <script id="engine-setup" type="text/javascript">
+        (function () {
+            var BASE_W = {{display.width}};
+            var BASE_H = {{display.height}};
+
+            function fitFixedCanvas() {
+                var app = document.getElementById("app-container");
+                var canvas = document.getElementById("canvas");
+                if (!app || !canvas) return;
+                var viewportW = window.innerWidth || BASE_W;
+                var viewportH = window.innerHeight || BASE_H;
+                var marginX = Math.max(0, Math.floor((viewportW - BASE_W) * 0.5));
+                var marginY = Math.max(0, Math.floor((viewportH - BASE_H) * 0.5));
+
+                app.style.width = BASE_W + "px";
+                app.style.height = BASE_H + "px";
+                app.style.marginLeft = marginX + "px";
+                app.style.marginTop = marginY + "px";
+                app.style.left = "0px";
+                app.style.top = "0px";
+
+                canvas.style.width = BASE_W + "px";
+                canvas.style.height = BASE_H + "px";
+                canvas.width = BASE_W;
+                canvas.height = BASE_H;
+            }
+
+            function keepCanvasFocused() {
+                var canvas = document.getElementById("canvas");
+                if (!canvas) return;
+                canvas.focus();
+            }
+
+            CUSTOM_PARAMETERS["disable_context_menu"] = true;
+            CUSTOM_PARAMETERS["resize_window_callback"] = function () {
+                fitFixedCanvas();
+                keepCanvasFocused();
+            };
+
+            window.addEventListener("wheel", keepCanvasFocused, { passive: true });
+
+            window.addEventListener("pointerdown", keepCanvasFocused, { passive: true });
+            window.addEventListener("mousedown", keepCanvasFocused, { passive: true });
+            window.addEventListener("touchstart", function (e) {
+                keepCanvasFocused();
+                if (e.cancelable) e.preventDefault();
+            }, { passive: false });
+        })();
+    </script>
+    <script id="engine-start" type="text/javascript">
+        var runningFromFileWarning = document.getElementById("running-from-file-warning");
+        if (window.location.href.indexOf("file://") === 0) {
+            runningFromFileWarning.style.display = "block";
+        } else {
+            EngineLoader.load("canvas", "{{exe-name}}");
+            runningFromFileWarning.parentNode.removeChild(runningFromFileWarning);
+        }
+    </script>
+</body>
+</html>

@@ -13,7 +13,7 @@ use_accelerometer = 0
 [display]
 width = 1280
 height = 720
-high_dpi = 1
+high_dpi = 0
 
 [render]
 clear_color_red = 0.0
@@ -30,4 +30,7 @@ shared_state = 1
 
 [sprite]
 max_count = 2500
+
+[html5]
+htmlfile = /web/index.html
 

@@ -184,6 +184,12 @@ coms.cells[4].object1 = {
     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
     offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
 }
+
+coms.cells[9].object1 = {
+    name = hash("nav_computer"), isFixed = true, hasNavData = true, contributesToExitObjective = false,
+    isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 901,
+    offsetX = 30, offsetY = 26, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
+}
 -- 
     library["coms"] = coms
 
@@ -229,7 +235,8 @@ coms.cells[4].object1 = {
         seatCapacity = 4
     }
     exit.cells[8].object1 = {
-        name = hash("nav_computer"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2801,
+        name = hash("nav_computer"), isFixed = false, hasNavData = false, contributesToExitObjective = true,
+        isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2801,
         offsetX = -52, offsetY = 14, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
     }
     exit.cells[8].object2 = {

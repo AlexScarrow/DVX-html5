@@ -64,6 +64,18 @@ function M.extend(runtime, ctx)
         unit.backpack_used = 0
     end
 
+    local function get_backpack_item_slot(unit, item_type)
+        if not unit or not unit.backpack_items then
+            return nil
+        end
+        for i, item in ipairs(unit.backpack_items) do
+            if item == item_type then
+                return i
+            end
+        end
+        return nil
+    end
+
     local function try_consume_drag_ap(source_unit, target_unit)
         if not source_unit then
             return false
@@ -724,10 +736,16 @@ function M.extend(runtime, ctx)
                     end
                 end
                 local nav = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
-                if nav and nav.isFixed == true then
-                    state.nav_ready = true
-                    if cell.isPowered == true then
-                        state.exit_tile_powered = true
+                if nav then
+                    local nav_has_data = (nav.hasNavData == true) or (nav.hasNavData == nil and nav.isFixed == true)
+                    nav.hasNavData = nav_has_data
+                    nav.isFixed = nav_has_data
+                    local contributes_to_exit = (nav.contributesToExitObjective ~= false)
+                    if contributes_to_exit and nav_has_data then
+                        state.nav_ready = true
+                        if cell.isPowered == true then
+                            state.exit_tile_powered = true
+                        end
                     end
                 end
                 local loader = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
@@ -1415,6 +1433,62 @@ function M.extend(runtime, ctx)
             and world_y <= (y + half_h)
     end
 
+    runtime.try_interact_nav_computer_selected_unit_on_cell = function(self, unit, cell, nav_obj)
+        if not unit or not cell or not nav_obj then
+            return false
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        local machine_has_nav = (nav_obj.hasNavData == true) or (nav_obj.hasNavData == nil and nav_obj.isFixed == true)
+        nav_obj.hasNavData = machine_has_nav
+        nav_obj.isFixed = machine_has_nav
+
+        if machine_has_nav then
+            if unit_has_any_food_supplies(unit) then
+                print("Cannot carry nav-data while backpack holds food supplies.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            if #unit.backpack_items >= cap then
+                print("Backpack full.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            table.insert(unit.backpack_items, ctx.COMPONENT_UI.component_nav_data)
+            unit.backpack_used = #unit.backpack_items
+            nav_obj.hasNavData = false
+            nav_obj.isFixed = false
+            runtime.refresh_exit_objective_state(self)
+            runtime.refresh_fix_markers(self)
+            runtime.refresh_world_item_visuals(self)
+            print(string.format("%s retrieved nav-data from machine.", unit.display_name))
+            return true
+        end
+
+        if unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
+            print("Only the Techie can insert nav-data into machine.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+
+        local nav_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_nav_data)
+        if not nav_slot then
+            print("Techie needs 1 nav-data in backpack.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+
+        table.remove(unit.backpack_items, nav_slot)
+        unit.backpack_used = #unit.backpack_items
+        nav_obj.hasNavData = true
+        nav_obj.isFixed = true
+        runtime.refresh_exit_objective_state(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s inserted nav-data into machine.", unit.display_name))
+        return true
+    end
+
     runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)
         if not self.world_grid or not clicked_cell_id then
             return nil, nil, nil
@@ -1430,6 +1504,10 @@ function M.extend(runtime, ctx)
         local power_node = runtime.get_power_node_object(cell)
         if power_node and is_point_in_object_hitbox(cell, power_node, world_x, world_y) then
             return "power_node", cell, power_node
+        end
+        local nav_computer = runtime.get_nav_computer_object(cell)
+        if nav_computer and is_point_in_object_hitbox(cell, nav_computer, world_x, world_y) then
+            return "nav_computer", cell, nav_computer
         end
         return nil, nil, nil
     end
@@ -1450,6 +1528,12 @@ function M.extend(runtime, ctx)
             end
             if object_kind == "power_node" then
                 return runtime.try_retrieve_power_selected_unit_on_cell(self, unit, clicked_cell)
+            end
+            if object_kind == "nav_computer" then
+                local nav_obj = runtime.get_nav_computer_object(clicked_cell)
+                if nav_obj then
+                    return runtime.try_interact_nav_computer_selected_unit_on_cell(self, unit, clicked_cell, nav_obj)
+                end
             end
             return true
         end
@@ -1953,8 +2037,7 @@ function M.extend(runtime, ctx)
                                 end
                             end
                             if component_target then
-                                local is_exit_install_target = component_target.name == hash("nav_computer")
-                                    or component_target.name == hash("supply_loader")
+                                local is_exit_install_target = component_target.name == hash("supply_loader")
                                 if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_exit_install_target then
                                     print("Only the Techie can fix objects.")
                                     flash_invalid_drag_units(source_unit, nil)
@@ -1976,6 +2059,10 @@ function M.extend(runtime, ctx)
                                         source_unit.backpack_used = #source_unit.backpack_items
                                     end
                                     component_target.isFixed = true
+                                    if component_target.name == hash("nav_computer")
+                                        and source_item == ctx.COMPONENT_UI.component_nav_data then
+                                        component_target.hasNavData = true
+                                    end
                                     consumed = true
                                     runtime.refresh_fix_markers(self)
                                     runtime.refresh_door_markers(self)

@@ -56,57 +56,57 @@ function M.create_tile_library(COMPONENT_UI)
     end
 
     -- corridor
-    local corridor = create_tile_prototype("corridor")
-    for i = 1, 9 do
-        corridor.cells[i].lightValue = 2
-        corridor.cells[i].moveValue = 1
-        corridor.cells[i].coverValue = 1
-    end
-    corridor.cells[1].accessDown = false
-    corridor.cells[2].accessDown = false
-    corridor.cells[3].accessDown = false
-    corridor.cells[3].accessRight = false
-    corridor.cells[4].accessDown = false
-    corridor.cells[6].accessDown = false
-    corridor.cells[7].accessDown = false
-    corridor.cells[8].accessDown = false
-    corridor.cells[9].accessRight = false
-    corridor.cells[5].object1 = {
-        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
-        offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
-    }
-    corridor.cells[8].object2 = {
-        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
-    }
-    assign_random_loot_cell(corridor)
-    library["corridor"] = corridor
+    -- local corridor = create_tile_prototype("corridor")
+    -- for i = 1, 9 do
+    --     corridor.cells[i].lightValue = 2
+    --     corridor.cells[i].moveValue = 1
+    --     corridor.cells[i].coverValue = 1
+    -- end
+    -- corridor.cells[1].accessDown = false
+    -- corridor.cells[2].accessDown = false
+    -- corridor.cells[3].accessDown = false
+    -- corridor.cells[3].accessRight = false
+    -- corridor.cells[4].accessDown = false
+    -- corridor.cells[6].accessDown = false
+    -- corridor.cells[7].accessDown = false
+    -- corridor.cells[8].accessDown = false
+    -- corridor.cells[9].accessRight = false
+    -- corridor.cells[5].object1 = {
+    --     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+    --     offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
+    -- }
+    -- corridor.cells[8].object2 = {
+    --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+    --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    -- }
+    -- assign_random_loot_cell(corridor)
+    -- library["corridor"] = corridor
 
     -- canteen
-    local canteen = create_tile_prototype("canteen")
-    for i = 1, 9 do
-        canteen.cells[i].lightValue = 4
-        canteen.cells[i].moveValue = 1
-        canteen.cells[i].coverValue = 2
-    end
-    canteen.cells[1].accessDown = false
-    canteen.cells[1].accessRight = false
-    canteen.cells[2].accessDown = false
-    canteen.cells[3].accessRight = false
-    canteen.cells[4].accessRight = false
-    canteen.cells[6].accessRight = false
-    canteen.cells[2].accessDown = false
-    canteen.cells[8].accessDown = false
-    canteen.cells[5].object1 = {
-        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
-        offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
-    }
-    canteen.cells[8].object2 = {
-        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 1802,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
-    }
-    assign_random_loot_cell(canteen)
-    library["canteen"] = canteen
+    -- local canteen = create_tile_prototype("canteen")
+    -- for i = 1, 9 do
+    --     canteen.cells[i].lightValue = 4
+    --     canteen.cells[i].moveValue = 1
+    --     canteen.cells[i].coverValue = 2
+    -- end
+    -- canteen.cells[1].accessDown = false
+    -- canteen.cells[1].accessRight = false
+    -- canteen.cells[2].accessDown = false
+    -- canteen.cells[3].accessRight = false
+    -- canteen.cells[4].accessRight = false
+    -- canteen.cells[6].accessRight = false
+    -- canteen.cells[2].accessDown = false
+    -- canteen.cells[8].accessDown = false
+    -- canteen.cells[5].object1 = {
+    --     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+    --     offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
+    -- }
+    -- canteen.cells[8].object2 = {
+    --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 1802,
+    --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    -- }
+    -- assign_random_loot_cell(canteen)
+    -- library["canteen"] = canteen
 
     -- entry (aesthetic-specific base tile; no power on/off layer)
     local entry = create_tile_prototype("entry")
@@ -136,6 +136,56 @@ function M.create_tile_library(COMPONENT_UI)
     }
     
     library["entry"] = entry
+
+
+    -- coms (aesthetic-specific base tile; no power on/off layer)
+    local coms = create_tile_prototype("coms")
+    coms.visualTile = "coms_off"
+    coms.powerLightOffAnim = "tile_coms_off"
+    coms.powerLightOnAnim = "tile_coms_on"
+   
+    for i = 1, 9 do
+        coms.cells[i].lightValue = 2
+        coms.cells[i].moveValue = 1
+        coms.cells[i].coverValue = 1
+    end
+    coms.cells[3].moveValue = 3
+    coms.cells[6].moveValue = 3
+
+    coms.cells[1].accessDown = false
+    coms.cells[1].accessRight = false
+    coms.cells[2].accessRight = false
+    coms.cells[3].accessRight = false
+    coms.cells[3].accessDown = false
+    coms.cells[4].accessDown = false
+    coms.cells[5].accessRight = false
+    coms.cells[6].accessRight = false
+    coms.cells[8].accessDown = false
+    coms.cells[9].accessDown = false
+    coms.cells[9].accessRight = false
+
+--     coms.cells[4].object1 = {
+--         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+--         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--     }
+-- 
+coms.cells[2].object1 = {
+    name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+    offsetX = -90, offsetY = -20, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 64, requiredComponent = nil,
+    powerLoaded = 0, powerRequired = 9
+}
+
+coms.cells[5].object1 = {
+    name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
+    offsetX = 80, offsetY = -5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+}
+
+coms.cells[4].object1 = {
+    name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+    offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+}
+-- 
+    library["coms"] = coms
 
     -- exit / escape pod (art hook: tile_exit)
     local exit = create_tile_prototype("exit")
@@ -280,80 +330,80 @@ function M.create_tile_library(COMPONENT_UI)
     library["armoury"] = armoury
 
     -- EXPERIMENTAL LEVEL-2 TILE DEFS (easy to purge)
-    local lvl2_open = create_tile_prototype("lvl2_open")
-    lvl2_open.visualTile = "armoury_off"
-    lvl2_open.powerLightOffAnim = "tile_armoury_off"
-    lvl2_open.powerLightOnAnim = "tile_armoury_on"
-    for i = 1, 9 do
-        lvl2_open.cells[i].lightValue = 3
-        lvl2_open.cells[i].moveValue = 1
-        lvl2_open.cells[i].coverValue = 2
-    end
-    lvl2_open.cells[2].object1 = {
-        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
-        offsetX = -90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
-    }
-    lvl2_open.cells[8].object2 = {
-        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2802,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
-    }
-    assign_fixed_loot_cell(lvl2_open, 5)
-    library["lvl2_open"] = lvl2_open
-
-    local lvl2_choke = create_tile_prototype("lvl2_choke")
-    lvl2_choke.visualTile = "corridor"
-    for i = 1, 9 do
-        lvl2_choke.cells[i].lightValue = 2
-        lvl2_choke.cells[i].moveValue = 1
-        lvl2_choke.cells[i].coverValue = 1
-    end
-    lvl2_choke.cells[1].accessDown = false
-    lvl2_choke.cells[2].accessDown = false
-    lvl2_choke.cells[3].accessDown = false
-    lvl2_choke.cells[4].accessDown = false
-    lvl2_choke.cells[5].accessDown = false
-    lvl2_choke.cells[6].accessDown = false
-    lvl2_choke.cells[3].accessRight = false
-    lvl2_choke.cells[6].accessRight = false
-    lvl2_choke.cells[9].accessRight = false
-    lvl2_choke.cells[5].object1 = {
-        name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 7201,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
-    }
-    lvl2_choke.cells[2].object1 = {
-        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
-        offsetX = -90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
-    }
-    lvl2_choke.cells[8].object2 = {
-        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 3802,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
-    }
-    assign_fixed_loot_cell(lvl2_choke, 8)
-    library["lvl2_choke"] = lvl2_choke
-
-    local lvl2_support = create_tile_prototype("lvl2_support")
-    lvl2_support.visualTile = "canteen"
-    for i = 1, 9 do
-        lvl2_support.cells[i].lightValue = 4
-        lvl2_support.cells[i].moveValue = 1
-        lvl2_support.cells[i].coverValue = 2
-    end
-    lvl2_support.cells[5].object1 = {
-        name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
-        offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
-    }
-    lvl2_support.cells[8].object2 = {
-        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 4802,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
-    }
-    assign_fixed_loot_cell(lvl2_support, 2)
-    library["lvl2_support"] = lvl2_support
+--     local lvl2_open = create_tile_prototype("lvl2_open")
+--     lvl2_open.visualTile = "armoury_off"
+--     lvl2_open.powerLightOffAnim = "tile_armoury_off"
+--     lvl2_open.powerLightOnAnim = "tile_armoury_on"
+--     for i = 1, 9 do
+--         lvl2_open.cells[i].lightValue = 3
+--         lvl2_open.cells[i].moveValue = 1
+--         lvl2_open.cells[i].coverValue = 2
+--     end
+--     lvl2_open.cells[2].object1 = {
+--         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+--         offsetX = -90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+--     }
+--     lvl2_open.cells[8].object2 = {
+--         name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2802,
+--         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+--     }
+--     assign_fixed_loot_cell(lvl2_open, 5)
+--     library["lvl2_open"] = lvl2_open
+-- 
+--     local lvl2_choke = create_tile_prototype("lvl2_choke")
+--     lvl2_choke.visualTile = "corridor"
+--     for i = 1, 9 do
+--         lvl2_choke.cells[i].lightValue = 2
+--         lvl2_choke.cells[i].moveValue = 1
+--         lvl2_choke.cells[i].coverValue = 1
+--     end
+--     lvl2_choke.cells[1].accessDown = false
+--     lvl2_choke.cells[2].accessDown = false
+--     lvl2_choke.cells[3].accessDown = false
+--     lvl2_choke.cells[4].accessDown = false
+--     lvl2_choke.cells[5].accessDown = false
+--     lvl2_choke.cells[6].accessDown = false
+--     lvl2_choke.cells[3].accessRight = false
+--     lvl2_choke.cells[6].accessRight = false
+--     lvl2_choke.cells[9].accessRight = false
+--     lvl2_choke.cells[5].object1 = {
+--         name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 7201,
+--         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+--     }
+--     lvl2_choke.cells[2].object1 = {
+--         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+--         offsetX = -90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+--     }
+--     lvl2_choke.cells[8].object2 = {
+--         name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 3802,
+--         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+--     }
+--     assign_fixed_loot_cell(lvl2_choke, 8)
+--     library["lvl2_choke"] = lvl2_choke
+-- 
+--     local lvl2_support = create_tile_prototype("lvl2_support")
+--     lvl2_support.visualTile = "canteen"
+--     for i = 1, 9 do
+--         lvl2_support.cells[i].lightValue = 4
+--         lvl2_support.cells[i].moveValue = 1
+--         lvl2_support.cells[i].coverValue = 2
+--     end
+--     lvl2_support.cells[5].object1 = {
+--         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 0,
+--         offsetX = 0, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = nil
+--     }
+--     lvl2_support.cells[8].object2 = {
+--         name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 4802,
+--         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+--     }
+--     assign_fixed_loot_cell(lvl2_support, 2)
+--     library["lvl2_support"] = lvl2_support
 
     -- =====================================================================
     -- TEMPLATE: medbay tile (copy/edit, then uncomment to enable)
     -- =====================================================================
      local medbay = create_tile_prototype("medbay")
-     medbay.visualTile = "medbay"
+     medbay.visualTile = "medbay_off"
      medbay.powerLightOffAnim = "tile_medbay_off"
      medbay.powerLightOnAnim = "tile_medbay_on"
     

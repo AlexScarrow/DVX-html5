@@ -4251,12 +4251,10 @@ local function spawn_exit_test_stash(self)
     for _ = 1, 9 do
         LOOT_RUNTIME.create_world_item_instance(self, "power", cell5_id, nil, { test_stash = true })
     end
-    LOOT_RUNTIME.create_world_item_instance(self, COMPONENT_UI.component_nav_data, cell5_id, nil, { test_stash = true })
-    LOOT_RUNTIME.create_world_item_instance(self, COMPONENT_UI.component_food_supplies, cell5_id, nil, { test_stash = true })
     if LOOT_RUNTIME.refresh_world_item_visuals then
         LOOT_RUNTIME.refresh_world_item_visuals(self)
     end
-    print("TEST STASH | Spawned exit cell-5 items (9x power, nav_data, food_supplies).")
+    print("TEST STASH | Spawned exit cell-5 items (9x power).")
 end
 
 function start_solo_game_flow(self)

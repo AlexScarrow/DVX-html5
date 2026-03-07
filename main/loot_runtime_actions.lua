@@ -741,7 +741,8 @@ function M.extend(runtime, ctx)
                     nav.hasNavData = nav_has_data
                     nav.isFixed = nav_has_data
                     local contributes_to_exit = (nav.contributesToExitObjective ~= false)
-                    if contributes_to_exit and nav_has_data then
+                    local nav_dependency_met = runtime.is_object_dependency_met(self.world_grid, nav)
+                    if contributes_to_exit and nav_has_data and nav_dependency_met then
                         state.nav_ready = true
                         if cell.isPowered == true then
                             state.exit_tile_powered = true
@@ -1439,6 +1440,11 @@ function M.extend(runtime, ctx)
         end
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if not runtime.is_object_dependency_met(self.world_grid, nav_obj) then
+            print("Nav computer dependency is not met.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
         local machine_has_nav = (nav_obj.hasNavData == true) or (nav_obj.hasNavData == nil and nav_obj.isFixed == true)
         nav_obj.hasNavData = machine_has_nav
         nav_obj.isFixed = machine_has_nav
@@ -2040,6 +2046,13 @@ function M.extend(runtime, ctx)
                                 local is_exit_install_target = component_target.name == hash("supply_loader")
                                 if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_exit_install_target then
                                     print("Only the Techie can fix objects.")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
+                                if component_target.name == hash("nav_computer")
+                                    and not runtime.is_object_dependency_met(self.world_grid, component_target) then
+                                    print("Nav computer dependency is not met.")
                                     flash_invalid_drag_units(source_unit, nil)
                                     self.drag_resource = { active = false }
                                     return true

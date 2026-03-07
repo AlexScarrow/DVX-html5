@@ -169,6 +169,11 @@ function M.create_tile_library(COMPONENT_UI)
 --         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
 --     }
 -- 
+coms.cells[7].object1 = {
+    name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+    offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+    lootItems = { "ammo", "ammo", "meds", "material","power","wiring_straight", COMPONENT_UI.component_fuse }
+}
 coms.cells[2].object1 = {
     name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
     offsetX = -90, offsetY = -20, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 64, requiredComponent = nil,
@@ -187,8 +192,8 @@ coms.cells[4].object1 = {
 
 coms.cells[9].object1 = {
     name = hash("nav_computer"), isFixed = true, hasNavData = true, contributesToExitObjective = false,
-    isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 901,
-    offsetX = 30, offsetY = 26, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
+    isWelded = false, isOpen = false, dependsOn = 501, isDependentOn = {}, objectId = 901,
+    offsetX = 70, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
 }
 -- 
     library["coms"] = coms

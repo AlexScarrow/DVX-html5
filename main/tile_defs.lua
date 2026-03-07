@@ -196,7 +196,71 @@ coms.cells[9].object1 = {
     offsetX = 70, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
 }
 -- 
-    library["coms"] = coms
+library["coms"] = coms
+
+
+-- coms (aesthetic-specific base tile; no power on/off layer)
+local canteen = create_tile_prototype("canteen")
+canteen.visualTile = "canteen_off"
+canteen.powerLightOffAnim = "tile_canteen_off"
+canteen.powerLightOnAnim = "tile_canteen_on"
+
+for i = 1, 9 do
+    canteen.cells[i].lightValue = 2
+    canteen.cells[i].moveValue = 1
+    canteen.cells[i].coverValue = 1
+end
+canteen.cells[3].moveValue = 3
+canteen.cells[6].moveValue = 3
+
+canteen.cells[1].accessDown = false
+--canteen.cells[1].accessRight = false
+--canteen.cells[2].accessRight = false
+--canteen.cells[3].accessRight = false
+canteen.cells[3].accessDown = false
+--canteen.cells[4].accessDown = false
+canteen.cells[4].accessRight = false
+--canteen.cells[4].accessDown = false
+canteen.cells[5].accessRight = false
+canteen.cells[5].accessDown = false
+canteen.cells[6].accessRight = false
+canteen.cells[8].accessDown = false
+canteen.cells[9].accessDown = false
+canteen.cells[9].accessRight = false
+
+--     coms.cells[4].object1 = {
+--         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+--         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--     }
+-- 
+canteen.cells[7].object1 = {
+    name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+    offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+    lootItems = { "ammo", "ammo", "meds", "material","power","wiring_straight", COMPONENT_UI.component_fuse }
+}
+canteen.cells[1].object1 = {
+    name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+    offsetX = -90, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 64, requiredComponent = nil,
+    powerLoaded = 0, powerRequired = 9
+}
+
+canteen.cells[9].object1 = {
+    name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 901,
+    offsetX = 80, offsetY = -5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+}
+
+-- canteen.cells[4].object1 = {
+--     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+--     offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+-- }
+
+canteen.cells[9].object2 = {
+    name = hash("supply_loader"), isFixed = true, hasFood = true, contributesToExitObjective = false,
+    isWelded = false, isOpen = false, dependsOn = 901, isDependentOn = {}, objectId = 902,
+    offsetX = 70, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_food_supplies
+}
+-- 
+library["canteen"] = canteen
 
     -- exit / escape pod (art hook: tile_exit)
     local exit = create_tile_prototype("exit")

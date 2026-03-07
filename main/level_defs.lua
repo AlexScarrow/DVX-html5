@@ -22,7 +22,7 @@ function M.create_level_library()
         { x = 8, y = 8, tile = "armoury" },
         { x = 11, y = 8, tile = "medbay" },
         { x = 2, y = 8, tile = "entry" },
-        { x = 5, y = 8, tile = "coms" },
+        { x = 5, y = 8, tile = "canteen" },
         { x = 14, y = 9, tile = "armoury" },
         { x = 14, y = 6, tile = "armoury" },
         { x = 6, y = 5, tile = "exit" },

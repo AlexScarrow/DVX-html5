@@ -722,10 +722,17 @@ function M.extend(runtime, ctx)
                     end
                 end
                 local loader = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
-                if loader and loader.isFixed == true then
-                    state.supplies_ready = true
-                    if cell.isPowered == true then
-                        state.exit_tile_powered = true
+                if loader then
+                    local loader_has_food = (loader.hasFood == true) or (loader.hasFood == nil and loader.isFixed == true)
+                    loader.hasFood = loader_has_food
+                    loader.isFixed = loader_has_food
+                    local contributes_to_exit = (loader.contributesToExitObjective ~= false)
+                    local loader_dependency_met = runtime.is_object_dependency_met(self.world_grid, loader)
+                    if contributes_to_exit and loader_has_food and loader_dependency_met then
+                        state.supplies_ready = true
+                        if cell.isPowered == true then
+                            state.exit_tile_powered = true
+                        end
                     end
                 end
             end
@@ -1427,6 +1434,56 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    runtime.try_interact_supply_loader_selected_unit_on_cell = function(self, unit, cell, loader_obj)
+        if not unit or not cell or not loader_obj then
+            return false
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if not runtime.is_object_dependency_met(self.world_grid, loader_obj) then
+            print("Supply loader dependency is not met.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local machine_has_food = (loader_obj.hasFood == true) or (loader_obj.hasFood == nil and loader_obj.isFixed == true)
+        loader_obj.hasFood = machine_has_food
+        loader_obj.isFixed = machine_has_food
+
+        if machine_has_food then
+            if #unit.backpack_items >= cap then
+                print("Backpack full.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            table.insert(unit.backpack_items, ctx.COMPONENT_UI.component_food_supplies)
+            unit.backpack_used = #unit.backpack_items
+            loader_obj.hasFood = false
+            loader_obj.isFixed = false
+            runtime.refresh_exit_objective_state(self)
+            runtime.refresh_fix_markers(self)
+            runtime.refresh_world_item_visuals(self)
+            print(string.format("%s retrieved food supplies from machine.", unit.display_name))
+            return true
+        end
+
+        local food_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_food_supplies)
+        if not food_slot then
+            print("Need 1 food supplies in backpack.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+
+        table.remove(unit.backpack_items, food_slot)
+        unit.backpack_used = #unit.backpack_items
+        loader_obj.hasFood = true
+        loader_obj.isFixed = true
+        runtime.refresh_exit_objective_state(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s inserted food supplies into machine.", unit.display_name))
+        return true
+    end
+
     runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)
         if not self.world_grid or not clicked_cell_id then
             return nil, nil, nil
@@ -1446,6 +1503,10 @@ function M.extend(runtime, ctx)
         local nav_computer = runtime.get_nav_computer_object(cell)
         if nav_computer and is_point_in_object_hitbox(cell, nav_computer, world_x, world_y) then
             return "nav_computer", cell, nav_computer
+        end
+        local supply_loader = runtime.get_supply_loader_object(cell)
+        if supply_loader and is_point_in_object_hitbox(cell, supply_loader, world_x, world_y) then
+            return "supply_loader", cell, supply_loader
         end
         return nil, nil, nil
     end
@@ -1471,6 +1532,12 @@ function M.extend(runtime, ctx)
                 local nav_obj = runtime.get_nav_computer_object(clicked_cell)
                 if nav_obj then
                     return runtime.try_interact_nav_computer_selected_unit_on_cell(self, unit, clicked_cell, nav_obj)
+                end
+            end
+            if object_kind == "supply_loader" then
+                local loader_obj = runtime.get_supply_loader_object(clicked_cell)
+                if loader_obj then
+                    return runtime.try_interact_supply_loader_selected_unit_on_cell(self, unit, clicked_cell, loader_obj)
                 end
             end
             return true
@@ -1980,6 +2047,10 @@ function M.extend(runtime, ctx)
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data then
                                         component_target.hasNavData = true
+                                    end
+                                    if component_target.name == hash("supply_loader")
+                                        and source_item == ctx.COMPONENT_UI.component_food_supplies then
+                                        component_target.hasFood = true
                                     end
                                     consumed = true
                                     runtime.refresh_fix_markers(self)

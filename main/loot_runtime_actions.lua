@@ -36,34 +36,6 @@ function M.extend(runtime, ctx)
         return item_type == ctx.COMPONENT_UI.component_nav_data
     end
 
-    local function unit_has_any_food_supplies(unit)
-        if not unit or not unit.backpack_items then
-            return false
-        end
-        for _, item in ipairs(unit.backpack_items) do
-            if is_food_supplies_item(item) then
-                return true
-            end
-        end
-        return false
-    end
-
-    local function set_unit_backpack_to_food_supplies(unit)
-        if not unit then
-            return
-        end
-        unit.backpack_items = { ctx.COMPONENT_UI.component_food_supplies }
-        unit.backpack_used = #unit.backpack_items
-    end
-
-    local function clear_food_supplies_from_backpack(unit)
-        if not unit then
-            return
-        end
-        unit.backpack_items = {}
-        unit.backpack_used = 0
-    end
-
     local function get_backpack_item_slot(unit, item_type)
         if not unit or not unit.backpack_items then
             return nil
@@ -873,11 +845,6 @@ function M.extend(runtime, ctx)
             print("Loot crate is hidden (tile has no power).")
             return true
         end
-        if unit_has_any_food_supplies(unit) then
-            print("Backpack occupied by food supplies. Drop/install it before scavenging.")
-            return true
-        end
-
         if unit.current_ap < ctx.LOOT_UI.ap_cost then
             print("Unable to scavenge: no AP")
             return true
@@ -919,15 +886,7 @@ function M.extend(runtime, ctx)
         end
 
         for _, item_type in ipairs(loot_results) do
-            if is_food_supplies_item(item_type) then
-                if #unit.backpack_items == 0 then
-                    set_unit_backpack_to_food_supplies(unit)
-                    runtime.spawn_loot_pickup_blip(self, unit.cell_id, 1, item_type)
-                    added = added + 1
-                else
-                    dropped = dropped + 1
-                end
-            elseif #unit.backpack_items < capacity then
+            if #unit.backpack_items < capacity then
                 table.insert(unit.backpack_items, item_type)
                 unit.backpack_used = #unit.backpack_items
                 runtime.spawn_loot_pickup_blip(self, unit.cell_id, #unit.backpack_items, item_type)
@@ -1134,10 +1093,6 @@ function M.extend(runtime, ctx)
         end
 
         unit.backpack_items = unit.backpack_items or {}
-        if unit_has_any_food_supplies(unit) then
-            print("Backpack occupied by food supplies. Cannot retrieve power.")
-            return true
-        end
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items >= capacity then
             print("Backpack full. Cannot retrieve power.")
@@ -1308,11 +1263,6 @@ function M.extend(runtime, ctx)
             return false
         end
         unit.backpack_items = unit.backpack_items or {}
-        if unit_has_any_food_supplies(unit) and (not is_food_supplies_item(item.item_type)) then
-            print("Cannot carry other items while hauling food supplies.")
-            flash_invalid_drag_units(unit, nil)
-            return true
-        end
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items >= cap then
             print("Backpack full.")
@@ -1340,13 +1290,6 @@ function M.extend(runtime, ctx)
                     go.set_position(vmath.vector3(-9999, -9999, 0.5), corpse_unit.go_path)
                 end
             end
-        elseif is_food_supplies_item(item.item_type) then
-            if #unit.backpack_items > 0 then
-                print("Backpack must be empty for food supplies.")
-                flash_invalid_drag_units(unit, nil)
-                return true
-            end
-            set_unit_backpack_to_food_supplies(unit)
         else
             table.insert(unit.backpack_items, item.item_type)
         end
@@ -1450,11 +1393,6 @@ function M.extend(runtime, ctx)
         nav_obj.isFixed = machine_has_nav
 
         if machine_has_nav then
-            if unit_has_any_food_supplies(unit) then
-                print("Cannot carry nav-data while backpack holds food supplies.")
-                flash_invalid_drag_units(unit, nil)
-                return true
-            end
             if #unit.backpack_items >= cap then
                 print("Backpack full.")
                 flash_invalid_drag_units(unit, nil)
@@ -1471,15 +1409,9 @@ function M.extend(runtime, ctx)
             return true
         end
 
-        if unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
-            print("Only the Techie can insert nav-data into machine.")
-            flash_invalid_drag_units(unit, nil)
-            return true
-        end
-
         local nav_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_nav_data)
         if not nav_slot then
-            print("Techie needs 1 nav-data in backpack.")
+            print("Need 1 nav-data in backpack.")
             flash_invalid_drag_units(unit, nil)
             return true
         end
@@ -1673,34 +1605,10 @@ function M.extend(runtime, ctx)
                                 ))
                                 -- FUTURE HOOK: play heal particle effect on target_unit.
                             end
-                        elseif is_food_supplies_item(source_item) then
-                            target_unit.backpack_items = target_unit.backpack_items or {}
-                            if #target_unit.backpack_items > 0 and not unit_has_any_food_supplies(target_unit) then
-                                print(target_unit.display_name .. " backpack must be empty for food supplies.")
-                                flash_invalid_drag_units(source_unit, target_unit)
-                            else
-                                if not try_consume_drag_ap(source_unit, target_unit) then
-                                    self.drag_resource = { active = false }
-                                    return true
-                                end
-                                clear_food_supplies_from_backpack(source_unit)
-                                set_unit_backpack_to_food_supplies(target_unit)
-                                trigger_receive_pulse(target_unit)
-                                consumed = true
-                                print(string.format(
-                                    "%s transferred food supplies to %s. (AP -%d)",
-                                    source_unit.display_name,
-                                    target_unit.display_name,
-                                    get_drag_ap_cost()
-                                ))
-                            end
                         else
                             target_unit.backpack_items = target_unit.backpack_items or {}
                             local target_cap = target_unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
-                            if unit_has_any_food_supplies(target_unit) or unit_has_any_food_supplies(source_unit) then
-                                print("Cannot mix food supplies with other items.")
-                                flash_invalid_drag_units(source_unit, target_unit)
-                            elseif #target_unit.backpack_items < target_cap then
+                            if #target_unit.backpack_items < target_cap then
                                 if not try_consume_drag_ap(source_unit, target_unit) then
                                     self.drag_resource = { active = false }
                                     return true
@@ -2043,8 +1951,9 @@ function M.extend(runtime, ctx)
                                 end
                             end
                             if component_target then
-                                local is_exit_install_target = component_target.name == hash("supply_loader")
-                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_exit_install_target then
+                                local is_class_agnostic_machine_target = component_target.name == hash("supply_loader")
+                                    or component_target.name == hash("nav_computer")
+                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_class_agnostic_machine_target then
                                     print("Only the Techie can fix objects.")
                                     flash_invalid_drag_units(source_unit, nil)
                                     self.drag_resource = { active = false }
@@ -2065,12 +1974,8 @@ function M.extend(runtime, ctx)
                                         self.drag_resource = { active = false }
                                         return true
                                     end
-                                    if source_item == ctx.COMPONENT_UI.component_food_supplies then
-                                        clear_food_supplies_from_backpack(source_unit)
-                                    else
-                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                        source_unit.backpack_used = #source_unit.backpack_items
-                                    end
+                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                    source_unit.backpack_used = #source_unit.backpack_items
                                     component_target.isFixed = true
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data then

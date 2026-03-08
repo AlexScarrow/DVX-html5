@@ -140,6 +140,15 @@ images {
   image: "/assets/images/food_supplies.png"
 }
 images {
+  image: "/assets/images/derples_comms_itemRecieved.png"
+}
+images {
+  image: "/assets/images/derples_comms_lowHealth.png"
+}
+images {
+  image: "/assets/images/derples_comms_alienSpotted.png"
+}
+images {
   image: "/assets/images/command_star.png"
 }
 images {

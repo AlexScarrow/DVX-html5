@@ -7,6 +7,11 @@ function M.extend(runtime, ctx)
     local WELD_SPARKS_Z = 0.62
     local RECEIVE_PULSE_DURATION = 0.24
     local SHUTTLE_HIDE_POS = vmath.vector3(-9999, -9999, 0.5)
+    local DERPLE_FEEDBACK_EVENT_DEFS = {
+        RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
+        LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
+        SPOT_ALIEN = { anim = hash("derples_comms_alienSpotted"), duration = 1.05, cooldown = 1.9, scale = 0.54, x_offset = 50, y_offset = 74 }
+    }
 
     local function get_drag_ap_cost()
         return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
@@ -46,6 +51,12 @@ function M.extend(runtime, ctx)
             end
         end
         return nil
+    end
+
+    local function emit_receive_item_feedback(self, unit)
+        if runtime.emit_derple_feedback and unit and unit.id then
+            runtime.emit_derple_feedback(self, unit.id, "RECEIVE_ITEM")
+        end
     end
 
     local function try_consume_drag_ap(source_unit, target_unit)
@@ -199,6 +210,90 @@ function M.extend(runtime, ctx)
         self.world_item_visuals = self.world_item_visuals or {}
         self.world_item_shadow_visuals = self.world_item_shadow_visuals or {}
         self.next_world_item_id = self.next_world_item_id or 0
+        self.derple_feedback_entries = self.derple_feedback_entries or {}
+        self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
+        self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
+        self.derple_feedback_clock = self.derple_feedback_clock or 0
+    end
+
+    runtime.emit_derple_feedback = function(self, unit_id, event_type)
+        runtime.ensure_item_runtime_state(self)
+        if not self.squad_units or not unit_id then
+            return false
+        end
+        local def = DERPLE_FEEDBACK_EVENT_DEFS[event_type]
+        local unit = self.squad_units[unit_id]
+        if not def or not unit or not unit.go_path or (unit.current_health or 0) <= 0 then
+            return false
+        end
+        local now = self.derple_feedback_clock or 0
+        self.derple_feedback_cooldowns[unit_id] = self.derple_feedback_cooldowns[unit_id] or {}
+        local cooldown_until = self.derple_feedback_cooldowns[unit_id][event_type] or 0
+        if now < cooldown_until then
+            return false
+        end
+        self.derple_feedback_cooldowns[unit_id][event_type] = now + (def.cooldown or 0.8)
+
+        local existing_index = self.derple_feedback_by_unit_id[unit_id]
+        if existing_index then
+            local existing = self.derple_feedback_entries[existing_index]
+            if existing and existing.go_id then
+                go.delete(existing.go_id)
+            end
+            self.derple_feedback_entries[existing_index] = nil
+            self.derple_feedback_by_unit_id[unit_id] = nil
+        end
+
+        local pos = go.get_position(unit.go_path)
+        local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(pos.x + (def.x_offset or 0), pos.y + (def.y_offset or 70), 0.84))
+        if not marker_id then
+            return false
+        end
+        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = def.anim })
+        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local scale = def.scale or 0.72
+        go.set_scale(vmath.vector3(scale, scale, 1), marker_id)
+
+        local entry = {
+            go_id = marker_id,
+            unit_id = unit_id,
+            event_type = event_type,
+            ttl = def.duration or 1.0,
+            x_offset = def.x_offset or 0,
+            y_offset = def.y_offset or 70
+        }
+        table.insert(self.derple_feedback_entries, entry)
+        self.derple_feedback_by_unit_id[unit_id] = #self.derple_feedback_entries
+        return true
+    end
+
+    runtime.update_derple_feedback_bubbles = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        self.derple_feedback_clock = (self.derple_feedback_clock or 0) + dt
+        for i = #self.derple_feedback_entries, 1, -1 do
+            local entry = self.derple_feedback_entries[i]
+            local keep = false
+            if entry and entry.go_id and self.squad_units and entry.unit_id then
+                local unit = self.squad_units[entry.unit_id]
+                if unit and unit.go_path and (unit.current_health or 0) > 0 then
+                    entry.ttl = (entry.ttl or 0) - dt
+                    if entry.ttl > 0 then
+                        local pos = go.get_position(unit.go_path)
+                        go.set_position(vmath.vector3(pos.x + (entry.x_offset or 0), pos.y + (entry.y_offset or 70), 0.84), entry.go_id)
+                        keep = true
+                    end
+                end
+            end
+            if not keep then
+                if entry and entry.go_id then
+                    go.delete(entry.go_id)
+                end
+                self.derple_feedback_entries[i] = nil
+                if entry and entry.unit_id then
+                    self.derple_feedback_by_unit_id[entry.unit_id] = nil
+                end
+            end
+        end
     end
 
     runtime.create_world_item_instance = function(self, item_type, cell_id, owner_unit_id, meta)
@@ -934,7 +1029,6 @@ function M.extend(runtime, ctx)
             dropped,
             ctx.LOOT_UI.ap_cost
         ))
-
         ctx.update_human_visual_state(self)
         return true
     end
@@ -1684,6 +1778,7 @@ function M.extend(runtime, ctx)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 table.insert(target_unit.backpack_items, source_item)
                                 target_unit.backpack_used = #target_unit.backpack_items
+                                emit_receive_item_feedback(self, target_unit)
                                 trigger_receive_pulse(target_unit)
                                 consumed = true
                                 print(string.format(

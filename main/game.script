@@ -51,6 +51,8 @@ local UNIT_CLICK_SELECT_RADIUS = 45
 local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2, -3, 3 }
 local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
 local UNIT_SELECTED_PULSE_SPEED = 4
+DERPLE_FEEDBACK_LOW_HP_RATIO = 0.35
+DERPLE_FEEDBACK_LOS_SCAN_INTERVAL = 0.22
 local VERTICAL_MOVE_AP_COST = 3
 local UI_PANEL_X = 170
 local UI_PANEL_Y = 370
@@ -3021,6 +3023,65 @@ function can_any_human_reactively_attack(self)
     return false
 end
 
+function reset_derple_feedback_runtime(self)
+    self.derple_feedback_low_hp_state = {}
+    self.derple_feedback_spot_state = {}
+    self.derple_feedback_los_scan_timer = 0
+end
+
+function update_derple_feedback_triggers(self, dt)
+    if not (LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback) then
+        return
+    end
+    if not self.squad_units then
+        return
+    end
+    self.derple_feedback_low_hp_state = self.derple_feedback_low_hp_state or {}
+    self.derple_feedback_spot_state = self.derple_feedback_spot_state or {}
+    self.derple_feedback_los_scan_timer = (self.derple_feedback_los_scan_timer or 0) - (dt or 0)
+
+    for unit_id, unit in pairs(self.squad_units) do
+        local alive = unit and (unit.current_health or 0) > 0 and unit.cell_id and unit.in_shuttle ~= true
+        if alive then
+            local hp_threshold = math.max(1, math.floor((unit.max_health or 1) * DERPLE_FEEDBACK_LOW_HP_RATIO))
+            local is_low_hp = (unit.current_health or 0) <= hp_threshold
+            local was_low_hp = self.derple_feedback_low_hp_state[unit_id] == true
+            if is_low_hp and (not was_low_hp) then
+                LOOT_RUNTIME.emit_derple_feedback(self, unit_id, "LOW_HP")
+            end
+            self.derple_feedback_low_hp_state[unit_id] = is_low_hp
+        else
+            self.derple_feedback_low_hp_state[unit_id] = false
+        end
+    end
+
+    if self.derple_feedback_los_scan_timer > 0 then
+        return
+    end
+    self.derple_feedback_los_scan_timer = DERPLE_FEEDBACK_LOS_SCAN_INTERVAL
+    for unit_id, unit in pairs(self.squad_units) do
+        local alive = unit and (unit.current_health or 0) > 0 and unit.cell_id and unit.in_shuttle ~= true
+        if alive then
+            local has_spot_los = false
+            if self.aliens then
+                for _, alien in ipairs(self.aliens) do
+                    if alien and (not alien.is_dead) and alien.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
+                        has_spot_los = true
+                        break
+                    end
+                end
+            end
+            local had_spot_los = self.derple_feedback_spot_state[unit_id] == true
+            if has_spot_los and (not had_spot_los) then
+                LOOT_RUNTIME.emit_derple_feedback(self, unit_id, "SPOT_ALIEN")
+            end
+            self.derple_feedback_spot_state[unit_id] = has_spot_los
+        else
+            self.derple_feedback_spot_state[unit_id] = false
+        end
+    end
+end
+
 -- =============================================================================
 -- VISUAL CELL FACTORY
 -- =============================================================================
@@ -4260,6 +4321,7 @@ end
 function start_solo_game_flow(self)
     local level_index = self.current_level_index or 1
     reset_and_load_level(self, level_index)
+    reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
     self.game_won = false
@@ -6942,6 +7004,7 @@ function init(self)
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
+    reset_derple_feedback_runtime(self)
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
     self.flow_score_breakdown = { total = 0, survivors = 0, seated = 0, dead = 0, power_units = 0, objectives = 0 }
     self.flow_outro_timer = 0
@@ -7122,8 +7185,10 @@ function update(self, dt)
         process_alien_turn(self)
     end
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
+    LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     update_human_visual_state(self)
+    update_derple_feedback_triggers(self, dt)
     update_exit_green_smoke_fx(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)

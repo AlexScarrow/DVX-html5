@@ -90,7 +90,7 @@ function test_character_system(world_grid)
 end
 
 -- Example of how to integrate into game loop
-function example_turn_sequence(world_grid, derples, aliens)
+local function example_turn_sequence(world_grid, derples, aliens)
     print("\n=== PLAYER TURN ===")
 
     for _, derple in ipairs(derples) do

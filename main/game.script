@@ -12,6 +12,34 @@
 -- =============================================================================
 -- CONSTANTS
 -- =============================================================================
+-- luacheck: globals DERPLE_FEEDBACK_LOW_HP_RATIO DERPLE_FEEDBACK_LOS_SCAN_INTERVAL
+-- luacheck: globals LEVEL_BUTTON_Y LEVEL_BUTTON_W LEVEL_BUTTON_H LEVEL1_BUTTON_X LEVEL_BUTTON_GAP LEVEL_BUTTON_Z
+-- luacheck: globals UI_COLOR_AP UI_COLOR_HP UI_COLOR_AMMO UI_COLOR_SLOT UI_COLOR_SLOT_ACTIVE
+-- luacheck: globals NEW_TURN_BUTTON_X NEW_TURN_BUTTON_Y NEW_TURN_BUTTON_W NEW_TURN_BUTTON_H NEW_TURN_BUTTON_Z
+-- luacheck: globals LAUNCH_BUTTON_X LAUNCH_BUTTON_Y LAUNCH_BUTTON_W LAUNCH_BUTTON_H LAUNCH_BUTTON_Z
+-- luacheck: globals FLOW_UI_OVERLAY_Z FLOW_UI_PANEL_Z FLOW_UI_BUTTON_Z FLOW_UI_SCREEN_W FLOW_UI_SCREEN_H
+-- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE EXIT_TEST_STASH_ENABLED
+-- luacheck: globals AESTHETIC_BUTTON_X AESTHETIC_BUTTON_Y AESTHETIC_BUTTON_W AESTHETIC_BUTTON_H AESTHETIC_BUTTON_Z
+-- luacheck: globals ZOOM_IN_BUTTON_X ZOOM_IN_BUTTON_Y ZOOM_IN_BUTTON_W ZOOM_IN_BUTTON_H ZOOM_IN_BUTTON_Z
+-- luacheck: globals ZOOM_OUT_BUTTON_X ZOOM_OUT_BUTTON_Y ZOOM_OUT_BUTTON_W ZOOM_OUT_BUTTON_H ZOOM_OUT_BUTTON_Z
+-- luacheck: globals ENTRY_FIRE_OFFSET_X ENTRY_FIRE_OFFSET_Y ENTRY_FIRE_Z ENTRY_FIRE_ROTATION_DEG
+-- luacheck: globals EXIT_GREEN_SMOKE_Z EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_X EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_Y
+-- luacheck: globals MELEE_RUNTIME TURRET_REACTIVE_FIRE_INTERVAL_SECONDS TURRET_PROJECTILE_SPEED
+-- luacheck: globals TURRET_BURST_PROJECTILE_COUNT TURRET_BURST_PROJECTILE_DELAY TURRET_BURST_SPREAD_PIXELS
+-- luacheck: globals HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS
+-- luacheck: globals AESTHETIC_MODE_COMPUTER AESTHETIC_MODE_BOARDGAME AESTHETIC_PROFILES
+-- luacheck: globals get_vent_neighbors_for_path get_blip_fallback_staging_target get_blip_cell_offset apply_blip_pulse_scale
+-- luacheck: globals get_fixed_viewport_rect map_window_input_to_logical enforce_fixed_window_size
+-- luacheck: globals request_zoom_to request_zoom_delta update_smooth_zoom
+-- luacheck: globals get_counter_shadow_offset get_counter_shadow_anim_for_alien get_alien_anim_for_aesthetic
+-- luacheck: globals get_counter_shadow_anim_for_human ensure_counter_shadow_proxy clear_counter_shadow_proxy
+-- luacheck: globals schedule_counter_shadow_proxy_clear PANEL_ART_ANIM_BY_CLASS_ID get_unit_panel_anim
+-- luacheck: globals get_ui_panel_close_button_center get_ui_panel_reactive_button_center count_non_nil_entries
+-- luacheck: globals collect_runtime_reference_counts log_runtime_reference_audit
+-- luacheck: globals get_aesthetic_profile get_world_shadow_alpha get_ui_panel_shadow_alpha get_human_anim_for_aesthetic
+-- luacheck: globals apply_human_aesthetic_animations apply_alien_aesthetic_animations apply_computer_emissive_accents
+-- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
+-- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
 
 local CELL_WIDTH = 250          -- Width of each cell in pixels
 local CELL_HEIGHT = 150         -- Height of each cell in pixels
@@ -159,6 +187,7 @@ local ALIEN_VENT_TRANSIT_AP_COST = 1
 local INITIAL_BLIP_COUNT = 3
 local ALIEN_MARKER_SIZE = 20
 local ALIEN_MOVE_SPEED = 320
+HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS = 0.4
 local SPITTER_MAX_RANGE_CELLS = 4
 local SPITTER_SHOT_AP_COST = 1
 local SPITTER_SHOT_INTERVAL_SECONDS = 0.5
@@ -1873,52 +1902,82 @@ local function resolve_human_reaction_fire(self, alien)
         return false
     end
 
-    local alien_cell = self.world_grid[alien.cell_id]
-    if not alien_cell or alien_cell.tileID == hash("empty") then
-        return false
-    end
+    self.human_reactive_fire_cooldown_by_unit_id = self.human_reactive_fire_cooldown_by_unit_id or {}
 
-    local fired_any = false
-    local target_cell_id = alien.cell_id
     local reaction_order = { "sarge", "techie", "medic", "gunner" }
     for _, unit_id in ipairs(reaction_order) do
         local unit = self.squad_units and self.squad_units[unit_id]
-        if unit and unit.cell_id and unit.reactive_fire_enabled ~= false and has_unobstructed_los(self.world_grid, unit.cell_id, target_cell_id) then
-            if unit.current_ap <= 0 and unit.current_ammo <= 0 then
-                print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, alien.id))
-            elseif unit.current_ap <= 0 then
-                print(string.format("%s cannot fire at alien #%d (no AP)", unit.display_name, alien.id))
-            elseif unit.current_ammo <= 0 then
-                print(string.format("%s cannot fire at alien #%d (no ammo)", unit.display_name, alien.id))
-            else
-                fired_any = true
-                unit.current_ap = unit.current_ap - 1
-                unit.current_ammo = unit.current_ammo - 1
-                local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
-                local ranged_model = require("main.config").RANGED_HIT_MODEL
-                local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
-                local range_cells = manhattan_distance_by_id(unit.cell_id, target_cell_id)
-                local range_penalty = math.max(0, (range_cells - 1) * 10)
-                local role = CLASS_ROLE_HOOKS[unit.class_id]
-                local class_bonus = (role and role.ranged_hit_bonus) or 0
-                local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
-                print(string.format(
-                    "RANGED DEBUG | reactive | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
-                    unit.display_name or "unit",
-                    alien.id or 0,
-                    range_cells or 0,
-                    range_penalty or 0,
-                    active_light or 0,
-                    class_bonus or 0,
-                    hit_chance or 0
-                ))
-                local roll = math.random(1, 100)
-                spawn_human_reaction_projectile(self, unit, alien, roll <= hit_chance, active_light, hit_chance, roll)
+        local unit_cooldown = self.human_reactive_fire_cooldown_by_unit_id[unit_id]
+        if unit and unit.cell_id and unit.reactive_fire_enabled ~= false and ((not unit_cooldown) or unit_cooldown <= 0) then
+            local nearest_dist = math.huge
+            local tied_targets = {}
+            if self.aliens then
+                for _, candidate in ipairs(self.aliens) do
+                    if candidate and (not candidate.is_dead) and candidate.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, candidate.cell_id) then
+                        local d = manhattan_distance_by_id(unit.cell_id, candidate.cell_id)
+                        if d < nearest_dist then
+                            nearest_dist = d
+                            tied_targets = { candidate }
+                        elseif d == nearest_dist then
+                            table.insert(tied_targets, candidate)
+                        end
+                    end
+                end
+            end
+            local chosen_target = nil
+            if #tied_targets > 0 then
+                chosen_target = tied_targets[math.random(1, #tied_targets)]
+            end
+            if chosen_target then
+                if unit.current_ap <= 0 and unit.current_ammo <= 0 then
+                    print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, chosen_target.id))
+                elseif unit.current_ap <= 0 then
+                    print(string.format("%s cannot fire at alien #%d (no AP)", unit.display_name, chosen_target.id))
+                elseif unit.current_ammo <= 0 then
+                    print(string.format("%s cannot fire at alien #%d (no ammo)", unit.display_name, chosen_target.id))
+                else
+                    unit.current_ap = unit.current_ap - 1
+                    unit.current_ammo = unit.current_ammo - 1
+                    local target_cell = self.world_grid[chosen_target.cell_id]
+                    local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
+                    local ranged_model = require("main.config").RANGED_HIT_MODEL
+                    local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
+                    local range_cells = nearest_dist
+                    local range_penalty = math.max(0, (range_cells - 1) * 10)
+                    local role = CLASS_ROLE_HOOKS[unit.class_id]
+                    local class_bonus = (role and role.ranged_hit_bonus) or 0
+                    local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+                    print(string.format(
+                        "RANGED DEBUG | reactive | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
+                        unit.display_name or "unit",
+                        chosen_target.id or 0,
+                        range_cells or 0,
+                        range_penalty or 0,
+                        active_light or 0,
+                        class_bonus or 0,
+                        hit_chance or 0
+                    ))
+                    local roll = math.random(1, 100)
+                    spawn_human_reaction_projectile(self, unit, chosen_target, roll <= hit_chance, active_light, hit_chance, roll)
+                    self.human_reactive_fire_cooldown_by_unit_id[unit_id] = HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS
+                end
             end
         end
     end
 
     return false
+end
+
+local function tick_human_reactive_fire_cooldowns(self, dt)
+    self.human_reactive_fire_cooldown_by_unit_id = self.human_reactive_fire_cooldown_by_unit_id or {}
+    for unit_id, cooldown in pairs(self.human_reactive_fire_cooldown_by_unit_id) do
+        cooldown = cooldown - dt
+        if cooldown <= 0 then
+            self.human_reactive_fire_cooldown_by_unit_id[unit_id] = nil
+        else
+            self.human_reactive_fire_cooldown_by_unit_id[unit_id] = cooldown
+        end
+    end
 end
 
 local function get_living_humans(self)
@@ -4686,6 +4745,7 @@ function reset_and_load_level(self, level_index)
     self.turret_last_human_cell_by_id = {}
     self.turret_last_alien_cell_by_id = {}
     self.turret_fire_cooldown_by_object_id = {}
+    self.human_reactive_fire_cooldown_by_unit_id = {}
     self.loot_pickup_blips = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
@@ -7028,6 +7088,7 @@ function init(self)
     self.turret_last_human_cell_by_id = {}
     self.turret_last_alien_cell_by_id = {}
     self.turret_fire_cooldown_by_object_id = {}
+    self.human_reactive_fire_cooldown_by_unit_id = {}
     self.pending_melee_attack_phase = false
     self.melee_attack_started = false
     self.melee_attack_timer = 0
@@ -7227,6 +7288,7 @@ function update(self, dt)
     update_spitter_projectiles(self, dt)
     update_turret_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
+    tick_human_reactive_fire_cooldowns(self, dt)
     process_turret_reactive_fire(self, dt)
     if self.alien_turn_active and (not self.alien_turn_waiting_for_advance) and (not any_alien_is_moving(self)) and (not self.pending_spitter_attack_phase) and (not self.pending_melee_attack_phase) then
         process_alien_turn(self)

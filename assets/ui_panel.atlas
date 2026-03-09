@@ -1,6 +1,18 @@
 images {
   image: "/assets/images/derple_ui_panel.png"
 }
+images {
+  image: "/assets/images/sarge_ui.png"
+}
+images {
+  image: "/assets/images/medic_ui.png"
+}
+images {
+  image: "/assets/images/techie_ui.png"
+}
+images {
+  image: "/assets/images/gunner_ui.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

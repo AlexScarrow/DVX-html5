@@ -140,6 +140,15 @@ images {
   image: "/assets/images/food_supplies.png"
 }
 images {
+  image: "/assets/images/derples_comms_itemRecieved.png"
+}
+images {
+  image: "/assets/images/derples_comms_lowHealth.png"
+}
+images {
+  image: "/assets/images/derples_comms_alienSpotted.png"
+}
+images {
   image: "/assets/images/command_star.png"
 }
 images {
@@ -184,6 +193,18 @@ images {
 images {
   image: "/assets/images/tile_exit_on.png"
 }
+images {
+  image: "/assets/images/tile_coms_off.png"
+}
+images {
+  image: "/assets/images/tile_coms_on.png"
+}
+images {
+  image: "/assets/images/tile_canteen_off.png"
+}
+images {
+  image: "/assets/images/tile_canteen_on.png"
+}
 margin: 2
-inner_padding: 2
 extrude_borders: 2
+inner_padding: 2

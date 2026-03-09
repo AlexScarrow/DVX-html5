@@ -18,11 +18,12 @@ local CELL_HEIGHT = 150         -- Height of each cell in pixels
 local GRID_COLS = 15            -- Number of columns in worldGrid
 local GRID_ROWS = 15            -- Number of rows in worldGrid
 local TILE_SIZE = 3             -- Tiles are 3x3 cells
-window = require("window")
+local window = rawget(_G, "window") or {}
 
 -- Screen dimensions
 local SCREEN_WIDTH = 1280
 local SCREEN_HEIGHT = 720
+local IS_HTML5 = (html5 ~= nil)
 
 
 -- Visual rendering
@@ -50,6 +51,8 @@ local UNIT_CLICK_SELECT_RADIUS = 45
 local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2, -3, 3 }
 local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
 local UNIT_SELECTED_PULSE_SPEED = 4
+DERPLE_FEEDBACK_LOW_HP_RATIO = 0.35
+DERPLE_FEEDBACK_LOS_SCAN_INTERVAL = 0.22
 local VERTICAL_MOVE_AP_COST = 3
 local UI_PANEL_X = 170
 local UI_PANEL_Y = 370
@@ -114,6 +117,16 @@ AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
 AESTHETIC_BUTTON_H = 30
 AESTHETIC_BUTTON_Z = 0.845
+ZOOM_IN_BUTTON_X = SCREEN_WIDTH - 70
+ZOOM_IN_BUTTON_Y = SCREEN_HEIGHT - 60
+ZOOM_IN_BUTTON_W = 48
+ZOOM_IN_BUTTON_H = 30
+ZOOM_IN_BUTTON_Z = 0.845
+ZOOM_OUT_BUTTON_X = SCREEN_WIDTH - 70
+ZOOM_OUT_BUTTON_Y = SCREEN_HEIGHT - 100
+ZOOM_OUT_BUTTON_W = 48
+ZOOM_OUT_BUTTON_H = 30
+ZOOM_OUT_BUTTON_Z = 0.845
 ENTRY_FIRE_OFFSET_X = -50
 ENTRY_FIRE_OFFSET_Y = -60
 ENTRY_FIRE_Z = 0.08 -- Above entry tile base visuals while still below UI layers
@@ -191,7 +204,7 @@ AESTHETIC_PROFILES = {
         counter_token_move_enabled = false,
         computer_emissive_enabled = true,
         computer_emissive_tint = vmath.vector4(1, 1, 1, 1),
-        computer_emissive_pulse_speed = 0.38,
+        computer_emissive_pulse_speed = 0.18,
         computer_emissive_min_mul = 0.84,
         computer_emissive_max_mul = 1.22,
         computer_emissive_variation_amount = 0.22,
@@ -1870,7 +1883,7 @@ local function resolve_human_reaction_fire(self, alien)
     local reaction_order = { "sarge", "techie", "medic", "gunner" }
     for _, unit_id in ipairs(reaction_order) do
         local unit = self.squad_units and self.squad_units[unit_id]
-        if unit and unit.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, target_cell_id) then
+        if unit and unit.cell_id and unit.reactive_fire_enabled ~= false and has_unobstructed_los(self.world_grid, unit.cell_id, target_cell_id) then
             if unit.current_ap <= 0 and unit.current_ammo <= 0 then
                 print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, alien.id))
             elseif unit.current_ap <= 0 then
@@ -2990,7 +3003,7 @@ function can_any_human_reactively_attack(self)
         return false
     end
     for _, unit in pairs(self.squad_units) do
-        if (unit.current_health or 0) > 0 and unit.cell_id then
+        if (unit.current_health or 0) > 0 and unit.cell_id and unit.reactive_fire_enabled ~= false then
             local can_melee = unit.current_ap > 0
             local can_ranged = unit.current_ap > 0 and unit.current_ammo > 0
             if can_melee or can_ranged then
@@ -3008,6 +3021,65 @@ function can_any_human_reactively_attack(self)
         end
     end
     return false
+end
+
+function reset_derple_feedback_runtime(self)
+    self.derple_feedback_low_hp_state = {}
+    self.derple_feedback_spot_state = {}
+    self.derple_feedback_los_scan_timer = 0
+end
+
+function update_derple_feedback_triggers(self, dt)
+    if not (LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback) then
+        return
+    end
+    if not self.squad_units then
+        return
+    end
+    self.derple_feedback_low_hp_state = self.derple_feedback_low_hp_state or {}
+    self.derple_feedback_spot_state = self.derple_feedback_spot_state or {}
+    self.derple_feedback_los_scan_timer = (self.derple_feedback_los_scan_timer or 0) - (dt or 0)
+
+    for unit_id, unit in pairs(self.squad_units) do
+        local alive = unit and (unit.current_health or 0) > 0 and unit.cell_id and unit.in_shuttle ~= true
+        if alive then
+            local hp_threshold = math.max(1, math.floor((unit.max_health or 1) * DERPLE_FEEDBACK_LOW_HP_RATIO))
+            local is_low_hp = (unit.current_health or 0) <= hp_threshold
+            local was_low_hp = self.derple_feedback_low_hp_state[unit_id] == true
+            if is_low_hp and (not was_low_hp) then
+                LOOT_RUNTIME.emit_derple_feedback(self, unit_id, "LOW_HP")
+            end
+            self.derple_feedback_low_hp_state[unit_id] = is_low_hp
+        else
+            self.derple_feedback_low_hp_state[unit_id] = false
+        end
+    end
+
+    if self.derple_feedback_los_scan_timer > 0 then
+        return
+    end
+    self.derple_feedback_los_scan_timer = DERPLE_FEEDBACK_LOS_SCAN_INTERVAL
+    for unit_id, unit in pairs(self.squad_units) do
+        local alive = unit and (unit.current_health or 0) > 0 and unit.cell_id and unit.in_shuttle ~= true
+        if alive then
+            local has_spot_los = false
+            if self.aliens then
+                for _, alien in ipairs(self.aliens) do
+                    if alien and (not alien.is_dead) and alien.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
+                        has_spot_los = true
+                        break
+                    end
+                end
+            end
+            local had_spot_los = self.derple_feedback_spot_state[unit_id] == true
+            if has_spot_los and (not had_spot_los) then
+                LOOT_RUNTIME.emit_derple_feedback(self, unit_id, "SPOT_ALIEN")
+            end
+            self.derple_feedback_spot_state[unit_id] = has_spot_los
+        else
+            self.derple_feedback_spot_state[unit_id] = false
+        end
+    end
 end
 
 -- =============================================================================
@@ -3087,11 +3159,45 @@ get_fixed_viewport_rect = function()
     return view_x, view_y, view_w, view_h, scale
 end
 
-map_window_input_to_logical = function(screen_x, screen_y)
-    if not screen_x or not screen_y then
+map_window_input_to_logical = function(x, y, screen_x, screen_y)
+    if not x or not y then
         return nil, nil, false
     end
-    return screen_x, screen_y, true
+    if not IS_HTML5 then
+        return x, y, true
+    end
+
+    -- Most HTML5 builds provide canvas-local action.x/y.
+    if x >= 0 and x <= SCREEN_WIDTH and y >= 0 and y <= SCREEN_HEIGHT then
+        return x, y, true
+    end
+
+    -- Fallback: treat x/y as window-space and map into fixed 1280x720 letterbox.
+    local ok_size, win_w, win_h = pcall(window.get_size)
+    if not ok_size or not win_w or not win_h or win_w <= 0 or win_h <= 0 then
+        return nil, nil, false
+    end
+
+    local scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+    if not scale or scale <= 0 then
+        return nil, nil, false
+    end
+
+    local view_w = SCREEN_WIDTH * scale
+    local view_h = SCREEN_HEIGHT * scale
+    local view_x = (win_w - view_w) * 0.5
+    local view_y = (win_h - view_h) * 0.5
+
+    local inside =
+        x >= view_x and x <= (view_x + view_w) and
+        y >= view_y and y <= (view_y + view_h)
+    if not inside then
+        return nil, nil, false
+    end
+
+    local logical_x = (x - view_x) / scale
+    local logical_y = (y - view_y) / scale
+    return logical_x, logical_y, true
 end
 
 enforce_fixed_window_size = function(self, dt, force_now)
@@ -3248,6 +3354,36 @@ local function zoom_camera_at_screen_point(self, target_zoom, screen_x, screen_y
     apply_camera_transform(self)
 end
 
+request_zoom_to = function(self, target_zoom, focus_x, focus_y)
+    local clamped = clamp(target_zoom, self.camera_min_zoom, self.camera_max_zoom)
+    self.zoom_target = clamped
+    self.zoom_focus_x = focus_x or (SCREEN_WIDTH * 0.5)
+    self.zoom_focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
+end
+
+request_zoom_delta = function(self, delta, focus_x, focus_y)
+    local base = self.zoom_target or self.camera_zoom
+    request_zoom_to(self, base + delta, focus_x, focus_y)
+end
+
+update_smooth_zoom = function(self, dt)
+    local target = self.zoom_target
+    if not target then
+        return
+    end
+    local diff = target - self.camera_zoom
+    if math.abs(diff) < 0.001 then
+        self.camera_zoom = target
+        apply_camera_transform(self)
+        self.zoom_target = nil
+        return
+    end
+    local speed = self.zoom_smooth_speed or 10
+    local alpha = 1 - math.exp(-speed * dt)
+    local next_zoom = self.camera_zoom + (diff * alpha)
+    zoom_camera_at_screen_point(self, next_zoom, self.zoom_focus_x or (SCREEN_WIDTH * 0.5), self.zoom_focus_y or (SCREEN_HEIGHT * 0.5))
+end
+
 local function is_walkable_cell(world_grid, cell_id)
     local cell = world_grid[cell_id]
     return cell and cell.tileID ~= hash("empty")
@@ -3276,6 +3412,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/human",
             sprite_path = "/human#sprite",
             shadow_path = "/human#shadow",
@@ -3302,6 +3439,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/techie",
             sprite_path = "/techie#sprite",
             shadow_path = "/techie#shadow",
@@ -3328,6 +3466,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/medic",
             sprite_path = "/medic#sprite",
             shadow_path = "/medic#shadow",
@@ -3354,6 +3493,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/gunner",
             sprite_path = "/gunner#sprite",
             shadow_path = "/gunner#shadow",
@@ -3825,6 +3965,29 @@ local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_
     go.set(msg.url(nil, go_id, "sprite"), "tint", tint or vmath.vector4(1, 1, 1, 1))
 end
 
+PANEL_ART_ANIM_BY_CLASS_ID = {
+    [UNIT_CLASS_SARGE] = hash("sarge_ui"),
+    [UNIT_CLASS_MEDIC] = hash("medic_ui"),
+    [UNIT_CLASS_TECHIE] = hash("techie_ui"),
+    [UNIT_CLASS_GUNNER] = hash("gunner_ui")
+}
+
+get_unit_panel_anim = function(unit)
+    if not unit then
+        return hash("derple_ui_panel")
+    end
+    return PANEL_ART_ANIM_BY_CLASS_ID[unit.class_id] or hash("derple_ui_panel")
+end
+
+get_ui_panel_close_button_center = function()
+    return UI_PANEL_X + (UI_PANEL_W * 0.5) - 38, UI_PANEL_Y - (UI_PANEL_H * 0.5) + 38
+end
+
+get_ui_panel_reactive_button_center = function()
+    local close_x, close_y = get_ui_panel_close_button_center()
+    return close_x - 74, close_y
+end
+
 count_non_nil_entries = function(t)
     if not t then
         return 0
@@ -4012,7 +4175,9 @@ local function initialize_unit_ui(self)
     self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
-    self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
+    self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
+    self.ui.zoom_out_button = create_ui_square(0, 0, ZOOM_OUT_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
+    self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 64, 32)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_command_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     if self.ui.drag_command_pip then
@@ -4075,7 +4240,9 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
-    set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
+    set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
+    set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
+    set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 64, 32)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -4172,17 +4339,16 @@ local function spawn_exit_test_stash(self)
     for _ = 1, 9 do
         LOOT_RUNTIME.create_world_item_instance(self, "power", cell5_id, nil, { test_stash = true })
     end
-    LOOT_RUNTIME.create_world_item_instance(self, COMPONENT_UI.component_nav_data, cell5_id, nil, { test_stash = true })
-    LOOT_RUNTIME.create_world_item_instance(self, COMPONENT_UI.component_food_supplies, cell5_id, nil, { test_stash = true })
     if LOOT_RUNTIME.refresh_world_item_visuals then
         LOOT_RUNTIME.refresh_world_item_visuals(self)
     end
-    print("TEST STASH | Spawned exit cell-5 items (9x power, nav_data, food_supplies).")
+    print("TEST STASH | Spawned exit cell-5 items (9x power).")
 end
 
 function start_solo_game_flow(self)
     local level_index = self.current_level_index or 1
     reset_and_load_level(self, level_index)
+    reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
     self.game_won = false
@@ -4564,6 +4730,8 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
         set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+        set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
+        set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
         return
     end
     local new_turn_color = self.alien_turn_active and vmath.vector4(0.3, 0.3, 0.3, 0.85) or vmath.vector4(0.2, 0.75, 0.25, 0.95)
@@ -4606,6 +4774,26 @@ function update_global_ui_buttons(self)
         aesthetic_color,
         AESTHETIC_BUTTON_W,
         AESTHETIC_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.zoom_in_button,
+        ZOOM_IN_BUTTON_X,
+        ZOOM_IN_BUTTON_Y,
+        ZOOM_IN_BUTTON_Z,
+        vmath.vector4(0.2, 0.55, 0.95, 0.95),
+        ZOOM_IN_BUTTON_W,
+        ZOOM_IN_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.zoom_out_button,
+        ZOOM_OUT_BUTTON_X,
+        ZOOM_OUT_BUTTON_Y,
+        ZOOM_OUT_BUTTON_Z,
+        vmath.vector4(0.2, 0.55, 0.95, 0.95),
+        ZOOM_OUT_BUTTON_W,
+        ZOOM_OUT_BUTTON_H
     )
 end
 
@@ -5226,41 +5414,26 @@ function update_selected_unit_ui(self)
                 end
             end
         end
-        local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
         set_ui_square_transform(
             self,
             self.ui.reactive_toggle_button,
-            40,
-            SCREEN_HEIGHT - 40,
+            -9999,
+            -9999,
             0.84,
-            toggle_color,
-            30,
+            vmath.vector4(0, 0, 0, 0),
+            64,
+            32
+        )
+        set_ui_square_transform(
+            self,
+            self.ui.reactive_advance_button,
+            -9999,
+            -9999,
+            0.84,
+            vmath.vector4(0, 0, 0, 0),
+            70,
             30
         )
-        if self.alien_turn_active and (not self.reactive_combat_enabled) then
-            local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
-            set_ui_square_transform(
-                self,
-                self.ui.reactive_advance_button,
-                105,
-                SCREEN_HEIGHT - 40,
-                0.84,
-                adv_color,
-                70,
-                30
-            )
-        else
-            set_ui_square_transform(
-                self,
-                self.ui.reactive_advance_button,
-                -9999,
-                -9999,
-                0.84,
-                vmath.vector4(0, 0, 0, 0),
-                70,
-                30
-            )
-        end
         return
     end
 
@@ -5276,9 +5449,16 @@ function update_selected_unit_ui(self)
         vmath.vector4(0, 0, 0, panel_shadow_alpha)
     )
     set_ui_panel_transform(self, self.ui.panel_art, UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H, vmath.vector4(1, 1, 1, 1))
+    local panel_anim = get_unit_panel_anim(unit)
+    if panel_anim ~= self.ui_panel_anim then
+        msg.post(msg.url(nil, self.ui.panel_art, "sprite"), "play_animation", { id = panel_anim })
+        self.ui_panel_anim = panel_anim
+    end
 
     for i = 1, UI_MAX_PIPS do
-        local pip_y = UI_BAR_START_Y - (i - 1) * (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP)
+        local pip_step = (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP) * 0.8
+        local pip_y = (UI_BAR_START_Y - 32) - (i - 1) * pip_step
+        local pip_h = UI_BAR_PIP_SIZE * 0.8
         local ap_count = math.min(unit.current_ap or 0, UI_MAX_PIPS)
         local hp_count = math.min(unit.current_health or 0, UI_MAX_PIPS)
         local ammo_count = math.min(unit.current_ammo or 0, UI_MAX_PIPS)
@@ -5290,9 +5470,9 @@ function update_selected_unit_ui(self)
         local hp_color = hp_on and UI_COLOR_HP or vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0.2)
         local ammo_color = ammo_on and UI_COLOR_AMMO or vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, 0.2)
 
-        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, 0.81, ap_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, 0.81, hp_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, 0.81, ammo_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, 0.81, ap_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, 0.81, hp_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, 0.81, ammo_color, UI_BAR_PIP_SIZE, pip_h)
     end
 
     local show_command = unit.class_id == UNIT_CLASS_SARGE
@@ -5338,26 +5518,29 @@ function update_selected_unit_ui(self)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
+    local close_button_x, close_button_y = get_ui_panel_close_button_center()
     set_ui_square_transform(
         self,
         self.ui.close_button,
-        UI_PANEL_X + (UI_PANEL_W * 0.5) - 22,
-        UI_PANEL_Y + (UI_PANEL_H * 0.5) - 22,
+        close_button_x,
+        close_button_y,
         0.83,
-        vmath.vector4(0.8, 0.2, 0.2, 0.95),
+        vmath.vector4(0, 0, 0, 0),
         28,
         28
     )
-    local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
+    local reactive_button_x, reactive_button_y = get_ui_panel_reactive_button_center()
+    local unit_reactive_enabled = unit.reactive_fire_enabled ~= false
+    local toggle_color = unit_reactive_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
     set_ui_square_transform(
         self,
         self.ui.reactive_toggle_button,
-        40,
-        SCREEN_HEIGHT - 40,
+        reactive_button_x,
+        reactive_button_y,
         0.84,
         toggle_color,
-        30,
-        30
+        64,
+        32
     )
     if self.alien_turn_active and (not self.reactive_combat_enabled) then
         local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
@@ -5395,8 +5578,7 @@ local function is_point_in_ui_panel(screen_x, screen_y)
 end
 
 function is_point_in_close_ui_button(screen_x, screen_y)
-    local button_x = UI_PANEL_X + (UI_PANEL_W * 0.5) - 22
-    local button_y = UI_PANEL_Y + (UI_PANEL_H * 0.5) - 22
+    local button_x, button_y = get_ui_panel_close_button_center()
     local half = 14
     return screen_x >= (button_x - half)
         and screen_x <= (button_x + half)
@@ -5421,16 +5603,18 @@ function try_close_selected_unit_ui(self, screen_x, screen_y)
 end
 
 function try_toggle_reactive_combat(self, screen_x, screen_y)
-    local tx = 40
-    local ty = SCREEN_HEIGHT - 40
-    if screen_x >= (tx - 15) and screen_x <= (tx + 15) and screen_y >= (ty - 15) and screen_y <= (ty + 15) then
-        self.reactive_combat_enabled = not self.reactive_combat_enabled
-        if self.alien_turn_active then
-            -- Reactive ON should never depend on manual step-through state.
-            self.alien_turn_manual_pause = false
-            self.alien_turn_waiting_for_advance = false
-        end
-        print("Reactive combat: " .. (self.reactive_combat_enabled and "ON" or "OFF"))
+    local selected_unit = get_selected_unit(self)
+    if not selected_unit then
+        return false
+    end
+    local tx, ty = get_ui_panel_reactive_button_center()
+    tx = tx + 5
+    ty = ty - 5
+    local half_w = 32
+    local half_h = 16
+    if screen_x >= (tx - half_w) and screen_x <= (tx + half_w) and screen_y >= (ty - half_h) and screen_y <= (ty + half_h) then
+        selected_unit.reactive_fire_enabled = not (selected_unit.reactive_fire_enabled ~= false)
+        print(string.format("%s reactive fire: %s", selected_unit.display_name or "Unit", (selected_unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
         return true
     end
     return false
@@ -5503,6 +5687,32 @@ function try_toggle_aesthetic_ui_button(self, screen_x, screen_y)
         and screen_y >= (AESTHETIC_BUTTON_Y - half_h)
         and screen_y <= (AESTHETIC_BUTTON_Y + half_h) then
         toggle_aesthetic_mode(self)
+        return true
+    end
+    return false
+end
+
+function try_zoom_in_button(self, screen_x, screen_y)
+    local half_w = ZOOM_IN_BUTTON_W * 0.5
+    local half_h = ZOOM_IN_BUTTON_H * 0.5
+    if screen_x >= (ZOOM_IN_BUTTON_X - half_w)
+        and screen_x <= (ZOOM_IN_BUTTON_X + half_w)
+        and screen_y >= (ZOOM_IN_BUTTON_Y - half_h)
+        and screen_y <= (ZOOM_IN_BUTTON_Y + half_h) then
+        request_zoom_delta(self, 0.12, screen_x, screen_y)
+        return true
+    end
+    return false
+end
+
+function try_zoom_out_button(self, screen_x, screen_y)
+    local half_w = ZOOM_OUT_BUTTON_W * 0.5
+    local half_h = ZOOM_OUT_BUTTON_H * 0.5
+    if screen_x >= (ZOOM_OUT_BUTTON_X - half_w)
+        and screen_x <= (ZOOM_OUT_BUTTON_X + half_w)
+        and screen_y >= (ZOOM_OUT_BUTTON_Y - half_h)
+        and screen_y <= (ZOOM_OUT_BUTTON_Y + half_h) then
+        request_zoom_delta(self, -0.12, screen_x, screen_y)
         return true
     end
     return false
@@ -6705,6 +6915,12 @@ function init(self)
     self.pan_velocity_y = 0
     self.pan_inertia_damping = 1--8
     self.pan_inertia_min_speed = 3
+    self.zoom_input_armed = false
+    self.zoom_block_timer = 0.6
+    self.zoom_target = nil
+    self.zoom_focus_x = SCREEN_WIDTH * 0.5
+    self.zoom_focus_y = SCREEN_HEIGHT * 0.5
+    self.zoom_smooth_speed = 12
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")
@@ -6714,7 +6930,9 @@ function init(self)
 
     -- Enable input
     msg.post(".", "acquire_input_focus")
-    enforce_fixed_window_size(self, 0, true)
+    if not IS_HTML5 then
+        enforce_fixed_window_size(self, 0, true)
+    end
 
     -- Set camera view
     msg.post("@render:", "use_camera_projection")
@@ -6791,7 +7009,7 @@ function init(self)
     self.melee_attack_timer = 0
     self.melee_action_queue = {}
     self.melee_ap_left_by_alien_id = {}
-    self.reactive_combat_enabled = false
+    self.reactive_combat_enabled = true
     self.alien_turn_active = false
     self.alien_turn_waiting_for_advance = false
     self.alien_turn_manual_pause = false
@@ -6809,6 +7027,7 @@ function init(self)
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
+    reset_derple_feedback_runtime(self)
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
     self.flow_score_breakdown = { total = 0, survivors = 0, seated = 0, dead = 0, power_units = 0, objectives = 0 }
     self.flow_outro_timer = 0
@@ -6828,7 +7047,13 @@ end
 -- =============================================================================
 
 function update(self, dt)
-    enforce_fixed_window_size(self, dt, false)
+    if self.zoom_block_timer and self.zoom_block_timer > 0 then
+        self.zoom_block_timer = math.max(0, self.zoom_block_timer - dt)
+    end
+    if not IS_HTML5 then
+        enforce_fixed_window_size(self, dt, false)
+    end
+    update_smooth_zoom(self, dt)
     if self.world_grid and self.tile_light_layers then
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local light_anim_cfg = self.tile_light_anim_ids and self.tile_light_anim_ids[tile_instance_id] or nil
@@ -6983,8 +7208,10 @@ function update(self, dt)
         process_alien_turn(self)
     end
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
+    LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     update_human_visual_state(self)
+    update_derple_feedback_triggers(self, dt)
     update_exit_green_smoke_fx(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
@@ -7165,7 +7392,7 @@ end
 
 function on_input(self, action_id, action)
     if action_id == hash("touch") then
-        local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             if action.released and inside_view and input_x and input_y then
                 handle_flow_touch(self, input_x, input_y)
@@ -7183,6 +7410,7 @@ function on_input(self, action_id, action)
         end
 
         if action.pressed then
+            self.zoom_input_armed = true
             if not inside_view then
                 return true
             end
@@ -7223,6 +7451,12 @@ function on_input(self, action_id, action)
                     return true
                 end
                 if try_toggle_aesthetic_ui_button(self, input_x, input_y) then
+                    return true
+                end
+                if try_zoom_in_button(self, input_x, input_y) then
+                    return true
+                end
+                if try_zoom_out_button(self, input_x, input_y) then
                     return true
                 end
                 if try_toggle_reactive_combat(self, input_x, input_y) then
@@ -7294,28 +7528,38 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
-        local target_zoom = math.min(self.camera_zoom + 0.1, self.camera_max_zoom)
-        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        if self.zoom_block_timer and self.zoom_block_timer > 0 then
+            return true
+        end
+        if not ((action.value and action.value ~= 0) or action.pressed or action.repeated) then
+            return true
+        end
+        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if not inside_view then
             focus_x = SCREEN_WIDTH * 0.5
             focus_y = SCREEN_HEIGHT * 0.5
         end
         focus_x = focus_x or (SCREEN_WIDTH * 0.5)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
-        zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
+        request_zoom_delta(self, 0.12, focus_x, focus_y)
     elseif action_id == hash("zoom_out") then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
-        local target_zoom = math.max(self.camera_zoom - 0.1, self.camera_min_zoom)
-        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y)
+        if self.zoom_block_timer and self.zoom_block_timer > 0 then
+            return true
+        end
+        if not ((action.value and action.value ~= 0) or action.pressed or action.repeated) then
+            return true
+        end
+        local focus_x, focus_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if not inside_view then
             focus_x = SCREEN_WIDTH * 0.5
             focus_y = SCREEN_HEIGHT * 0.5
         end
         focus_x = focus_x or (SCREEN_WIDTH * 0.5)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
-        zoom_camera_at_screen_point(self, target_zoom, focus_x, focus_y)
+        request_zoom_delta(self, -0.12, focus_x, focus_y)
     elseif action_id == hash("toggle_aesthetic_mode") and action.pressed then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true

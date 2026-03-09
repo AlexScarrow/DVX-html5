@@ -7,6 +7,11 @@ function M.extend(runtime, ctx)
     local WELD_SPARKS_Z = 0.62
     local RECEIVE_PULSE_DURATION = 0.24
     local SHUTTLE_HIDE_POS = vmath.vector3(-9999, -9999, 0.5)
+    local DERPLE_FEEDBACK_EVENT_DEFS = {
+        RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
+        LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
+        SPOT_ALIEN = { anim = hash("derples_comms_alienSpotted"), duration = 1.05, cooldown = 1.9, scale = 0.54, x_offset = 50, y_offset = 74 }
+    }
 
     local function get_drag_ap_cost()
         return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
@@ -36,32 +41,22 @@ function M.extend(runtime, ctx)
         return item_type == ctx.COMPONENT_UI.component_nav_data
     end
 
-    local function unit_has_any_food_supplies(unit)
+    local function get_backpack_item_slot(unit, item_type)
         if not unit or not unit.backpack_items then
-            return false
+            return nil
         end
-        for _, item in ipairs(unit.backpack_items) do
-            if is_food_supplies_item(item) then
-                return true
+        for i, item in ipairs(unit.backpack_items) do
+            if item == item_type then
+                return i
             end
         end
-        return false
+        return nil
     end
 
-    local function set_unit_backpack_to_food_supplies(unit)
-        if not unit then
-            return
+    local function emit_receive_item_feedback(self, unit)
+        if runtime.emit_derple_feedback and unit and unit.id then
+            runtime.emit_derple_feedback(self, unit.id, "RECEIVE_ITEM")
         end
-        unit.backpack_items = { ctx.COMPONENT_UI.component_food_supplies }
-        unit.backpack_used = #unit.backpack_items
-    end
-
-    local function clear_food_supplies_from_backpack(unit)
-        if not unit then
-            return
-        end
-        unit.backpack_items = {}
-        unit.backpack_used = 0
     end
 
     local function try_consume_drag_ap(source_unit, target_unit)
@@ -215,6 +210,90 @@ function M.extend(runtime, ctx)
         self.world_item_visuals = self.world_item_visuals or {}
         self.world_item_shadow_visuals = self.world_item_shadow_visuals or {}
         self.next_world_item_id = self.next_world_item_id or 0
+        self.derple_feedback_entries = self.derple_feedback_entries or {}
+        self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
+        self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
+        self.derple_feedback_clock = self.derple_feedback_clock or 0
+    end
+
+    runtime.emit_derple_feedback = function(self, unit_id, event_type)
+        runtime.ensure_item_runtime_state(self)
+        if not self.squad_units or not unit_id then
+            return false
+        end
+        local def = DERPLE_FEEDBACK_EVENT_DEFS[event_type]
+        local unit = self.squad_units[unit_id]
+        if not def or not unit or not unit.go_path or (unit.current_health or 0) <= 0 then
+            return false
+        end
+        local now = self.derple_feedback_clock or 0
+        self.derple_feedback_cooldowns[unit_id] = self.derple_feedback_cooldowns[unit_id] or {}
+        local cooldown_until = self.derple_feedback_cooldowns[unit_id][event_type] or 0
+        if now < cooldown_until then
+            return false
+        end
+        self.derple_feedback_cooldowns[unit_id][event_type] = now + (def.cooldown or 0.8)
+
+        local existing_index = self.derple_feedback_by_unit_id[unit_id]
+        if existing_index then
+            local existing = self.derple_feedback_entries[existing_index]
+            if existing and existing.go_id then
+                go.delete(existing.go_id)
+            end
+            self.derple_feedback_entries[existing_index] = nil
+            self.derple_feedback_by_unit_id[unit_id] = nil
+        end
+
+        local pos = go.get_position(unit.go_path)
+        local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(pos.x + (def.x_offset or 0), pos.y + (def.y_offset or 70), 0.84))
+        if not marker_id then
+            return false
+        end
+        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = def.anim })
+        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local scale = def.scale or 0.72
+        go.set_scale(vmath.vector3(scale, scale, 1), marker_id)
+
+        local entry = {
+            go_id = marker_id,
+            unit_id = unit_id,
+            event_type = event_type,
+            ttl = def.duration or 1.0,
+            x_offset = def.x_offset or 0,
+            y_offset = def.y_offset or 70
+        }
+        table.insert(self.derple_feedback_entries, entry)
+        self.derple_feedback_by_unit_id[unit_id] = #self.derple_feedback_entries
+        return true
+    end
+
+    runtime.update_derple_feedback_bubbles = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        self.derple_feedback_clock = (self.derple_feedback_clock or 0) + dt
+        for i = #self.derple_feedback_entries, 1, -1 do
+            local entry = self.derple_feedback_entries[i]
+            local keep = false
+            if entry and entry.go_id and self.squad_units and entry.unit_id then
+                local unit = self.squad_units[entry.unit_id]
+                if unit and unit.go_path and (unit.current_health or 0) > 0 then
+                    entry.ttl = (entry.ttl or 0) - dt
+                    if entry.ttl > 0 then
+                        local pos = go.get_position(unit.go_path)
+                        go.set_position(vmath.vector3(pos.x + (entry.x_offset or 0), pos.y + (entry.y_offset or 70), 0.84), entry.go_id)
+                        keep = true
+                    end
+                end
+            end
+            if not keep then
+                if entry and entry.go_id then
+                    go.delete(entry.go_id)
+                end
+                self.derple_feedback_entries[i] = nil
+                if entry and entry.unit_id then
+                    self.derple_feedback_by_unit_id[entry.unit_id] = nil
+                end
+            end
+        end
     end
 
     runtime.create_world_item_instance = function(self, item_type, cell_id, owner_unit_id, meta)
@@ -724,17 +803,31 @@ function M.extend(runtime, ctx)
                     end
                 end
                 local nav = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
-                if nav and nav.isFixed == true then
-                    state.nav_ready = true
-                    if cell.isPowered == true then
-                        state.exit_tile_powered = true
+                if nav then
+                    local nav_has_data = (nav.hasNavData == true) or (nav.hasNavData == nil and nav.isFixed == true)
+                    nav.hasNavData = nav_has_data
+                    nav.isFixed = nav_has_data
+                    local contributes_to_exit = (nav.contributesToExitObjective ~= false)
+                    local nav_dependency_met = runtime.is_object_dependency_met(self.world_grid, nav)
+                    if contributes_to_exit and nav_has_data and nav_dependency_met then
+                        state.nav_ready = true
+                        if cell.isPowered == true then
+                            state.exit_tile_powered = true
+                        end
                     end
                 end
                 local loader = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
-                if loader and loader.isFixed == true then
-                    state.supplies_ready = true
-                    if cell.isPowered == true then
-                        state.exit_tile_powered = true
+                if loader then
+                    local loader_has_food = (loader.hasFood == true) or (loader.hasFood == nil and loader.isFixed == true)
+                    loader.hasFood = loader_has_food
+                    loader.isFixed = loader_has_food
+                    local contributes_to_exit = (loader.contributesToExitObjective ~= false)
+                    local loader_dependency_met = runtime.is_object_dependency_met(self.world_grid, loader)
+                    if contributes_to_exit and loader_has_food and loader_dependency_met then
+                        state.supplies_ready = true
+                        if cell.isPowered == true then
+                            state.exit_tile_powered = true
+                        end
                     end
                 end
             end
@@ -854,11 +947,6 @@ function M.extend(runtime, ctx)
             print("Loot crate is hidden (tile has no power).")
             return true
         end
-        if unit_has_any_food_supplies(unit) then
-            print("Backpack occupied by food supplies. Drop/install it before scavenging.")
-            return true
-        end
-
         if unit.current_ap < ctx.LOOT_UI.ap_cost then
             print("Unable to scavenge: no AP")
             return true
@@ -900,15 +988,7 @@ function M.extend(runtime, ctx)
         end
 
         for _, item_type in ipairs(loot_results) do
-            if is_food_supplies_item(item_type) then
-                if #unit.backpack_items == 0 then
-                    set_unit_backpack_to_food_supplies(unit)
-                    runtime.spawn_loot_pickup_blip(self, unit.cell_id, 1, item_type)
-                    added = added + 1
-                else
-                    dropped = dropped + 1
-                end
-            elseif #unit.backpack_items < capacity then
+            if #unit.backpack_items < capacity then
                 table.insert(unit.backpack_items, item_type)
                 unit.backpack_used = #unit.backpack_items
                 runtime.spawn_loot_pickup_blip(self, unit.cell_id, #unit.backpack_items, item_type)
@@ -949,7 +1029,6 @@ function M.extend(runtime, ctx)
             dropped,
             ctx.LOOT_UI.ap_cost
         ))
-
         ctx.update_human_visual_state(self)
         return true
     end
@@ -1115,10 +1194,6 @@ function M.extend(runtime, ctx)
         end
 
         unit.backpack_items = unit.backpack_items or {}
-        if unit_has_any_food_supplies(unit) then
-            print("Backpack occupied by food supplies. Cannot retrieve power.")
-            return true
-        end
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items >= capacity then
             print("Backpack full. Cannot retrieve power.")
@@ -1289,11 +1364,6 @@ function M.extend(runtime, ctx)
             return false
         end
         unit.backpack_items = unit.backpack_items or {}
-        if unit_has_any_food_supplies(unit) and (not is_food_supplies_item(item.item_type)) then
-            print("Cannot carry other items while hauling food supplies.")
-            flash_invalid_drag_units(unit, nil)
-            return true
-        end
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items >= cap then
             print("Backpack full.")
@@ -1321,13 +1391,6 @@ function M.extend(runtime, ctx)
                     go.set_position(vmath.vector3(-9999, -9999, 0.5), corpse_unit.go_path)
                 end
             end
-        elseif is_food_supplies_item(item.item_type) then
-            if #unit.backpack_items > 0 then
-                print("Backpack must be empty for food supplies.")
-                flash_invalid_drag_units(unit, nil)
-                return true
-            end
-            set_unit_backpack_to_food_supplies(unit)
         else
             table.insert(unit.backpack_items, item.item_type)
         end
@@ -1415,6 +1478,106 @@ function M.extend(runtime, ctx)
             and world_y <= (y + half_h)
     end
 
+    runtime.try_interact_nav_computer_selected_unit_on_cell = function(self, unit, cell, nav_obj)
+        if not unit or not cell or not nav_obj then
+            return false
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if not runtime.is_object_dependency_met(self.world_grid, nav_obj) then
+            print("Nav computer dependency is not met.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local machine_has_nav = (nav_obj.hasNavData == true) or (nav_obj.hasNavData == nil and nav_obj.isFixed == true)
+        nav_obj.hasNavData = machine_has_nav
+        nav_obj.isFixed = machine_has_nav
+
+        if machine_has_nav then
+            if #unit.backpack_items >= cap then
+                print("Backpack full.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            table.insert(unit.backpack_items, ctx.COMPONENT_UI.component_nav_data)
+            unit.backpack_used = #unit.backpack_items
+            nav_obj.hasNavData = false
+            nav_obj.isFixed = false
+            runtime.refresh_exit_objective_state(self)
+            runtime.refresh_fix_markers(self)
+            runtime.refresh_world_item_visuals(self)
+            print(string.format("%s retrieved nav-data from machine.", unit.display_name))
+            return true
+        end
+
+        local nav_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_nav_data)
+        if not nav_slot then
+            print("Need 1 nav-data in backpack.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+
+        table.remove(unit.backpack_items, nav_slot)
+        unit.backpack_used = #unit.backpack_items
+        nav_obj.hasNavData = true
+        nav_obj.isFixed = true
+        runtime.refresh_exit_objective_state(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s inserted nav-data into machine.", unit.display_name))
+        return true
+    end
+
+    runtime.try_interact_supply_loader_selected_unit_on_cell = function(self, unit, cell, loader_obj)
+        if not unit or not cell or not loader_obj then
+            return false
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if not runtime.is_object_dependency_met(self.world_grid, loader_obj) then
+            print("Supply loader dependency is not met.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local machine_has_food = (loader_obj.hasFood == true) or (loader_obj.hasFood == nil and loader_obj.isFixed == true)
+        loader_obj.hasFood = machine_has_food
+        loader_obj.isFixed = machine_has_food
+
+        if machine_has_food then
+            if #unit.backpack_items >= cap then
+                print("Backpack full.")
+                flash_invalid_drag_units(unit, nil)
+                return true
+            end
+            table.insert(unit.backpack_items, ctx.COMPONENT_UI.component_food_supplies)
+            unit.backpack_used = #unit.backpack_items
+            loader_obj.hasFood = false
+            loader_obj.isFixed = false
+            runtime.refresh_exit_objective_state(self)
+            runtime.refresh_fix_markers(self)
+            runtime.refresh_world_item_visuals(self)
+            print(string.format("%s retrieved food supplies from machine.", unit.display_name))
+            return true
+        end
+
+        local food_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_food_supplies)
+        if not food_slot then
+            print("Need 1 food supplies in backpack.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+
+        table.remove(unit.backpack_items, food_slot)
+        unit.backpack_used = #unit.backpack_items
+        loader_obj.hasFood = true
+        loader_obj.isFixed = true
+        runtime.refresh_exit_objective_state(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s inserted food supplies into machine.", unit.display_name))
+        return true
+    end
+
     runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)
         if not self.world_grid or not clicked_cell_id then
             return nil, nil, nil
@@ -1430,6 +1593,14 @@ function M.extend(runtime, ctx)
         local power_node = runtime.get_power_node_object(cell)
         if power_node and is_point_in_object_hitbox(cell, power_node, world_x, world_y) then
             return "power_node", cell, power_node
+        end
+        local nav_computer = runtime.get_nav_computer_object(cell)
+        if nav_computer and is_point_in_object_hitbox(cell, nav_computer, world_x, world_y) then
+            return "nav_computer", cell, nav_computer
+        end
+        local supply_loader = runtime.get_supply_loader_object(cell)
+        if supply_loader and is_point_in_object_hitbox(cell, supply_loader, world_x, world_y) then
+            return "supply_loader", cell, supply_loader
         end
         return nil, nil, nil
     end
@@ -1450,6 +1621,18 @@ function M.extend(runtime, ctx)
             end
             if object_kind == "power_node" then
                 return runtime.try_retrieve_power_selected_unit_on_cell(self, unit, clicked_cell)
+            end
+            if object_kind == "nav_computer" then
+                local nav_obj = runtime.get_nav_computer_object(clicked_cell)
+                if nav_obj then
+                    return runtime.try_interact_nav_computer_selected_unit_on_cell(self, unit, clicked_cell, nav_obj)
+                end
+            end
+            if object_kind == "supply_loader" then
+                local loader_obj = runtime.get_supply_loader_object(clicked_cell)
+                if loader_obj then
+                    return runtime.try_interact_supply_loader_selected_unit_on_cell(self, unit, clicked_cell, loader_obj)
+                end
             end
             return true
         end
@@ -1583,34 +1766,10 @@ function M.extend(runtime, ctx)
                                 ))
                                 -- FUTURE HOOK: play heal particle effect on target_unit.
                             end
-                        elseif is_food_supplies_item(source_item) then
-                            target_unit.backpack_items = target_unit.backpack_items or {}
-                            if #target_unit.backpack_items > 0 and not unit_has_any_food_supplies(target_unit) then
-                                print(target_unit.display_name .. " backpack must be empty for food supplies.")
-                                flash_invalid_drag_units(source_unit, target_unit)
-                            else
-                                if not try_consume_drag_ap(source_unit, target_unit) then
-                                    self.drag_resource = { active = false }
-                                    return true
-                                end
-                                clear_food_supplies_from_backpack(source_unit)
-                                set_unit_backpack_to_food_supplies(target_unit)
-                                trigger_receive_pulse(target_unit)
-                                consumed = true
-                                print(string.format(
-                                    "%s transferred food supplies to %s. (AP -%d)",
-                                    source_unit.display_name,
-                                    target_unit.display_name,
-                                    get_drag_ap_cost()
-                                ))
-                            end
                         else
                             target_unit.backpack_items = target_unit.backpack_items or {}
                             local target_cap = target_unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
-                            if unit_has_any_food_supplies(target_unit) or unit_has_any_food_supplies(source_unit) then
-                                print("Cannot mix food supplies with other items.")
-                                flash_invalid_drag_units(source_unit, target_unit)
-                            elseif #target_unit.backpack_items < target_cap then
+                            if #target_unit.backpack_items < target_cap then
                                 if not try_consume_drag_ap(source_unit, target_unit) then
                                     self.drag_resource = { active = false }
                                     return true
@@ -1619,6 +1778,7 @@ function M.extend(runtime, ctx)
                                 source_unit.backpack_used = #source_unit.backpack_items
                                 table.insert(target_unit.backpack_items, source_item)
                                 target_unit.backpack_used = #target_unit.backpack_items
+                                emit_receive_item_feedback(self, target_unit)
                                 trigger_receive_pulse(target_unit)
                                 consumed = true
                                 print(string.format(
@@ -1953,10 +2113,17 @@ function M.extend(runtime, ctx)
                                 end
                             end
                             if component_target then
-                                local is_exit_install_target = component_target.name == hash("nav_computer")
-                                    or component_target.name == hash("supply_loader")
-                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_exit_install_target then
+                                local is_class_agnostic_machine_target = component_target.name == hash("supply_loader")
+                                    or component_target.name == hash("nav_computer")
+                                if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_class_agnostic_machine_target then
                                     print("Only the Techie can fix objects.")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                    self.drag_resource = { active = false }
+                                    return true
+                                end
+                                if component_target.name == hash("nav_computer")
+                                    and not runtime.is_object_dependency_met(self.world_grid, component_target) then
+                                    print("Nav computer dependency is not met.")
                                     flash_invalid_drag_units(source_unit, nil)
                                     self.drag_resource = { active = false }
                                     return true
@@ -1969,13 +2136,17 @@ function M.extend(runtime, ctx)
                                         self.drag_resource = { active = false }
                                         return true
                                     end
-                                    if source_item == ctx.COMPONENT_UI.component_food_supplies then
-                                        clear_food_supplies_from_backpack(source_unit)
-                                    else
-                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                        source_unit.backpack_used = #source_unit.backpack_items
-                                    end
+                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                    source_unit.backpack_used = #source_unit.backpack_items
                                     component_target.isFixed = true
+                                    if component_target.name == hash("nav_computer")
+                                        and source_item == ctx.COMPONENT_UI.component_nav_data then
+                                        component_target.hasNavData = true
+                                    end
+                                    if component_target.name == hash("supply_loader")
+                                        and source_item == ctx.COMPONENT_UI.component_food_supplies then
+                                        component_target.hasFood = true
+                                    end
                                     consumed = true
                                     runtime.refresh_fix_markers(self)
                                     runtime.refresh_door_markers(self)

@@ -1897,9 +1897,21 @@ local function resolve_human_reaction_fire(self, alien)
                 local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
                 local ranged_model = require("main.config").RANGED_HIT_MODEL
                 local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
+                local range_cells = manhattan_distance_by_id(unit.cell_id, target_cell_id)
+                local range_penalty = math.max(0, (range_cells - 1) * 10)
                 local role = CLASS_ROLE_HOOKS[unit.class_id]
                 local class_bonus = (role and role.ranged_hit_bonus) or 0
-                local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus))
+                local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+                print(string.format(
+                    "RANGED DEBUG | reactive | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
+                    unit.display_name or "unit",
+                    alien.id or 0,
+                    range_cells or 0,
+                    range_penalty or 0,
+                    active_light or 0,
+                    class_bonus or 0,
+                    hit_chance or 0
+                ))
                 local roll = math.random(1, 100)
                 spawn_human_reaction_projectile(self, unit, alien, roll <= hit_chance, active_light, hit_chance, roll)
             end
@@ -6370,9 +6382,21 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
     local ranged_model = require("main.config").RANGED_HIT_MODEL
     local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
+    local range_cells = manhattan_distance_by_id(unit.cell_id, alien.cell_id)
+    local range_penalty = math.max(0, (range_cells - 1) * 10)
     local role = CLASS_ROLE_HOOKS[unit.class_id]
     local class_bonus = (role and role.ranged_hit_bonus) or 0
-    local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus))
+    local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+    print(string.format(
+        "RANGED DEBUG | manual | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
+        unit.display_name or "unit",
+        alien.id or 0,
+        range_cells or 0,
+        range_penalty or 0,
+        active_light or 0,
+        class_bonus or 0,
+        hit_chance or 0
+    ))
     local roll = math.random(1, 100)
     spawn_human_reaction_projectile(self, unit, alien, roll <= hit_chance, active_light, hit_chance, roll)
 

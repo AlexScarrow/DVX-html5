@@ -204,7 +204,7 @@ AESTHETIC_PROFILES = {
         counter_token_move_enabled = false,
         computer_emissive_enabled = true,
         computer_emissive_tint = vmath.vector4(1, 1, 1, 1),
-        computer_emissive_pulse_speed = 0.38,
+        computer_emissive_pulse_speed = 0.18,
         computer_emissive_min_mul = 0.84,
         computer_emissive_max_mul = 1.22,
         computer_emissive_variation_amount = 0.22,
@@ -1883,7 +1883,7 @@ local function resolve_human_reaction_fire(self, alien)
     local reaction_order = { "sarge", "techie", "medic", "gunner" }
     for _, unit_id in ipairs(reaction_order) do
         local unit = self.squad_units and self.squad_units[unit_id]
-        if unit and unit.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, target_cell_id) then
+        if unit and unit.cell_id and unit.reactive_fire_enabled ~= false and has_unobstructed_los(self.world_grid, unit.cell_id, target_cell_id) then
             if unit.current_ap <= 0 and unit.current_ammo <= 0 then
                 print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, alien.id))
             elseif unit.current_ap <= 0 then
@@ -3003,7 +3003,7 @@ function can_any_human_reactively_attack(self)
         return false
     end
     for _, unit in pairs(self.squad_units) do
-        if (unit.current_health or 0) > 0 and unit.cell_id then
+        if (unit.current_health or 0) > 0 and unit.cell_id and unit.reactive_fire_enabled ~= false then
             local can_melee = unit.current_ap > 0
             local can_ranged = unit.current_ap > 0 and unit.current_ammo > 0
             if can_melee or can_ranged then
@@ -3412,6 +3412,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/human",
             sprite_path = "/human#sprite",
             shadow_path = "/human#shadow",
@@ -3438,6 +3439,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/techie",
             sprite_path = "/techie#sprite",
             shadow_path = "/techie#shadow",
@@ -3464,6 +3466,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/medic",
             sprite_path = "/medic#sprite",
             shadow_path = "/medic#shadow",
@@ -3490,6 +3493,7 @@ local function create_squad_units()
             move_path = nil,
             move_path_index = 0,
             anim_phase = 0,
+            reactive_fire_enabled = true,
             go_path = "/gunner",
             sprite_path = "/gunner#sprite",
             shadow_path = "/gunner#shadow",
@@ -3961,6 +3965,29 @@ local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_
     go.set(msg.url(nil, go_id, "sprite"), "tint", tint or vmath.vector4(1, 1, 1, 1))
 end
 
+PANEL_ART_ANIM_BY_CLASS_ID = {
+    [UNIT_CLASS_SARGE] = hash("sarge_ui"),
+    [UNIT_CLASS_MEDIC] = hash("medic_ui"),
+    [UNIT_CLASS_TECHIE] = hash("techie_ui"),
+    [UNIT_CLASS_GUNNER] = hash("gunner_ui")
+}
+
+get_unit_panel_anim = function(unit)
+    if not unit then
+        return hash("derple_ui_panel")
+    end
+    return PANEL_ART_ANIM_BY_CLASS_ID[unit.class_id] or hash("derple_ui_panel")
+end
+
+get_ui_panel_close_button_center = function()
+    return UI_PANEL_X + (UI_PANEL_W * 0.5) - 38, UI_PANEL_Y - (UI_PANEL_H * 0.5) + 38
+end
+
+get_ui_panel_reactive_button_center = function()
+    local close_x, close_y = get_ui_panel_close_button_center()
+    return close_x - 74, close_y
+end
+
 count_non_nil_entries = function(t)
     if not t then
         return 0
@@ -4150,7 +4177,7 @@ local function initialize_unit_ui(self)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     self.ui.zoom_out_button = create_ui_square(0, 0, ZOOM_OUT_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
-    self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 30, 30)
+    self.ui.reactive_toggle_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.8, 0.2, 0.2, 0.95), 64, 32)
     self.ui.reactive_advance_button = create_ui_square(0, 0, 0.84, vmath.vector4(0.2, 0.8, 0.2, 0.95), 70, 30)
     self.ui.drag_command_pip = create_ui_square(0, 0, 0.9, vmath.vector4(0, 0, 0, 0), LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     if self.ui.drag_command_pip then
@@ -4215,7 +4242,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
-    set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 30, 30)
+    set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 64, 32)
     set_ui_square_transform(self, self.ui.reactive_advance_button, -9999, -9999, 0.84, hidden, 70, 30)
     set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
@@ -5387,41 +5414,26 @@ function update_selected_unit_ui(self)
                 end
             end
         end
-        local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
         set_ui_square_transform(
             self,
             self.ui.reactive_toggle_button,
-            40,
-            SCREEN_HEIGHT - 40,
+            -9999,
+            -9999,
             0.84,
-            toggle_color,
-            30,
+            vmath.vector4(0, 0, 0, 0),
+            64,
+            32
+        )
+        set_ui_square_transform(
+            self,
+            self.ui.reactive_advance_button,
+            -9999,
+            -9999,
+            0.84,
+            vmath.vector4(0, 0, 0, 0),
+            70,
             30
         )
-        if self.alien_turn_active and (not self.reactive_combat_enabled) then
-            local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
-            set_ui_square_transform(
-                self,
-                self.ui.reactive_advance_button,
-                105,
-                SCREEN_HEIGHT - 40,
-                0.84,
-                adv_color,
-                70,
-                30
-            )
-        else
-            set_ui_square_transform(
-                self,
-                self.ui.reactive_advance_button,
-                -9999,
-                -9999,
-                0.84,
-                vmath.vector4(0, 0, 0, 0),
-                70,
-                30
-            )
-        end
         return
     end
 
@@ -5437,9 +5449,16 @@ function update_selected_unit_ui(self)
         vmath.vector4(0, 0, 0, panel_shadow_alpha)
     )
     set_ui_panel_transform(self, self.ui.panel_art, UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H, vmath.vector4(1, 1, 1, 1))
+    local panel_anim = get_unit_panel_anim(unit)
+    if panel_anim ~= self.ui_panel_anim then
+        msg.post(msg.url(nil, self.ui.panel_art, "sprite"), "play_animation", { id = panel_anim })
+        self.ui_panel_anim = panel_anim
+    end
 
     for i = 1, UI_MAX_PIPS do
-        local pip_y = UI_BAR_START_Y - (i - 1) * (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP)
+        local pip_step = (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP) * 0.8
+        local pip_y = (UI_BAR_START_Y - 32) - (i - 1) * pip_step
+        local pip_h = UI_BAR_PIP_SIZE * 0.8
         local ap_count = math.min(unit.current_ap or 0, UI_MAX_PIPS)
         local hp_count = math.min(unit.current_health or 0, UI_MAX_PIPS)
         local ammo_count = math.min(unit.current_ammo or 0, UI_MAX_PIPS)
@@ -5451,9 +5470,9 @@ function update_selected_unit_ui(self)
         local hp_color = hp_on and UI_COLOR_HP or vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0.2)
         local ammo_color = ammo_on and UI_COLOR_AMMO or vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, 0.2)
 
-        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, 0.81, ap_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, 0.81, hp_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, 0.81, ammo_color, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, 0.81, ap_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, 0.81, hp_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, 0.81, ammo_color, UI_BAR_PIP_SIZE, pip_h)
     end
 
     local show_command = unit.class_id == UNIT_CLASS_SARGE
@@ -5499,26 +5518,29 @@ function update_selected_unit_ui(self)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
+    local close_button_x, close_button_y = get_ui_panel_close_button_center()
     set_ui_square_transform(
         self,
         self.ui.close_button,
-        UI_PANEL_X + (UI_PANEL_W * 0.5) - 22,
-        UI_PANEL_Y + (UI_PANEL_H * 0.5) - 22,
+        close_button_x,
+        close_button_y,
         0.83,
-        vmath.vector4(0.8, 0.2, 0.2, 0.95),
+        vmath.vector4(0, 0, 0, 0),
         28,
         28
     )
-    local toggle_color = self.reactive_combat_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
+    local reactive_button_x, reactive_button_y = get_ui_panel_reactive_button_center()
+    local unit_reactive_enabled = unit.reactive_fire_enabled ~= false
+    local toggle_color = unit_reactive_enabled and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
     set_ui_square_transform(
         self,
         self.ui.reactive_toggle_button,
-        40,
-        SCREEN_HEIGHT - 40,
+        reactive_button_x,
+        reactive_button_y,
         0.84,
         toggle_color,
-        30,
-        30
+        64,
+        32
     )
     if self.alien_turn_active and (not self.reactive_combat_enabled) then
         local adv_color = self.alien_turn_waiting_for_advance and vmath.vector4(0.2, 0.8, 0.2, 0.95) or vmath.vector4(0.8, 0.2, 0.2, 0.95)
@@ -5556,8 +5578,7 @@ local function is_point_in_ui_panel(screen_x, screen_y)
 end
 
 function is_point_in_close_ui_button(screen_x, screen_y)
-    local button_x = UI_PANEL_X + (UI_PANEL_W * 0.5) - 22
-    local button_y = UI_PANEL_Y + (UI_PANEL_H * 0.5) - 22
+    local button_x, button_y = get_ui_panel_close_button_center()
     local half = 14
     return screen_x >= (button_x - half)
         and screen_x <= (button_x + half)
@@ -5582,16 +5603,18 @@ function try_close_selected_unit_ui(self, screen_x, screen_y)
 end
 
 function try_toggle_reactive_combat(self, screen_x, screen_y)
-    local tx = 40
-    local ty = SCREEN_HEIGHT - 40
-    if screen_x >= (tx - 15) and screen_x <= (tx + 15) and screen_y >= (ty - 15) and screen_y <= (ty + 15) then
-        self.reactive_combat_enabled = not self.reactive_combat_enabled
-        if self.alien_turn_active then
-            -- Reactive ON should never depend on manual step-through state.
-            self.alien_turn_manual_pause = false
-            self.alien_turn_waiting_for_advance = false
-        end
-        print("Reactive combat: " .. (self.reactive_combat_enabled and "ON" or "OFF"))
+    local selected_unit = get_selected_unit(self)
+    if not selected_unit then
+        return false
+    end
+    local tx, ty = get_ui_panel_reactive_button_center()
+    tx = tx + 5
+    ty = ty - 5
+    local half_w = 32
+    local half_h = 16
+    if screen_x >= (tx - half_w) and screen_x <= (tx + half_w) and screen_y >= (ty - half_h) and screen_y <= (ty + half_h) then
+        selected_unit.reactive_fire_enabled = not (selected_unit.reactive_fire_enabled ~= false)
+        print(string.format("%s reactive fire: %s", selected_unit.display_name or "Unit", (selected_unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
         return true
     end
     return false
@@ -6986,7 +7009,7 @@ function init(self)
     self.melee_attack_timer = 0
     self.melee_action_queue = {}
     self.melee_ap_left_by_alien_id = {}
-    self.reactive_combat_enabled = false
+    self.reactive_combat_enabled = true
     self.alien_turn_active = false
     self.alien_turn_waiting_for_advance = false
     self.alien_turn_manual_pause = false

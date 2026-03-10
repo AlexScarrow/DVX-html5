@@ -1915,11 +1915,32 @@ local function resolve_human_reaction_fire(self, alien)
                 for _, candidate in ipairs(self.aliens) do
                     if candidate and (not candidate.is_dead) and candidate.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, candidate.cell_id) then
                         local d = manhattan_distance_by_id(unit.cell_id, candidate.cell_id)
-                        if d < nearest_dist then
-                            nearest_dist = d
-                            tied_targets = { candidate }
-                        elseif d == nearest_dist then
-                            table.insert(tied_targets, candidate)
+                        local is_vertical_lane = false
+                        local vertical_lane_allowed = true
+                        local from_cell = self.world_grid[unit.cell_id]
+                        local to_cell = self.world_grid[candidate.cell_id]
+                        if from_cell and to_cell then
+                            is_vertical_lane = (from_cell.xCell == to_cell.xCell) and (from_cell.yCell ~= to_cell.yCell)
+                            if is_vertical_lane then
+                                local from_center_x = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+                                local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+                                local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
+                                local target_pos = candidate.go_id and go.get_position(candidate.go_id) or nil
+                                local shooter_x = shooter_pos and shooter_pos.x or from_center_x
+                                local target_x = target_pos and target_pos.x or to_center_x
+                                local right_threshold = CELL_WIDTH * 0.15
+                                local shooter_in_right_lane = shooter_x >= (from_center_x + right_threshold)
+                                local target_in_right_lane = target_x >= (to_center_x + right_threshold)
+                                vertical_lane_allowed = shooter_in_right_lane and target_in_right_lane
+                            end
+                        end
+                        if vertical_lane_allowed then
+                            if d < nearest_dist then
+                                nearest_dist = d
+                                tied_targets = { candidate }
+                            elseif d == nearest_dist then
+                                table.insert(tied_targets, candidate)
+                            end
                         end
                     end
                 end
@@ -2430,50 +2451,71 @@ function process_turret_reactive_fire(self, dt)
                             local turret_pos = vmath.vector3(tx + (turret_obj.offsetX or 0), ty + (turret_obj.offsetY or 0), 0.76)
                             local target_pos = get_target_world_pos_for_turret(self, target)
                             if target_pos then
-                                self.turret_pending_shots = self.turret_pending_shots or {}
-                                self.next_turret_shot_id = (self.next_turret_shot_id or 0) + 1
-                                local shot_id = self.next_turret_shot_id
-                                spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
-                                local gun_markers = self.turret_gun_objects or {}
-                                local gun_go = gun_markers[turret_cell_id]
-                                if gun_go then
-                                    local gx = target_pos.x - turret_pos.x
-                                    local gy = target_pos.y - turret_pos.y
-                                    if math.abs(gx) > 0.001 or math.abs(gy) > 0.001 then
-                                        local fire_rot = math.atan2(gy, gx)
-                                        local ok_rot = pcall(go.set_rotation, vmath.quat_rotation_z(fire_rot), gun_go)
-                                        if ok_rot then
-                                            pcall(go.cancel_animations, gun_go, "euler.z")
-                                            local return_delay = (TURRET_BURST_PROJECTILE_COUNT - 1) * TURRET_BURST_PROJECTILE_DELAY
-                                            pcall(go.animate, gun_go, "euler.z", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INOUTSINE, 0.35, return_delay)
-                                        else
-                                            -- Turret marker may have been rebuilt this frame; skip rotation safely.
-                                            gun_markers[turret_cell_id] = nil
+                                local allow_vertical_lane = true
+                                local target_cell = target.cell_id and self.world_grid[target.cell_id] or nil
+                                if target_cell then
+                                    local is_vertical_lane = (cell.xCell == target_cell.xCell) and (cell.yCell ~= target_cell.yCell)
+                                    if is_vertical_lane then
+                                        local turret_center_x = tx
+                                        local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+                                        local right_threshold = CELL_WIDTH * 0.15
+                                        local turret_in_right_lane = turret_pos.x >= (turret_center_x + right_threshold)
+                                        local target_in_right_lane = target_pos.x >= (target_center_x + right_threshold)
+                                        allow_vertical_lane = turret_in_right_lane and target_in_right_lane
+                                        if not allow_vertical_lane then
+                                            print(string.format(
+                                                "Turret #%d blocked: vertical shot requires right-lane alignment.",
+                                                turret_object_id or 0
+                                            ))
                                         end
                                     end
                                 end
+                                if allow_vertical_lane then
+                                    self.turret_pending_shots = self.turret_pending_shots or {}
+                                    self.next_turret_shot_id = (self.next_turret_shot_id or 0) + 1
+                                    local shot_id = self.next_turret_shot_id
+                                    spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
+                                    local gun_markers = self.turret_gun_objects or {}
+                                    local gun_go = gun_markers[turret_cell_id]
+                                    if gun_go then
+                                        local gx = target_pos.x - turret_pos.x
+                                        local gy = target_pos.y - turret_pos.y
+                                        if math.abs(gx) > 0.001 or math.abs(gy) > 0.001 then
+                                            local fire_rot = math.atan2(gy, gx)
+                                            local ok_rot = pcall(go.set_rotation, vmath.quat_rotation_z(fire_rot), gun_go)
+                                            if ok_rot then
+                                                pcall(go.cancel_animations, gun_go, "euler.z")
+                                                local return_delay = (TURRET_BURST_PROJECTILE_COUNT - 1) * TURRET_BURST_PROJECTILE_DELAY
+                                                pcall(go.animate, gun_go, "euler.z", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INOUTSINE, 0.35, return_delay)
+                                            else
+                                                -- Turret marker may have been rebuilt this frame; skip rotation safely.
+                                                gun_markers[turret_cell_id] = nil
+                                            end
+                                        end
+                                    end
 
-                                local target_cell = self.world_grid[target.cell_id]
-                                local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
-                                local ranged_model = require("main.config").RANGED_HIT_MODEL
-                                local hit_chance = math.max(
-                                    ranged_model.min_hit_chance,
-                                    math.min(ranged_model.max_hit_chance, ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus))
-                                )
-                                local roll = math.random(1, 100)
-                                self.turret_pending_shots[shot_id] = {
-                                    target_kind = target.kind,
-                                    target_id = target.id,
-                                    target_cell_id = target.cell_id,
-                                    turret_object_id = turret_object_id,
-                                    impact_light = active_light,
-                                    impact_chance = hit_chance,
-                                    impact_roll = roll,
-                                    hit = roll <= hit_chance,
-                                    resolved = false
-                                }
+                                    target_cell = self.world_grid[target.cell_id]
+                                    local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
+                                    local ranged_model = require("main.config").RANGED_HIT_MODEL
+                                    local hit_chance = math.max(
+                                        ranged_model.min_hit_chance,
+                                        math.min(ranged_model.max_hit_chance, ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus))
+                                    )
+                                    local roll = math.random(1, 100)
+                                    self.turret_pending_shots[shot_id] = {
+                                        target_kind = target.kind,
+                                        target_id = target.id,
+                                        target_cell_id = target.cell_id,
+                                        turret_object_id = turret_object_id,
+                                        impact_light = active_light,
+                                        impact_chance = hit_chance,
+                                        impact_roll = roll,
+                                        hit = roll <= hit_chance,
+                                        resolved = false
+                                    }
 
-                                self.turret_fire_cooldown_by_object_id[turret_object_id] = TURRET_REACTIVE_FIRE_INTERVAL_SECONDS
+                                    self.turret_fire_cooldown_by_object_id[turret_object_id] = TURRET_REACTIVE_FIRE_INTERVAL_SECONDS
+                                end
                             end
                         end
                     end
@@ -6431,6 +6473,27 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     if not has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
         print("Unable to fire: no line of sight.")
         return false
+    end
+
+    local shooter_cell = self.world_grid[unit.cell_id]
+    local target_cell = self.world_grid[alien.cell_id]
+    if shooter_cell and target_cell then
+        local is_vertical_lane = (shooter_cell.xCell == target_cell.xCell) and (shooter_cell.yCell ~= target_cell.yCell)
+        if is_vertical_lane then
+            local shooter_center_x = coords_to_world_pos(shooter_cell.xCell, shooter_cell.yCell)
+            local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
+            local target_pos = alien.go_id and go.get_position(alien.go_id) or nil
+            local shooter_x = shooter_pos and shooter_pos.x or shooter_center_x
+            local target_x = target_pos and target_pos.x or target_center_x
+            local right_threshold = CELL_WIDTH * 0.15
+            local shooter_in_right_lane = shooter_x >= (shooter_center_x + right_threshold)
+            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
+            if (not shooter_in_right_lane) or (not target_in_right_lane) then
+                print("Unable to fire: vertical shot requires both shooter and target in right lane.")
+                return false
+            end
+        end
     end
 
     if unit.current_ap <= 0 or unit.current_ammo <= 0 then

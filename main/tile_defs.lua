@@ -245,7 +245,7 @@ canteen.cells[4].object1 = {
 }
 canteen.cells[2].object1 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 551,
-    offsetX = -84, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    offsetX = -90, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
 canteen.cells[2].object2 = {
@@ -255,7 +255,7 @@ canteen.cells[2].object2 = {
 }
 canteen.cells[2].object3 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 553,
-    offsetX = 84, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    offsetX = 32, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
 canteen.cells[1].object1 = {

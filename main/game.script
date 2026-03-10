@@ -852,6 +852,21 @@ try_brute_break_adjacent_barricade = function(self, alien)
         target_cell.obstacleShudderTimer = 0.60
         target_cell.obstacleShudderPhase = 0
         if remaining <= 0 then
+            local fx_x, fx_y = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            local fx_id = factory.create("/barricade_broken_fx_factory#barricade_broken_fx_factory", vmath.vector3(fx_x, fx_y, 0.62))
+            if fx_id then
+                pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+                timer.delay(0.18, false, function()
+                    if fx_id then
+                        pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = false })
+                    end
+                end)
+                timer.delay(1.1, false, function()
+                    if fx_id then
+                        pcall(go.delete, fx_id)
+                    end
+                end)
+            end
             target_cell.has_barricade = false
             target_cell.barricade_hp = nil
             target_cell.obstacleShudderTimer = nil

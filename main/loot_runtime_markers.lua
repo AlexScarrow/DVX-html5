@@ -180,11 +180,18 @@ function M.extend(runtime, ctx)
     runtime.refresh_fix_markers = function(self)
         self.fix_objects = self.fix_objects or {}
         self.exit_requirement_markers = self.exit_requirement_markers or {}
+        self.obstacle_debug_objects = self.obstacle_debug_objects or {}
         for cell_id, marker in pairs(self.fix_objects) do
             if marker then
                 go.delete(marker)
             end
             self.fix_objects[cell_id] = nil
+        end
+        for i, marker in ipairs(self.obstacle_debug_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.obstacle_debug_objects[i] = nil
         end
         for i, marker in ipairs(self.exit_requirement_markers) do
             if marker then
@@ -223,6 +230,29 @@ function M.extend(runtime, ctx)
                         or ctx.COMPONENT_UI.fix_marker_fixed_color
                     go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
                     self.fix_objects[cell_id] = marker_id
+                end
+            end
+            if cell and cell.tileID ~= hash("empty") then
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local slots = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(slots) do
+                    if obj and obj.name == hash("obstacle") then
+                        local count = obj.stackCount or obj.obstacleCount or 1
+                        if count < 1 then
+                            count = 1
+                        end
+                        local base_x = cx + (obj.offsetX or 0)
+                        local base_y = cy + (obj.offsetY or 0)
+                        for i = 1, count do
+                            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16), base_y, 0.56))
+                            if marker_id then
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("power_unit") })
+                                go.set_scale(vmath.vector3(0.72, 0.72, 1), marker_id)
+                                go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                                table.insert(self.obstacle_debug_objects, marker_id)
+                            end
+                        end
+                    end
                 end
             end
             local nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil

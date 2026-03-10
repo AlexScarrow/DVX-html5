@@ -3,6 +3,8 @@ local M = {}
 function M.extend(runtime, ctx)
     local WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM = 34
     local TURRET_PACKED_ITEM = "turret_packed"
+    local OBSTACLE_ITEM = "obstacle"
+    local OBSTACLE_STACK_CAP = 4
     local TURRET_ARMING_TURNS_ON_DEPLOY = 2
     local WELD_SPARKS_Z = 0.62
     local RECEIVE_PULSE_DURATION = 0.24
@@ -84,6 +86,8 @@ function M.extend(runtime, ctx)
             return hash("power_unit")
         elseif item_type == TURRET_PACKED_ITEM then
             return hash("gun_turret")
+        elseif item_type == OBSTACLE_ITEM then
+            return hash("material_unit")
         elseif is_nav_data_item(item_type) then
             return hash("nav_data")
         elseif is_food_supplies_item(item_type) then
@@ -103,6 +107,138 @@ function M.extend(runtime, ctx)
             end
         end
         return nil
+    end
+
+    local function allocate_runtime_object_id(world_grid)
+        local max_id = 0
+        for _, cell in ipairs(world_grid or {}) do
+            local objs = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objs) do
+                local id = (obj and obj.objectId) or 0
+                if id > max_id then
+                    max_id = id
+                end
+            end
+        end
+        return max_id + 1
+    end
+
+    local function get_center_obstacle_slot(cell)
+        if not cell then
+            return nil
+        end
+        return cell.object2
+    end
+
+    local function reset_object_slot_to_empty(slot)
+        if not slot then
+            return
+        end
+        slot.name = hash("empty")
+        slot.isFixed = false
+        slot.isWelded = false
+        slot.isOpen = false
+        slot.dependsOn = 0
+        slot.isDependentOn = {}
+        slot.objectId = 0
+        slot.offsetX = 0
+        slot.offsetY = 0
+        slot.fxOffsetX = 0
+        slot.fxOffsetY = 0
+        slot.fxRotation = 0
+        slot.fxFactory = nil
+        slot.hitW = 32
+        slot.hitH = 32
+        slot.requiredComponent = nil
+        slot.stackCount = nil
+        slot.obstacleCount = nil
+    end
+
+    local function init_obstacle_slot(slot, world_grid)
+        if not slot then
+            return
+        end
+        slot.name = hash("obstacle")
+        slot.isFixed = true
+        slot.isWelded = false
+        slot.isOpen = false
+        slot.dependsOn = 0
+        slot.isDependentOn = {}
+        slot.objectId = allocate_runtime_object_id(world_grid)
+        slot.offsetX = 0
+        slot.offsetY = 0
+        slot.fxOffsetX = 0
+        slot.fxOffsetY = 0
+        slot.fxRotation = 0
+        slot.fxFactory = nil
+        slot.hitW = 48
+        slot.hitH = 48
+        slot.requiredComponent = nil
+        slot.stackCount = 1
+        slot.obstacleCount = 1
+    end
+
+    local function get_obstacle_count(slot)
+        if not slot or slot.name ~= hash("obstacle") then
+            return 0
+        end
+        local count = slot.stackCount or slot.obstacleCount or 1
+        if count < 1 then
+            count = 1
+        end
+        return count
+    end
+
+    local function set_obstacle_count(slot, count)
+        if not slot then
+            return
+        end
+        local clamped = math.max(0, math.min(OBSTACLE_STACK_CAP, count or 0))
+        if clamped <= 0 then
+            reset_object_slot_to_empty(slot)
+            return
+        end
+        slot.name = hash("obstacle")
+        slot.stackCount = clamped
+        slot.obstacleCount = clamped
+        slot.hitW = slot.hitW or 48
+        slot.hitH = slot.hitH or 48
+        slot.offsetX = slot.offsetX or 0
+        slot.offsetY = slot.offsetY or 0
+    end
+
+    local function find_clicked_obstacle_slot(cell, world_x, world_y)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        local best_slot = nil
+        local best_dist = math.huge
+        for _, slot in ipairs(slots) do
+            if slot and slot.name == hash("obstacle") then
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local ox = slot.offsetX or 0
+                local oy = slot.offsetY or 0
+                local sx = cx + ox
+                local sy = cy + oy
+                local half_w = ((slot.hitW or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                local half_h = ((slot.hitH or ctx.COMPONENT_UI.object_default_hit_size) * 0.5)
+                local inside = world_x >= (sx - half_w)
+                    and world_x <= (sx + half_w)
+                    and world_y >= (sy - half_h)
+                    and world_y <= (sy + half_h)
+                if inside then
+                    local dx = sx - world_x
+                    local dy = sy - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < best_dist then
+                        best_slot = slot
+                        best_dist = dist
+                    end
+                end
+            end
+        end
+        return best_slot
     end
 
     local function get_empty_object_slot(cell)
@@ -151,20 +287,6 @@ function M.extend(runtime, ctx)
         end
         unit.backpack_items = keep
         unit.backpack_used = #unit.backpack_items
-    end
-
-    local function allocate_runtime_object_id(world_grid)
-        local max_id = 0
-        for _, cell in ipairs(world_grid or {}) do
-            local objs = { cell.object1, cell.object2, cell.object3 }
-            for _, obj in ipairs(objs) do
-                local id = (obj and obj.objectId) or 0
-                if id > max_id then
-                    max_id = id
-                end
-            end
-        end
-        return max_id + 1
     end
 
     local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
@@ -1482,6 +1604,49 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    runtime.try_pickup_obstacle_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id or not clicked_cell_id then
+            return false
+        end
+        if clicked_cell_id ~= unit.cell_id then
+            return false
+        end
+        local cell = self.world_grid and self.world_grid[clicked_cell_id]
+        if not cell or cell.tileID == hash("empty") then
+            return false
+        end
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local obstacle_slot = find_clicked_obstacle_slot(cell, world_x, world_y)
+        if not obstacle_slot then
+            return false
+        end
+
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if #unit.backpack_items >= cap then
+            print("Backpack full.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        if not try_consume_drag_ap(unit, nil) then
+            return true
+        end
+
+        local current_count = get_obstacle_count(obstacle_slot)
+        if current_count <= 1 then
+            reset_object_slot_to_empty(obstacle_slot)
+        else
+            set_obstacle_count(obstacle_slot, current_count - 1)
+        end
+        table.insert(unit.backpack_items, OBSTACLE_ITEM)
+        unit.backpack_used = #unit.backpack_items
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s retrieved 1 obstacle. (AP -%d)", unit.display_name, get_drag_ap_cost()))
+        return true
+    end
+
     local function is_point_in_object_hitbox(cell, obj, world_x, world_y)
         if not cell or not obj then
             return false
@@ -1661,6 +1826,9 @@ function M.extend(runtime, ctx)
             return true
         end
         if runtime.try_pickup_world_turret_selected_unit(self, screen_x, screen_y, clicked_cell_id) then
+            return true
+        end
+        if runtime.try_pickup_obstacle_selected_unit(self, screen_x, screen_y, clicked_cell_id) then
             return true
         end
         if runtime.try_pickup_world_item_selected_unit(self, screen_x, screen_y) then
@@ -2040,6 +2208,60 @@ function M.extend(runtime, ctx)
                                         end
                                     end
                                 end
+                            end
+                        end
+                    end
+                    if not consumed then
+                        if source_item == OBSTACLE_ITEM and drop_cell_id and source_unit.cell_id then
+                            local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                            local tx, ty = ctx.id_to_coords(drop_cell_id)
+                            local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                            if manhattan == 0 then
+                                local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                                if not drop_cell or drop_cell.tileID == hash("empty") then
+                                    print("Invalid obstacle drop cell.")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                else
+                                    local center_slot = get_center_obstacle_slot(drop_cell)
+                                    if not center_slot then
+                                        print("No center slot available for obstacle.")
+                                        flash_invalid_drag_units(source_unit, nil)
+                                    elseif center_slot.name ~= hash("empty") and center_slot.name ~= hash("obstacle") then
+                                        print("Center slot is occupied by another object.")
+                                        flash_invalid_drag_units(source_unit, nil)
+                                    else
+                                        local current_count = get_obstacle_count(center_slot)
+                                        if current_count >= OBSTACLE_STACK_CAP then
+                                            print(string.format("Obstacle stack cap reached (%d).", OBSTACLE_STACK_CAP))
+                                            flash_invalid_drag_units(source_unit, nil)
+                                        else
+                                            if not try_consume_drag_ap(source_unit, nil) then
+                                                self.drag_resource = { active = false }
+                                                return true
+                                            end
+                                            table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                            source_unit.backpack_used = #source_unit.backpack_items
+                                            if center_slot.name ~= hash("obstacle") then
+                                                init_obstacle_slot(center_slot, self.world_grid)
+                                            end
+                                            current_count = get_obstacle_count(center_slot)
+                                            set_obstacle_count(center_slot, current_count + 1)
+                                            consumed = true
+                                            runtime.refresh_fix_markers(self)
+                                            runtime.refresh_world_item_visuals(self)
+                                            print(string.format(
+                                                "%s placed 1 obstacle (stack %d/%d). (AP -%d)",
+                                                source_unit.display_name,
+                                                get_obstacle_count(center_slot),
+                                                OBSTACLE_STACK_CAP,
+                                                get_drag_ap_cost()
+                                            ))
+                                        end
+                                    end
+                                end
+                            else
+                                print("too far away")
+                                flash_invalid_drag_units(source_unit, nil)
                             end
                         end
                     end

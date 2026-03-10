@@ -554,8 +554,8 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
         return VERTICAL_MOVE_AP_COST
     end
 
-    -- Horizontal transitions use destination cell's moveValue.
-    return to_cell.moveValue
+    -- Horizontal transitions are always a flat move cost.
+    return 1
 end
 
 local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
@@ -569,7 +569,7 @@ local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
         return ALIEN_VERTICAL_MOVE_AP_COST
     end
 
-    return to_cell.moveValue
+    return 1
 end
 
 function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
@@ -1109,7 +1109,7 @@ end
 --[[
     Finds path from start_cell_id to end_cell_id
     Returns: table of cell IDs representing path, or nil if no path found
-    Takes into account: moveValue, access permissions, VOID cells
+    Takes into account: fixed step AP costs, access permissions, VOID cells
 ]]
 
 function heuristic(from_id, to_id)

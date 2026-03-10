@@ -2020,7 +2020,27 @@ local function choose_spitter_target(self, alien)
     for _, human in ipairs(get_living_humans(self)) do
         local dist = heuristic(alien.cell_id, human.cell_id)
         if dist <= range_cells and has_unobstructed_los(self.world_grid, alien.cell_id, human.cell_id) then
-            table.insert(candidates, { unit = human, dist = dist, hp = human.current_health })
+            local vertical_lane_allowed = true
+            local from_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
+            local to_cell = self.world_grid and self.world_grid[human.cell_id] or nil
+            if from_cell and to_cell then
+                local is_vertical_lane = (from_cell.xCell == to_cell.xCell) and (from_cell.yCell ~= to_cell.yCell)
+                if is_vertical_lane then
+                    local from_center_x = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+                    local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+                    local shooter_pos = alien.go_id and go.get_position(alien.go_id) or nil
+                    local target_pos = human.go_path and go.get_position(human.go_path) or nil
+                    local shooter_x = shooter_pos and shooter_pos.x or from_center_x
+                    local target_x = target_pos and target_pos.x or to_center_x
+                    local right_threshold = CELL_WIDTH * 0.15
+                    local shooter_in_right_lane = shooter_x >= (from_center_x + right_threshold)
+                    local target_in_right_lane = target_x >= (to_center_x + right_threshold)
+                    vertical_lane_allowed = shooter_in_right_lane and target_in_right_lane
+                end
+            end
+            if vertical_lane_allowed then
+                table.insert(candidates, { unit = human, dist = dist, hp = human.current_health })
+            end
         end
     end
 
@@ -2607,6 +2627,27 @@ local function update_spitter_attack_phase(self, dt)
     if not target then
         print(string.format("Spitter #%d cannot fire (no valid target in LOS/range)", spitter.id))
         return
+    end
+
+    local spitter_cell = self.world_grid and self.world_grid[spitter.cell_id] or nil
+    local target_cell_for_lane = self.world_grid and self.world_grid[target.cell_id] or nil
+    if spitter_cell and target_cell_for_lane then
+        local is_vertical_lane = (spitter_cell.xCell == target_cell_for_lane.xCell) and (spitter_cell.yCell ~= target_cell_for_lane.yCell)
+        if is_vertical_lane then
+            local spitter_center_x = coords_to_world_pos(spitter_cell.xCell, spitter_cell.yCell)
+            local target_center_x = coords_to_world_pos(target_cell_for_lane.xCell, target_cell_for_lane.yCell)
+            local spitter_pos_for_lane = spitter.go_id and go.get_position(spitter.go_id) or nil
+            local target_pos_for_lane = target.go_path and go.get_position(target.go_path) or nil
+            local spitter_x = spitter_pos_for_lane and spitter_pos_for_lane.x or spitter_center_x
+            local target_x = target_pos_for_lane and target_pos_for_lane.x or target_center_x
+            local right_threshold = CELL_WIDTH * 0.15
+            local spitter_in_right_lane = spitter_x >= (spitter_center_x + right_threshold)
+            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
+            if (not spitter_in_right_lane) or (not target_in_right_lane) then
+                print(string.format("Spitter #%d blocked: vertical shot requires right-lane alignment.", spitter.id))
+                return
+            end
+        end
     end
 
     if spitter.go_id and target.go_path then

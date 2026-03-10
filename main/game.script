@@ -1772,6 +1772,8 @@ local function ensure_alien_visual(self, alien)
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
     elseif alien.type == ALIEN_TYPE_CANNON then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
     else
         y = y + 0
     end
@@ -1793,6 +1795,10 @@ local function ensure_alien_visual(self, alien)
         alien.go_id = factory.create("/alien_speedy_factory#alien_speedy_factory", pos)
         alien.uses_blip_sprite = true
         visual_kind = "speedy"
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        alien.go_id = factory.create("/alien_cannon_fodder_factory#alien_cannon_fodder_factory", pos)
+        alien.uses_blip_sprite = true
+        visual_kind = "brute"
     else
         alien.go_id = factory.create("/ui_factory#ui_factory", pos)
         alien.uses_blip_sprite = false
@@ -1801,12 +1807,14 @@ local function ensure_alien_visual(self, alien)
     alien.visual_kind = visual_kind
     if alien.go_id then
         if alien.uses_blip_sprite then
-            if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+            if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE then
                 local scale = 0.33333334
                 if alien.type == ALIEN_TYPE_CANNON then
                     scale = 0.22
                 elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                     scale = scale * 0.75
+                elseif alien.type == ALIEN_TYPE_BRUTE then
+                    scale = 0.22 * 1.5
                 end
                 sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
                 sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
@@ -1832,6 +1840,8 @@ local function refresh_alien_visual(self, alien)
         wanted_visual_kind = "spitter"
     elseif alien.type == ALIEN_TYPE_SPEEDY then
         wanted_visual_kind = "speedy"
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        wanted_visual_kind = "brute"
     end
     if alien.go_id and alien.visual_kind ~= wanted_visual_kind then
         go.delete(alien.go_id)
@@ -4119,6 +4129,8 @@ end
 get_counter_shadow_anim_for_alien = function(alien_type)
     if alien_type == ALIEN_TYPE_CANNON then
         return hash("alien_cannonFodder_shadow")
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        return hash("alien_cannonFodder_shadow")
     elseif alien_type == ALIEN_TYPE_SPITTER then
         return hash("alien_spitter_shadow")
     elseif alien_type == ALIEN_TYPE_SPEEDY then
@@ -4134,6 +4146,8 @@ get_alien_anim_for_aesthetic = function(self, alien_type)
     if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
         if alien_type == ALIEN_TYPE_CANNON then
             return hash("alien_cannonFodder_boardgame")
+        elseif alien_type == ALIEN_TYPE_BRUTE then
+            return hash("alien_brute_boardgame")
         elseif alien_type == ALIEN_TYPE_SPITTER then
             return hash("alien_spitter_boardgame")
         elseif alien_type == ALIEN_TYPE_SPEEDY then
@@ -4142,6 +4156,8 @@ get_alien_anim_for_aesthetic = function(self, alien_type)
     end
     if alien_type == ALIEN_TYPE_CANNON then
         return hash("alien_cannonFodder")
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        return hash("alien_brute")
     elseif alien_type == ALIEN_TYPE_SPITTER then
         return hash("alien_spitter")
     elseif alien_type == ALIEN_TYPE_SPEEDY then

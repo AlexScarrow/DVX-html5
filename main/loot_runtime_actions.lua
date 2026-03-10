@@ -1418,6 +1418,25 @@ function M.extend(runtime, ctx)
             return false
         end
         local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local human_click_priority_radius = ctx.UNIT_CLICK_SELECT_RADIUS or 45
+        if clicked_cell_id and self.squad_units then
+            local nearest_human_dist = math.huge
+            for _, squad_unit in pairs(self.squad_units) do
+                if squad_unit and squad_unit.cell_id == clicked_cell_id and (squad_unit.current_health or 0) > 0 and squad_unit.go_path then
+                    local pos = go.get_position(squad_unit.go_path)
+                    local dx = pos.x - world_x
+                    local dy = pos.y - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < nearest_human_dist then
+                        nearest_human_dist = dist
+                    end
+                end
+            end
+            if nearest_human_dist <= human_click_priority_radius then
+                -- Let main human selection flow handle this click first.
+                return false
+            end
+        end
         local cell, turret_obj = find_turret_pickup_target(self, world_x, world_y, unit.cell_id)
         if not cell or not turret_obj then
             return false

@@ -87,7 +87,7 @@ function M.extend(runtime, ctx)
         elseif item_type == TURRET_PACKED_ITEM then
             return hash("gun_turret")
         elseif item_type == OBSTACLE_ITEM then
-            return hash("material_unit")
+            return hash("obstacle_icon")
         elseif is_nav_data_item(item_type) then
             return hash("nav_data")
         elseif is_food_supplies_item(item_type) then

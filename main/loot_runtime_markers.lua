@@ -243,14 +243,14 @@ function M.extend(runtime, ctx)
                         shudder_dx = math.sin(phase) * 4.4
                         shudder_dy = math.cos(phase * 1.7) * 2.0
                     end
-                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + shudder_dx, cy + shudder_dy, 0.56))
+                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + shudder_dx, (cy + 7) + shudder_dy, 0.56))
                     if marker_id then
                         msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("barricade") })
-                        go.set_scale(vmath.vector3(0.78, 0.78, 1), marker_id)
+                        go.set_scale(vmath.vector3(0.975, 0.975, 1), marker_id)
                         go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         table.insert(self.obstacle_debug_objects, marker_id)
                     end
-                else
+                elseif cell.isPowered then
                 local slots = { cell.object1, cell.object2, cell.object3 }
                 for _, obj in ipairs(slots) do
                     if obj and obj.name == hash("obstacle") then
@@ -270,8 +270,15 @@ function M.extend(runtime, ctx)
                             end
                             local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16) + shudder_dx, base_y + shudder_dy, 0.56))
                             if marker_id then
-                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("power_unit") })
-                                go.set_scale(vmath.vector3(0.72, 0.72, 1), marker_id)
+                                local variant_idx = (((obj.objectId or 0) + i) % 3) + 1
+                                local obstacle_anim = hash("obstacle1")
+                                if variant_idx == 2 then
+                                    obstacle_anim = hash("obstacle2")
+                                elseif variant_idx == 3 then
+                                    obstacle_anim = hash("obstacle3")
+                                end
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = obstacle_anim })
+                                go.set_scale(vmath.vector3(0.9, 0.9, 1), marker_id)
                                 go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                                 table.insert(self.obstacle_debug_objects, marker_id)
                             end

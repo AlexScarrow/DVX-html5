@@ -72,7 +72,7 @@ function M.create(ctx)
         elseif item_type == "turret_packed" then
             return hash("gun_turret")
         elseif item_type == "obstacle" then
-            return hash("material_unit")
+            return hash("obstacle_icon")
         end
         return nil
     end

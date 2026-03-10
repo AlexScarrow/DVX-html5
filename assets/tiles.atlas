@@ -74,6 +74,18 @@ images {
   image: "/assets/images/barricade.png"
 }
 images {
+  image: "/assets/images/obstacle1.png"
+}
+images {
+  image: "/assets/images/obstacle2.png"
+}
+images {
+  image: "/assets/images/obstacle3.png"
+}
+images {
+  image: "/assets/images/obstacle_icon.png"
+}
+images {
   image: "/assets/images/tile_generic_alpha_layer.png"
 }
 images {

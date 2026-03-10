@@ -234,6 +234,23 @@ function M.extend(runtime, ctx)
             end
             if cell and cell.tileID ~= hash("empty") then
                 local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local barricade_hp = cell.barricade_hp or 0
+                if (cell.has_barricade == true) and barricade_hp > 0 then
+                    local shudder_dx = 0
+                    local shudder_dy = 0
+                    if (cell.obstacleShudderTimer or 0) > 0 then
+                        local phase = (cell.obstacleShudderPhase or 0)
+                        shudder_dx = math.sin(phase) * 4.4
+                        shudder_dy = math.cos(phase * 1.7) * 2.0
+                    end
+                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + shudder_dx, cy + shudder_dy, 0.56))
+                    if marker_id then
+                        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("barricade") })
+                        go.set_scale(vmath.vector3(0.78, 0.78, 1), marker_id)
+                        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        table.insert(self.obstacle_debug_objects, marker_id)
+                    end
+                else
                 local slots = { cell.object1, cell.object2, cell.object3 }
                 for _, obj in ipairs(slots) do
                     if obj and obj.name == hash("obstacle") then
@@ -248,8 +265,8 @@ function M.extend(runtime, ctx)
                             local shudder_dy = 0
                             if (cell.obstacleShudderTimer or 0) > 0 then
                                 local phase = (cell.obstacleShudderPhase or 0) + (i * 1.3)
-                                shudder_dx = math.sin(phase) * 5
-                                shudder_dy = math.cos(phase * 1.7) * 2
+                                shudder_dx = math.sin(phase) * 10
+                                shudder_dy = math.cos(phase * 1.7) * 4
                             end
                             local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16) + shudder_dx, base_y + shudder_dy, 0.56))
                             if marker_id then
@@ -260,6 +277,7 @@ function M.extend(runtime, ctx)
                             end
                         end
                     end
+                end
                 end
             end
             local nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
@@ -295,6 +313,11 @@ function M.extend(runtime, ctx)
                 end
             end
         end
+    end
+
+    -- Hook for future barricade impact FX integration.
+    runtime.play_barricade_hit_fx = function(self, cell_id, destroyed)
+        return false
     end
 
     runtime.refresh_power_node_markers = function(self)

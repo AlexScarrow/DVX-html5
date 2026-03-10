@@ -171,8 +171,8 @@ function M.extend(runtime, ctx)
         slot.fxOffsetY = 0
         slot.fxRotation = 0
         slot.fxFactory = nil
-        slot.hitW = 48
-        slot.hitH = 48
+        slot.hitW = 24
+        slot.hitH = 24
         slot.requiredComponent = nil
         slot.stackCount = 1
         slot.obstacleCount = 1
@@ -201,8 +201,8 @@ function M.extend(runtime, ctx)
         slot.name = hash("obstacle")
         slot.stackCount = clamped
         slot.obstacleCount = clamped
-        slot.hitW = slot.hitW or 48
-        slot.hitH = slot.hitH or 48
+        slot.hitW = slot.hitW or 24
+        slot.hitH = slot.hitH or 24
         slot.offsetX = slot.offsetX or 0
         slot.offsetY = slot.offsetY or 0
     end
@@ -1628,10 +1628,29 @@ function M.extend(runtime, ctx)
         if not unit or not unit.cell_id or not clicked_cell_id then
             return false
         end
+        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        local human_click_priority_radius = ctx.UNIT_CLICK_SELECT_RADIUS or 45
+        if self.squad_units then
+            local nearest_human_dist = math.huge
+            for _, squad_unit in pairs(self.squad_units) do
+                if squad_unit and squad_unit.cell_id == clicked_cell_id and (squad_unit.current_health or 0) > 0 and squad_unit.go_path then
+                    local pos = go.get_position(squad_unit.go_path)
+                    local dx = pos.x - world_x
+                    local dy = pos.y - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < nearest_human_dist then
+                        nearest_human_dist = dist
+                    end
+                end
+            end
+            if nearest_human_dist <= human_click_priority_radius then
+                -- Let main human selection flow handle this click first.
+                return false
+            end
+        end
         local ux, uy = ctx.id_to_coords(unit.cell_id)
         local tx, ty = ctx.id_to_coords(clicked_cell_id)
-        local manhattan = math.abs(ux - tx) + math.abs(uy - ty)
-        if manhattan > 1 then
+        if ux ~= tx or uy ~= ty then
             print("too far away")
             flash_invalid_drag_units(unit, nil)
             return false
@@ -1640,7 +1659,10 @@ function M.extend(runtime, ctx)
         if not cell or cell.tileID == hash("empty") then
             return false
         end
-        local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        if (cell.has_barricade == true) and ((cell.barricade_hp or 0) > 0) then
+            -- Barricades are non-clickable; allow other click handlers (doors, selection, etc.).
+            return false
+        end
         local obstacle_slot = find_clicked_obstacle_slot(cell, world_x, world_y)
         if not obstacle_slot then
             obstacle_slot = find_any_obstacle_slot(cell)
@@ -2249,40 +2271,79 @@ function M.extend(runtime, ctx)
                                     print("Invalid obstacle drop cell.")
                                     flash_invalid_drag_units(source_unit, nil)
                                 else
-                                    local center_slot = get_center_obstacle_slot(drop_cell)
-                                    if not center_slot then
-                                        print("No center slot available for obstacle.")
-                                        flash_invalid_drag_units(source_unit, nil)
-                                    elseif center_slot.name ~= hash("empty") and center_slot.name ~= hash("obstacle") then
-                                        print("Center slot is occupied by another object.")
-                                        flash_invalid_drag_units(source_unit, nil)
+                                    if (drop_cell.has_barricade == true) and ((drop_cell.barricade_hp or 0) > 0) then
+                                        if not try_consume_drag_ap(source_unit, nil) then
+                                            self.drag_resource = { active = false }
+                                            return true
+                                        end
+                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                        source_unit.backpack_used = #source_unit.backpack_items
+                                        drop_cell.barricade_hp = math.min(10, (drop_cell.barricade_hp or 0) + 1)
+                                        consumed = true
+                                        runtime.refresh_fix_markers(self)
+                                        runtime.refresh_world_item_visuals(self)
+                                        print(string.format(
+                                            "%s reinforced barricade (hp %d/10). (AP -%d)",
+                                            source_unit.display_name,
+                                            drop_cell.barricade_hp,
+                                            get_drag_ap_cost()
+                                        ))
                                     else
-                                        local current_count = get_obstacle_count(center_slot)
-                                        if current_count >= OBSTACLE_STACK_CAP then
-                                            print(string.format("Obstacle stack cap reached (%d).", OBSTACLE_STACK_CAP))
+                                        local center_slot = get_center_obstacle_slot(drop_cell)
+                                        if not center_slot then
+                                            print("No center slot available for obstacle.")
+                                            flash_invalid_drag_units(source_unit, nil)
+                                        elseif center_slot.name ~= hash("empty") and center_slot.name ~= hash("obstacle") then
+                                            print("Center slot is occupied by another object.")
                                             flash_invalid_drag_units(source_unit, nil)
                                         else
-                                            if not try_consume_drag_ap(source_unit, nil) then
-                                                self.drag_resource = { active = false }
-                                                return true
+                                            local current_count = get_obstacle_count(center_slot)
+                                            if current_count >= OBSTACLE_STACK_CAP then
+                                                print(string.format("Obstacle stack cap reached (%d).", OBSTACLE_STACK_CAP))
+                                                flash_invalid_drag_units(source_unit, nil)
+                                            else
+                                                if not try_consume_drag_ap(source_unit, nil) then
+                                                    self.drag_resource = { active = false }
+                                                    return true
+                                                end
+                                                table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                                source_unit.backpack_used = #source_unit.backpack_items
+                                                if center_slot.name ~= hash("obstacle") then
+                                                    init_obstacle_slot(center_slot, self.world_grid)
+                                                end
+                                                current_count = get_obstacle_count(center_slot)
+                                                set_obstacle_count(center_slot, current_count + 1)
+                                                local new_stack = get_obstacle_count(center_slot)
+                                                if new_stack >= 3 then
+                                                    local slots = { drop_cell.object1, drop_cell.object2, drop_cell.object3 }
+                                                    local total_obstacles = 0
+                                                    for _, slot in ipairs(slots) do
+                                                        if slot and slot.name == hash("obstacle") then
+                                                            total_obstacles = total_obstacles + get_obstacle_count(slot)
+                                                            reset_object_slot_to_empty(slot)
+                                                        end
+                                                    end
+                                                    drop_cell.has_barricade = true
+                                                    drop_cell.barricade_hp = math.max(3, math.min(10, total_obstacles))
+                                                    print(string.format(
+                                                        "%s built a barricade (hp %d/10). (AP -%d)",
+                                                        source_unit.display_name,
+                                                        drop_cell.barricade_hp,
+                                                        get_drag_ap_cost()
+                                                    ))
+                                                else
+                                                    print(string.format(
+                                                        "%s placed 1 obstacle (stack %d/%d). (AP -%d)",
+                                                        source_unit.display_name,
+                                                        new_stack,
+                                                        OBSTACLE_STACK_CAP,
+                                                        get_drag_ap_cost()
+                                                    ))
+                                                end
+                                                consumed = true
+                                                runtime.refresh_fix_markers(self)
+                                                runtime.refresh_world_item_visuals(self)
                                             end
-                                            table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                            source_unit.backpack_used = #source_unit.backpack_items
-                                            if center_slot.name ~= hash("obstacle") then
-                                                init_obstacle_slot(center_slot, self.world_grid)
-                                            end
-                                            current_count = get_obstacle_count(center_slot)
-                                            set_obstacle_count(center_slot, current_count + 1)
-                                            consumed = true
-                                            runtime.refresh_fix_markers(self)
-                                            runtime.refresh_world_item_visuals(self)
-                                            print(string.format(
-                                                "%s placed 1 obstacle (stack %d/%d). (AP -%d)",
-                                                source_unit.display_name,
-                                                get_obstacle_count(center_slot),
-                                                OBSTACLE_STACK_CAP,
-                                                get_drag_ap_cost()
-                                            ))
                                         end
                                     end
                                 end

@@ -560,14 +560,21 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
             obstacle_penalty = obstacle_penalty + stack_count
         end
     end
+    local barricade_surcharge = 0
+    if is_cell_barricaded(world_grid, to_cell_id) then
+        obstacle_penalty = 0
+        barricade_surcharge = 3
+    else
+        obstacle_penalty = math.min(3, obstacle_penalty)
+    end
 
     -- Vertical transitions are always a flat ladder cost.
     if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
-        return VERTICAL_MOVE_AP_COST + obstacle_penalty
+        return VERTICAL_MOVE_AP_COST + obstacle_penalty + barricade_surcharge
     end
 
     -- Horizontal transitions are always a flat move cost.
-    return 1 + obstacle_penalty
+    return 1 + obstacle_penalty + barricade_surcharge
 end
 
 local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
@@ -707,6 +714,9 @@ function is_cell_barricaded(world_grid, cell_id)
     if not cell or cell.tileID == hash("empty") then
         return false
     end
+    if (cell.has_barricade == true) and ((cell.barricade_hp or 0) > 0) then
+        return true
+    end
     local slots = { cell.object1, cell.object2, cell.object3 }
     for _, obj in ipairs(slots) do
         if obj and obj.name == hash("obstacle") then
@@ -727,141 +737,142 @@ remove_one_obstacle_from_cell = function(world_grid, cell_id)
     if not cell or cell.tileID == hash("empty") then
         return false, 0
     end
-    local slots = { cell.object1, cell.object2, cell.object3 }
-    local best_slot = nil
-    local best_count = 0
-    for _, obj in ipairs(slots) do
-        if obj and obj.name == hash("obstacle") then
-            local count = obj.stackCount or obj.obstacleCount or 1
-            if count > best_count then
-                best_count = count
-                best_slot = obj
+    local hp = cell.barricade_hp or 0
+    if (cell.has_barricade ~= true) or hp <= 0 then
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        local total_obstacles = 0
+        local has_stack_barricade = false
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("obstacle") then
+                local count = obj.stackCount or obj.obstacleCount or 1
+                if count < 1 then
+                    count = 1
+                end
+                total_obstacles = total_obstacles + count
+                if count >= 3 then
+                    has_stack_barricade = true
+                end
+            end
+        end
+        if not has_stack_barricade then
+            return false, 0
+        end
+        hp = math.max(3, math.min(10, total_obstacles))
+        cell.has_barricade = true
+        cell.barricade_hp = hp
+        for _, slot in ipairs(slots) do
+            if slot and slot.name == hash("obstacle") then
+                slot.name = hash("empty")
+                slot.isFixed = false
+                slot.isWelded = false
+                slot.isOpen = false
+                slot.dependsOn = 0
+                slot.isDependentOn = {}
+                slot.objectId = 0
+                slot.offsetX = 0
+                slot.offsetY = 0
+                slot.fxOffsetX = 0
+                slot.fxOffsetY = 0
+                slot.fxRotation = 0
+                slot.fxFactory = nil
+                slot.hitW = 32
+                slot.hitH = 32
+                slot.requiredComponent = nil
+                slot.stackCount = nil
+                slot.obstacleCount = nil
             end
         end
     end
-    if not best_slot then
-        return false, 0
+    hp = math.max(0, hp - 1)
+    cell.barricade_hp = hp
+    if hp <= 0 then
+        cell.has_barricade = false
+        cell.barricade_hp = nil
+        cell.obstacleShudderTimer = nil
+        cell.obstacleShudderPhase = nil
     end
-    local next_count = best_count - 1
-    if next_count <= 0 then
-        best_slot.name = hash("empty")
-        best_slot.isFixed = false
-        best_slot.isWelded = false
-        best_slot.isOpen = false
-        best_slot.dependsOn = 0
-        best_slot.isDependentOn = {}
-        best_slot.objectId = 0
-        best_slot.offsetX = 0
-        best_slot.offsetY = 0
-        best_slot.fxOffsetX = 0
-        best_slot.fxOffsetY = 0
-        best_slot.fxRotation = 0
-        best_slot.fxFactory = nil
-        best_slot.hitW = 32
-        best_slot.hitH = 32
-        best_slot.requiredComponent = nil
-        best_slot.stackCount = nil
-        best_slot.obstacleCount = nil
-    else
-        best_slot.name = hash("obstacle")
-        best_slot.stackCount = next_count
-        best_slot.obstacleCount = next_count
-        best_slot.hitW = best_slot.hitW or 48
-        best_slot.hitH = best_slot.hitH or 48
-    end
-    local remaining_total = 0
-    for _, obj in ipairs(slots) do
-        if obj and obj.name == hash("obstacle") then
-            local count = obj.stackCount or obj.obstacleCount or 1
-            if count > 0 then
-                remaining_total = remaining_total + count
-            end
-        end
-    end
-    return true, remaining_total
+    return true, hp
 end
 
 try_brute_break_adjacent_barricade = function(self, alien)
     if not self or not alien or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.cell_id) then
         return false
     end
-    local dirs = { "up", "right", "down", "left" }
-    for _, dir in ipairs(dirs) do
-        local neighbor_id = get_adjacent_cell(alien.cell_id, dir)
-        if neighbor_id and can_cross_between_cells(self.world_grid, alien.cell_id, neighbor_id) and is_cell_barricaded(self.world_grid, neighbor_id) then
-            local removed, remaining = remove_one_obstacle_from_cell(self.world_grid, neighbor_id)
-            if removed then
-                if alien.go_id then
-                    local brute_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
-                    local target_cell = self.world_grid and self.world_grid[neighbor_id] or nil
-                    if brute_cell and target_cell then
-                        local bx, by = coords_to_world_pos(brute_cell.xCell, brute_cell.yCell)
-                        local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-                        local dx = tx - bx
-                        local dy = ty - by
-                        local len = math.sqrt((dx * dx) + (dy * dy))
-                        if len > 0.001 then
-                            local ux = dx / len
-                            local uy = dy / len
-                            local edge_x = bx + (ux * (CELL_WIDTH * 0.30))
-                            local edge_y = by + (uy * (CELL_HEIGHT * 0.20))
-                            local lurch_x = edge_x + (ux * 22)
-                            local lurch_y = edge_y + (uy * 14)
-                            local current_pos = go.get_position(alien.go_id)
-                            local base_z = current_pos.z
-                            pcall(go.cancel_animations, alien.go_id, "position")
-                            pcall(
-                                go.animate,
-                                alien.go_id,
-                                "position",
-                                go.PLAYBACK_ONCE_FORWARD,
-                                vmath.vector3(edge_x, edge_y, base_z),
-                                go.EASING_INOUTSINE,
-                                0.08
-                            )
-                            pcall(
-                                go.animate,
-                                alien.go_id,
-                                "position",
-                                go.PLAYBACK_ONCE_FORWARD,
-                                vmath.vector3(lurch_x, lurch_y, base_z),
-                                go.EASING_OUTBACK,
-                                0.08,
-                                0.08
-                            )
-                            pcall(
-                                go.animate,
-                                alien.go_id,
-                                "position",
-                                go.PLAYBACK_ONCE_FORWARD,
-                                vmath.vector3(edge_x, edge_y, base_z),
-                                go.EASING_INOUTSINE,
-                                0.10,
-                                0.16
-                            )
-                        end
-                    end
-                end
-                local target_cell = self.world_grid and self.world_grid[neighbor_id]
-                if target_cell then
-                    target_cell.obstacleShudderTimer = 0.36
-                    target_cell.obstacleShudderPhase = 0
-                end
-                if remaining < 3 then
-                    alien.barricade_pause_turns = 1
-                end
-                if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
-                    LOOT_RUNTIME.refresh_fix_markers(self)
-                end
-                if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
-                    LOOT_RUNTIME.refresh_world_item_visuals(self)
-                end
-                print(string.format("Brute #%d damaged barricade in cell %d (removed 1 obstacle).", alien.id or 0, neighbor_id))
-                return true
+    local target_cell_id = alien.cell_id
+    if not is_cell_barricaded(self.world_grid, target_cell_id) then
+        return false
+    end
+    self.barricade_damage_cells_this_turn = self.barricade_damage_cells_this_turn or {}
+    if self.barricade_damage_cells_this_turn[target_cell_id] then
+        return true
+    end
+    local removed, remaining = remove_one_obstacle_from_cell(self.world_grid, target_cell_id)
+    if not removed then
+        return false
+    end
+    self.barricade_damage_cells_this_turn[target_cell_id] = true
+    if alien.go_id then
+        local target_cell = self.world_grid and self.world_grid[target_cell_id] or nil
+        if target_cell then
+            local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            local apos = go.get_position(alien.go_id)
+            local dx = tx - apos.x
+            local dy = ty - apos.y
+            local len = math.sqrt((dx * dx) + (dy * dy))
+            local ux, uy = 1, 0
+            if len > 0.001 then
+                ux = dx / len
+                uy = dy / len
             end
+            local lurch_dx = ux * 54
+            local lurch_dy = uy * 36
+            local sprite_url = msg.url(nil, alien.go_id, "sprite")
+            local shadow_url = msg.url(nil, alien.go_id, "shadow")
+            local ok_sprite_pos, base_sprite_pos = pcall(go.get, sprite_url, "position")
+            local ok_shadow_pos, base_shadow_pos = pcall(go.get, shadow_url, "position")
+            if not ok_sprite_pos or (not base_sprite_pos) then
+                base_sprite_pos = vmath.vector3(0, 0, 0)
+            end
+            if not ok_shadow_pos or (not base_shadow_pos) then
+                base_shadow_pos = vmath.vector3(0, 0, 0)
+            end
+            local target_sprite_pos = vmath.vector3(base_sprite_pos.x + lurch_dx, base_sprite_pos.y + lurch_dy, base_sprite_pos.z)
+            local target_shadow_pos = vmath.vector3(base_shadow_pos.x + lurch_dx, base_shadow_pos.y + lurch_dy, base_shadow_pos.z)
+            print(string.format("DEBUG: Brute #%d sprite-lurch triggered toward barricade cell %d.", alien.id or 0, target_cell_id))
+            pcall(go.cancel_animations, sprite_url, "position")
+            pcall(go.cancel_animations, shadow_url, "position")
+            pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, target_sprite_pos, go.EASING_OUTSINE, 0.20)
+            pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, base_sprite_pos, go.EASING_INSINE, 0.28, 0.20)
+            pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, target_shadow_pos, go.EASING_OUTSINE, 0.20)
+            pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, base_shadow_pos, go.EASING_INSINE, 0.28, 0.20)
         end
     end
-    return false
+    local target_cell = self.world_grid and self.world_grid[target_cell_id]
+    if target_cell then
+        target_cell.obstacleShudderTimer = 0.60
+        target_cell.obstacleShudderPhase = 0
+        if remaining <= 0 then
+            target_cell.has_barricade = false
+            target_cell.barricade_hp = nil
+            target_cell.obstacleShudderTimer = nil
+            target_cell.obstacleShudderPhase = nil
+        end
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.play_barricade_hit_fx then
+        LOOT_RUNTIME.play_barricade_hit_fx(self, target_cell_id, remaining <= 0)
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+        LOOT_RUNTIME.refresh_fix_markers(self)
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    if remaining > 0 then
+        print(string.format("Brute #%d damaged barricade in cell %d (hp=%d).", alien.id or 0, target_cell_id, remaining))
+    else
+        print(string.format("Brute #%d destroyed barricade in cell %d.", alien.id or 0, target_cell_id))
+    end
+    return true
 end
 
 function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type)
@@ -869,7 +880,7 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
         return false
     end
     if is_cell_barricaded(world_grid, to_cell_id) then
-        return false
+        return alien_type == ALIEN_TYPE_BRUTE
     end
     local _, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
     if not door_obj or not door_closed then
@@ -880,9 +891,6 @@ end
 
 function can_human_cross_between_cells(world_grid, from_cell_id, to_cell_id)
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
-        return false
-    end
-    if is_cell_barricaded(world_grid, to_cell_id) then
         return false
     end
     local _, _, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
@@ -1585,10 +1593,11 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
     return nil, nil
 end
 
-get_blip_fallback_staging_target = function(self, from_cell_id)
+get_blip_fallback_staging_target = function(self, from_cell_id, alien_type)
     if not self.world_grid or not self.world_grid[from_cell_id] then
         return nil, nil
     end
+    local fallback_alien_type = alien_type or ALIEN_TYPE_BLIP
     local human_ids = get_human_cell_ids(self)
     if #human_ids == 0 then
         return nil, nil
@@ -1601,7 +1610,7 @@ get_blip_fallback_staging_target = function(self, from_cell_id)
 
     for candidate_id, candidate_cell in ipairs(self.world_grid) do
         if candidate_id ~= from_cell_id and candidate_cell and candidate_cell.tileID ~= hash("empty") then
-            local candidate_path, candidate_cost = find_alien_path(self.world_grid, ALIEN_TYPE_BLIP, from_cell_id, candidate_id, nil)
+            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil)
             if candidate_path and candidate_cost and candidate_cost > 0 then
                 local nearest_human_dist = math.huge
                 for _, human_id in ipairs(human_ids) do
@@ -1634,22 +1643,15 @@ get_brute_barricade_staging_target = function(self, from_cell_id)
     local best_target = nil
     local best_path = nil
     local best_cost = math.huge
-    local dirs = { "up", "right", "down", "left" }
 
     for cell_id, cell in ipairs(self.world_grid) do
         if cell and cell.tileID ~= hash("empty") and is_cell_barricaded(self.world_grid, cell_id) then
-            for _, dir in ipairs(dirs) do
-                local adj_id = get_adjacent_cell(cell_id, dir)
-                local adj_cell = adj_id and self.world_grid[adj_id] or nil
-                if adj_cell and adj_cell.tileID ~= hash("empty") and (not is_cell_barricaded(self.world_grid, adj_id)) then
-                    local path, cost = find_alien_path(self.world_grid, ALIEN_TYPE_BRUTE, from_cell_id, adj_id, nil)
-                    if path and cost then
-                        if cost < best_cost or (cost == best_cost and (best_target == nil or adj_id < best_target)) then
-                            best_target = adj_id
-                            best_path = path
-                            best_cost = cost
-                        end
-                    end
+            local path, cost = find_alien_path(self.world_grid, ALIEN_TYPE_BRUTE, from_cell_id, cell_id, nil)
+            if path and cost then
+                if cost < best_cost or (cost == best_cost and (best_target == nil or cell_id < best_target)) then
+                    best_target = cell_id
+                    best_path = path
+                    best_cost = cost
                 end
             end
         end
@@ -2941,7 +2943,11 @@ local function update_alien_movement(self, dt)
                     local sdx = alien.melee_shuffle_target_x - pos.x
                     local sdy = alien.melee_shuffle_target_y - pos.y
                     local sdist = math.sqrt(sdx * sdx + sdy * sdy)
-                    local sstep = ALIEN_MOVE_SPEED * dt
+                    local alien_move_speed = ALIEN_MOVE_SPEED
+                    if alien.type == ALIEN_TYPE_BRUTE then
+                        alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                    end
+                    local sstep = alien_move_speed * dt
                     local profile = get_aesthetic_profile(self)
                     local move_z = 0.6
                     if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
@@ -3012,6 +3018,15 @@ local function update_alien_movement(self, dt)
                 local from_cell_before_step = alien.cell_id
                 local from_cell = self.world_grid[from_cell_before_step]
                 local to_cell = self.world_grid[target_cell_id]
+                if to_cell and is_cell_barricaded(self.world_grid, target_cell_id) and alien.type ~= ALIEN_TYPE_BRUTE then
+                    alien.counter_shadow_offset = nil
+                    alien.counter_move_total_dist = nil
+                    alien.is_moving = false
+                    alien.move_path = nil
+                    alien.move_path_index = 0
+                    alien.turn_ap_remaining = 0
+                    print(string.format("Alien #%d (%s) blocked by barricade at cell %d.", alien.id or 0, alien.type or "?", target_cell_id))
+                else
                 local from_vent = get_vent_object_on_cell(from_cell)
                 local to_vent = get_vent_object_on_cell(to_cell)
                 local is_vent_jump = from_vent and to_vent and from_cell_before_step ~= target_cell_id
@@ -3073,7 +3088,11 @@ local function update_alien_movement(self, dt)
                 local dx = tx - pos.x
                 local dy = ty - pos.y
                 local dist = math.sqrt(dx * dx + dy * dy)
-                local step = ALIEN_MOVE_SPEED * dt
+                local alien_move_speed = ALIEN_MOVE_SPEED
+                if alien.type == ALIEN_TYPE_BRUTE then
+                    alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                end
+                local step = alien_move_speed * dt
                 local profile = get_aesthetic_profile(self)
                 local move_z = 0.6
                 if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
@@ -3171,11 +3190,21 @@ local function update_alien_movement(self, dt)
                         local vy = cy + (to_vent.offsetY or 0)
                         go.set_position(vmath.vector3(vx, vy, 0.6), alien.go_id)
                     end
-                    alien.move_path_index = alien.move_path_index + 1
+                    if alien.type == ALIEN_TYPE_BRUTE and is_cell_barricaded(self.world_grid, target_cell_id) then
+                        alien.turn_ap_remaining = 0
+                        alien.counter_shadow_offset = nil
+                        alien.counter_move_total_dist = nil
+                        alien.is_moving = false
+                        alien.move_path = nil
+                        alien.move_path_index = 0
+                        print(string.format("Brute #%d entered barricade cell %d and braces to attack.", alien.id or 0, target_cell_id))
+                    else
+                        alien.move_path_index = alien.move_path_index + 1
+                    end
                     maybe_reveal_blip(self, alien)
                     local killed = resolve_human_reaction_fire(self, alien)
                     if not killed then
-                        if alien.move_path_index > #alien.move_path then
+                        if alien.move_path and alien.move_path_index > #alien.move_path then
                             local weakest_human = nil
                             if self.squad_units then
                                 for _, unit in pairs(self.squad_units) do
@@ -3264,6 +3293,7 @@ local function update_alien_movement(self, dt)
                     local ny = pos.y + (dy / dist) * step
                     go.set_position(vmath.vector3(nx, ny, move_z), alien.go_id)
                 end
+                end
             end
         end
     end
@@ -3294,6 +3324,7 @@ local function process_alien_turn(self)
         end
         self.alien_turn_active = true
         self.alien_turn_waiting_for_advance = false
+        self.barricade_damage_cells_this_turn = {}
         print("=== Alien Turn Start ===")
         for _, alien in ipairs(self.aliens) do
             if not alien.is_dead then
@@ -3317,8 +3348,8 @@ local function process_alien_turn(self)
             local ap_budget = alien.turn_ap_remaining or 0
             local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
             local used_fallback_staging = false
-            if not target_cell_id and alien.type == ALIEN_TYPE_BLIP then
-                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id)
+            if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
+                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type)
                 used_fallback_staging = target_cell_id ~= nil
             end
             if not target_cell_id and alien.type == ALIEN_TYPE_BRUTE then
@@ -7587,7 +7618,7 @@ function update(self, dt)
     if obstacle_shudder_active then
         self.obstacle_shudder_refresh_timer = (self.obstacle_shudder_refresh_timer or 0) - dt
         if self.obstacle_shudder_refresh_timer <= 0 then
-            self.obstacle_shudder_refresh_timer = 0.05
+            self.obstacle_shudder_refresh_timer = 0.016
             if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
                 LOOT_RUNTIME.refresh_fix_markers(self)
             end

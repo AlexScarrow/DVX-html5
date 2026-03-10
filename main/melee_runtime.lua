@@ -75,6 +75,14 @@ function M.create(ctx)
         return list
     end
 
+    local function cell_has_active_barricade(self, cell_id)
+        if not self or not self.world_grid or not cell_id then
+            return false
+        end
+        local cell = self.world_grid[cell_id]
+        return cell and cell.has_barricade == true and (cell.barricade_hp or 0) > 0
+    end
+
     local function kill_alien(alien)
         alien.is_dead = true
         alien.is_moving = false
@@ -238,6 +246,10 @@ function M.create(ctx)
         if target_alien.is_dead or target_alien.cell_id ~= human.cell_id then
             return
         end
+        if cell_has_active_barricade(self, human.cell_id) then
+            print(string.format("%s melee blocked by barricade on cell %d.", human.display_name, human.cell_id or -1))
+            return
+        end
 
         play_human_melee_lurch(human, target_alien)
         play_target_red_flash(target_alien)
@@ -279,6 +291,9 @@ function M.create(ctx)
 
         local humans = get_living_humans_on_cell(self, alien.cell_id)
         if #humans == 0 then
+            return
+        end
+        if cell_has_active_barricade(self, alien.cell_id) then
             return
         end
 

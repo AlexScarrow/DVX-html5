@@ -71,6 +71,9 @@ images {
   image: "/assets/images/alien_brute_boardgame.png"
 }
 images {
+  image: "/assets/images/barricade.png"
+}
+images {
   image: "/assets/images/tile_generic_alpha_layer.png"
 }
 images {

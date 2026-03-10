@@ -244,7 +244,14 @@ function M.extend(runtime, ctx)
                         local base_x = cx + (obj.offsetX or 0)
                         local base_y = cy + (obj.offsetY or 0)
                         for i = 1, count do
-                            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16), base_y, 0.56))
+                            local shudder_dx = 0
+                            local shudder_dy = 0
+                            if (cell.obstacleShudderTimer or 0) > 0 then
+                                local phase = (cell.obstacleShudderPhase or 0) + (i * 1.3)
+                                shudder_dx = math.sin(phase) * 5
+                                shudder_dy = math.cos(phase * 1.7) * 2
+                            end
+                            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16) + shudder_dx, base_y + shudder_dy, 0.56))
                             if marker_id then
                                 msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("power_unit") })
                                 go.set_scale(vmath.vector3(0.72, 0.72, 1), marker_id)

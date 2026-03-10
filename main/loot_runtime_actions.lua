@@ -241,6 +241,25 @@ function M.extend(runtime, ctx)
         return best_slot
     end
 
+    local function find_any_obstacle_slot(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        local best_slot = nil
+        local best_count = 0
+        for _, slot in ipairs(slots) do
+            if slot and slot.name == hash("obstacle") then
+                local count = get_obstacle_count(slot)
+                if count > best_count then
+                    best_count = count
+                    best_slot = slot
+                end
+            end
+        end
+        return best_slot
+    end
+
     local function get_empty_object_slot(cell)
         if not cell then
             return nil
@@ -1609,7 +1628,12 @@ function M.extend(runtime, ctx)
         if not unit or not unit.cell_id or not clicked_cell_id then
             return false
         end
-        if clicked_cell_id ~= unit.cell_id then
+        local ux, uy = ctx.id_to_coords(unit.cell_id)
+        local tx, ty = ctx.id_to_coords(clicked_cell_id)
+        local manhattan = math.abs(ux - tx) + math.abs(uy - ty)
+        if manhattan > 1 then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
             return false
         end
         local cell = self.world_grid and self.world_grid[clicked_cell_id]
@@ -1619,7 +1643,10 @@ function M.extend(runtime, ctx)
         local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
         local obstacle_slot = find_clicked_obstacle_slot(cell, world_x, world_y)
         if not obstacle_slot then
-            return false
+            obstacle_slot = find_any_obstacle_slot(cell)
+            if not obstacle_slot then
+                return false
+            end
         end
 
         unit.backpack_items = unit.backpack_items or {}

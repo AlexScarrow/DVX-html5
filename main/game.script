@@ -40,6 +40,7 @@
 -- luacheck: globals apply_human_aesthetic_animations apply_alien_aesthetic_animations apply_computer_emissive_accents
 -- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
 -- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
+-- luacheck: globals apply_brute_alpha_pulse
 
 local CELL_WIDTH = 250          -- Width of each cell in pixels
 local CELL_HEIGHT = 150         -- Height of each cell in pixels
@@ -568,13 +569,16 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
         obstacle_penalty = math.min(3, obstacle_penalty)
     end
 
+    local step_cost = 0
     -- Vertical transitions are always a flat ladder cost.
     if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
-        return VERTICAL_MOVE_AP_COST + obstacle_penalty + barricade_surcharge
+        step_cost = VERTICAL_MOVE_AP_COST + obstacle_penalty + barricade_surcharge
+    else
+        -- Horizontal transitions are always a flat move cost.
+        step_cost = 1 + obstacle_penalty + barricade_surcharge
     end
 
-    -- Horizontal transitions are always a flat move cost.
-    return 1 + obstacle_penalty + barricade_surcharge
+    return math.min(HUMAN_MAX_ACTION_POINTS, step_cost)
 end
 
 local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
@@ -2963,6 +2967,27 @@ local function update_spitter_attack_phase(self, dt)
     self.spitter_attack_timer = SPITTER_SHOT_INTERVAL_SECONDS
 end
 
+apply_brute_alpha_pulse = function(self, alien, dt)
+    if (not alien) or alien.is_dead or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.go_id) or alien.melee_flash_active then
+        return
+    end
+    local sprite_url = msg.url(nil, alien.go_id, "sprite")
+    if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+        if alien.alpha_pulse_speed == nil then
+            alien.alpha_pulse_speed = 0.275 + (math.random() * 0.625)
+        end
+        if alien.emissive_phase == nil then
+            alien.emissive_phase = math.random() * math.pi * 2
+        end
+        alien.emissive_phase = (alien.emissive_phase or 0) + (dt * math.pi * 2 * (alien.alpha_pulse_speed or 1))
+        local glow = (math.sin(alien.emissive_phase) * 0.5) + 0.5
+        local alpha = math.pow(glow, 3.8)
+        pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, alpha))
+    else
+        pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+    end
+end
+
 local function update_alien_movement(self, dt)
     if not self.aliens then
         return
@@ -4556,7 +4581,7 @@ collect_runtime_reference_counts = function(self)
     if self.ui then
         local named = {
             "panel_art", "panel_shadow", "component_button", "fix_button", "loot_button", "retrieve_button",
-            "close_button", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
+            "close_button", "not_enough_ap_icon", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
             "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_panel",
             "flow_outro_ship", "flow_outro_skip_button", "flow_score_submit_button", "flow_score_title_button",
             "flow_title_solo_button", "flow_title_multiplayer_button"
@@ -4626,6 +4651,7 @@ local function initialize_unit_ui(self)
         loot_button = nil,
         retrieve_button = nil,
         close_button = nil,
+        not_enough_ap_icon = nil,
         level_buttons = {},
         new_turn_button = nil,
         launch_button = nil,
@@ -4671,6 +4697,10 @@ local function initialize_unit_ui(self)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.retrieve_button = create_ui_square(0, 0, 0.82, LOOT_UI.retrieve_button_color, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     self.ui.close_button = create_ui_square(0, 0, 0.83, vmath.vector4(0.8, 0.2, 0.2, 0.95), 28, 28)
+    self.ui.not_enough_ap_icon = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.835))
+    if self.ui.not_enough_ap_icon then
+        msg.post(msg.url(nil, self.ui.not_enough_ap_icon, "sprite"), "play_animation", { id = hash("derples_comms_notEnough_AP") })
+    end
     local level_count = (self.level_library and #self.level_library) or 0
     for i = 1, level_count do
         self.ui.level_buttons[i] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
@@ -4733,6 +4763,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     set_ui_square_transform(self, self.ui.close_button, -9999, -9999, 0.83, hidden, 28, 28)
+    set_ui_square_transform(self, self.ui.not_enough_ap_icon, -9999, -9999, 0.835, hidden, 0.81, 0.81)
     if self.ui.level_buttons then
         for i, btn in ipairs(self.ui.level_buttons) do
             if btn then
@@ -5958,6 +5989,31 @@ function update_selected_unit_ui(self)
         msg.post(msg.url(nil, self.ui.panel_art, "sprite"), "play_animation", { id = panel_anim })
         self.ui_panel_anim = panel_anim
     end
+    local show_not_enough_ap_icon = false
+    if self.derple_feedback_by_unit_id and self.derple_feedback_entries and unit.id then
+        local entry_index = self.derple_feedback_by_unit_id[unit.id]
+        local entry = entry_index and self.derple_feedback_entries[entry_index] or nil
+        show_not_enough_ap_icon = entry
+            and entry.event_type == "NOT_ENOUGH_AP"
+            and (entry.ttl or 0) > 0
+            and entry.go_id ~= nil
+            and true
+            or false
+    end
+    if show_not_enough_ap_icon then
+        set_ui_square_transform(
+            self,
+            self.ui.not_enough_ap_icon,
+            UI_PANEL_X + (UI_PANEL_W * 0.5) + 23,
+            UI_PANEL_Y + (UI_PANEL_H * 0.5) + 3,
+            0.835,
+            vmath.vector4(1, 1, 1, 1),
+            0.81,
+            0.81
+        )
+    else
+        set_ui_square_transform(self, self.ui.not_enough_ap_icon, -9999, -9999, 0.835, vmath.vector4(0, 0, 0, 0), 0.81, 0.81)
+    end
 
     for i = 1, UI_MAX_PIPS do
         local pip_step = (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP) * 0.8
@@ -6662,6 +6718,9 @@ local function update_single_unit_movement(self, unit, dt)
         unit.last_completed_step_vertical = false
         unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
+            LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "NOT_ENOUGH_AP")
+        end
         print(unit.display_name .. " stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. unit.current_ap .. ")")
         update_human_visual_state(self)
         update_human_ap_debug_label(self)
@@ -7714,28 +7773,7 @@ function update(self, dt)
             if alien and (alien.melee_pose_lock_timer or 0) > 0 then
                 alien.melee_pose_lock_timer = math.max(0, (alien.melee_pose_lock_timer or 0) - dt)
             end
-            if alien
-                and (not alien.is_dead)
-                and alien.type == ALIEN_TYPE_BRUTE
-                and alien.go_id
-                and (not alien.melee_flash_active)
-            then
-                local sprite_url = msg.url(nil, alien.go_id, "sprite")
-                if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
-                    if alien.alpha_pulse_speed == nil then
-                        alien.alpha_pulse_speed = 0.275 + (math.random() * 0.625)
-                    end
-                    if alien.emissive_phase == nil then
-                        alien.emissive_phase = math.random() * math.pi * 2
-                    end
-                    alien.emissive_phase = (alien.emissive_phase or 0) + (dt * math.pi * 2 * (alien.alpha_pulse_speed or 1))
-                    local glow = (math.sin(alien.emissive_phase) * 0.5) + 0.5
-                    local alpha = math.pow(glow, 3.8)
-                    pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, alpha))
-                else
-                    pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
-                end
-            end
+            apply_brute_alpha_pulse(self, alien, dt)
             if alien
                 and (not alien.is_dead)
                 and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)

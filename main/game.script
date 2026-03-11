@@ -289,7 +289,7 @@ local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
     [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
     [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
-    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 6, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
+    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 3, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
 }
 
 
@@ -2445,14 +2445,26 @@ local function update_spitter_projectiles(self, dt)
                         if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
                             MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target)
                         end
-                        print(string.format(
-                            "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
-                            p.shooter_name or "Human", target.id, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
-                        ))
-                        target.is_dead = true
-                        target.is_moving = false
-                        target.move_path = nil
-                        target.move_path_index = 0
+                        target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
+                        if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
+                            target.brute_damage_flash_timer = 0.24
+                        end
+                        if target.hp_current <= 0 then
+                            print(string.format(
+                                "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
+                                p.shooter_name or "Human", target.id, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
+                            ))
+                            target.is_dead = true
+                            target.is_moving = false
+                            target.move_path = nil
+                            target.move_path_index = 0
+                            remove_dead_aliens(self)
+                        else
+                            print(string.format(
+                                "%s fired at alien #%d and HIT (HP now %d) [light=%d chance=%d%% roll=%d]",
+                                p.shooter_name or "Human", target.id, target.hp_current, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
+                            ))
+                        end
                     elseif target and (not target.is_dead) then
                         print(string.format(
                             "%s fired at alien #%d and MISSED [light=%d chance=%d%% roll=%d]",
@@ -2654,6 +2666,9 @@ local function resolve_turret_pending_shot(self, shot_id)
             end
             if target_alien and (not target_alien.is_dead) then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
+                    target_alien.brute_damage_flash_timer = 0.24
+                end
                 if target_alien.hp_current <= 0 then
                     target_alien.is_dead = true
                     target_alien.is_moving = false
@@ -2989,8 +3004,15 @@ apply_brute_alpha_pulse = function(self, alien, dt)
         end
         alien.emissive_phase = (alien.emissive_phase or 0) + (dt * math.pi * 2 * (alien.alpha_pulse_speed or 1))
         local glow = (math.sin(alien.emissive_phase) * 0.5) + 0.5
+        local flash_timer = alien.brute_damage_flash_timer or 0
+        if flash_timer > 0 then
+            flash_timer = math.max(0, flash_timer - dt)
+            alien.brute_damage_flash_timer = flash_timer
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+            return
+        end
         local alpha = math.pow(glow, 3.8)
-        pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, alpha))
+        pcall(go.set, sprite_url, "tint", vmath.vector4(0, 0, 0, alpha))
     else
         pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
     end
@@ -3106,7 +3128,7 @@ local function update_alien_movement(self, dt)
                 else
                 local from_vent = get_vent_object_on_cell(from_cell)
                 local to_vent = get_vent_object_on_cell(to_cell)
-                local is_vent_jump = from_vent and to_vent and from_cell_before_step ~= target_cell_id
+                local is_vent_jump = (alien.type ~= ALIEN_TYPE_BRUTE) and from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 if alien.type == ALIEN_TYPE_BLIP then
                     if alien.blip_step_for_index ~= alien.move_path_index then
@@ -3293,7 +3315,7 @@ local function update_alien_movement(self, dt)
                         end
                         print(string.format("Brute #%d smashed door object #%d open.", alien.id, door_obj.objectId or 0))
                     end
-                    if from_vent and to_vent and from_cell_before_step ~= target_cell_id then
+                    if is_vent_jump then
                         local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
                         local vx = cx + (to_vent.offsetX or 0)
                         local vy = cy + (to_vent.offsetY or 0)

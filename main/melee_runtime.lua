@@ -288,6 +288,9 @@ function M.create(ctx)
             spawn_alien_blood_splatter_fx(target_alien)
             if target_alien.type == ctx.ALIEN_TYPE_BRUTE then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                if target_alien.hp_current > 0 then
+                    target_alien.brute_damage_flash_timer = 0.24
+                end
                 print(string.format(
                     "%s melee %s on alien #%d (BRUTE) and HIT [chance=%d%% roll=%d hp=%d]",
                     human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current

@@ -1952,7 +1952,31 @@ function M.extend(runtime, ctx)
                 local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
                 local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
                 local vending_attempted = false
-                local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
+                local force_barricade_drop = false
+                if source_item == OBSTACLE_ITEM and drop_cell_id then
+                    local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                    if drop_cell
+                        and drop_cell.tileID ~= hash("empty")
+                        and (drop_cell.has_barricade == true)
+                        and ((drop_cell.barricade_hp or 0) > 0)
+                    then
+                        local bx, by = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                        by = by + 7
+                        local half_w = 62
+                        local half_h = 50
+                        if world_x >= (bx - half_w)
+                            and world_x <= (bx + half_w)
+                            and world_y >= (by - half_h)
+                            and world_y <= (by + half_h)
+                        then
+                            force_barricade_drop = true
+                        end
+                    end
+                end
+                local target_unit = nil
+                if not force_barricade_drop then
+                    target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
+                end
                 if source_item == TURRET_PACKED_ITEM then
                     -- Packed turret deployment is cell-targeted, not human-targeted.
                     target_unit = nil
@@ -2280,6 +2304,9 @@ function M.extend(runtime, ctx)
                                         table.remove(source_unit.backpack_items, drag.source_slot_index)
                                         source_unit.backpack_used = #source_unit.backpack_items
                                         drop_cell.barricade_hp = math.min(10, (drop_cell.barricade_hp or 0) + 1)
+                                        drop_cell.barricade_brightness = math.max(0.25, math.min(1.0, (drop_cell.barricade_brightness or 1.0) * 1.33))
+                                        drop_cell.barricade_scale_pulse = 0.1
+                                        drop_cell.barricade_scale_pulse_timer = 0.22
                                         consumed = true
                                         runtime.refresh_fix_markers(self)
                                         runtime.refresh_world_item_visuals(self)
@@ -2326,6 +2353,9 @@ function M.extend(runtime, ctx)
                                                     end
                                                     drop_cell.has_barricade = true
                                                     drop_cell.barricade_hp = math.max(3, math.min(10, total_obstacles))
+                                                    drop_cell.barricade_brightness = 1.0
+                                                    drop_cell.barricade_scale_pulse = nil
+                                                    drop_cell.barricade_scale_pulse_timer = nil
                                                     print(string.format(
                                                         "%s built a barricade (hp %d/10). (AP -%d)",
                                                         source_unit.display_name,

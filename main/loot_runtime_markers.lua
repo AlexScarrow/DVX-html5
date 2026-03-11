@@ -238,6 +238,8 @@ function M.extend(runtime, ctx)
                 if (cell.has_barricade == true) and barricade_hp > 0 then
                     local shudder_dx = 0
                     local shudder_dy = 0
+                    local barricade_brightness = math.max(0.25, math.min(1.0, cell.barricade_brightness or 1.0))
+                    local barricade_scale = math.max(0.82, math.min(1.12, 0.975 + (cell.barricade_scale_pulse or 0)))
                     if (cell.obstacleShudderTimer or 0) > 0 then
                         local phase = (cell.obstacleShudderPhase or 0)
                         shudder_dx = math.sin(phase) * 4.4
@@ -246,8 +248,8 @@ function M.extend(runtime, ctx)
                     local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + shudder_dx, (cy + 7) + shudder_dy, 0.56))
                     if marker_id then
                         msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("barricade") })
-                        go.set_scale(vmath.vector3(0.975, 0.975, 1), marker_id)
-                        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        go.set_scale(vmath.vector3(barricade_scale, barricade_scale, 1), marker_id)
+                        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(barricade_brightness, barricade_brightness, barricade_brightness, 1))
                         table.insert(self.obstacle_debug_objects, marker_id)
                     end
                 elseif cell.isPowered then

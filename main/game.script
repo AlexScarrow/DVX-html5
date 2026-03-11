@@ -764,6 +764,7 @@ remove_one_obstacle_from_cell = function(world_grid, cell_id)
         hp = math.max(3, math.min(10, total_obstacles))
         cell.has_barricade = true
         cell.barricade_hp = hp
+        cell.barricade_brightness = 1.0
         for _, slot in ipairs(slots) do
             if slot and slot.name == hash("obstacle") then
                 slot.name = hash("empty")
@@ -789,9 +790,13 @@ remove_one_obstacle_from_cell = function(world_grid, cell_id)
     end
     hp = math.max(0, hp - 1)
     cell.barricade_hp = hp
+    cell.barricade_brightness = math.max(0.25, math.min(1.0, (cell.barricade_brightness or 1.0) * 0.67))
     if hp <= 0 then
         cell.has_barricade = false
         cell.barricade_hp = nil
+        cell.barricade_brightness = nil
+        cell.barricade_scale_pulse = nil
+        cell.barricade_scale_pulse_timer = nil
         cell.obstacleShudderTimer = nil
         cell.obstacleShudderPhase = nil
     end
@@ -876,24 +881,27 @@ try_brute_break_adjacent_barricade = function(self, alien)
     if target_cell then
         target_cell.obstacleShudderTimer = 0.60
         target_cell.obstacleShudderPhase = 0
+        local fx_x, fx_y = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+        local fx_id = factory.create("/barricade_broken_fx_factory#barricade_broken_fx_factory", vmath.vector3(fx_x, fx_y, 0.62))
+        if fx_id then
+            pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+            timer.delay(0.18, false, function()
+                if fx_id then
+                    pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = false })
+                end
+            end)
+            timer.delay(1.1, false, function()
+                if fx_id then
+                    pcall(go.delete, fx_id)
+                end
+            end)
+        end
         if remaining <= 0 then
-            local fx_x, fx_y = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-            local fx_id = factory.create("/barricade_broken_fx_factory#barricade_broken_fx_factory", vmath.vector3(fx_x, fx_y, 0.62))
-            if fx_id then
-                pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
-                timer.delay(0.18, false, function()
-                    if fx_id then
-                        pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = false })
-                    end
-                end)
-                timer.delay(1.1, false, function()
-                    if fx_id then
-                        pcall(go.delete, fx_id)
-                    end
-                end)
-            end
             target_cell.has_barricade = false
             target_cell.barricade_hp = nil
+            target_cell.barricade_brightness = nil
+            target_cell.barricade_scale_pulse = nil
+            target_cell.barricade_scale_pulse_timer = nil
             target_cell.obstacleShudderTimer = nil
             target_cell.obstacleShudderPhase = nil
         end
@@ -7746,6 +7754,16 @@ function update(self, dt)
                 else
                     cell.obstacleShudderTimer = nil
                     cell.obstacleShudderPhase = nil
+                end
+            end
+            if cell and (cell.barricade_scale_pulse_timer or 0) > 0 then
+                cell.barricade_scale_pulse_timer = math.max(0, (cell.barricade_scale_pulse_timer or 0) - dt)
+                if cell.barricade_scale_pulse_timer > 0 then
+                    obstacle_shudder_active = true
+                    cell.barricade_scale_pulse = 0.1 * (cell.barricade_scale_pulse_timer / 0.22)
+                else
+                    cell.barricade_scale_pulse_timer = nil
+                    cell.barricade_scale_pulse = nil
                 end
             end
         end

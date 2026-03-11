@@ -1,6 +1,6 @@
 emitters {
   mode: PLAY_MODE_ONCE
-  duration: 1.0
+  duration: 2.0
   space: EMISSION_SPACE_WORLD
   tile_source: "/assets/tiles.atlas"
   animation: "barricade_particle"
@@ -28,21 +28,21 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 0.5
+      y: 1.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 300.0
+      y: 150.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SIZE
     points {
-      y: 10.0
+      y: 5.0
     }
-    spread: 50.0
+    spread: 25.0
   }
   properties {
     key: EMITTER_KEY_PARTICLE_ALPHA

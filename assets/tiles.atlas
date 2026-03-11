@@ -65,6 +65,33 @@ images {
   image: "/assets/images/alien_cannonFodder_shadow.png"
 }
 images {
+  image: "/assets/images/alien_brute.png"
+}
+images {
+  image: "/assets/images/alien_brute_boardgame.png"
+}
+images {
+  image: "/assets/images/alien_brute_side.png"
+}
+images {
+  image: "/assets/images/alien_brute_side_boardgame.png"
+}
+images {
+  image: "/assets/images/barricade.png"
+}
+images {
+  image: "/assets/images/obstacle1.png"
+}
+images {
+  image: "/assets/images/obstacle2.png"
+}
+images {
+  image: "/assets/images/obstacle3.png"
+}
+images {
+  image: "/assets/images/obstacle_icon.png"
+}
+images {
   image: "/assets/images/tile_generic_alpha_layer.png"
 }
 images {
@@ -149,6 +176,9 @@ images {
   image: "/assets/images/derples_comms_alienSpotted.png"
 }
 images {
+  image: "/assets/images/derples_comms_notEnough_AP.png"
+}
+images {
   image: "/assets/images/command_star.png"
 }
 images {
@@ -204,6 +234,9 @@ images {
 }
 images {
   image: "/assets/images/tile_canteen_on.png"
+}
+images {
+  image: "/assets/images/barricade_particle.png"
 }
 margin: 2
 extrude_borders: 2

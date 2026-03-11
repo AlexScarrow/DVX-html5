@@ -390,3 +390,13 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "barricade_broken_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"barricade_broken_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/barricade_broken_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

@@ -75,6 +75,14 @@ function M.create(ctx)
         return list
     end
 
+    local function cell_has_active_barricade(self, cell_id)
+        if not self or not self.world_grid or not cell_id then
+            return false
+        end
+        local cell = self.world_grid[cell_id]
+        return cell and cell.has_barricade == true and (cell.barricade_hp or 0) > 0
+    end
+
     local function kill_alien(alien)
         alien.is_dead = true
         alien.is_moving = false
@@ -201,7 +209,7 @@ function M.create(ctx)
         end)
     end
 
-    local function play_alien_melee_lurch(alien, target_human)
+    local function play_alien_melee_lurch(self, alien, target_human)
         if not alien or not alien.go_id or alien.is_moving then
             return
         end
@@ -212,6 +220,19 @@ function M.create(ctx)
         local target_pos = go.get_position(target_human.go_path)
         local dx = target_pos.x - attacker_pos.x
         local dy = target_pos.y - attacker_pos.y
+
+        local sprite_url = msg.url(nil, alien.go_id, "sprite")
+        local shadow_url = msg.url(nil, alien.go_id, "shadow")
+        if alien.type == ctx.ALIEN_TYPE_BRUTE then
+            alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.42)
+            local is_boardgame = self and self.aesthetic_mode == "boardgame"
+            local side_anim = is_boardgame and hash("alien_brute_side_boardgame") or hash("alien_brute_side")
+            pcall(msg.post, sprite_url, "play_animation", { id = side_anim })
+            local facing_right = dx > 0
+            pcall(sprite.set_hflip, sprite_url, facing_right)
+            pcall(sprite.set_hflip, shadow_url, facing_right)
+        end
+
         local len = math.sqrt((dx * dx) + (dy * dy))
         if len <= 0.001 then
             return
@@ -224,7 +245,22 @@ function M.create(ctx)
         local lurch_target = vmath.vector3(origin.x + step_x, origin.y + step_y, lurch_z)
         go.cancel_animations(alien.go_id, "position")
         go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, lurch_target, go.EASING_OUTQUAD, ALIEN_MELEE_LURCH_OUT_TIME, 0, function()
-            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, origin, go.EASING_INQUAD, ALIEN_MELEE_LURCH_BACK_TIME)
+            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, origin, go.EASING_INQUAD, ALIEN_MELEE_LURCH_BACK_TIME, 0, function()
+                if alien and alien.go_id and alien.type == ctx.ALIEN_TYPE_BRUTE then
+                    timer.delay(0.08, false, function()
+                        if alien and alien.go_id and (not alien.is_dead) then
+                            alien.melee_pose_lock_timer = 0
+                            local is_boardgame = self and self.aesthetic_mode == "boardgame"
+                            local front_anim = is_boardgame and hash("alien_brute_boardgame") or hash("alien_brute")
+                            local end_sprite_url = msg.url(nil, alien.go_id, "sprite")
+                            local end_shadow_url = msg.url(nil, alien.go_id, "shadow")
+                            pcall(msg.post, end_sprite_url, "play_animation", { id = front_anim })
+                            pcall(sprite.set_hflip, end_sprite_url, false)
+                            pcall(sprite.set_hflip, end_shadow_url, false)
+                        end
+                    end)
+                end
+            end)
         end)
     end
 
@@ -238,6 +274,10 @@ function M.create(ctx)
         if target_alien.is_dead or target_alien.cell_id ~= human.cell_id then
             return
         end
+        if cell_has_active_barricade(self, human.cell_id) then
+            print(string.format("%s melee blocked by barricade on cell %d.", human.display_name, human.cell_id or -1))
+            return
+        end
 
         play_human_melee_lurch(human, target_alien)
         play_target_red_flash(target_alien)
@@ -248,6 +288,9 @@ function M.create(ctx)
             spawn_alien_blood_splatter_fx(target_alien)
             if target_alien.type == ctx.ALIEN_TYPE_BRUTE then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                if target_alien.hp_current > 0 then
+                    target_alien.brute_damage_flash_timer = 0.24
+                end
                 print(string.format(
                     "%s melee %s on alien #%d (BRUTE) and HIT [chance=%d%% roll=%d hp=%d]",
                     human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current
@@ -281,6 +324,9 @@ function M.create(ctx)
         if #humans == 0 then
             return
         end
+        if cell_has_active_barricade(self, alien.cell_id) then
+            return
+        end
 
         local target = humans[1] -- weakest-first
         local armor_bonus = target.melee_armor_bonus or target.equipped_armor_bonus or 0
@@ -288,7 +334,7 @@ function M.create(ctx)
         local roll = math.random(1, 100)
         self.melee_ap_left_by_alien_id[alien.id] = ap_left - 1
         spawn_alien_melee_swipe_fx(self, target)
-        play_alien_melee_lurch(alien, target)
+        play_alien_melee_lurch(self, alien, target)
 
         if roll <= hit_chance then
             target.current_health = math.max(0, (target.current_health or 0) - 1)

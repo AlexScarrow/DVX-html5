@@ -1,22 +1,22 @@
 emitters {
-  mode: PLAY_MODE_LOOP
-  duration: 1.0
+  mode: PLAY_MODE_ONCE
+  duration: 2.0
   space: EMISSION_SPACE_WORLD
   tile_source: "/assets/tiles.atlas"
-  animation: "smokeParticle"
-  material: "/main/particlefx_under_tiles.material"
+  animation: "barricade_particle"
+  material: "/builtins/materials/particlefx.material"
   max_particle_count: 128
-  type: EMITTER_TYPE_BOX
+  type: EMITTER_TYPE_CIRCLE
   properties {
     key: EMITTER_KEY_SPAWN_RATE
     points {
-      y: 5.0
+      y: 40.0
     }
   }
   properties {
     key: EMITTER_KEY_SIZE_X
     points {
-      y: 100.0
+      y: 8.0
     }
   }
   properties {
@@ -28,39 +28,35 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 7.0
+      y: 1.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 100.0
+      y: 150.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SIZE
     points {
-      y: 50.0
+      y: 5.0
     }
-    spread: 100.0
-  }
-  properties {
-    key: EMITTER_KEY_PARTICLE_RED
-    points {
-      y: 1.0
-    }
-  }
-  properties {
-    key: EMITTER_KEY_PARTICLE_GREEN
-    points {
-      y: 1.0
-    }
+    spread: 25.0
   }
   properties {
     key: EMITTER_KEY_PARTICLE_ALPHA
     points {
       y: 1.0
     }
+    spread: 1.0
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_ROTATION
+    points {
+      y: 0.0
+    }
+    spread: 270.0
   }
   particle_properties {
     key: PARTICLE_KEY_SCALE
@@ -71,47 +67,61 @@ emitters {
   particle_properties {
     key: PARTICLE_KEY_RED
     points {
-      y: 0.11
-    }
-    points {
-      x: 1.0
-      y: 0.11
+      y: 1.0
     }
   }
   particle_properties {
     key: PARTICLE_KEY_GREEN
     points {
-      y: 0.11
-    }
-    points {
-      x: 1.0
-      y: 0.11
+      y: 1.0
     }
   }
   particle_properties {
     key: PARTICLE_KEY_BLUE
     points {
-      y: 0.11
-    }
-    points {
-      x: 1.0
-      y: 0.11
+      y: 1.0
     }
   }
   particle_properties {
     key: PARTICLE_KEY_ALPHA
     points {
-      y: 1.0
+      y: 0.0
+      t_x: 0.07194582
+      t_y: 0.99740857
+    }
+    points {
+      x: 0.11320755
+      y: 0.99277455
+      t_x: 0.99418455
+      t_y: 0.10768964
+    }
+    points {
+      x: 0.7112546
+      y: 0.555656
+      t_x: 0.5694311
+      t_y: -0.82203907
     }
     points {
       x: 1.0
-      y: 0.0
+      y: 0.0072254334
+      t_x: 0.4737472
+      t_y: -0.8806609
+    }
+  }
+  particle_properties {
+    key: PARTICLE_KEY_ROTATION
+    points {
+      y: 500.0
+    }
+    points {
+      x: 1.0
+      y: 500.0
     }
   }
   particle_properties {
     key: PARTICLE_KEY_ANGULAR_VELOCITY
     points {
-      y: 1.2
+      y: 1.0
     }
   }
 }

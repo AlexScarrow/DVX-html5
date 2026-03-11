@@ -180,11 +180,18 @@ function M.extend(runtime, ctx)
     runtime.refresh_fix_markers = function(self)
         self.fix_objects = self.fix_objects or {}
         self.exit_requirement_markers = self.exit_requirement_markers or {}
+        self.obstacle_debug_objects = self.obstacle_debug_objects or {}
         for cell_id, marker in pairs(self.fix_objects) do
             if marker then
                 go.delete(marker)
             end
             self.fix_objects[cell_id] = nil
+        end
+        for i, marker in ipairs(self.obstacle_debug_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.obstacle_debug_objects[i] = nil
         end
         for i, marker in ipairs(self.exit_requirement_markers) do
             if marker then
@@ -225,6 +232,63 @@ function M.extend(runtime, ctx)
                     self.fix_objects[cell_id] = marker_id
                 end
             end
+            if cell and cell.tileID ~= hash("empty") then
+                local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                local barricade_hp = cell.barricade_hp or 0
+                if (cell.has_barricade == true) and barricade_hp > 0 then
+                    local shudder_dx = 0
+                    local shudder_dy = 0
+                    local barricade_brightness = math.max(0.25, math.min(1.0, cell.barricade_brightness or 1.0))
+                    local barricade_scale = math.max(0.82, math.min(1.12, 0.975 + (cell.barricade_scale_pulse or 0)))
+                    if (cell.obstacleShudderTimer or 0) > 0 then
+                        local phase = (cell.obstacleShudderPhase or 0)
+                        shudder_dx = math.sin(phase) * 4.4
+                        shudder_dy = math.cos(phase * 1.7) * 2.0
+                    end
+                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + shudder_dx, (cy + 7) + shudder_dy, 0.56))
+                    if marker_id then
+                        msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("barricade") })
+                        go.set_scale(vmath.vector3(barricade_scale, barricade_scale, 1), marker_id)
+                        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(barricade_brightness, barricade_brightness, barricade_brightness, 1))
+                        table.insert(self.obstacle_debug_objects, marker_id)
+                    end
+                elseif cell.isPowered then
+                local slots = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(slots) do
+                    if obj and obj.name == hash("obstacle") then
+                        local count = obj.stackCount or obj.obstacleCount or 1
+                        if count < 1 then
+                            count = 1
+                        end
+                        local base_x = cx + (obj.offsetX or 0)
+                        local base_y = cy + (obj.offsetY or 0)
+                        for i = 1, count do
+                            local shudder_dx = 0
+                            local shudder_dy = 0
+                            if (cell.obstacleShudderTimer or 0) > 0 then
+                                local phase = (cell.obstacleShudderPhase or 0) + (i * 1.3)
+                                shudder_dx = math.sin(phase) * 10
+                                shudder_dy = math.cos(phase * 1.7) * 4
+                            end
+                            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16) + shudder_dx, base_y + shudder_dy, 0.56))
+                            if marker_id then
+                                local variant_idx = (((obj.objectId or 0) + i) % 3) + 1
+                                local obstacle_anim = hash("obstacle1")
+                                if variant_idx == 2 then
+                                    obstacle_anim = hash("obstacle2")
+                                elseif variant_idx == 3 then
+                                    obstacle_anim = hash("obstacle3")
+                                end
+                                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = obstacle_anim })
+                                go.set_scale(vmath.vector3(0.9, 0.9, 1), marker_id)
+                                go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                                table.insert(self.obstacle_debug_objects, marker_id)
+                            end
+                        end
+                    end
+                end
+                end
+            end
             local nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
             if nav_obj then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
@@ -258,6 +322,11 @@ function M.extend(runtime, ctx)
                 end
             end
         end
+    end
+
+    -- Hook for future barricade impact FX integration.
+    runtime.play_barricade_hit_fx = function(self, cell_id, destroyed)
+        return false
     end
 
     runtime.refresh_power_node_markers = function(self)

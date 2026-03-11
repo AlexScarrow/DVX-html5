@@ -40,6 +40,7 @@
 -- luacheck: globals apply_human_aesthetic_animations apply_alien_aesthetic_animations apply_computer_emissive_accents
 -- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
 -- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
+-- luacheck: globals apply_brute_alpha_pulse
 
 local CELL_WIDTH = 250          -- Width of each cell in pixels
 local CELL_HEIGHT = 150         -- Height of each cell in pixels
@@ -280,7 +281,7 @@ AESTHETIC_PROFILES = {
 local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy testing
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
 local ALIEN_REVEAL_WEIGHT_SPITTER = 2
-local ALIEN_REVEAL_WEIGHT_BRUTE = 1
+local ALIEN_REVEAL_WEIGHT_BRUTE = 8 -- temporary higher brute chance for barricade-phase testing
 local TILE_OPACITY = 1
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 local ALIEN_TYPE_CONFIG = {
@@ -288,7 +289,7 @@ local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
     [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
     [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
-    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 6, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
+    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 3, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
 }
 
 
@@ -549,13 +550,35 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
         return math.huge
     end
 
-    -- Vertical transitions are always a flat ladder cost.
-    if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
-        return VERTICAL_MOVE_AP_COST
+    local obstacle_penalty = 0
+    local scan = { to_cell.object1, to_cell.object2, to_cell.object3 }
+    for _, obj in ipairs(scan) do
+        if obj and obj.name == hash("obstacle") then
+            local stack_count = obj.stackCount or obj.obstacleCount or 1
+            if stack_count < 1 then
+                stack_count = 1
+            end
+            obstacle_penalty = obstacle_penalty + stack_count
+        end
+    end
+    local barricade_surcharge = 0
+    if is_cell_barricaded(world_grid, to_cell_id) then
+        obstacle_penalty = 0
+        barricade_surcharge = 3
+    else
+        obstacle_penalty = math.min(3, obstacle_penalty)
     end
 
-    -- Horizontal transitions use destination cell's moveValue.
-    return to_cell.moveValue
+    local step_cost = 0
+    -- Vertical transitions are always a flat ladder cost.
+    if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
+        step_cost = VERTICAL_MOVE_AP_COST + obstacle_penalty + barricade_surcharge
+    else
+        -- Horizontal transitions are always a flat move cost.
+        step_cost = 1 + obstacle_penalty + barricade_surcharge
+    end
+
+    return math.min(HUMAN_MAX_ACTION_POINTS, step_cost)
 end
 
 local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
@@ -565,11 +588,23 @@ local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id)
         return math.huge
     end
 
-    if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
-        return ALIEN_VERTICAL_MOVE_AP_COST
+    local obstacle_penalty = 0
+    local scan = { to_cell.object1, to_cell.object2, to_cell.object3 }
+    for _, obj in ipairs(scan) do
+        if obj and obj.name == hash("obstacle") then
+            local stack_count = obj.stackCount or obj.obstacleCount or 1
+            if stack_count < 1 then
+                stack_count = 1
+            end
+            obstacle_penalty = obstacle_penalty + stack_count
+        end
     end
 
-    return to_cell.moveValue
+    if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
+        return ALIEN_VERTICAL_MOVE_AP_COST + obstacle_penalty
+    end
+
+    return 1 + obstacle_penalty
 end
 
 function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
@@ -675,9 +710,225 @@ function get_edge_door_context(world_grid, from_cell_id, to_cell_id)
     return owner_cell, door_obj, is_door_closed_runtime(world_grid, owner_cell, door_obj)
 end
 
+function is_cell_barricaded(world_grid, cell_id)
+    if not world_grid or not cell_id then
+        return false
+    end
+    local cell = world_grid[cell_id]
+    if not cell or cell.tileID == hash("empty") then
+        return false
+    end
+    if (cell.has_barricade == true) and ((cell.barricade_hp or 0) > 0) then
+        return true
+    end
+    local slots = { cell.object1, cell.object2, cell.object3 }
+    for _, obj in ipairs(slots) do
+        if obj and obj.name == hash("obstacle") then
+            local count = obj.stackCount or obj.obstacleCount or 1
+            if count >= 3 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+remove_one_obstacle_from_cell = function(world_grid, cell_id)
+    if not world_grid or not cell_id then
+        return false, 0
+    end
+    local cell = world_grid[cell_id]
+    if not cell or cell.tileID == hash("empty") then
+        return false, 0
+    end
+    local hp = cell.barricade_hp or 0
+    if (cell.has_barricade ~= true) or hp <= 0 then
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        local total_obstacles = 0
+        local has_stack_barricade = false
+        for _, obj in ipairs(slots) do
+            if obj and obj.name == hash("obstacle") then
+                local count = obj.stackCount or obj.obstacleCount or 1
+                if count < 1 then
+                    count = 1
+                end
+                total_obstacles = total_obstacles + count
+                if count >= 3 then
+                    has_stack_barricade = true
+                end
+            end
+        end
+        if not has_stack_barricade then
+            return false, 0
+        end
+        hp = math.max(3, math.min(10, total_obstacles))
+        cell.has_barricade = true
+        cell.barricade_hp = hp
+        cell.barricade_brightness = 1.0
+        for _, slot in ipairs(slots) do
+            if slot and slot.name == hash("obstacle") then
+                slot.name = hash("empty")
+                slot.isFixed = false
+                slot.isWelded = false
+                slot.isOpen = false
+                slot.dependsOn = 0
+                slot.isDependentOn = {}
+                slot.objectId = 0
+                slot.offsetX = 0
+                slot.offsetY = 0
+                slot.fxOffsetX = 0
+                slot.fxOffsetY = 0
+                slot.fxRotation = 0
+                slot.fxFactory = nil
+                slot.hitW = 32
+                slot.hitH = 32
+                slot.requiredComponent = nil
+                slot.stackCount = nil
+                slot.obstacleCount = nil
+            end
+        end
+    end
+    hp = math.max(0, hp - 1)
+    cell.barricade_hp = hp
+    cell.barricade_brightness = math.max(0.25, math.min(1.0, (cell.barricade_brightness or 1.0) * 0.67))
+    if hp <= 0 then
+        cell.has_barricade = false
+        cell.barricade_hp = nil
+        cell.barricade_brightness = nil
+        cell.barricade_scale_pulse = nil
+        cell.barricade_scale_pulse_timer = nil
+        cell.obstacleShudderTimer = nil
+        cell.obstacleShudderPhase = nil
+    end
+    return true, hp
+end
+
+try_brute_break_adjacent_barricade = function(self, alien)
+    if not self or not alien or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.cell_id) then
+        return false
+    end
+    local target_cell_id = alien.cell_id
+    if not is_cell_barricaded(self.world_grid, target_cell_id) then
+        return false
+    end
+    self.barricade_damage_cells_this_turn = self.barricade_damage_cells_this_turn or {}
+    if self.barricade_damage_cells_this_turn[target_cell_id] then
+        return true
+    end
+    local removed, remaining = remove_one_obstacle_from_cell(self.world_grid, target_cell_id)
+    if not removed then
+        return false
+    end
+    self.barricade_damage_cells_this_turn[target_cell_id] = true
+    if alien.go_id then
+        local target_cell = self.world_grid and self.world_grid[target_cell_id] or nil
+        if target_cell then
+            local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            local apos = go.get_position(alien.go_id)
+            local dx = tx - apos.x
+            local dy = ty - apos.y
+            local len = math.sqrt((dx * dx) + (dy * dy))
+            local ux, uy = 1, 0
+            if len > 0.001 then
+                ux = dx / len
+                uy = dy / len
+            end
+            local lurch_dx = ux * 54
+            local lurch_dy = uy * 36
+            local sprite_url = msg.url(nil, alien.go_id, "sprite")
+            local shadow_url = msg.url(nil, alien.go_id, "shadow")
+            alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
+            local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                and hash("alien_brute_side_boardgame")
+                or hash("alien_brute_side")
+            pcall(msg.post, sprite_url, "play_animation", { id = side_anim })
+            local facing_right = ux > 0
+            pcall(sprite.set_hflip, sprite_url, facing_right)
+            pcall(sprite.set_hflip, shadow_url, facing_right)
+            local ok_sprite_pos, base_sprite_pos = pcall(go.get, sprite_url, "position")
+            local ok_shadow_pos, base_shadow_pos = pcall(go.get, shadow_url, "position")
+            if not ok_sprite_pos or (not base_sprite_pos) then
+                base_sprite_pos = vmath.vector3(0, 0, 0)
+            end
+            if not ok_shadow_pos or (not base_shadow_pos) then
+                base_shadow_pos = vmath.vector3(0, 0, 0)
+            end
+            local target_sprite_pos = vmath.vector3(base_sprite_pos.x + lurch_dx, base_sprite_pos.y + lurch_dy, base_sprite_pos.z)
+            local target_shadow_pos = vmath.vector3(base_shadow_pos.x + lurch_dx, base_shadow_pos.y + lurch_dy, base_shadow_pos.z)
+            print(string.format("DEBUG: Brute #%d sprite-lurch triggered toward barricade cell %d.", alien.id or 0, target_cell_id))
+            pcall(go.cancel_animations, sprite_url, "position")
+            pcall(go.cancel_animations, shadow_url, "position")
+            pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, target_sprite_pos, go.EASING_OUTSINE, 0.20)
+            pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, base_sprite_pos, go.EASING_INSINE, 0.28, 0.20)
+            pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, target_shadow_pos, go.EASING_OUTSINE, 0.20)
+            pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, base_shadow_pos, go.EASING_INSINE, 0.28, 0.20)
+            timer.delay(0.30, false, function()
+                if alien and alien.go_id and (not alien.is_dead) then
+                    alien.melee_pose_lock_timer = 0
+                    local front_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                        and hash("alien_brute_boardgame")
+                        or hash("alien_brute")
+                    local end_sprite_url = msg.url(nil, alien.go_id, "sprite")
+                    local end_shadow_url = msg.url(nil, alien.go_id, "shadow")
+                    pcall(msg.post, end_sprite_url, "play_animation", { id = front_anim })
+                    pcall(sprite.set_hflip, end_sprite_url, false)
+                    pcall(sprite.set_hflip, end_shadow_url, false)
+                end
+            end)
+        end
+    end
+    local target_cell = self.world_grid and self.world_grid[target_cell_id]
+    if target_cell then
+        target_cell.obstacleShudderTimer = 0.60
+        target_cell.obstacleShudderPhase = 0
+        local fx_x, fx_y = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+        local fx_id = factory.create("/barricade_broken_fx_factory#barricade_broken_fx_factory", vmath.vector3(fx_x, fx_y, 0.62))
+        if fx_id then
+            pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+            timer.delay(0.18, false, function()
+                if fx_id then
+                    pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = false })
+                end
+            end)
+            timer.delay(1.1, false, function()
+                if fx_id then
+                    pcall(go.delete, fx_id)
+                end
+            end)
+        end
+        if remaining <= 0 then
+            target_cell.has_barricade = false
+            target_cell.barricade_hp = nil
+            target_cell.barricade_brightness = nil
+            target_cell.barricade_scale_pulse = nil
+            target_cell.barricade_scale_pulse_timer = nil
+            target_cell.obstacleShudderTimer = nil
+            target_cell.obstacleShudderPhase = nil
+        end
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.play_barricade_hit_fx then
+        LOOT_RUNTIME.play_barricade_hit_fx(self, target_cell_id, remaining <= 0)
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+        LOOT_RUNTIME.refresh_fix_markers(self)
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    if remaining > 0 then
+        print(string.format("Brute #%d damaged barricade in cell %d (hp=%d).", alien.id or 0, target_cell_id, remaining))
+    else
+        print(string.format("Brute #%d destroyed barricade in cell %d.", alien.id or 0, target_cell_id))
+    end
+    return true
+end
+
 function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type)
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
         return false
+    end
+    if is_cell_barricaded(world_grid, to_cell_id) then
+        return alien_type == ALIEN_TYPE_BRUTE
     end
     local _, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
     if not door_obj or not door_closed then
@@ -786,10 +1037,7 @@ local function get_alien_neighbors(cell_id, world_grid, alien_type)
             local can_enter_void = can_traverse_void == true
             local is_void = adj_cell.tileID == hash("empty")
             if (not is_void or can_enter_void) and can_alien_cross_between_cells(world_grid, cell_id, adj_id, alien_type) then
-                local step_cost = 1
-                if alien_type ~= ALIEN_TYPE_BLIP then
-                    step_cost = get_alien_step_move_cost(world_grid, cell_id, adj_id)
-                end
+                local step_cost = get_alien_step_move_cost(world_grid, cell_id, adj_id)
                 table.insert(neighbors, { id = adj_id, cost = step_cost })
             end
         end
@@ -1109,7 +1357,7 @@ end
 --[[
     Finds path from start_cell_id to end_cell_id
     Returns: table of cell IDs representing path, or nil if no path found
-    Takes into account: moveValue, access permissions, VOID cells
+    Takes into account: fixed step AP costs, access permissions, VOID cells
 ]]
 
 function heuristic(from_id, to_id)
@@ -1250,10 +1498,7 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
 
             local total_cost = 0
             for i = 2, #path do
-                local step_cost = 1
-                if alien_type ~= ALIEN_TYPE_BLIP then
-                    step_cost = get_alien_step_move_cost(world_grid, path[i - 1], path[i])
-                end
+                local step_cost = get_alien_step_move_cost(world_grid, path[i - 1], path[i])
                 total_cost = total_cost + step_cost
             end
 
@@ -1396,10 +1641,11 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
     return nil, nil
 end
 
-get_blip_fallback_staging_target = function(self, from_cell_id)
+get_blip_fallback_staging_target = function(self, from_cell_id, alien_type)
     if not self.world_grid or not self.world_grid[from_cell_id] then
         return nil, nil
     end
+    local fallback_alien_type = alien_type or ALIEN_TYPE_BLIP
     local human_ids = get_human_cell_ids(self)
     if #human_ids == 0 then
         return nil, nil
@@ -1412,7 +1658,7 @@ get_blip_fallback_staging_target = function(self, from_cell_id)
 
     for candidate_id, candidate_cell in ipairs(self.world_grid) do
         if candidate_id ~= from_cell_id and candidate_cell and candidate_cell.tileID ~= hash("empty") then
-            local candidate_path, candidate_cost = find_alien_path(self.world_grid, ALIEN_TYPE_BLIP, from_cell_id, candidate_id, nil)
+            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil)
             if candidate_path and candidate_cost and candidate_cost > 0 then
                 local nearest_human_dist = math.huge
                 for _, human_id in ipairs(human_ids) do
@@ -1435,6 +1681,29 @@ get_blip_fallback_staging_target = function(self, from_cell_id)
         end
     end
 
+    return best_target, best_path
+end
+
+get_brute_barricade_staging_target = function(self, from_cell_id)
+    if not self or not self.world_grid or not from_cell_id then
+        return nil, nil
+    end
+    local best_target = nil
+    local best_path = nil
+    local best_cost = math.huge
+
+    for cell_id, cell in ipairs(self.world_grid) do
+        if cell and cell.tileID ~= hash("empty") and is_cell_barricaded(self.world_grid, cell_id) then
+            local path, cost = find_alien_path(self.world_grid, ALIEN_TYPE_BRUTE, from_cell_id, cell_id, nil)
+            if path and cost then
+                if cost < best_cost or (cost == best_cost and (best_target == nil or cell_id < best_target)) then
+                    best_target = cell_id
+                    best_path = path
+                    best_cost = cost
+                end
+            end
+        end
+    end
     return best_target, best_path
 end
 
@@ -1553,6 +1822,8 @@ local function ensure_alien_visual(self, alien)
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
     elseif alien.type == ALIEN_TYPE_CANNON then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 5
     else
         y = y + 0
     end
@@ -1574,6 +1845,10 @@ local function ensure_alien_visual(self, alien)
         alien.go_id = factory.create("/alien_speedy_factory#alien_speedy_factory", pos)
         alien.uses_blip_sprite = true
         visual_kind = "speedy"
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        alien.go_id = factory.create("/alien_cannon_fodder_factory#alien_cannon_fodder_factory", pos)
+        alien.uses_blip_sprite = true
+        visual_kind = "brute"
     else
         alien.go_id = factory.create("/ui_factory#ui_factory", pos)
         alien.uses_blip_sprite = false
@@ -1582,12 +1857,14 @@ local function ensure_alien_visual(self, alien)
     alien.visual_kind = visual_kind
     if alien.go_id then
         if alien.uses_blip_sprite then
-            if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+            if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE then
                 local scale = 0.33333334
                 if alien.type == ALIEN_TYPE_CANNON then
                     scale = 0.22
                 elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                     scale = scale * 0.75
+                elseif alien.type == ALIEN_TYPE_BRUTE then
+                    scale = 0.22 * 1.5 * 1.25 * 1.2 * 1.1
                 end
                 sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
                 sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
@@ -1613,6 +1890,8 @@ local function refresh_alien_visual(self, alien)
         wanted_visual_kind = "spitter"
     elseif alien.type == ALIEN_TYPE_SPEEDY then
         wanted_visual_kind = "speedy"
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        wanted_visual_kind = "brute"
     end
     if alien.go_id and alien.visual_kind ~= wanted_visual_kind then
         go.delete(alien.go_id)
@@ -1676,6 +1955,8 @@ local function refresh_alien_visual(self, alien)
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
     elseif alien.type == ALIEN_TYPE_CANNON then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+    elseif alien.type == ALIEN_TYPE_BRUTE then
+        y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 5
     else
         y = y + 0
     end
@@ -1763,10 +2044,7 @@ local function get_alien_turn_movement_segment(self, alien, path, max_ap)
     for i = 2, #path do
         local from_cell = path[i - 1]
         local to_cell = path[i]
-        local step_cost = 1
-        if alien.type ~= ALIEN_TYPE_BLIP then
-            step_cost = get_alien_step_move_cost(self.world_grid, from_cell, to_cell)
-        end
+        local step_cost = get_alien_step_move_cost(self.world_grid, from_cell, to_cell)
 
         if ap_spent + step_cost > max_ap then
             break
@@ -2167,14 +2445,26 @@ local function update_spitter_projectiles(self, dt)
                         if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
                             MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target)
                         end
-                        print(string.format(
-                            "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
-                            p.shooter_name or "Human", target.id, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
-                        ))
-                        target.is_dead = true
-                        target.is_moving = false
-                        target.move_path = nil
-                        target.move_path_index = 0
+                        target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
+                        if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
+                            target.brute_damage_flash_timer = 0.24
+                        end
+                        if target.hp_current <= 0 then
+                            print(string.format(
+                                "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
+                                p.shooter_name or "Human", target.id, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
+                            ))
+                            target.is_dead = true
+                            target.is_moving = false
+                            target.move_path = nil
+                            target.move_path_index = 0
+                            remove_dead_aliens(self)
+                        else
+                            print(string.format(
+                                "%s fired at alien #%d and HIT (HP now %d) [light=%d chance=%d%% roll=%d]",
+                                p.shooter_name or "Human", target.id, target.hp_current, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
+                            ))
+                        end
                     elseif target and (not target.is_dead) then
                         print(string.format(
                             "%s fired at alien #%d and MISSED [light=%d chance=%d%% roll=%d]",
@@ -2376,6 +2666,9 @@ local function resolve_turret_pending_shot(self, shot_id)
             end
             if target_alien and (not target_alien.is_dead) then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
+                    target_alien.brute_damage_flash_timer = 0.24
+                end
                 if target_alien.hp_current <= 0 then
                     target_alien.is_dead = true
                     target_alien.is_moving = false
@@ -2697,6 +2990,34 @@ local function update_spitter_attack_phase(self, dt)
     self.spitter_attack_timer = SPITTER_SHOT_INTERVAL_SECONDS
 end
 
+apply_brute_alpha_pulse = function(self, alien, dt)
+    if (not alien) or alien.is_dead or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.go_id) or alien.melee_flash_active then
+        return
+    end
+    local sprite_url = msg.url(nil, alien.go_id, "sprite")
+    if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+        if alien.alpha_pulse_speed == nil then
+            alien.alpha_pulse_speed = 0.275 + (math.random() * 0.625)
+        end
+        if alien.emissive_phase == nil then
+            alien.emissive_phase = math.random() * math.pi * 2
+        end
+        alien.emissive_phase = (alien.emissive_phase or 0) + (dt * math.pi * 2 * (alien.alpha_pulse_speed or 1))
+        local glow = (math.sin(alien.emissive_phase) * 0.5) + 0.5
+        local flash_timer = alien.brute_damage_flash_timer or 0
+        if flash_timer > 0 then
+            flash_timer = math.max(0, flash_timer - dt)
+            alien.brute_damage_flash_timer = flash_timer
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+            return
+        end
+        local alpha = math.pow(glow, 3.8)
+        pcall(go.set, sprite_url, "tint", vmath.vector4(0, 0, 0, alpha))
+    else
+        pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+    end
+end
+
 local function update_alien_movement(self, dt)
     if not self.aliens then
         return
@@ -2715,20 +3036,30 @@ local function update_alien_movement(self, dt)
                     local sdx = alien.melee_shuffle_target_x - pos.x
                     local sdy = alien.melee_shuffle_target_y - pos.y
                     local sdist = math.sqrt(sdx * sdx + sdy * sdy)
-                    local sstep = ALIEN_MOVE_SPEED * dt
+                    local alien_move_speed = ALIEN_MOVE_SPEED
+                    if alien.type == ALIEN_TYPE_BRUTE then
+                        alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                    end
+                    local sstep = alien_move_speed * dt
                     local profile = get_aesthetic_profile(self)
                     local move_z = 0.6
                     if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
                         move_z = profile.counter_alien_move_z or 0.72
                     end
-                    if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
-                        alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                    if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE then
+                        local anim_speed_mul = 1
+                        if alien.type == ALIEN_TYPE_BRUTE then
+                            anim_speed_mul = 0.3
+                        end
+                        alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * anim_speed_mul * math.pi * 2)
                         local ping = math.sin(alien.spitter_anim_phase)
                         local base_scale = 0.33333334
                         if alien.type == ALIEN_TYPE_CANNON then
                             base_scale = 0.22
                         elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                             base_scale = base_scale * 0.75
+                        elseif alien.type == ALIEN_TYPE_BRUTE then
+                            base_scale = 0.22 * 1.5 * 1.25 * 1.2 * 1.1
                         end
                         local sx = base_scale
                         local sy = base_scale
@@ -2786,9 +3117,18 @@ local function update_alien_movement(self, dt)
                 local from_cell_before_step = alien.cell_id
                 local from_cell = self.world_grid[from_cell_before_step]
                 local to_cell = self.world_grid[target_cell_id]
+                if to_cell and is_cell_barricaded(self.world_grid, target_cell_id) and alien.type ~= ALIEN_TYPE_BRUTE then
+                    alien.counter_shadow_offset = nil
+                    alien.counter_move_total_dist = nil
+                    alien.is_moving = false
+                    alien.move_path = nil
+                    alien.move_path_index = 0
+                    alien.turn_ap_remaining = 0
+                    print(string.format("Alien #%d (%s) blocked by barricade at cell %d.", alien.id or 0, alien.type or "?", target_cell_id))
+                else
                 local from_vent = get_vent_object_on_cell(from_cell)
                 local to_vent = get_vent_object_on_cell(to_cell)
-                local is_vent_jump = from_vent and to_vent and from_cell_before_step ~= target_cell_id
+                local is_vent_jump = (alien.type ~= ALIEN_TYPE_BRUTE) and from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 if alien.type == ALIEN_TYPE_BLIP then
                     if alien.blip_step_for_index ~= alien.move_path_index then
@@ -2839,6 +3179,8 @@ local function update_alien_movement(self, dt)
                     ty = ty - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
                 elseif alien.type == ALIEN_TYPE_CANNON then
                     ty = ty - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+                elseif alien.type == ALIEN_TYPE_BRUTE then
+                    ty = ty - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 5
                 else
                     ty = ty + 0
                 end
@@ -2847,7 +3189,11 @@ local function update_alien_movement(self, dt)
                 local dx = tx - pos.x
                 local dy = ty - pos.y
                 local dist = math.sqrt(dx * dx + dy * dy)
-                local step = ALIEN_MOVE_SPEED * dt
+                local alien_move_speed = ALIEN_MOVE_SPEED
+                if alien.type == ALIEN_TYPE_BRUTE then
+                    alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                end
+                local step = alien_move_speed * dt
                 local profile = get_aesthetic_profile(self)
                 local move_z = 0.6
                 if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
@@ -2856,14 +3202,20 @@ local function update_alien_movement(self, dt)
                 if is_vent_jump then
                     alien.counter_shadow_offset = nil
                 end
-                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
-                    alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE) then
+                    local anim_speed_mul = 1
+                    if alien.type == ALIEN_TYPE_BRUTE then
+                        anim_speed_mul = 0.3
+                    end
+                    alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * anim_speed_mul * math.pi * 2)
                     local ping = math.sin(alien.spitter_anim_phase)
                     local base_scale = 0.33333334
                     if alien.type == ALIEN_TYPE_CANNON then
                         base_scale = 0.22
                     elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                         base_scale = base_scale * 0.75
+                    elseif alien.type == ALIEN_TYPE_BRUTE then
+                        base_scale = 0.22 * 1.5 * 1.25 * 1.2 * 1.1
                     end
                     local sx = base_scale
                     local sy = base_scale
@@ -2898,6 +3250,30 @@ local function update_alien_movement(self, dt)
                         end
                     else
                         go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                    end
+                end
+                if (not is_vent_jump) and alien.type == ALIEN_TYPE_BRUTE then
+                    local sprite_url = msg.url(nil, alien.go_id, "sprite")
+                    local shadow_url = msg.url(nil, alien.go_id, "shadow")
+                    if math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.1 then
+                        local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                            and hash("alien_brute_side_boardgame")
+                            or hash("alien_brute_side")
+                        if alien.current_aesthetic_anim ~= side_anim then
+                            pcall(msg.post, sprite_url, "play_animation", { id = side_anim })
+                            alien.current_aesthetic_anim = side_anim
+                        end
+                        local facing_right = dx > 0
+                        sprite.set_hflip(sprite_url, facing_right)
+                        sprite.set_hflip(shadow_url, facing_right)
+                    else
+                        local front_anim = get_alien_anim_for_aesthetic(self, alien.type)
+                        if front_anim and alien.current_aesthetic_anim ~= front_anim then
+                            pcall(msg.post, sprite_url, "play_animation", { id = front_anim })
+                            alien.current_aesthetic_anim = front_anim
+                        end
+                        sprite.set_hflip(sprite_url, false)
+                        sprite.set_hflip(shadow_url, false)
                     end
                 end
                 if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
@@ -2939,17 +3315,27 @@ local function update_alien_movement(self, dt)
                         end
                         print(string.format("Brute #%d smashed door object #%d open.", alien.id, door_obj.objectId or 0))
                     end
-                    if from_vent and to_vent and from_cell_before_step ~= target_cell_id then
+                    if is_vent_jump then
                         local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
                         local vx = cx + (to_vent.offsetX or 0)
                         local vy = cy + (to_vent.offsetY or 0)
                         go.set_position(vmath.vector3(vx, vy, 0.6), alien.go_id)
                     end
-                    alien.move_path_index = alien.move_path_index + 1
+                    if alien.type == ALIEN_TYPE_BRUTE and is_cell_barricaded(self.world_grid, target_cell_id) then
+                        alien.turn_ap_remaining = 0
+                        alien.counter_shadow_offset = nil
+                        alien.counter_move_total_dist = nil
+                        alien.is_moving = false
+                        alien.move_path = nil
+                        alien.move_path_index = 0
+                        print(string.format("Brute #%d entered barricade cell %d and braces to attack.", alien.id or 0, target_cell_id))
+                    else
+                        alien.move_path_index = alien.move_path_index + 1
+                    end
                     maybe_reveal_blip(self, alien)
                     local killed = resolve_human_reaction_fire(self, alien)
                     if not killed then
-                        if alien.move_path_index > #alien.move_path then
+                        if alien.move_path and alien.move_path_index > #alien.move_path then
                             local weakest_human = nil
                             if self.squad_units then
                                 for _, unit in pairs(self.squad_units) do
@@ -3038,6 +3424,7 @@ local function update_alien_movement(self, dt)
                     local ny = pos.y + (dy / dist) * step
                     go.set_position(vmath.vector3(nx, ny, move_z), alien.go_id)
                 end
+                end
             end
         end
     end
@@ -3068,11 +3455,18 @@ local function process_alien_turn(self)
         end
         self.alien_turn_active = true
         self.alien_turn_waiting_for_advance = false
+        self.barricade_damage_cells_this_turn = {}
         print("=== Alien Turn Start ===")
         for _, alien in ipairs(self.aliens) do
             if not alien.is_dead then
                 local cfg = ALIEN_TYPE_CONFIG[alien.type]
                 local ap_budget = cfg and cfg.ap_per_turn or 1
+                if (alien.barricade_pause_turns or 0) > 0 then
+                    alien.barricade_pause_turns = math.max(0, (alien.barricade_pause_turns or 0) - 1)
+                    ap_budget = 0
+                elseif try_brute_break_adjacent_barricade(self, alien) then
+                    ap_budget = 0
+                end
                 alien.turn_ap_remaining = ap_budget
             end
         end
@@ -3085,8 +3479,12 @@ local function process_alien_turn(self)
             local ap_budget = alien.turn_ap_remaining or 0
             local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
             local used_fallback_staging = false
-            if not target_cell_id and alien.type == ALIEN_TYPE_BLIP then
-                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id)
+            if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
+                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type)
+                used_fallback_staging = target_cell_id ~= nil
+            end
+            if not target_cell_id and alien.type == ALIEN_TYPE_BRUTE then
+                target_cell_id, path = get_brute_barricade_staging_target(self, alien.cell_id)
                 used_fallback_staging = target_cell_id ~= nil
             end
             if target_cell_id then
@@ -3893,6 +4291,8 @@ end
 get_counter_shadow_anim_for_alien = function(alien_type)
     if alien_type == ALIEN_TYPE_CANNON then
         return hash("alien_cannonFodder_shadow")
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        return hash("alien_cannonFodder_shadow")
     elseif alien_type == ALIEN_TYPE_SPITTER then
         return hash("alien_spitter_shadow")
     elseif alien_type == ALIEN_TYPE_SPEEDY then
@@ -3908,6 +4308,8 @@ get_alien_anim_for_aesthetic = function(self, alien_type)
     if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
         if alien_type == ALIEN_TYPE_CANNON then
             return hash("alien_cannonFodder_boardgame")
+        elseif alien_type == ALIEN_TYPE_BRUTE then
+            return hash("alien_brute_boardgame")
         elseif alien_type == ALIEN_TYPE_SPITTER then
             return hash("alien_spitter_boardgame")
         elseif alien_type == ALIEN_TYPE_SPEEDY then
@@ -3916,6 +4318,8 @@ get_alien_anim_for_aesthetic = function(self, alien_type)
     end
     if alien_type == ALIEN_TYPE_CANNON then
         return hash("alien_cannonFodder")
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        return hash("alien_brute")
     elseif alien_type == ALIEN_TYPE_SPITTER then
         return hash("alien_spitter")
     elseif alien_type == ALIEN_TYPE_SPEEDY then
@@ -4207,7 +4611,7 @@ collect_runtime_reference_counts = function(self)
     if self.ui then
         local named = {
             "panel_art", "panel_shadow", "component_button", "fix_button", "loot_button", "retrieve_button",
-            "close_button", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
+            "close_button", "not_enough_ap_icon", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
             "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_panel",
             "flow_outro_ship", "flow_outro_skip_button", "flow_score_submit_button", "flow_score_title_button",
             "flow_title_solo_button", "flow_title_multiplayer_button"
@@ -4277,6 +4681,7 @@ local function initialize_unit_ui(self)
         loot_button = nil,
         retrieve_button = nil,
         close_button = nil,
+        not_enough_ap_icon = nil,
         level_buttons = {},
         new_turn_button = nil,
         launch_button = nil,
@@ -4322,6 +4727,10 @@ local function initialize_unit_ui(self)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.retrieve_button = create_ui_square(0, 0, 0.82, LOOT_UI.retrieve_button_color, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     self.ui.close_button = create_ui_square(0, 0, 0.83, vmath.vector4(0.8, 0.2, 0.2, 0.95), 28, 28)
+    self.ui.not_enough_ap_icon = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.835))
+    if self.ui.not_enough_ap_icon then
+        msg.post(msg.url(nil, self.ui.not_enough_ap_icon, "sprite"), "play_animation", { id = hash("derples_comms_notEnough_AP") })
+    end
     local level_count = (self.level_library and #self.level_library) or 0
     for i = 1, level_count do
         self.ui.level_buttons[i] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
@@ -4384,6 +4793,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
     set_ui_square_transform(self, self.ui.close_button, -9999, -9999, 0.83, hidden, 28, 28)
+    set_ui_square_transform(self, self.ui.not_enough_ap_icon, -9999, -9999, 0.835, hidden, 0.81, 0.81)
     if self.ui.level_buttons then
         for i, btn in ipairs(self.ui.level_buttons) do
             if btn then
@@ -5609,6 +6019,31 @@ function update_selected_unit_ui(self)
         msg.post(msg.url(nil, self.ui.panel_art, "sprite"), "play_animation", { id = panel_anim })
         self.ui_panel_anim = panel_anim
     end
+    local show_not_enough_ap_icon = false
+    if self.derple_feedback_by_unit_id and self.derple_feedback_entries and unit.id then
+        local entry_index = self.derple_feedback_by_unit_id[unit.id]
+        local entry = entry_index and self.derple_feedback_entries[entry_index] or nil
+        show_not_enough_ap_icon = entry
+            and entry.event_type == "NOT_ENOUGH_AP"
+            and (entry.ttl or 0) > 0
+            and entry.go_id ~= nil
+            and true
+            or false
+    end
+    if show_not_enough_ap_icon then
+        set_ui_square_transform(
+            self,
+            self.ui.not_enough_ap_icon,
+            UI_PANEL_X + (UI_PANEL_W * 0.5) + 23,
+            UI_PANEL_Y + (UI_PANEL_H * 0.5) + 3,
+            0.835,
+            vmath.vector4(1, 1, 1, 1),
+            0.81,
+            0.81
+        )
+    else
+        set_ui_square_transform(self, self.ui.not_enough_ap_icon, -9999, -9999, 0.835, vmath.vector4(0, 0, 0, 0), 0.81, 0.81)
+    end
 
     for i = 1, UI_MAX_PIPS do
         local pip_step = (UI_BAR_PIP_SIZE + UI_BAR_PIP_GAP) * 0.8
@@ -6103,7 +6538,7 @@ function spawn_human_unit(self)
     update_human_ap_debug_label(self)
 end
 
-local function begin_human_path_move(self, path)
+local function begin_human_path_move(self, path, destination_cell_id, destination_slot_index)
     local unit = get_controlled_unit(self)
     if not unit then
         return
@@ -6117,6 +6552,8 @@ local function begin_human_path_move(self, path)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.desired_destination_cell_id = nil
+        unit.desired_destination_slot_index = nil
         return
     end
 
@@ -6133,6 +6570,8 @@ local function begin_human_path_move(self, path)
     unit.entry_slot_index = nil
     unit.last_completed_step_vertical = false
     unit.counter_move_total_dist = nil
+    unit.desired_destination_cell_id = destination_cell_id or path[#path]
+    unit.desired_destination_slot_index = destination_slot_index
 end
 
 local function update_single_unit_movement(self, unit, dt)
@@ -6143,6 +6582,8 @@ local function update_single_unit_movement(self, unit, dt)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.desired_destination_cell_id = nil
+        unit.desired_destination_slot_index = nil
         unit.micro_target_x = nil
         unit.micro_target_y = nil
         unit.micro_move_kind = nil
@@ -6199,6 +6640,8 @@ local function update_single_unit_movement(self, unit, dt)
                 unit.is_moving = false
                 unit.move_path = nil
                 unit.move_path_index = 0
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
                 unit.micro_target_x = nil
                 unit.micro_target_y = nil
                 unit.micro_move_kind = nil
@@ -6226,6 +6669,8 @@ local function update_single_unit_movement(self, unit, dt)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.desired_destination_cell_id = nil
+        unit.desired_destination_slot_index = nil
         unit.vertical_prep_done_for_index = nil
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
@@ -6263,6 +6708,10 @@ local function update_single_unit_movement(self, unit, dt)
 
     if unit.entry_slot_for_index ~= unit.move_path_index then
         local selected_slot = math.random(1, #CELL_SLOT_OFFSETS_X)
+        local is_final_step = unit.move_path and (unit.move_path_index >= #unit.move_path)
+        local prefer_clicked_slot = is_final_step
+            and unit.desired_destination_slot_index
+            and (target_cell_id == unit.desired_destination_cell_id)
         if is_vertical_step and (not counter_move_enabled) then
             local right_slot = 1
             for i = 1, #CELL_SLOT_OFFSETS_X do
@@ -6288,9 +6737,28 @@ local function update_single_unit_movement(self, unit, dt)
                     table.insert(free_slots, i)
                 end
             end
-            if #free_slots > 0 and (counter_move_enabled or (not is_vertical_step)) then
+            if prefer_clicked_slot then
+                local desired_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, unit.desired_destination_slot_index))
+                if not used[desired_slot] then
+                    selected_slot = desired_slot
+                elseif #free_slots > 0 then
+                    local desired_offset = CELL_SLOT_OFFSETS_X[desired_slot] or 0
+                    local best_slot = free_slots[1]
+                    local best_dist = math.abs((CELL_SLOT_OFFSETS_X[best_slot] or 0) - desired_offset)
+                    for _, free_slot in ipairs(free_slots) do
+                        local dist = math.abs((CELL_SLOT_OFFSETS_X[free_slot] or 0) - desired_offset)
+                        if dist < best_dist then
+                            best_dist = dist
+                            best_slot = free_slot
+                        end
+                    end
+                    selected_slot = best_slot
+                end
+            elseif #free_slots > 0 and (counter_move_enabled or (not is_vertical_step)) then
                 selected_slot = free_slots[math.random(1, #free_slots)]
             end
+        elseif prefer_clicked_slot then
+            selected_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, unit.desired_destination_slot_index))
         end
         unit.entry_slot_for_index = unit.move_path_index
         unit.entry_slot_index = selected_slot
@@ -6304,6 +6772,8 @@ local function update_single_unit_movement(self, unit, dt)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
+        unit.desired_destination_cell_id = nil
+        unit.desired_destination_slot_index = nil
         unit.micro_target_x = nil
         unit.micro_target_y = nil
         unit.micro_move_kind = nil
@@ -6313,6 +6783,9 @@ local function update_single_unit_movement(self, unit, dt)
         unit.last_completed_step_vertical = false
         unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
+            LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "NOT_ENOUGH_AP")
+        end
         print(unit.display_name .. " stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. unit.current_ap .. ")")
         update_human_visual_state(self)
         update_human_ap_debug_label(self)
@@ -6371,6 +6844,8 @@ local function update_single_unit_movement(self, unit, dt)
         unit.move_path_index = unit.move_path_index + 1
 
         if unit.move_path_index > #unit.move_path then
+            unit.desired_destination_cell_id = nil
+            unit.desired_destination_slot_index = nil
             if (not counter_move_enabled) and unit.last_completed_step_vertical and self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
                 local assignment = self.cell_slot_assignments[unit.cell_id]
                 local current_slot = assignment[unit.id] or 1
@@ -6727,10 +7202,60 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
         local path, total_cost = find_path(self.world_grid, unit.cell_id, clicked_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
         if path then
+            local destination_slot_index = nil
+            local destination_slot_requested = nil
+            local destination_cell = self.world_grid and self.world_grid[clicked_cell_id] or nil
+            if destination_cell then
+                local base_x, _ = get_human_world_pos_for_cell(destination_cell)
+                local assignment = self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] or nil
+                local used = {}
+                if assignment then
+                    for unit_id, slot_index in pairs(assignment) do
+                        if unit_id ~= unit.id then
+                            used[slot_index] = true
+                        end
+                    end
+                end
+                local best_slot = 1
+                local best_dist = math.huge
+                for i = 1, #CELL_SLOT_OFFSETS_X do
+                    local slot_x = base_x + ((CELL_SLOT_OFFSETS_X[i] or 0) * HUMAN_STACK_SPACING_X)
+                    local dist = math.abs(world_x - slot_x)
+                    if dist < best_dist then
+                        best_dist = dist
+                        best_slot = i
+                    end
+                end
+                destination_slot_requested = best_slot
+                if not used[best_slot] then
+                    destination_slot_index = best_slot
+                else
+                    local desired_offset = CELL_SLOT_OFFSETS_X[best_slot] or 0
+                    for i = 1, #CELL_SLOT_OFFSETS_X do
+                        if not used[i] then
+                            local dist = math.abs((CELL_SLOT_OFFSETS_X[i] or 0) - desired_offset)
+                            if destination_slot_index == nil
+                                or dist < math.abs((CELL_SLOT_OFFSETS_X[destination_slot_index] or 0) - desired_offset)
+                            then
+                                destination_slot_index = i
+                            end
+                        end
+                    end
+                end
+            end
             print(unit.display_name .. " route selected:")
+            if destination_slot_requested then
+                print(string.format(
+                    "%s destination slot click on cell %d -> requested slot %d, resolved slot %d",
+                    unit.display_name,
+                    clicked_cell_id,
+                    destination_slot_requested,
+                    destination_slot_index or destination_slot_requested
+                ))
+            end
             print_path_debug(path, total_cost)
             highlight_path(self, path)
-            begin_human_path_move(self, path)
+            begin_human_path_move(self, path, clicked_cell_id, destination_slot_index or destination_slot_requested)
         else
             print("No path found for " .. unit.display_name .. " to cell: " .. clicked_cell_id)
         end
@@ -7327,6 +7852,42 @@ function update(self, dt)
 
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
+    local obstacle_shudder_active = false
+    if self.world_grid then
+        for _, cell in ipairs(self.world_grid) do
+            if cell and (cell.obstacleShudderTimer or 0) > 0 then
+                cell.obstacleShudderTimer = math.max(0, (cell.obstacleShudderTimer or 0) - dt)
+                cell.obstacleShudderPhase = (cell.obstacleShudderPhase or 0) + (dt * 24)
+                if cell.obstacleShudderTimer > 0 then
+                    obstacle_shudder_active = true
+                else
+                    cell.obstacleShudderTimer = nil
+                    cell.obstacleShudderPhase = nil
+                end
+            end
+            if cell and (cell.barricade_scale_pulse_timer or 0) > 0 then
+                cell.barricade_scale_pulse_timer = math.max(0, (cell.barricade_scale_pulse_timer or 0) - dt)
+                if cell.barricade_scale_pulse_timer > 0 then
+                    obstacle_shudder_active = true
+                    cell.barricade_scale_pulse = 0.1 * (cell.barricade_scale_pulse_timer / 0.22)
+                else
+                    cell.barricade_scale_pulse_timer = nil
+                    cell.barricade_scale_pulse = nil
+                end
+            end
+        end
+    end
+    if obstacle_shudder_active then
+        self.obstacle_shudder_refresh_timer = (self.obstacle_shudder_refresh_timer or 0) - dt
+        if self.obstacle_shudder_refresh_timer <= 0 then
+            self.obstacle_shudder_refresh_timer = 0.016
+            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                LOOT_RUNTIME.refresh_fix_markers(self)
+            end
+        end
+    else
+        self.obstacle_shudder_refresh_timer = 0
+    end
     if LOOT_RUNTIME.update_exit_boarding then
         LOOT_RUNTIME.update_exit_boarding(self)
     end
@@ -7336,9 +7897,13 @@ function update(self, dt)
         local counter_move_enabled = profile and profile.counter_token_move_enabled == true
         local shadow_origin = vmath.vector3(30, -30, -0.01)
         for _, alien in ipairs(self.aliens) do
+            if alien and (alien.melee_pose_lock_timer or 0) > 0 then
+                alien.melee_pose_lock_timer = math.max(0, (alien.melee_pose_lock_timer or 0) - dt)
+            end
+            apply_brute_alpha_pulse(self, alien, dt)
             if alien
                 and (not alien.is_dead)
-                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
+                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)
                 and alien.go_id then
                 local shadow_pos = shadow_origin
                 if counter_move_enabled then
@@ -7370,7 +7935,7 @@ function update(self, dt)
             end
             if alien
                 and (not alien.is_dead)
-                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
+                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)
                 and (not alien.is_moving)
                 and alien.go_id then
                 alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * 2.2 * math.pi * 2)
@@ -7380,6 +7945,17 @@ function update(self, dt)
                     base_scale = 0.22
                 elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                     base_scale = base_scale * 0.75
+                elseif alien.type == ALIEN_TYPE_BRUTE then
+                    if (alien.melee_pose_lock_timer or 0) <= 0 then
+                        local front_anim = get_alien_anim_for_aesthetic(self, alien.type)
+                        if front_anim and alien.current_aesthetic_anim ~= front_anim then
+                            pcall(msg.post, msg.url(nil, alien.go_id, "sprite"), "play_animation", { id = front_anim })
+                            alien.current_aesthetic_anim = front_anim
+                        end
+                        sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
+                        sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
+                    end
+                    base_scale = 0.22 * 1.5 * 1.25 * 1.2 * 1.1
                 end
                 local sx = base_scale * (1 - (0.045 * pulse))
                 local sy = base_scale * (1 + (0.0675 * pulse))

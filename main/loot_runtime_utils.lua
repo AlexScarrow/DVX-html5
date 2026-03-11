@@ -30,6 +30,8 @@ function M.create(ctx)
             return vmath.vector4(0.75, 0.12, 0.12, 1)
         elseif item_type == "turret_packed" then
             return vmath.vector4(0.55, 0.75, 0.95, 1)
+        elseif item_type == "obstacle" then
+            return vmath.vector4(0.7, 0.65, 0.55, 1)
         elseif item_type == ctx.COMPONENT_UI.item_type_blue
             or item_type == ctx.COMPONENT_UI.component_wiring_straight
             or item_type == ctx.COMPONENT_UI.component_wiring_corner
@@ -69,6 +71,8 @@ function M.create(ctx)
             return hash("food_supplies")
         elseif item_type == "turret_packed" then
             return hash("gun_turret")
+        elseif item_type == "obstacle" then
+            return hash("obstacle_icon")
         end
         return nil
     end

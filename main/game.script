@@ -828,6 +828,14 @@ try_brute_break_adjacent_barricade = function(self, alien)
             local lurch_dy = uy * 36
             local sprite_url = msg.url(nil, alien.go_id, "sprite")
             local shadow_url = msg.url(nil, alien.go_id, "shadow")
+            alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
+            local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                and hash("alien_brute_side_boardgame")
+                or hash("alien_brute_side")
+            pcall(msg.post, sprite_url, "play_animation", { id = side_anim })
+            local facing_right = ux > 0
+            pcall(sprite.set_hflip, sprite_url, facing_right)
+            pcall(sprite.set_hflip, shadow_url, facing_right)
             local ok_sprite_pos, base_sprite_pos = pcall(go.get, sprite_url, "position")
             local ok_shadow_pos, base_shadow_pos = pcall(go.get, shadow_url, "position")
             if not ok_sprite_pos or (not base_sprite_pos) then
@@ -845,6 +853,19 @@ try_brute_break_adjacent_barricade = function(self, alien)
             pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, base_sprite_pos, go.EASING_INSINE, 0.28, 0.20)
             pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, target_shadow_pos, go.EASING_OUTSINE, 0.20)
             pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, base_shadow_pos, go.EASING_INSINE, 0.28, 0.20)
+            timer.delay(0.30, false, function()
+                if alien and alien.go_id and (not alien.is_dead) then
+                    alien.melee_pose_lock_timer = 0
+                    local front_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                        and hash("alien_brute_boardgame")
+                        or hash("alien_brute")
+                    local end_sprite_url = msg.url(nil, alien.go_id, "sprite")
+                    local end_shadow_url = msg.url(nil, alien.go_id, "shadow")
+                    pcall(msg.post, end_sprite_url, "play_animation", { id = front_anim })
+                    pcall(sprite.set_hflip, end_sprite_url, false)
+                    pcall(sprite.set_hflip, end_shadow_url, false)
+                end
+            end)
         end
     end
     local target_cell = self.world_grid and self.world_grid[target_cell_id]
@@ -1831,7 +1852,7 @@ local function ensure_alien_visual(self, alien)
                 elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                     scale = scale * 0.75
                 elseif alien.type == ALIEN_TYPE_BRUTE then
-                    scale = 0.22 * 1.5 * 1.25
+                    scale = 0.22 * 1.5 * 1.25 * 1.2
                 end
                 sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
                 sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
@@ -2970,14 +2991,20 @@ local function update_alien_movement(self, dt)
                     if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
                         move_z = profile.counter_alien_move_z or 0.72
                     end
-                    if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
-                        alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                    if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE then
+                        local anim_speed_mul = 1
+                        if alien.type == ALIEN_TYPE_BRUTE then
+                            anim_speed_mul = 0.5
+                        end
+                        alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * anim_speed_mul * math.pi * 2)
                         local ping = math.sin(alien.spitter_anim_phase)
                         local base_scale = 0.33333334
                         if alien.type == ALIEN_TYPE_CANNON then
                             base_scale = 0.22
                         elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                             base_scale = base_scale * 0.75
+                        elseif alien.type == ALIEN_TYPE_BRUTE then
+                            base_scale = 0.22 * 1.5 * 1.25 * 1.2
                         end
                         local sx = base_scale
                         local sy = base_scale
@@ -3120,14 +3147,20 @@ local function update_alien_movement(self, dt)
                 if is_vent_jump then
                     alien.counter_shadow_offset = nil
                 end
-                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
-                    alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE) then
+                    local anim_speed_mul = 1
+                    if alien.type == ALIEN_TYPE_BRUTE then
+                        anim_speed_mul = 0.5
+                    end
+                    alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * anim_speed_mul * math.pi * 2)
                     local ping = math.sin(alien.spitter_anim_phase)
                     local base_scale = 0.33333334
                     if alien.type == ALIEN_TYPE_CANNON then
                         base_scale = 0.22
                     elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                         base_scale = base_scale * 0.75
+                    elseif alien.type == ALIEN_TYPE_BRUTE then
+                        base_scale = 0.22 * 1.5 * 1.25 * 1.2
                     end
                     local sx = base_scale
                     local sy = base_scale
@@ -3162,6 +3195,30 @@ local function update_alien_movement(self, dt)
                         end
                     else
                         go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                    end
+                end
+                if (not is_vent_jump) and alien.type == ALIEN_TYPE_BRUTE then
+                    local sprite_url = msg.url(nil, alien.go_id, "sprite")
+                    local shadow_url = msg.url(nil, alien.go_id, "shadow")
+                    if math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.1 then
+                        local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                            and hash("alien_brute_side_boardgame")
+                            or hash("alien_brute_side")
+                        if alien.current_aesthetic_anim ~= side_anim then
+                            pcall(msg.post, sprite_url, "play_animation", { id = side_anim })
+                            alien.current_aesthetic_anim = side_anim
+                        end
+                        local facing_right = dx > 0
+                        sprite.set_hflip(sprite_url, facing_right)
+                        sprite.set_hflip(shadow_url, facing_right)
+                    else
+                        local front_anim = get_alien_anim_for_aesthetic(self, alien.type)
+                        if front_anim and alien.current_aesthetic_anim ~= front_anim then
+                            pcall(msg.post, sprite_url, "play_animation", { id = front_anim })
+                            alien.current_aesthetic_anim = front_anim
+                        end
+                        sprite.set_hflip(sprite_url, false)
+                        sprite.set_hflip(shadow_url, false)
                     end
                 end
                 if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
@@ -7654,9 +7711,12 @@ function update(self, dt)
         local counter_move_enabled = profile and profile.counter_token_move_enabled == true
         local shadow_origin = vmath.vector3(30, -30, -0.01)
         for _, alien in ipairs(self.aliens) do
+            if alien and (alien.melee_pose_lock_timer or 0) > 0 then
+                alien.melee_pose_lock_timer = math.max(0, (alien.melee_pose_lock_timer or 0) - dt)
+            end
             if alien
                 and (not alien.is_dead)
-                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
+                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)
                 and alien.go_id then
                 local shadow_pos = shadow_origin
                 if counter_move_enabled then
@@ -7688,7 +7748,7 @@ function update(self, dt)
             end
             if alien
                 and (not alien.is_dead)
-                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY)
+                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)
                 and (not alien.is_moving)
                 and alien.go_id then
                 alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * 2.2 * math.pi * 2)
@@ -7698,6 +7758,17 @@ function update(self, dt)
                     base_scale = 0.22
                 elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                     base_scale = base_scale * 0.75
+                elseif alien.type == ALIEN_TYPE_BRUTE then
+                    if (alien.melee_pose_lock_timer or 0) <= 0 then
+                        local front_anim = get_alien_anim_for_aesthetic(self, alien.type)
+                        if front_anim and alien.current_aesthetic_anim ~= front_anim then
+                            pcall(msg.post, msg.url(nil, alien.go_id, "sprite"), "play_animation", { id = front_anim })
+                            alien.current_aesthetic_anim = front_anim
+                        end
+                        sprite.set_hflip(msg.url(nil, alien.go_id, "sprite"), false)
+                        sprite.set_hflip(msg.url(nil, alien.go_id, "shadow"), false)
+                    end
+                    base_scale = 0.22 * 1.5 * 1.25 * 1.2
                 end
                 local sx = base_scale * (1 - (0.045 * pulse))
                 local sy = base_scale * (1 + (0.0675 * pulse))

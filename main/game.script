@@ -4288,7 +4288,7 @@ get_counter_shadow_anim_for_alien = function(alien_type)
     if alien_type == ALIEN_TYPE_CANNON then
         return hash("alien_cannonFodder_shadow")
     elseif alien_type == ALIEN_TYPE_BRUTE then
-        return hash("alien_cannonFodder_shadow")
+        return hash("alien_brute_shadow")
     elseif alien_type == ALIEN_TYPE_SPITTER then
         return hash("alien_spitter_shadow")
     elseif alien_type == ALIEN_TYPE_SPEEDY then
@@ -5433,6 +5433,13 @@ apply_alien_aesthetic_animations = function(self)
                 alien.current_aesthetic_anim = anim
             else
                 alien.current_aesthetic_anim = nil
+            end
+            if alien.type == ALIEN_TYPE_BRUTE then
+                local shadow_anim = hash("alien_cannonFodder_shadow")
+                if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+                    shadow_anim = hash("alien_brute_shadow")
+                end
+                pcall(msg.post, msg.url(nil, alien.go_id, "shadow"), "play_animation", { id = shadow_anim })
             end
         end
     end

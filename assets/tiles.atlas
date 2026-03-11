@@ -65,6 +65,9 @@ images {
   image: "/assets/images/alien_cannonFodder_shadow.png"
 }
 images {
+  image: "/assets/images/alien_brute_shadow.png"
+}
+images {
   image: "/assets/images/alien_brute.png"
 }
 images {

@@ -41,6 +41,7 @@
 -- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
 -- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
 -- luacheck: globals apply_brute_alpha_pulse
+-- luacheck: globals get_obstacle_move_speed_multiplier
 
 local CELL_WIDTH = 250          -- Width of each cell in pixels
 local CELL_HEIGHT = 150         -- Height of each cell in pixels
@@ -610,6 +611,19 @@ local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id, al
     end
 
     return 1 + obstacle_penalty
+end
+
+get_obstacle_move_speed_multiplier = function(step_ap_cost)
+    if step_ap_cost >= 5 then
+        return 0.25
+    elseif step_ap_cost == 4 then
+        return 0.35
+    elseif step_ap_cost == 3 then
+        return 0.5
+    elseif step_ap_cost == 2 then
+        return 0.7
+    end
+    return 1.0
 end
 
 function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
@@ -5721,6 +5735,14 @@ apply_aesthetic_mode = function(self)
             end
         end
     end
+    if self.exterior_detail_objects then
+        local exterior_alpha = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME) and 0 or 1
+        for _, exterior_id in ipairs(self.exterior_detail_objects) do
+            if exterior_id then
+                pcall(go.set, msg.url(nil, exterior_id, "sprite"), "tint", vmath.vector4(1, 1, 1, exterior_alpha))
+            end
+        end
+    end
     if self.tile_base_objects and self.level_library and self.current_level_index then
         local selected_level = self.level_library[self.current_level_index]
         for placement_index, placement in ipairs(selected_level or {}) do
@@ -6799,7 +6821,8 @@ local function update_single_unit_movement(self, unit, dt)
     local dx = target_x - current_pos.x
     local dy = target_y - current_pos.y
     local distance = math.sqrt(dx * dx + dy * dy)
-    local step = HUMAN_MOVE_SPEED * dt
+    local move_speed_mul = get_obstacle_move_speed_multiplier(target_cost)
+    local step = (HUMAN_MOVE_SPEED * move_speed_mul) * dt
 
     unit.anim_phase = (unit.anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
     local ping = math.sin(unit.anim_phase)
@@ -7328,6 +7351,7 @@ end
         self.tile_light_anim_ids = {}
         self.tile_alpha_layers = {}
         self.tile_room_shadows = {}
+        self.exterior_detail_objects = {}
         self.entry_fire_fx_objects = {}
         self.exit_green_smoke_fx_objects = {}
         self.exit_green_smoke_fx_power_state = {}
@@ -7455,6 +7479,7 @@ end
                         msg.post(msg.url(nil, roof_id, "sprite"), "play_animation", { id = hash("exterior_roof1") })
                         go.set(msg.url(nil, roof_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         table.insert(tile_objects, roof_id)
+                        table.insert(self.exterior_detail_objects, roof_id)
                     end
                 end
                 if not has_tile_left then
@@ -7469,6 +7494,7 @@ end
                         msg.post(msg.url(nil, left_wall_id, "sprite"), "play_animation", { id = hash("exterior_leftWall1") })
                         go.set(msg.url(nil, left_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         table.insert(tile_objects, left_wall_id)
+                        table.insert(self.exterior_detail_objects, left_wall_id)
                     end
                 end
             end

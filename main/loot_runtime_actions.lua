@@ -2117,6 +2117,7 @@ function M.extend(runtime, ctx)
                                         vy + 18
                                     )
                                     consumed = true
+                                    runtime.refresh_machine_markers(self)
                                     print(string.format(
                                         "%s used 1 material and produced 1 %s. (AP -%d)",
                                         source_unit.display_name,
@@ -2509,6 +2510,7 @@ function M.extend(runtime, ctx)
                                     end
                                     consumed = true
                                     runtime.refresh_fix_markers(self)
+                                    runtime.refresh_machine_markers(self)
                                     runtime.refresh_door_markers(self)
                                     runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_turret_markers(self)

@@ -101,13 +101,27 @@ function M.extend(runtime, ctx)
                 if boardgame_shadows_enabled(self) then
                     self.machine_shadow_objects[cell_id] = spawn_world_shadow(mx + 5, my - 7, 0.5, 0.62, 0.24, 0.34)
                 end
-                local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(mx, my, 0.56))
+                local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(mx, my, 0.62))
                 if marker_id then
                     local anim = hash("wiregap_straight_off")
                     if machine.name == hash("ammo_vending_machine") then
-                        anim = hash("ammo_vend_machine")
+                        local functional = (cell.isPowered == true)
+                            and (machine.isFixed == true)
+                            and runtime.is_object_dependency_met(self.world_grid, machine)
+                        anim = functional and hash("ammo_vend_machine_on") or hash("ammo_vend_machine_off")
+                        print(string.format(
+                            "DEBUG: ammo machine cell=%d powered=%s fixed=%s dep=%s anim=%s",
+                            cell_id,
+                            tostring(cell.isPowered == true),
+                            tostring(machine.isFixed == true),
+                            tostring(runtime.is_object_dependency_met(self.world_grid, machine)),
+                            functional and "ammo_vend_machine_on" or "ammo_vend_machine_off"
+                        ))
                     elseif machine.name == hash("med_vending_machine") then
-                        anim = hash("med_vend_machine")
+                        local functional = (cell.isPowered == true)
+                            and (machine.isFixed == true)
+                            and runtime.is_object_dependency_met(self.world_grid, machine)
+                        anim = functional and hash("med_vend_machine_on") or hash("med_vend_machine_off")
                     elseif machine.name == hash("machine") then
                         anim = hash("wiregap_straight_on")
                     end

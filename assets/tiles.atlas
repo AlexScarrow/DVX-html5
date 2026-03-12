@@ -83,6 +83,9 @@ images {
   image: "/assets/images/barricade.png"
 }
 images {
+  image: "/assets/images/barricade_particle.png"
+}
+images {
   image: "/assets/images/obstacle1.png"
 }
 images {
@@ -147,6 +150,18 @@ images {
 }
 images {
   image: "/assets/images/med_vend_machine.png"
+}
+images {
+  image: "/assets/images/ammo_vend_machine_on.png"
+}
+images {
+  image: "/assets/images/ammo_vend_machine_off.png"
+}
+images {
+  image: "/assets/images/med_vend_machine_on.png"
+}
+images {
+  image: "/assets/images/med_vend_machine_off.png"
 }
 images {
   image: "/assets/images/fuse.png"
@@ -237,9 +252,6 @@ images {
 }
 images {
   image: "/assets/images/tile_canteen_on.png"
-}
-images {
-  image: "/assets/images/barricade_particle.png"
 }
 margin: 2
 extrude_borders: 2

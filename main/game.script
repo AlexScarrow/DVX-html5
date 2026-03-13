@@ -807,6 +807,9 @@ remove_one_obstacle_from_cell = function(world_grid, cell_id)
         cell.barricade_brightness = nil
         cell.barricade_scale_pulse = nil
         cell.barricade_scale_pulse_timer = nil
+        cell.barricade_slot_index = nil
+        cell.barricade_anchor_x = nil
+        cell.barricade_anchor_y = nil
         cell.obstacleShudderTimer = nil
         cell.obstacleShudderPhase = nil
     end
@@ -892,6 +895,8 @@ try_brute_break_adjacent_barricade = function(self, alien)
         target_cell.obstacleShudderTimer = 0.60
         target_cell.obstacleShudderPhase = 0
         local fx_x, fx_y = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+        fx_x = fx_x + (target_cell.barricade_anchor_x or 0)
+        fx_y = fx_y + (target_cell.barricade_anchor_y or 0)
         local fx_id = factory.create("/barricade_broken_fx_factory#barricade_broken_fx_factory", vmath.vector3(fx_x, fx_y, 0.62))
         if fx_id then
             pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
@@ -912,6 +917,9 @@ try_brute_break_adjacent_barricade = function(self, alien)
             target_cell.barricade_brightness = nil
             target_cell.barricade_scale_pulse = nil
             target_cell.barricade_scale_pulse_timer = nil
+            target_cell.barricade_slot_index = nil
+            target_cell.barricade_anchor_x = nil
+            target_cell.barricade_anchor_y = nil
             target_cell.obstacleShudderTimer = nil
             target_cell.obstacleShudderPhase = nil
         end
@@ -6108,11 +6116,24 @@ function update_selected_unit_ui(self)
     end
 
     local total_slots = UI_BACKPACK_COLS * UI_BACKPACK_ROWS
+    local show_full_packed_turret = false
+    if unit.backpack_items and total_slots > 0 and #unit.backpack_items == total_slots then
+        show_full_packed_turret = true
+        for i = 1, total_slots do
+            if unit.backpack_items[i] ~= "turret_packed" then
+                show_full_packed_turret = false
+                break
+            end
+        end
+    end
     for i = 1, total_slots do
         local slot_x, slot_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(i)
         local item_type = unit.backpack_items and unit.backpack_items[i] or nil
         local slot_color = UI_COLOR_SLOT
-        local icon_anim = LOOT_RUNTIME.get_item_visual_animation and LOOT_RUNTIME.get_item_visual_animation(item_type) or nil
+        local icon_anim = nil
+        if not show_full_packed_turret then
+            icon_anim = LOOT_RUNTIME.get_item_visual_animation and LOOT_RUNTIME.get_item_visual_animation(item_type) or nil
+        end
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
         end
@@ -6127,6 +6148,36 @@ function update_selected_unit_ui(self)
         else
             set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
         end
+    end
+    if show_full_packed_turret and total_slots > 0 then
+        local first_x, first_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(1)
+        local last_x, last_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(total_slots)
+        local center_x = (first_x + last_x) * 0.5
+        local center_y = ((first_y + last_y) * 0.5) + 42
+        local grid_w = math.abs(last_x - first_x) + UI_BACKPACK_SLOT_SIZE
+        local grid_h = math.abs(last_y - first_y) + UI_BACKPACK_SLOT_SIZE
+        local packed_turret_ui_scale = 0.021 * 0.72
+        local packed_alpha = 1
+        if self.drag_resource
+            and self.drag_resource.active
+            and self.drag_resource.source_unit_id == unit.id
+            and self.drag_resource.drag_type == "resource"
+            and unit.backpack_items
+            and unit.backpack_items[self.drag_resource.source_slot_index] == "turret_packed"
+        then
+            packed_alpha = 0.25
+        end
+        msg.post(msg.url(nil, self.ui.backpack_item_icons[1], "sprite"), "play_animation", { id = hash("gun_turret") })
+        set_ui_square_transform(
+            self,
+            self.ui.backpack_item_icons[1],
+            center_x,
+            center_y,
+            0.815,
+            vmath.vector4(1, 1, 1, packed_alpha),
+            grid_w * packed_turret_ui_scale,
+            grid_h * packed_turret_ui_scale
+        )
     end
 
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), COMPONENT_UI.button_size, COMPONENT_UI.button_size)
@@ -7886,7 +7937,7 @@ function update(self, dt)
         for _, cell in ipairs(self.world_grid) do
             if cell and (cell.obstacleShudderTimer or 0) > 0 then
                 cell.obstacleShudderTimer = math.max(0, (cell.obstacleShudderTimer or 0) - dt)
-                cell.obstacleShudderPhase = (cell.obstacleShudderPhase or 0) + (dt * 24)
+                cell.obstacleShudderPhase = (cell.obstacleShudderPhase or 0) + (dt * 48)
                 if cell.obstacleShudderTimer > 0 then
                     obstacle_shudder_active = true
                 else

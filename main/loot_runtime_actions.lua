@@ -5,6 +5,8 @@ function M.extend(runtime, ctx)
     local TURRET_PACKED_ITEM = "turret_packed"
     local OBSTACLE_ITEM = "obstacle"
     local OBSTACLE_STACK_CAP = 4
+    local OBSTACLE_DROP_FLOOR_Y_OFFSET = -30
+    local OBSTACLE_SLOT_X_BY_INDEX = { -70, 0, 70 }
     local TURRET_ARMING_TURNS_ON_DEPLOY = 2
     local WELD_SPARKS_Z = 0.62
     local RECEIVE_PULSE_DURATION = 0.24
@@ -132,6 +134,90 @@ function M.extend(runtime, ctx)
         return cell.object2
     end
 
+    local function get_cell_object_slot_index(cell, slot)
+        if not cell or not slot then
+            return nil
+        end
+        if slot == cell.object1 then
+            return 1
+        end
+        if slot == cell.object2 then
+            return 2
+        end
+        if slot == cell.object3 then
+            return 3
+        end
+        return nil
+    end
+
+    local function get_obstacle_slot_anchor_offset(cell, slot)
+        if not slot then
+            return 0, 0
+        end
+        local slot_index = get_cell_object_slot_index(cell, slot) or 2
+        local anchor_x = slot.obstacleAnchorX
+        if anchor_x == nil then
+            anchor_x = OBSTACLE_SLOT_X_BY_INDEX[slot_index] or 0
+        end
+        local anchor_y = slot.obstacleAnchorY
+        if anchor_y == nil then
+            anchor_y = 0
+        end
+        return anchor_x, anchor_y
+    end
+
+    local function get_barricade_anchor_offset(cell)
+        if not cell then
+            return 0, 0
+        end
+        if cell.barricade_anchor_x ~= nil or cell.barricade_anchor_y ~= nil then
+            return cell.barricade_anchor_x or 0, cell.barricade_anchor_y or 0
+        end
+        local slot_index = cell.barricade_slot_index
+        if slot_index == 1 then
+            return OBSTACLE_SLOT_X_BY_INDEX[1], 0
+        elseif slot_index == 2 then
+            return OBSTACLE_SLOT_X_BY_INDEX[2], 0
+        elseif slot_index == 3 then
+            return OBSTACLE_SLOT_X_BY_INDEX[3], 0
+        end
+        return 0, 0
+    end
+
+    local function is_point_in_barricade_hitbox(cell, world_x, world_y)
+        if not cell or cell.tileID == hash("empty") then
+            return false
+        end
+        if (cell.has_barricade ~= true) or ((cell.barricade_hp or 0) <= 0) then
+            return false
+        end
+        local bx, by = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local anchor_x, anchor_y = get_barricade_anchor_offset(cell)
+        bx = bx + anchor_x
+        by = by + anchor_y + 7
+        local half_w = 62
+        local half_h = 50
+        return world_x >= (bx - half_w)
+            and world_x <= (bx + half_w)
+            and world_y >= (by - half_h)
+            and world_y <= (by + half_h)
+    end
+
+    local function apply_obstacle_slot_floor_alignment(cell, slot, anchor_x, anchor_y)
+        if not slot then
+            return
+        end
+        local resolved_anchor_x = anchor_x
+        local resolved_anchor_y = anchor_y
+        if resolved_anchor_x == nil or resolved_anchor_y == nil then
+            resolved_anchor_x, resolved_anchor_y = get_obstacle_slot_anchor_offset(cell, slot)
+        end
+        slot.obstacleAnchorX = resolved_anchor_x
+        slot.obstacleAnchorY = resolved_anchor_y
+        slot.offsetX = resolved_anchor_x
+        slot.offsetY = resolved_anchor_y + OBSTACLE_DROP_FLOOR_Y_OFFSET
+    end
+
     local function reset_object_slot_to_empty(slot)
         if not slot then
             return
@@ -154,9 +240,11 @@ function M.extend(runtime, ctx)
         slot.requiredComponent = nil
         slot.stackCount = nil
         slot.obstacleCount = nil
+        slot.obstacleAnchorX = nil
+        slot.obstacleAnchorY = nil
     end
 
-    local function init_obstacle_slot(slot, world_grid)
+    local function init_obstacle_slot(cell, slot, world_grid, anchor_x, anchor_y)
         if not slot then
             return
         end
@@ -167,8 +255,7 @@ function M.extend(runtime, ctx)
         slot.dependsOn = 0
         slot.isDependentOn = {}
         slot.objectId = allocate_runtime_object_id(world_grid)
-        slot.offsetX = 0
-        slot.offsetY = 0
+        apply_obstacle_slot_floor_alignment(cell, slot, anchor_x, anchor_y)
         slot.fxOffsetX = 0
         slot.fxOffsetY = 0
         slot.fxRotation = 0
@@ -255,6 +342,31 @@ function M.extend(runtime, ctx)
                 local count = get_obstacle_count(slot)
                 if count > best_count then
                     best_count = count
+                    best_slot = slot
+                end
+            end
+        end
+        return best_slot
+    end
+
+    local function find_clicked_drop_slot(cell, world_x, world_y)
+        if not cell then
+            return nil
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        local best_slot = nil
+        local best_dist = math.huge
+        for _, slot in ipairs(slots) do
+            if slot then
+                local anchor_x, anchor_y = get_obstacle_slot_anchor_offset(cell, slot)
+                local sx = cx + anchor_x
+                local sy = cy + anchor_y + OBSTACLE_DROP_FLOOR_Y_OFFSET
+                local dx = sx - world_x
+                local dy = sy - world_y
+                local dist = math.sqrt((dx * dx) + (dy * dy))
+                if dist < best_dist then
+                    best_dist = dist
                     best_slot = slot
                 end
             end
@@ -1424,6 +1536,8 @@ function M.extend(runtime, ctx)
             source_unit_id = unit.id,
             source_slot_index = slot_index,
             item_type = item_type,
+            start_screen_x = screen_x,
+            start_screen_y = screen_y,
             screen_x = screen_x,
             screen_y = screen_y
         }
@@ -1907,6 +2021,18 @@ function M.extend(runtime, ctx)
             self.drag_resource = { active = false }
             return true
         end
+        if source_item == TURRET_PACKED_ITEM then
+            local start_x = drag.start_screen_x or drag.screen_x or screen_x
+            local start_y = drag.start_screen_y or drag.screen_y or screen_y
+            local drag_dx = (screen_x or start_x) - start_x
+            local drag_dy = (screen_y or start_y) - start_y
+            local drag_dist = math.sqrt((drag_dx * drag_dx) + (drag_dy * drag_dy))
+            if drag_dist < 12 then
+                -- Packed turret requires an intentional drag; simple click should not deploy/drop it.
+                self.drag_resource = { active = false }
+                return true
+            end
+        end
 
         local consumed = false
         local suppress_generic_world_drop = false
@@ -1956,6 +2082,13 @@ function M.extend(runtime, ctx)
                 local vending_attempted = false
                 local force_barricade_drop = false
                 if source_item == OBSTACLE_ITEM and drop_cell_id then
+                    -- Prioritize reinforcing the selected unit's own barricade even near cell borders.
+                    -- This prevents side-slot barricade drops from resolving to a neighboring cell.
+                    local source_cell = self.world_grid and self.world_grid[source_unit.cell_id]
+                    if source_cell and is_point_in_barricade_hitbox(source_cell, world_x, world_y) then
+                        force_barricade_drop = true
+                        drop_cell_id = source_unit.cell_id
+                    end
                     local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
                     if drop_cell
                         and drop_cell.tileID ~= hash("empty")
@@ -1963,6 +2096,9 @@ function M.extend(runtime, ctx)
                         and ((drop_cell.barricade_hp or 0) > 0)
                     then
                         local bx, by = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                        local barricade_anchor_x, barricade_anchor_y = get_barricade_anchor_offset(drop_cell)
+                        bx = bx + barricade_anchor_x
+                        by = by + barricade_anchor_y
                         by = by + 7
                         local half_w = 62
                         local half_h = 50
@@ -2320,15 +2456,15 @@ function M.extend(runtime, ctx)
                                             get_drag_ap_cost()
                                         ))
                                     else
-                                        local center_slot = get_center_obstacle_slot(drop_cell)
-                                        if not center_slot then
-                                            print("No center slot available for obstacle.")
+                                        local target_slot = find_clicked_drop_slot(drop_cell, world_x, world_y)
+                                        if not target_slot then
+                                            print("No slot available for obstacle.")
                                             flash_invalid_drag_units(source_unit, nil)
-                                        elseif center_slot.name ~= hash("empty") and center_slot.name ~= hash("obstacle") then
-                                            print("Center slot is occupied by another object.")
+                                        elseif target_slot.name ~= hash("empty") and target_slot.name ~= hash("obstacle") then
+                                            print("Clicked obstacle slot is occupied by another object.")
                                             flash_invalid_drag_units(source_unit, nil)
                                         else
-                                            local current_count = get_obstacle_count(center_slot)
+                                            local current_count = get_obstacle_count(target_slot)
                                             if current_count >= OBSTACLE_STACK_CAP then
                                                 print(string.format("Obstacle stack cap reached (%d).", OBSTACLE_STACK_CAP))
                                                 flash_invalid_drag_units(source_unit, nil)
@@ -2339,12 +2475,15 @@ function M.extend(runtime, ctx)
                                                 end
                                                 table.remove(source_unit.backpack_items, drag.source_slot_index)
                                                 source_unit.backpack_used = #source_unit.backpack_items
-                                                if center_slot.name ~= hash("obstacle") then
-                                                    init_obstacle_slot(center_slot, self.world_grid)
+                                                local anchor_x, anchor_y = get_obstacle_slot_anchor_offset(drop_cell, target_slot)
+                                                if target_slot.name ~= hash("obstacle") then
+                                                    init_obstacle_slot(drop_cell, target_slot, self.world_grid, anchor_x, anchor_y)
+                                                else
+                                                    apply_obstacle_slot_floor_alignment(drop_cell, target_slot, anchor_x, anchor_y)
                                                 end
-                                                current_count = get_obstacle_count(center_slot)
-                                                set_obstacle_count(center_slot, current_count + 1)
-                                                local new_stack = get_obstacle_count(center_slot)
+                                                current_count = get_obstacle_count(target_slot)
+                                                set_obstacle_count(target_slot, current_count + 1)
+                                                local new_stack = get_obstacle_count(target_slot)
                                                 if new_stack >= 3 then
                                                     local slots = { drop_cell.object1, drop_cell.object2, drop_cell.object3 }
                                                     local total_obstacles = 0
@@ -2359,6 +2498,9 @@ function M.extend(runtime, ctx)
                                                     drop_cell.barricade_brightness = 1.0
                                                     drop_cell.barricade_scale_pulse = nil
                                                     drop_cell.barricade_scale_pulse_timer = nil
+                                                    drop_cell.barricade_slot_index = get_cell_object_slot_index(drop_cell, target_slot) or 2
+                                                    drop_cell.barricade_anchor_x = anchor_x or 0
+                                                    drop_cell.barricade_anchor_y = anchor_y or 0
                                                     print(string.format(
                                                         "%s built a barricade (hp %d/10). (AP -%d)",
                                                         source_unit.display_name,

@@ -251,18 +251,32 @@ function M.extend(runtime, ctx)
                 local barricade_hp = cell.barricade_hp or 0
                 if (cell.has_barricade == true) and barricade_hp > 0 then
                     local shudder_dx = 0
-                    local shudder_dy = 0
                     local barricade_brightness = math.max(0.25, math.min(1.0, cell.barricade_brightness or 1.0))
                     local barricade_scale = math.max(0.82, math.min(1.12, 0.975 + (cell.barricade_scale_pulse or 0)))
+                    local barricade_anchor_x = cell.barricade_anchor_x
+                    local barricade_anchor_y = cell.barricade_anchor_y
+                    if barricade_anchor_x == nil or barricade_anchor_y == nil then
+                        local slot_index = cell.barricade_slot_index or 2
+                        if slot_index == 1 then
+                            barricade_anchor_x = -70
+                        elseif slot_index == 3 then
+                            barricade_anchor_x = 70
+                        else
+                            barricade_anchor_x = 0
+                        end
+                        barricade_anchor_y = 0
+                    end
                     if (cell.obstacleShudderTimer or 0) > 0 then
                         local phase = (cell.obstacleShudderPhase or 0)
                         shudder_dx = math.sin(phase) * 4.4
-                        shudder_dy = math.cos(phase * 1.7) * 2.0
                     end
-                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + shudder_dx, (cy + 7) + shudder_dy, 0.56))
+                    local marker_id = factory.create(
+                        "/loot_marker_factory#loot_marker_factory",
+                        vmath.vector3(cx + barricade_anchor_x + shudder_dx, cy + barricade_anchor_y + 7, 0.56)
+                    )
                     if marker_id then
                         msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("barricade") })
-                        go.set_scale(vmath.vector3(barricade_scale, barricade_scale, 1), marker_id)
+                        go.set_scale(vmath.vector3(barricade_scale * 0.75, barricade_scale, 1), marker_id)
                         go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(barricade_brightness, barricade_brightness, barricade_brightness, 1))
                         table.insert(self.obstacle_debug_objects, marker_id)
                     end

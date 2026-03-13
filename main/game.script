@@ -4425,7 +4425,11 @@ local function update_human_visual_state(self)
             end
             local flash_timer = unit.hit_flash_timer or 0
             if not (unit and (unit.current_health or 0) > 0) then
-                safe_set_tint(vmath.vector4(0.18, 0.18, 0.18, 1))
+                local dead_anim = get_human_anim_for_aesthetic(self, unit)
+                if dead_anim then
+                    pcall(msg.post, unit.sprite_path, "play_animation", { id = dead_anim })
+                end
+                safe_set_tint(vmath.vector4(1, 1, 1, 1))
             elseif flash_timer > 0 then
                 local flash_band = math.floor(flash_timer * 24) % 2
                 if flash_band == 0 then
@@ -5405,6 +5409,12 @@ get_human_anim_for_aesthetic = function(self, unit)
     if not unit then
         return nil
     end
+    if (unit.current_health or 0) <= 0 then
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            return hash("human_dead_boardgame")
+        end
+        return hash("human_dead")
+    end
     if unit.class_id == UNIT_CLASS_SARGE then
         if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
             return hash("human_sarge_boardgame")
@@ -6116,12 +6126,15 @@ function update_selected_unit_ui(self)
     end
 
     local total_slots = UI_BACKPACK_COLS * UI_BACKPACK_ROWS
-    local show_full_packed_turret = false
+    local full_backpack_item_type = nil
     if unit.backpack_items and total_slots > 0 and #unit.backpack_items == total_slots then
-        show_full_packed_turret = true
+        local first_item_type = unit.backpack_items[1]
+        if first_item_type == "turret_packed" or first_item_type == "corpse" then
+            full_backpack_item_type = first_item_type
+        end
         for i = 1, total_slots do
-            if unit.backpack_items[i] ~= "turret_packed" then
-                show_full_packed_turret = false
+            if unit.backpack_items[i] ~= full_backpack_item_type then
+                full_backpack_item_type = nil
                 break
             end
         end
@@ -6131,7 +6144,7 @@ function update_selected_unit_ui(self)
         local item_type = unit.backpack_items and unit.backpack_items[i] or nil
         local slot_color = UI_COLOR_SLOT
         local icon_anim = nil
-        if not show_full_packed_turret then
+        if not full_backpack_item_type then
             icon_anim = LOOT_RUNTIME.get_item_visual_animation and LOOT_RUNTIME.get_item_visual_animation(item_type) or nil
         end
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
@@ -6149,7 +6162,7 @@ function update_selected_unit_ui(self)
             set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
         end
     end
-    if show_full_packed_turret and total_slots > 0 then
+    if full_backpack_item_type and total_slots > 0 then
         local first_x, first_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(1)
         local last_x, last_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(total_slots)
         local center_x = (first_x + last_x) * 0.5
@@ -6157,17 +6170,26 @@ function update_selected_unit_ui(self)
         local grid_w = math.abs(last_x - first_x) + UI_BACKPACK_SLOT_SIZE
         local grid_h = math.abs(last_y - first_y) + UI_BACKPACK_SLOT_SIZE
         local packed_turret_ui_scale = 0.021 * 0.576
+        local packed_item_ui_scale_x = packed_turret_ui_scale
+        local packed_item_ui_scale_y = packed_turret_ui_scale
         local packed_alpha = 1
+        local full_backpack_anim = hash("gun_turret_icon")
+        if full_backpack_item_type == "corpse" then
+            full_backpack_anim = hash("human_dead_ui")
+            local corpse_base_scale = packed_turret_ui_scale * 0.5
+            packed_item_ui_scale_x = corpse_base_scale * 0.8
+            packed_item_ui_scale_y = corpse_base_scale * 0.6
+        end
         if self.drag_resource
             and self.drag_resource.active
             and self.drag_resource.source_unit_id == unit.id
             and self.drag_resource.drag_type == "resource"
             and unit.backpack_items
-            and unit.backpack_items[self.drag_resource.source_slot_index] == "turret_packed"
+            and unit.backpack_items[self.drag_resource.source_slot_index] == full_backpack_item_type
         then
             packed_alpha = 0.25
         end
-        msg.post(msg.url(nil, self.ui.backpack_item_icons[1], "sprite"), "play_animation", { id = hash("gun_turret_icon") })
+        msg.post(msg.url(nil, self.ui.backpack_item_icons[1], "sprite"), "play_animation", { id = full_backpack_anim })
         set_ui_square_transform(
             self,
             self.ui.backpack_item_icons[1],
@@ -6175,8 +6197,8 @@ function update_selected_unit_ui(self)
             center_y,
             0.815,
             vmath.vector4(1, 1, 1, packed_alpha),
-            grid_w * packed_turret_ui_scale,
-            grid_h * packed_turret_ui_scale
+            grid_w * packed_item_ui_scale_x,
+            grid_h * packed_item_ui_scale_y
         )
     end
 

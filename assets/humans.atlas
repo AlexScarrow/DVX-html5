@@ -29,6 +29,12 @@ images {
   image: "/assets/images/human_gunner_boardgame.png"
 }
 images {
+  image: "/assets/images/human_dead.png"
+}
+images {
+  image: "/assets/images/human_dead_boardgame.png"
+}
+images {
   image: "/assets/images/human_proxyShadow_boardgame.png"
 }
 margin: 0

@@ -224,6 +224,15 @@ images {
   image: "/assets/images/human_dropShadow.png"
 }
 images {
+  image: "/assets/images/human_dead.png"
+}
+images {
+  image: "/assets/images/human_dead_boardgame.png"
+}
+images {
+  image: "/assets/images/human_dead_ui.png"
+}
+images {
   image: "/assets/images/backdrop_boardgame.png"
 }
 images {

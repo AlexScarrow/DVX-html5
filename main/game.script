@@ -6153,10 +6153,10 @@ function update_selected_unit_ui(self)
         local first_x, first_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(1)
         local last_x, last_y = LOOT_RUNTIME.get_backpack_slot_screen_pos(total_slots)
         local center_x = (first_x + last_x) * 0.5
-        local center_y = ((first_y + last_y) * 0.5) + 42
+        local center_y = ((first_y + last_y) * 0.5) + 10
         local grid_w = math.abs(last_x - first_x) + UI_BACKPACK_SLOT_SIZE
         local grid_h = math.abs(last_y - first_y) + UI_BACKPACK_SLOT_SIZE
-        local packed_turret_ui_scale = 0.021 * 0.72
+        local packed_turret_ui_scale = 0.021 * 0.576
         local packed_alpha = 1
         if self.drag_resource
             and self.drag_resource.active
@@ -6167,7 +6167,7 @@ function update_selected_unit_ui(self)
         then
             packed_alpha = 0.25
         end
-        msg.post(msg.url(nil, self.ui.backpack_item_icons[1], "sprite"), "play_animation", { id = hash("gun_turret") })
+        msg.post(msg.url(nil, self.ui.backpack_item_icons[1], "sprite"), "play_animation", { id = hash("gun_turret_icon") })
         set_ui_square_transform(
             self,
             self.ui.backpack_item_icons[1],

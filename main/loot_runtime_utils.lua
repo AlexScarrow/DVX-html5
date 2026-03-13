@@ -70,7 +70,7 @@ function M.create(ctx)
         elseif item_type == ctx.COMPONENT_UI.component_food_supplies then
             return hash("food_supplies")
         elseif item_type == "turret_packed" then
-            return hash("gun_turret")
+            return hash("gun_turret_icon")
         elseif item_type == "obstacle" then
             return hash("obstacle_icon")
         end

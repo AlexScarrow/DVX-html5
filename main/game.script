@@ -2988,7 +2988,12 @@ function process_turret_reactive_fire(self, dt)
                                     local ranged_model = require("main.config").RANGED_HIT_MODEL
                                     local hit_chance = math.max(
                                         ranged_model.min_hit_chance,
-                                        math.min(ranged_model.max_hit_chance, ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus))
+                                        math.min(
+                                            ranged_model.max_hit_chance,
+                                            ranged_model.base_hit_chance
+                                                + (active_light * ranged_model.per_light_level_bonus)
+                                                + ((CLASS_ROLE_HOOKS[UNIT_CLASS_GUNNER] and CLASS_ROLE_HOOKS[UNIT_CLASS_GUNNER].ranged_hit_bonus) or 0)
+                                        )
                                     )
                                     local roll = math.random(1, 100)
                                     self.turret_pending_shots[shot_id] = {

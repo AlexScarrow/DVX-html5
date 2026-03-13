@@ -634,13 +634,21 @@ function M.extend(runtime, ctx)
                 if door then
                     seen[cell_id] = true
                     local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                    local dx = x + (door.offsetX or 0)
+                    local shudder_dx = 0
+                    if (door.door_shudder_timer or 0) > 0 then
+                        local phase = (door.door_shudder_phase or 0)
+                        shudder_dx = math.sin(phase) * 4.4
+                    end
+                    local dx = x + (door.offsetX or 0) + shudder_dx
                     local dy = y + (door.offsetY or 0)
                     local powered = cell.isPowered == true
                     local fixed = door.isFixed == true
                     local deps_met = dependency_met(self.world_grid, door)
                     local functional = powered and fixed and deps_met
                     local closed = functional and (door.isOpen ~= true)
+                    local door_tint_mul = math.max(0.25, math.min(1.0, door.door_damage_tint or 1.0))
+                    local closed_tint = vmath.vector4(door_tint_mul, door_tint_mul, door_tint_mul, 1)
+                    local open_tint = vmath.vector4(0.5 * door_tint_mul, 0.5 * door_tint_mul, 0.5 * door_tint_mul, 1)
                     local visual_state = "open"
                     local anim = hash("door_open")
                     local z = 0.555
@@ -679,18 +687,18 @@ function M.extend(runtime, ctx)
                             go.cancel_animations(sprite_url, "tint")
                             if visual_state == "open" then
                                 msg.post(sprite_url, "play_animation", { id = hash("door_open") })
-                                go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+                                go.set(sprite_url, "tint", closed_tint)
                                 go.set_scale(vmath.vector3(0.08, 1, 1), marker_id)
                                 go.animate(marker_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1, 1, 1), go.EASING_INOUTSINE, 0.56)
-                                go.animate(sprite_url, "tint", go.PLAYBACK_ONCE_FORWARD, vmath.vector4(0.5, 0.5, 0.5, 1), go.EASING_INOUTSINE, 0.56)
+                                go.animate(sprite_url, "tint", go.PLAYBACK_ONCE_FORWARD, open_tint, go.EASING_INOUTSINE, 0.56)
                                 self.door_visual_state[cell_id] = visual_state
                             elseif prev_state == "open" then
                                 -- Closing is reverse of opening: shrink open panel back down.
                                 msg.post(sprite_url, "play_animation", { id = hash("door_open") })
-                                go.set(sprite_url, "tint", vmath.vector4(0.5, 0.5, 0.5, 1))
+                                go.set(sprite_url, "tint", open_tint)
                                 go.set_scale(vmath.vector3(1, 1, 1), marker_id)
                                 go.animate(marker_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.08, 1, 1), go.EASING_INOUTSINE, 0.56)
-                                go.animate(sprite_url, "tint", go.PLAYBACK_ONCE_FORWARD, vmath.vector4(1, 1, 1, 1), go.EASING_INOUTSINE, 0.56)
+                                go.animate(sprite_url, "tint", go.PLAYBACK_ONCE_FORWARD, closed_tint, go.EASING_INOUTSINE, 0.56)
                                 self.door_visual_state[cell_id] = "closing"
                                 timer.delay(0.56, false, function()
                                     if self.door_objects and self.door_objects[cell_id] == marker_id then
@@ -698,25 +706,25 @@ function M.extend(runtime, ctx)
                                         go.cancel_animations(sprite_url, "tint")
                                         msg.post(sprite_url, "play_animation", { id = anim })
                                         go.set_scale(vmath.vector3(1, 1, 1), marker_id)
-                                        go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+                                        go.set(sprite_url, "tint", closed and closed_tint or open_tint)
                                         self.door_visual_state[cell_id] = visual_state
                                     end
                                 end)
                             else
                                 msg.post(sprite_url, "play_animation", { id = anim })
-                                go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+                                go.set(sprite_url, "tint", closed and closed_tint or open_tint)
                                 go.set_scale(vmath.vector3(1, 1, 1), marker_id)
                                 self.door_visual_state[cell_id] = visual_state
                             end
                         elseif prev_state == "closing" then
                             -- Let close transition finish before forcing steady-state transforms.
                         elseif visual_state == "open" then
-                            go.set(sprite_url, "tint", vmath.vector4(0.5, 0.5, 0.5, 1))
+                            go.set(sprite_url, "tint", open_tint)
                         else
                             -- Closed door sprites must never remain scaled.
                             go.cancel_animations(marker_id, "scale")
                             go.set_scale(vmath.vector3(1, 1, 1), marker_id)
-                            go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+                            go.set(sprite_url, "tint", closed_tint)
                         end
                     end
                 end

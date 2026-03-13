@@ -941,6 +941,90 @@ try_brute_break_adjacent_barricade = function(self, alien)
     return true
 end
 
+reset_runtime_object_slot_to_empty = function(slot)
+    if not slot then
+        return
+    end
+    slot.name = hash("empty")
+    slot.isFixed = false
+    slot.isWelded = false
+    slot.isOpen = false
+    slot.dependsOn = 0
+    slot.isDependentOn = {}
+    slot.objectId = 0
+    slot.offsetX = 0
+    slot.offsetY = 0
+    slot.fxOffsetX = 0
+    slot.fxOffsetY = 0
+    slot.fxRotation = 0
+    slot.fxFactory = nil
+    slot.hitW = 32
+    slot.hitH = 32
+    slot.requiredComponent = nil
+    slot.door_hp = nil
+    slot.door_damage_tint = nil
+    slot.door_shudder_timer = nil
+    slot.door_shudder_phase = nil
+end
+
+try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
+    if not self or not alien or alien.type ~= ALIEN_TYPE_BRUTE then
+        return false
+    end
+    local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_id, to_cell_id)
+    if not owner_cell or not door_obj or not door_closed then
+        return false
+    end
+    self.door_damage_cells_this_turn = self.door_damage_cells_this_turn or {}
+    local damage_key = owner_cell.idNumber or 0
+    if self.door_damage_cells_this_turn[damage_key] then
+        return true
+    end
+    self.door_damage_cells_this_turn[damage_key] = true
+    local hp = door_obj.door_hp or 3
+    hp = math.max(0, hp - 1)
+    door_obj.door_hp = hp
+    door_obj.door_damage_tint = math.max(0.25, math.min(1.0, hp / 3))
+    door_obj.door_shudder_timer = 0.60
+    door_obj.door_shudder_phase = 0
+
+    local cell_x, cell_y = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+    local fx_x = cell_x + (door_obj.offsetX or 0)
+    local fx_y = cell_y + (door_obj.offsetY or 0)
+    local fx_id = factory.create("/barricade_broken_fx_factory#barricade_broken_fx_factory", vmath.vector3(fx_x, fx_y, 0.62))
+    if fx_id then
+        pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+        timer.delay(0.18, false, function()
+            if fx_id then
+                pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = false })
+            end
+        end)
+        timer.delay(1.1, false, function()
+            if fx_id then
+                pcall(go.delete, fx_id)
+            end
+        end)
+    end
+
+    if hp <= 0 then
+        reset_runtime_object_slot_to_empty(door_obj)
+    end
+
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+        LOOT_RUNTIME.refresh_fix_markers(self)
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+        LOOT_RUNTIME.refresh_door_markers(self)
+    end
+
+    if hp > 0 then
+        print(string.format("Brute #%d damaged door object #%d (hp=%d).", alien.id or 0, door_obj.objectId or 0, hp))
+    else
+        print(string.format("Brute #%d destroyed door object #%d.", alien.id or 0, door_obj.objectId or 0))
+    end
+    return true
+end
+
 function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type)
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
         return false
@@ -1622,7 +1706,7 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
     local can_use_vent = alien_type ~= ALIEN_TYPE_BRUTE and not blip_in_void
     for _, human_cell_id in ipairs(human_ids) do
         local normal_path, normal_cost
-        if alien_type == ALIEN_TYPE_BLIP then
+        if alien_type == ALIEN_TYPE_BLIP or alien_type == ALIEN_TYPE_BRUTE then
             normal_path, normal_cost = find_alien_path(self.world_grid, alien_type, from_cell_id, human_cell_id, nil)
         else
             normal_path, normal_cost = find_path(self.world_grid, from_cell_id, human_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
@@ -3144,6 +3228,20 @@ local function update_alien_movement(self, dt)
                     alien.turn_ap_remaining = 0
                     print(string.format("Alien #%d (%s) blocked by barricade at cell %d.", alien.id or 0, alien.type or "?", target_cell_id))
                 else
+                local brute_door_blocked = false
+                if alien.type == ALIEN_TYPE_BRUTE then
+                    local _, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
+                    if door_obj and door_closed and try_brute_damage_edge_door(self, alien, from_cell_before_step, target_cell_id) then
+                        brute_door_blocked = true
+                        alien.counter_shadow_offset = nil
+                        alien.counter_move_total_dist = nil
+                        alien.is_moving = false
+                        alien.move_path = nil
+                        alien.move_path_index = 0
+                        alien.turn_ap_remaining = 0
+                    end
+                end
+                if not brute_door_blocked then
                 local from_vent = get_vent_object_on_cell(from_cell)
                 local to_vent = get_vent_object_on_cell(to_cell)
                 local is_vent_jump = (alien.type ~= ALIEN_TYPE_BRUTE) and from_vent and to_vent and from_cell_before_step ~= target_cell_id
@@ -3321,18 +3419,6 @@ local function update_alien_movement(self, dt)
                         alien.blip_step_offset_y = nil
                     end
                     alien.counter_move_total_dist = nil
-                    local door_owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
-                    if door_obj and door_closed and alien.type == ALIEN_TYPE_BRUTE then
-                        door_obj.isFixed = false
-                        door_obj.isOpen = true
-                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
-                            LOOT_RUNTIME.refresh_fix_markers(self)
-                        end
-                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
-                            LOOT_RUNTIME.refresh_door_markers(self)
-                        end
-                        print(string.format("Brute #%d smashed door object #%d open.", alien.id, door_obj.objectId or 0))
-                    end
                     if is_vent_jump then
                         local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
                         local vx = cx + (to_vent.offsetX or 0)
@@ -3443,6 +3529,7 @@ local function update_alien_movement(self, dt)
                     go.set_position(vmath.vector3(nx, ny, move_z), alien.go_id)
                 end
                 end
+                end
             end
         end
     end
@@ -3474,6 +3561,7 @@ local function process_alien_turn(self)
         self.alien_turn_active = true
         self.alien_turn_waiting_for_advance = false
         self.barricade_damage_cells_this_turn = {}
+        self.door_damage_cells_this_turn = {}
         print("=== Alien Turn Start ===")
         for _, alien in ipairs(self.aliens) do
             if not alien.is_dead then
@@ -7981,6 +8069,7 @@ function update(self, dt)
     update_human_movement(self, dt)
     update_alien_movement(self, dt)
     local obstacle_shudder_active = false
+    local door_shudder_active = false
     if self.world_grid then
         for _, cell in ipairs(self.world_grid) do
             if cell and (cell.obstacleShudderTimer or 0) > 0 then
@@ -8003,14 +8092,32 @@ function update(self, dt)
                     cell.barricade_scale_pulse = nil
                 end
             end
+            if cell then
+                local door_objs = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(door_objs) do
+                    if obj and obj.name == hash("door") and (obj.door_shudder_timer or 0) > 0 then
+                        obj.door_shudder_timer = math.max(0, (obj.door_shudder_timer or 0) - dt)
+                        obj.door_shudder_phase = (obj.door_shudder_phase or 0) + (dt * 48)
+                        if obj.door_shudder_timer > 0 then
+                            door_shudder_active = true
+                        else
+                            obj.door_shudder_timer = nil
+                            obj.door_shudder_phase = nil
+                        end
+                    end
+                end
+            end
         end
     end
-    if obstacle_shudder_active then
+    if obstacle_shudder_active or door_shudder_active then
         self.obstacle_shudder_refresh_timer = (self.obstacle_shudder_refresh_timer or 0) - dt
         if self.obstacle_shudder_refresh_timer <= 0 then
             self.obstacle_shudder_refresh_timer = 0.016
             if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
                 LOOT_RUNTIME.refresh_fix_markers(self)
+            end
+            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+                LOOT_RUNTIME.refresh_door_markers(self)
             end
         end
     else

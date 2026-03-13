@@ -968,7 +968,12 @@ reset_runtime_object_slot_to_empty = function(slot)
 end
 
 try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
-    if not self or not alien or alien.type ~= ALIEN_TYPE_BRUTE then
+    if not self or not alien then
+        return false
+    end
+    local is_true_brute = alien.type == ALIEN_TYPE_BRUTE
+    local is_hidden_brute_blip = alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE
+    if (not is_true_brute) and (not is_hidden_brute_blip) then
         return false
     end
     local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_id, to_cell_id)
@@ -981,6 +986,61 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
         return true
     end
     self.door_damage_cells_this_turn[damage_key] = true
+    if alien.go_id and is_true_brute then
+        local cell_x, cell_y = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+        local tx = cell_x + (door_obj.offsetX or 0)
+        local ty = cell_y + (door_obj.offsetY or 0)
+        local apos = go.get_position(alien.go_id)
+        local dx = tx - apos.x
+        local dy = ty - apos.y
+        local len = math.sqrt((dx * dx) + (dy * dy))
+        local ux, uy = 1, 0
+        if len > 0.001 then
+            ux = dx / len
+            uy = dy / len
+        end
+        local lurch_dx = ux * 54
+        local lurch_dy = uy * 36
+        local sprite_url = msg.url(nil, alien.go_id, "sprite")
+        local shadow_url = msg.url(nil, alien.go_id, "shadow")
+        alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
+        local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+            and hash("alien_brute_side_boardgame")
+            or hash("alien_brute_side")
+        pcall(msg.post, sprite_url, "play_animation", { id = side_anim })
+        local facing_right = ux > 0
+        pcall(sprite.set_hflip, sprite_url, facing_right)
+        pcall(sprite.set_hflip, shadow_url, facing_right)
+        local ok_sprite_pos, base_sprite_pos = pcall(go.get, sprite_url, "position")
+        local ok_shadow_pos, base_shadow_pos = pcall(go.get, shadow_url, "position")
+        if not ok_sprite_pos or (not base_sprite_pos) then
+            base_sprite_pos = vmath.vector3(0, 0, 0)
+        end
+        if not ok_shadow_pos or (not base_shadow_pos) then
+            base_shadow_pos = vmath.vector3(0, 0, 0)
+        end
+        local target_sprite_pos = vmath.vector3(base_sprite_pos.x + lurch_dx, base_sprite_pos.y + lurch_dy, base_sprite_pos.z)
+        local target_shadow_pos = vmath.vector3(base_shadow_pos.x + lurch_dx, base_shadow_pos.y + lurch_dy, base_shadow_pos.z)
+        pcall(go.cancel_animations, sprite_url, "position")
+        pcall(go.cancel_animations, shadow_url, "position")
+        pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, target_sprite_pos, go.EASING_OUTSINE, 0.20)
+        pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, base_sprite_pos, go.EASING_INSINE, 0.28, 0.20)
+        pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, target_shadow_pos, go.EASING_OUTSINE, 0.20)
+        pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, base_shadow_pos, go.EASING_INSINE, 0.28, 0.20)
+        timer.delay(0.30, false, function()
+            if alien and alien.go_id and (not alien.is_dead) then
+                alien.melee_pose_lock_timer = 0
+                local front_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+                    and hash("alien_brute_boardgame")
+                    or hash("alien_brute")
+                local end_sprite_url = msg.url(nil, alien.go_id, "sprite")
+                local end_shadow_url = msg.url(nil, alien.go_id, "shadow")
+                pcall(msg.post, end_sprite_url, "play_animation", { id = front_anim })
+                pcall(sprite.set_hflip, end_sprite_url, false)
+                pcall(sprite.set_hflip, end_shadow_url, false)
+            end
+        end)
+    end
     local hp = door_obj.door_hp or 3
     hp = math.max(0, hp - 1)
     door_obj.door_hp = hp
@@ -1025,7 +1085,7 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
     return true
 end
 
-function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type)
+function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type, hidden_reveal_type)
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
         return false
     end
@@ -1037,6 +1097,7 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
         return true
     end
     return alien_type == ALIEN_TYPE_BRUTE
+        or (alien_type == ALIEN_TYPE_BLIP and hidden_reveal_type == ALIEN_TYPE_BRUTE)
 end
 
 function can_human_cross_between_cells(world_grid, from_cell_id, to_cell_id)
@@ -1126,7 +1187,7 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
     return true
 end
 
-local function get_alien_neighbors(cell_id, world_grid, alien_type)
+local function get_alien_neighbors(cell_id, world_grid, alien_type, hidden_reveal_type)
     local neighbors = {}
     local directions = { "right", "left", "up", "down" }
     local cfg = ALIEN_TYPE_CONFIG[alien_type]
@@ -1138,7 +1199,7 @@ local function get_alien_neighbors(cell_id, world_grid, alien_type)
             local adj_cell = world_grid[adj_id]
             local can_enter_void = can_traverse_void == true
             local is_void = adj_cell.tileID == hash("empty")
-            if (not is_void or can_enter_void) and can_alien_cross_between_cells(world_grid, cell_id, adj_id, alien_type) then
+            if (not is_void or can_enter_void) and can_alien_cross_between_cells(world_grid, cell_id, adj_id, alien_type, hidden_reveal_type) then
                 local step_cost = get_alien_step_move_cost(world_grid, cell_id, adj_id, alien_type)
                 table.insert(neighbors, { id = adj_id, cost = step_cost })
             end
@@ -1558,7 +1619,7 @@ function find_path(world_grid, start_id, end_id, max_action_points, movement_pro
     return nil  -- No path found
 end
 
-local function find_alien_path(world_grid, alien_type, start_id, end_id, max_action_points)
+local function find_alien_path(world_grid, alien_type, start_id, end_id, max_action_points, hidden_reveal_type)
     if not world_grid[start_id] or not world_grid[end_id] then
         return nil
     end
@@ -1613,7 +1674,7 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
 
         table.remove(open_set, current_index)
 
-        local neighbors = get_alien_neighbors(current, world_grid, alien_type)
+        local neighbors = get_alien_neighbors(current, world_grid, alien_type, hidden_reveal_type)
         for _, neighbor_data in ipairs(neighbors) do
             local neighbor_id = neighbor_data.id
             local move_cost = neighbor_data.cost
@@ -1696,18 +1757,19 @@ local function get_nearest_human_cell_id(self, from_cell_id)
     return nearest
 end
 
-local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_id)
+local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_id, hidden_reveal_type)
     local human_ids = get_human_cell_ids(self)
     local best_target = nil
     local best_path = nil
     local best_cost = math.huge
     local from_cell = self.world_grid and self.world_grid[from_cell_id]
     local blip_in_void = (alien_type == ALIEN_TYPE_BLIP) and (from_cell and from_cell.tileID == hash("empty"))
-    local can_use_vent = alien_type ~= ALIEN_TYPE_BRUTE and not blip_in_void
+    local hidden_brute_blip = alien_type == ALIEN_TYPE_BLIP and hidden_reveal_type == ALIEN_TYPE_BRUTE
+    local can_use_vent = alien_type ~= ALIEN_TYPE_BRUTE and (not hidden_brute_blip) and not blip_in_void
     for _, human_cell_id in ipairs(human_ids) do
         local normal_path, normal_cost
         if alien_type == ALIEN_TYPE_BLIP or alien_type == ALIEN_TYPE_BRUTE then
-            normal_path, normal_cost = find_alien_path(self.world_grid, alien_type, from_cell_id, human_cell_id, nil)
+            normal_path, normal_cost = find_alien_path(self.world_grid, alien_type, from_cell_id, human_cell_id, nil, hidden_reveal_type)
         else
             normal_path, normal_cost = find_path(self.world_grid, from_cell_id, human_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
         end
@@ -1743,7 +1805,7 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
     return nil, nil
 end
 
-get_blip_fallback_staging_target = function(self, from_cell_id, alien_type)
+get_blip_fallback_staging_target = function(self, from_cell_id, alien_type, hidden_reveal_type)
     if not self.world_grid or not self.world_grid[from_cell_id] then
         return nil, nil
     end
@@ -1760,7 +1822,7 @@ get_blip_fallback_staging_target = function(self, from_cell_id, alien_type)
 
     for candidate_id, candidate_cell in ipairs(self.world_grid) do
         if candidate_id ~= from_cell_id and candidate_cell and candidate_cell.tileID ~= hash("empty") then
-            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil)
+            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil, hidden_reveal_type)
             if candidate_path and candidate_cost and candidate_cost > 0 then
                 local nearest_human_dist = math.huge
                 for _, human_id in ipairs(human_ids) do
@@ -2069,6 +2131,12 @@ local function refresh_alien_visual(self, alien)
             flash_alpha = cfg.marker_tint.w
         end
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 0.2, 0.2, flash_alpha))
+    elseif alien.type == ALIEN_TYPE_BLIP and alien.uses_blip_sprite then
+        if alien.hidden_reveal_type == ALIEN_TYPE_BRUTE then
+            go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1.0, 0.55, 0.15, 1.0))
+        else
+            go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        end
     elseif (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
     end
@@ -2098,6 +2166,9 @@ local function spawn_alien(self, alien_type, cell_id)
         spitter_anim_phase = math.random() * math.pi * 2,
         spitter_flip = false
     }
+    if alien_type == ALIEN_TYPE_BLIP then
+        alien.hidden_reveal_type = pick_weighted_blip_reveal_type()
+    end
 
     table.insert(self.aliens, alien)
     ensure_alien_visual(self, alien)
@@ -2119,7 +2190,7 @@ local function maybe_reveal_blip(self, alien)
 
     for _, human_cell_id in ipairs(get_human_cell_ids(self)) do
         if has_unobstructed_los(self.world_grid, alien.cell_id, human_cell_id) then
-            local revealed_type = pick_weighted_blip_reveal_type()
+            local revealed_type = alien.hidden_reveal_type or pick_weighted_blip_reveal_type()
             local cfg = ALIEN_TYPE_CONFIG[revealed_type]
             alien.type = revealed_type
             alien.ap_max = cfg.ap_per_turn
@@ -2181,6 +2252,9 @@ apply_blip_pulse_scale = function(alien, dt)
     end
     local speed_mul = 2
     local scale_mul = 1.25
+    if alien.hidden_reveal_type == ALIEN_TYPE_BRUTE then
+        scale_mul = scale_mul * 2.0
+    end
     alien.blip_pulse_phase = alien.blip_pulse_phase + (dt * alien.blip_pulse_speed * speed_mul * math.pi * 2)
     local wave = math.sin(alien.blip_pulse_phase)
     local s = alien.blip_pulse_base_scale * (1 + (wave * alien.blip_pulse_amount)) * scale_mul
@@ -3229,7 +3303,9 @@ local function update_alien_movement(self, dt)
                     print(string.format("Alien #%d (%s) blocked by barricade at cell %d.", alien.id or 0, alien.type or "?", target_cell_id))
                 else
                 local brute_door_blocked = false
-                if alien.type == ALIEN_TYPE_BRUTE then
+                if alien.type == ALIEN_TYPE_BRUTE
+                    or (alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE)
+                then
                     local _, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
                     if door_obj and door_closed and try_brute_damage_edge_door(self, alien, from_cell_before_step, target_cell_id) then
                         brute_door_blocked = true
@@ -3596,10 +3672,10 @@ local function process_alien_turn(self)
                     end
                 end
             end
-            local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
+            local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id, alien.hidden_reveal_type)
             local used_fallback_staging = false
             if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
-                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type)
+                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type, alien.hidden_reveal_type)
                 used_fallback_staging = target_cell_id ~= nil
             end
             if not target_cell_id and alien.type == ALIEN_TYPE_BRUTE then

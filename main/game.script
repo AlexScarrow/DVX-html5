@@ -3479,10 +3479,13 @@ local function process_alien_turn(self)
             if not alien.is_dead then
                 local cfg = ALIEN_TYPE_CONFIG[alien.type]
                 local ap_budget = cfg and cfg.ap_per_turn or 1
-                if (alien.barricade_pause_turns or 0) > 0 then
-                    alien.barricade_pause_turns = math.max(0, (alien.barricade_pause_turns or 0) - 1)
-                    ap_budget = 0
-                elseif try_brute_break_adjacent_barricade(self, alien) then
+                -- TEMPORARY: disable one-turn brute barricade pause for now.
+                -- Kept commented so this behavior can be restored later if desired.
+                -- if (alien.barricade_pause_turns or 0) > 0 then
+                --     alien.barricade_pause_turns = math.max(0, (alien.barricade_pause_turns or 0) - 1)
+                --     ap_budget = 0
+                -- elseif try_brute_break_adjacent_barricade(self, alien) then
+                if try_brute_break_adjacent_barricade(self, alien) then
                     ap_budget = 0
                 end
                 alien.turn_ap_remaining = ap_budget
@@ -3491,10 +3494,20 @@ local function process_alien_turn(self)
     end
 
     local any_step = false
+    local any_melee_ready_without_move = false
     local step_mode = self.alien_turn_manual_pause
     for _, alien in ipairs(self.aliens) do
         if (not alien.is_dead) and (alien.turn_ap_remaining or 0) > 0 then
             local ap_budget = alien.turn_ap_remaining or 0
+            local shares_cell_with_living_human = false
+            if self.squad_units then
+                for _, unit in pairs(self.squad_units) do
+                    if unit and (unit.current_health or 0) > 0 and unit.cell_id == alien.cell_id then
+                        shares_cell_with_living_human = true
+                        break
+                    end
+                end
+            end
             local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id)
             local used_fallback_staging = false
             if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
@@ -3513,7 +3526,12 @@ local function process_alien_turn(self)
                 local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, step_budget)
                 spent = spent or 0
                 if spent <= 0 then
-                    alien.turn_ap_remaining = 0
+                    -- If already engaged in melee range, preserve AP for melee phase.
+                    if shares_cell_with_living_human then
+                        alien.turn_ap_remaining = ap_budget
+                    else
+                        alien.turn_ap_remaining = 0
+                    end
                 else
                     alien.turn_ap_remaining = math.max(0, ap_budget - spent)
                     any_step = true
@@ -3527,13 +3545,21 @@ local function process_alien_turn(self)
                     used_fallback_staging and " [fallback-staging]" or ""
                 ))
             else
-                alien.turn_ap_remaining = 0
+                -- No path found: still allow melee when already sharing a cell with a human.
+                if shares_cell_with_living_human then
+                    alien.turn_ap_remaining = ap_budget
+                else
+                    alien.turn_ap_remaining = 0
+                end
                 print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
+            end
+            if (alien.turn_ap_remaining or 0) > 0 and shares_cell_with_living_human then
+                any_melee_ready_without_move = true
             end
         end
     end
 
-    if any_step then
+    if any_step or any_melee_ready_without_move then
         MELEE_RUNTIME.begin_phase(self)
         begin_spitter_attack_phase(self)
         if step_mode and self.alien_turn_manual_pause then

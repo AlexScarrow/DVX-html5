@@ -197,6 +197,9 @@ images {
   image: "/assets/images/derples_comms_notEnough_AP.png"
 }
 images {
+  image: "/assets/images/derples_comms_turret_fullPack.png"
+}
+images {
   image: "/assets/images/command_star.png"
 }
 images {

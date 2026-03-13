@@ -13,7 +13,8 @@ function M.extend(runtime, ctx)
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
         SPOT_ALIEN = { anim = hash("derples_comms_alienSpotted"), duration = 1.05, cooldown = 1.9, scale = 0.54, x_offset = 50, y_offset = 74 },
-        NOT_ENOUGH_AP = { anim = hash("derples_comms_notEnough_AP"), duration = 1.05, cooldown = 0.4, scale = 0.54, x_offset = 50, y_offset = 74 }
+        NOT_ENOUGH_AP = { anim = hash("derples_comms_notEnough_AP"), duration = 1.05, cooldown = 0.4, scale = 0.54, x_offset = 50, y_offset = 74 },
+        TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 }
     }
 
     local function get_drag_ap_cost()
@@ -1592,6 +1593,7 @@ function M.extend(runtime, ctx)
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if #unit.backpack_items > 0 then
             print("Backpack must be emptied before carrying a turret.")
+            runtime.emit_derple_feedback(self, unit.id, "TURRET_BACKPACK_NOT_EMPTY")
             flash_invalid_drag_units(unit, nil)
             return true
         end

@@ -1570,6 +1570,10 @@ function M.extend(runtime, ctx)
         end
 
         if bar_target == "meds" then
+            if (unit.current_health or 0) <= 0 then
+                print("Dead units cannot be healed with meds.")
+                return false
+            end
             if unit.current_health >= unit.max_health then
                 print("Health already full.")
                 return false
@@ -1593,7 +1597,7 @@ function M.extend(runtime, ctx)
         local best = nil
         local best_dist = math.huge
         for _, unit in pairs(self.squad_units) do
-            if unit.id ~= exclude_unit_id and unit.go_path then
+            if unit.id ~= exclude_unit_id and unit.go_path and (unit.current_health or 0) > 0 then
                 local pos = go.get_position(unit.go_path)
                 local dx = pos.x - world_x
                 local dy = pos.y - world_y
@@ -2144,7 +2148,10 @@ function M.extend(runtime, ctx)
                     else
                     if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
-                            if target_unit.current_health >= target_unit.max_health then
+                            if (target_unit.current_health or 0) <= 0 then
+                                print(target_unit.display_name .. " is dead and cannot be healed with meds.")
+                                flash_invalid_drag_units(source_unit, target_unit)
+                            elseif target_unit.current_health >= target_unit.max_health then
                                 print(target_unit.display_name .. " already has full HP.")
                                 flash_invalid_drag_units(source_unit, target_unit)
                             else

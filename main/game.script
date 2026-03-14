@@ -5601,17 +5601,33 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
         return
     end
-    local new_turn_color = self.alien_turn_active and vmath.vector4(0.3, 0.3, 0.3, 0.85) or vmath.vector4(0.2, 0.75, 0.25, 0.95)
-    set_ui_square_transform(
-        self,
-        self.ui.new_turn_button,
-        NEW_TURN_BUTTON_X,
-        NEW_TURN_BUTTON_Y,
-        NEW_TURN_BUTTON_Z,
-        new_turn_color,
-        NEW_TURN_BUTTON_W,
-        NEW_TURN_BUTTON_H
-    )
+    local alien_cycle_active = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+    if alien_cycle_active then
+        set_ui_square_transform(
+            self,
+            self.ui.new_turn_button,
+            -9999,
+            -9999,
+            NEW_TURN_BUTTON_Z,
+            vmath.vector4(0, 0, 0, 0),
+            NEW_TURN_BUTTON_W,
+            NEW_TURN_BUTTON_H
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.new_turn_button,
+            NEW_TURN_BUTTON_X,
+            NEW_TURN_BUTTON_Y,
+            NEW_TURN_BUTTON_Z,
+            vmath.vector4(0.2, 0.75, 0.25, 0.95),
+            NEW_TURN_BUTTON_W,
+            NEW_TURN_BUTTON_H
+        )
+    end
     local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
     local launch_color = vmath.vector4(0.72, 0.2, 0.2, 0.95)
     if self.game_won then
@@ -6612,15 +6628,20 @@ function try_advance_reactive_alien_turn(self, screen_x, screen_y)
 end
 
 function try_next_turn_button(self, screen_x, screen_y)
+    if self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+    then
+        return false
+    end
     local half_w = NEW_TURN_BUTTON_W * 0.5
     local half_h = NEW_TURN_BUTTON_H * 0.5
     if screen_x >= (NEW_TURN_BUTTON_X - half_w)
         and screen_x <= (NEW_TURN_BUTTON_X + half_w)
         and screen_y >= (NEW_TURN_BUTTON_Y - half_h)
         and screen_y <= (NEW_TURN_BUTTON_Y + half_h) then
-        if not self.alien_turn_active then
-            msg.post(".", "next_turn")
-        end
+        msg.post(".", "next_turn")
         return true
     end
     return false
@@ -8739,6 +8760,13 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
+        if self.alien_turn_active
+            or self.pending_spitter_attack_phase
+            or self.pending_melee_attack_phase
+            or any_alien_is_moving(self)
+        then
+            return true
+        end
         next_turn_reset_human_ap(self)
         process_alien_turn(self)
     end
@@ -8751,6 +8779,13 @@ end
 function on_message(self, message_id, message, sender)
     if message_id == hash("next_turn") then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return
+        end
+        if self.alien_turn_active
+            or self.pending_spitter_attack_phase
+            or self.pending_melee_attack_phase
+            or any_alien_is_moving(self)
+        then
             return
         end
         next_turn_reset_human_ap(self)

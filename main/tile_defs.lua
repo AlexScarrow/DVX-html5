@@ -179,6 +179,7 @@ canteen.cells[4].accessRight = false
 canteen.cells[5].accessRight = false
 canteen.cells[5].accessDown = false
 canteen.cells[6].accessRight = false
+canteen.cells[6].accessDown = false
 canteen.cells[8].accessDown = false
 canteen.cells[9].accessDown = false
 canteen.cells[9].accessRight = false

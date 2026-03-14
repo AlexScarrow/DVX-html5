@@ -161,13 +161,16 @@ function M.extend(runtime, ctx)
         end
 
         for cell_id, cell in ipairs(self.world_grid) do
-            if cell.tileID ~= hash("empty") and cell.isPowered then
+            if cell.tileID ~= hash("empty") then
                 local objects = { cell.object1, cell.object2, cell.object3 }
                 for _, obj in ipairs(objects) do
                     if obj and obj.name == hash("gun_turret") then
                         local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                         local tx = x + (obj.offsetX or 0)
                         local ty = y + (obj.offsetY or 0)
+                        local turret_tint = (cell.isPowered == true)
+                            and vmath.vector4(1, 1, 1, 1)
+                            or vmath.vector4(0.14, 0.14, 0.14, 1)
                         if boardgame_shadows_enabled(self) then
                             self.turret_shadow_objects[cell_id] = spawn_world_shadow(tx + 7, ty - 10, 0.5, 0.74, 0.3, 0.36)
                         end
@@ -175,11 +178,13 @@ function M.extend(runtime, ctx)
                         local gun_id = factory.create("/tile_factory#tile_factory", vmath.vector3(tx, ty, 0.561))
                         if tripod_id then
                             msg.post(msg.url(nil, tripod_id, "sprite"), "play_animation", { id = hash("gun_turret_tripod") })
+                            go.set(msg.url(nil, tripod_id, "sprite"), "tint", turret_tint)
                             go.set_scale(vmath.vector3(1, 1, 1), tripod_id)
                             turret_tripod_objects[cell_id] = tripod_id
                         end
                         if gun_id then
                             msg.post(msg.url(nil, gun_id, "sprite"), "play_animation", { id = hash("gun_turret") })
+                            go.set(msg.url(nil, gun_id, "sprite"), "tint", turret_tint)
                             go.set_scale(vmath.vector3(1, 1, 1), gun_id)
                             -- Rotation hook: update this z-angle when turret acquires/fires at target.
                             go.set_rotation(vmath.quat_rotation_z(0), gun_id)

@@ -2468,6 +2468,86 @@ local function get_living_humans(self)
     return living
 end
 
+get_barricade_anchor_x_for_cell = function(cell)
+    if not cell then
+        return 0
+    end
+    if cell.barricade_anchor_x ~= nil then
+        return cell.barricade_anchor_x
+    end
+    local slot_index = cell.barricade_slot_index or 2
+    if slot_index == 1 then
+        return -70
+    elseif slot_index == 3 then
+        return 70
+    end
+    return 0
+end
+
+spitter_shot_blocked_by_barricade = function(self, alien, human)
+    if not self or not self.world_grid or not alien or not human then
+        return false
+    end
+    local from_id = alien.cell_id
+    local to_id = human.cell_id
+    if not from_id or not to_id or from_id == to_id then
+        return false
+    end
+    local from_cell = self.world_grid[from_id]
+    local to_cell = self.world_grid[to_id]
+    if not from_cell or not to_cell then
+        return false
+    end
+
+    -- Rule 1: any barricade in an intermediate cell blocks the shot.
+    if from_cell.xCell == to_cell.xCell then
+        local step = (to_cell.yCell > from_cell.yCell) and 1 or -1
+        for y = from_cell.yCell + step, to_cell.yCell - step, step do
+            local mid_id = coords_to_id(from_cell.xCell, y)
+            if mid_id and is_cell_barricaded(self.world_grid, mid_id) then
+                return true, "intermediate_barricade"
+            end
+        end
+    elseif from_cell.yCell == to_cell.yCell then
+        local step = (to_cell.xCell > from_cell.xCell) and 1 or -1
+        for x = from_cell.xCell + step, to_cell.xCell - step, step do
+            local mid_id = coords_to_id(x, from_cell.yCell)
+            if mid_id and is_cell_barricaded(self.world_grid, mid_id) then
+                return true, "intermediate_barricade"
+            end
+        end
+    end
+
+    -- Rules 2-5: same-cell barricade can block cross-cell horizontal shooting by side.
+    if is_cell_barricaded(self.world_grid, from_id) and from_cell.xCell ~= to_cell.xCell then
+        local from_center_x = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+        local shooter_pos = alien.go_id and go.get_position(alien.go_id) or nil
+        local shooter_x = shooter_pos and shooter_pos.x or from_center_x
+        local barricade_x = from_center_x + get_barricade_anchor_x_for_cell(from_cell)
+
+        local shooter_side = (shooter_x >= barricade_x) and 1 or -1
+        local target_dir = (to_cell.xCell > from_cell.xCell) and 1 or -1
+        if shooter_side ~= target_dir then
+            return true, "same_cell_side_block"
+        end
+    end
+
+    -- Rule 6: barricade in target cell can shield by target-side against horizontal shots.
+    if is_cell_barricaded(self.world_grid, to_id) and from_cell.xCell ~= to_cell.xCell then
+        local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+        local target_pos = human.go_path and go.get_position(human.go_path) or nil
+        local target_x = target_pos and target_pos.x or to_center_x
+        local barricade_x = to_center_x + get_barricade_anchor_x_for_cell(to_cell)
+        local target_side = (target_x >= barricade_x) and 1 or -1
+        local shot_dir = (to_cell.xCell > from_cell.xCell) and 1 or -1
+        if target_side == shot_dir then
+            return true, "target_cell_side_block"
+        end
+    end
+
+    return false
+end
+
 local function choose_spitter_target(self, alien)
     local candidates = {}
     local range_cells = alien.ranged_cells or SPITTER_MAX_RANGE_CELLS
@@ -2492,7 +2572,8 @@ local function choose_spitter_target(self, alien)
                     vertical_lane_allowed = shooter_in_right_lane and target_in_right_lane
                 end
             end
-            if vertical_lane_allowed then
+            local blocked_by_barricade = spitter_shot_blocked_by_barricade(self, alien, human)
+            if vertical_lane_allowed and (not blocked_by_barricade) then
                 table.insert(candidates, { unit = human, dist = dist, hp = human.current_health })
             end
         end
@@ -3094,6 +3175,14 @@ local function update_spitter_attack_phase(self, dt)
     local target = choose_spitter_target(self, spitter)
     if not target then
         print(string.format("Spitter #%d cannot fire (no valid target in LOS/range)", spitter.id))
+        return
+    end
+    local blocked_by_barricade, block_reason = spitter_shot_blocked_by_barricade(self, spitter, target)
+    if blocked_by_barricade then
+        print(string.format(
+            "Spitter #%d blocked by barricade (reason=%s) shooterCell=%d targetCell=%d",
+            spitter.id, tostring(block_reason), spitter.cell_id or 0, target.cell_id or 0
+        ))
         return
     end
 

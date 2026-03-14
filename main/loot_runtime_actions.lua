@@ -2025,7 +2025,7 @@ function M.extend(runtime, ctx)
             self.drag_resource = { active = false }
             return true
         end
-        if source_item == TURRET_PACKED_ITEM then
+        if drag.drag_type ~= "command" and source_item == TURRET_PACKED_ITEM then
             local start_x = drag.start_screen_x or drag.screen_x or screen_x
             local start_y = drag.start_screen_y or drag.screen_y or screen_y
             local drag_dx = (screen_x or start_x) - start_x

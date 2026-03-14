@@ -825,29 +825,31 @@ try_brute_break_adjacent_barricade = function(self, alien)
         return false
     end
     self.barricade_damage_cells_this_turn = self.barricade_damage_cells_this_turn or {}
-    if self.barricade_damage_cells_this_turn[target_cell_id] then
-        return true
-    end
-    local removed, remaining = remove_one_obstacle_from_cell(self.world_grid, target_cell_id)
-    if not removed then
-        return false
-    end
-    self.barricade_damage_cells_this_turn[target_cell_id] = true
     if alien.go_id then
         local target_cell = self.world_grid and self.world_grid[target_cell_id] or nil
         if target_cell then
             local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            tx = tx + (target_cell.barricade_anchor_x or 0)
+            ty = ty + (target_cell.barricade_anchor_y or 0)
             local apos = go.get_position(alien.go_id)
             local dx = tx - apos.x
             local dy = ty - apos.y
             local len = math.sqrt((dx * dx) + (dy * dy))
-            local ux, uy = 1, 0
+            local ux, uy = 0, 0
             if len > 0.001 then
                 ux = dx / len
                 uy = dy / len
+            else
+                local sprite_url = msg.url(nil, alien.go_id, "sprite")
+                local facing_right = true
+                local ok_flip, current_flip = pcall(sprite.get_hflip, sprite_url)
+                if ok_flip then
+                    facing_right = current_flip == true
+                end
+                ux = facing_right and 1 or -1
             end
-            local lurch_dx = ux * 54
-            local lurch_dy = uy * 36
+            local lurch_dx = dx * 0.9
+            local lurch_dy = dy * 0.9
             local sprite_url = msg.url(nil, alien.go_id, "sprite")
             local shadow_url = msg.url(nil, alien.go_id, "shadow")
             alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
@@ -858,23 +860,12 @@ try_brute_break_adjacent_barricade = function(self, alien)
             local facing_right = ux > 0
             pcall(sprite.set_hflip, sprite_url, facing_right)
             pcall(sprite.set_hflip, shadow_url, facing_right)
-            local ok_sprite_pos, base_sprite_pos = pcall(go.get, sprite_url, "position")
-            local ok_shadow_pos, base_shadow_pos = pcall(go.get, shadow_url, "position")
-            if not ok_sprite_pos or (not base_sprite_pos) then
-                base_sprite_pos = vmath.vector3(0, 0, 0)
-            end
-            if not ok_shadow_pos or (not base_shadow_pos) then
-                base_shadow_pos = vmath.vector3(0, 0, 0)
-            end
-            local target_sprite_pos = vmath.vector3(base_sprite_pos.x + lurch_dx, base_sprite_pos.y + lurch_dy, base_sprite_pos.z)
-            local target_shadow_pos = vmath.vector3(base_shadow_pos.x + lurch_dx, base_shadow_pos.y + lurch_dy, base_shadow_pos.z)
             print(string.format("DEBUG: Brute #%d sprite-lurch triggered toward barricade cell %d.", alien.id or 0, target_cell_id))
-            pcall(go.cancel_animations, sprite_url, "position")
-            pcall(go.cancel_animations, shadow_url, "position")
-            pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, target_sprite_pos, go.EASING_OUTSINE, 0.20)
-            pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, base_sprite_pos, go.EASING_INSINE, 0.28, 0.20)
-            pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, target_shadow_pos, go.EASING_OUTSINE, 0.20)
-            pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, base_shadow_pos, go.EASING_INSINE, 0.28, 0.20)
+            local base_go_pos = go.get_position(alien.go_id)
+            local target_go_pos = vmath.vector3(base_go_pos.x + lurch_dx, base_go_pos.y + lurch_dy, base_go_pos.z)
+            pcall(go.cancel_animations, alien.go_id, "position")
+            pcall(go.animate, alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, target_go_pos, go.EASING_OUTSINE, 0.20)
+            pcall(go.animate, alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, base_go_pos, go.EASING_INSINE, 0.28, 0.20)
             timer.delay(0.30, false, function()
                 if alien and alien.go_id and (not alien.is_dead) then
                     alien.melee_pose_lock_timer = 0
@@ -890,6 +881,14 @@ try_brute_break_adjacent_barricade = function(self, alien)
             end)
         end
     end
+    if self.barricade_damage_cells_this_turn[target_cell_id] then
+        return true
+    end
+    local removed, remaining = remove_one_obstacle_from_cell(self.world_grid, target_cell_id)
+    if not removed then
+        return false
+    end
+    self.barricade_damage_cells_this_turn[target_cell_id] = true
     local target_cell = self.world_grid and self.world_grid[target_cell_id]
     if target_cell then
         target_cell.obstacleShudderTimer = 0.60
@@ -982,10 +981,6 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
     end
     self.door_damage_cells_this_turn = self.door_damage_cells_this_turn or {}
     local damage_key = owner_cell.idNumber or 0
-    if self.door_damage_cells_this_turn[damage_key] then
-        return true
-    end
-    self.door_damage_cells_this_turn[damage_key] = true
     if alien.go_id and is_true_brute then
         local cell_x, cell_y = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
         local tx = cell_x + (door_obj.offsetX or 0)
@@ -999,8 +994,8 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
             ux = dx / len
             uy = dy / len
         end
-        local lurch_dx = ux * 54
-        local lurch_dy = uy * 36
+        local lurch_dx = dx * 0.9
+        local lurch_dy = dy * 0.9
         local sprite_url = msg.url(nil, alien.go_id, "sprite")
         local shadow_url = msg.url(nil, alien.go_id, "shadow")
         alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
@@ -1011,22 +1006,11 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
         local facing_right = ux > 0
         pcall(sprite.set_hflip, sprite_url, facing_right)
         pcall(sprite.set_hflip, shadow_url, facing_right)
-        local ok_sprite_pos, base_sprite_pos = pcall(go.get, sprite_url, "position")
-        local ok_shadow_pos, base_shadow_pos = pcall(go.get, shadow_url, "position")
-        if not ok_sprite_pos or (not base_sprite_pos) then
-            base_sprite_pos = vmath.vector3(0, 0, 0)
-        end
-        if not ok_shadow_pos or (not base_shadow_pos) then
-            base_shadow_pos = vmath.vector3(0, 0, 0)
-        end
-        local target_sprite_pos = vmath.vector3(base_sprite_pos.x + lurch_dx, base_sprite_pos.y + lurch_dy, base_sprite_pos.z)
-        local target_shadow_pos = vmath.vector3(base_shadow_pos.x + lurch_dx, base_shadow_pos.y + lurch_dy, base_shadow_pos.z)
-        pcall(go.cancel_animations, sprite_url, "position")
-        pcall(go.cancel_animations, shadow_url, "position")
-        pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, target_sprite_pos, go.EASING_OUTSINE, 0.20)
-        pcall(go.animate, sprite_url, "position", go.PLAYBACK_ONCE_FORWARD, base_sprite_pos, go.EASING_INSINE, 0.28, 0.20)
-        pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, target_shadow_pos, go.EASING_OUTSINE, 0.20)
-        pcall(go.animate, shadow_url, "position", go.PLAYBACK_ONCE_FORWARD, base_shadow_pos, go.EASING_INSINE, 0.28, 0.20)
+        local base_go_pos = go.get_position(alien.go_id)
+        local target_go_pos = vmath.vector3(base_go_pos.x + lurch_dx, base_go_pos.y + lurch_dy, base_go_pos.z)
+        pcall(go.cancel_animations, alien.go_id, "position")
+        pcall(go.animate, alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, target_go_pos, go.EASING_OUTSINE, 0.20)
+        pcall(go.animate, alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, base_go_pos, go.EASING_INSINE, 0.28, 0.20)
         timer.delay(0.30, false, function()
             if alien and alien.go_id and (not alien.is_dead) then
                 alien.melee_pose_lock_timer = 0
@@ -1041,6 +1025,10 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
             end
         end)
     end
+    if self.door_damage_cells_this_turn[damage_key] then
+        return true
+    end
+    self.door_damage_cells_this_turn[damage_key] = true
     local hp = door_obj.door_hp or 3
     hp = math.max(0, hp - 1)
     door_obj.door_hp = hp

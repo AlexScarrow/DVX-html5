@@ -2,16 +2,18 @@ local M = {}
 
 function M.create(ctx)
     local runtime = {}
-    local HUMAN_MELEE_LURCH_DISTANCE = 28
+    local HUMAN_MELEE_LURCH_REACH_FACTOR = 0.9
     local HUMAN_MELEE_LURCH_OUT_TIME = 0.06
     local HUMAN_MELEE_LURCH_BACK_TIME = 0.08
     local HUMAN_MELEE_LURCH_Z_BONUS = 0.08
     local HUMAN_MELEE_TARGET_FLASH_TIME = 0.09
-    local ALIEN_MELEE_LURCH_DISTANCE = 26
+    local ALIEN_MELEE_LURCH_REACH_FACTOR = 0.9
     local ALIEN_MELEE_LURCH_OUT_TIME = 0.05
     local ALIEN_MELEE_LURCH_BACK_TIME = 0.08
     local ALIEN_MELEE_LURCH_Z_BONUS = 0.06
     local SPEEDY_VERTICAL_LURCH_FACTOR = 0.55
+    local HUMAN_VS_SPEEDY_VERTICAL_ARC = 16
+    local SPEEDY_VS_HUMAN_VERTICAL_ARC = 14
 
     local function clamp(v, lo, hi)
         if v < lo then return lo end
@@ -199,11 +201,12 @@ function M.create(ctx)
             return
         end
 
-        local step_x = (dx / len) * HUMAN_MELEE_LURCH_DISTANCE
+        local step_x = dx * HUMAN_MELEE_LURCH_REACH_FACTOR
         local step_y = 0
         if target_alien.type == ctx.ALIEN_TYPE_SPEEDY then
             -- Exception: human vs speedy keeps a temporary upward lurch before returning to floor anchor.
-            step_y = math.abs((dy / len) * HUMAN_MELEE_LURCH_DISTANCE * SPEEDY_VERTICAL_LURCH_FACTOR)
+            local guided_arc = math.abs(dy) * SPEEDY_VERTICAL_LURCH_FACTOR
+            step_y = math.max(HUMAN_VS_SPEEDY_VERTICAL_ARC, guided_arc)
         end
         local origin = go.get_position(human.go_path)
         local lurch_z = math.max(origin.z, (target_pos.z or origin.z) + HUMAN_MELEE_LURCH_Z_BONUS)
@@ -243,11 +246,12 @@ function M.create(ctx)
             return
         end
 
-        local step_x = (dx / len) * ALIEN_MELEE_LURCH_DISTANCE
+        local step_x = dx * ALIEN_MELEE_LURCH_REACH_FACTOR
         local step_y = 0
         if alien.type == ctx.ALIEN_TYPE_SPEEDY then
             -- Exception: speedy vs human lunges downward then returns to ceiling-style anchor.
-            step_y = -math.abs((dy / len) * ALIEN_MELEE_LURCH_DISTANCE * SPEEDY_VERTICAL_LURCH_FACTOR)
+            local guided_arc = math.abs(dy) * SPEEDY_VERTICAL_LURCH_FACTOR
+            step_y = -math.max(SPEEDY_VS_HUMAN_VERTICAL_ARC, guided_arc)
         end
         local origin = go.get_position(alien.go_id)
         local lurch_z = math.max(origin.z, (target_pos.z or origin.z) + ALIEN_MELEE_LURCH_Z_BONUS)

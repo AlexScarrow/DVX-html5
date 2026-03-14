@@ -7111,6 +7111,7 @@ local function update_single_unit_movement(self, unit, dt)
         local prefer_clicked_slot = is_final_step
             and unit.desired_destination_slot_index
             and (target_cell_id == unit.desired_destination_cell_id)
+        local allow_clicked_slot_for_entry = prefer_clicked_slot and (counter_move_enabled or (not is_vertical_step))
         if is_vertical_step and (not counter_move_enabled) then
             local right_slot = 1
             for i = 1, #CELL_SLOT_OFFSETS_X do
@@ -7136,7 +7137,7 @@ local function update_single_unit_movement(self, unit, dt)
                     table.insert(free_slots, i)
                 end
             end
-            if prefer_clicked_slot then
+            if allow_clicked_slot_for_entry then
                 local desired_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, unit.desired_destination_slot_index))
                 if not used[desired_slot] then
                     selected_slot = desired_slot
@@ -7156,7 +7157,7 @@ local function update_single_unit_movement(self, unit, dt)
             elseif #free_slots > 0 and (counter_move_enabled or (not is_vertical_step)) then
                 selected_slot = free_slots[math.random(1, #free_slots)]
             end
-        elseif prefer_clicked_slot then
+        elseif allow_clicked_slot_for_entry then
             selected_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, unit.desired_destination_slot_index))
         end
         unit.entry_slot_for_index = unit.move_path_index
@@ -7244,6 +7245,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.move_path_index = unit.move_path_index + 1
 
         if unit.move_path_index > #unit.move_path then
+            local final_desired_slot_index = unit.desired_destination_slot_index
             unit.desired_destination_cell_id = nil
             unit.desired_destination_slot_index = nil
             if (not counter_move_enabled) and unit.last_completed_step_vertical and self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
@@ -7261,8 +7263,29 @@ local function update_single_unit_movement(self, unit, dt)
                         table.insert(spare_slots, i)
                     end
                 end
-                if #spare_slots > 0 then
-                    local settle_slot = spare_slots[math.random(1, #spare_slots)]
+                local settle_slot = nil
+                if final_desired_slot_index then
+                    local desired_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, final_desired_slot_index))
+                    if desired_slot ~= current_slot then
+                        if not used[desired_slot] then
+                            settle_slot = desired_slot
+                        elseif #spare_slots > 0 then
+                            local desired_offset = CELL_SLOT_OFFSETS_X[desired_slot] or 0
+                            settle_slot = spare_slots[1]
+                            local best_dist = math.abs((CELL_SLOT_OFFSETS_X[settle_slot] or 0) - desired_offset)
+                            for _, free_slot in ipairs(spare_slots) do
+                                local dist = math.abs((CELL_SLOT_OFFSETS_X[free_slot] or 0) - desired_offset)
+                                if dist < best_dist then
+                                    best_dist = dist
+                                    settle_slot = free_slot
+                                end
+                            end
+                        end
+                    end
+                elseif #spare_slots > 0 then
+                    settle_slot = spare_slots[math.random(1, #spare_slots)]
+                end
+                if settle_slot then
                     assignment[unit.id] = settle_slot
                     local settle_x, settle_y = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
                     unit.micro_target_x = settle_x

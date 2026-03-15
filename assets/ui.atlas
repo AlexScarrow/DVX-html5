@@ -28,6 +28,9 @@ images {
 images {
   image: "/assets/images/command_star.png"
 }
+images {
+  image: "/assets/images/button_newTurn.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

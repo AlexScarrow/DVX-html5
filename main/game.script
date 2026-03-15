@@ -83,7 +83,7 @@ local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
 local UNIT_SELECTED_PULSE_SPEED = 4
 DERPLE_FEEDBACK_LOW_HP_RATIO = 0.35
 DERPLE_FEEDBACK_LOS_SCAN_INTERVAL = 0.22
-local VERTICAL_MOVE_AP_COST = 3
+local VERTICAL_MOVE_AP_COST = 2
 local UI_PANEL_X = 170
 local UI_PANEL_Y = 370
 local UI_PANEL_W = 300
@@ -127,6 +127,7 @@ NEW_TURN_BUTTON_Y = 64
 NEW_TURN_BUTTON_W = 180
 NEW_TURN_BUTTON_H = 64
 NEW_TURN_BUTTON_Z = 0.845
+NEW_TURN_BUTTON_VISUAL_SCALE = 1.0
 LAUNCH_BUTTON_X = SCREEN_WIDTH - 140
 LAUNCH_BUTTON_Y = 64
 LAUNCH_BUTTON_W = 180
@@ -184,7 +185,7 @@ local ALIEN_TYPE_CANNON = "cannon_fodder"
 local ALIEN_TYPE_SPEEDY = "speedy"
 local ALIEN_TYPE_SPITTER = "spitter"
 local ALIEN_TYPE_BRUTE = "brute"
-local ALIEN_VERTICAL_MOVE_AP_COST = 3
+local ALIEN_VERTICAL_MOVE_AP_COST = 2
 local ALIEN_VENT_TRANSIT_AP_COST = 1
 local INITIAL_BLIP_COUNT = 3
 local ALIEN_MARKER_SIZE = 20
@@ -1909,7 +1910,7 @@ end
 local function get_edge_spawn_cell_ids(world_grid)
     local ids = {}
     for cell_id, cell in ipairs(world_grid) do
-        if cell and cell.tileID ~= hash("empty") and cell.isPowered ~= true then
+        if cell and cell.tileID ~= hash("empty") then
             local has_spawn = cell.blipSpawnEnabled == true
             local objs = { cell.object1, cell.object2, cell.object3 }
             for _, obj in ipairs(objs) do
@@ -5025,6 +5026,9 @@ local function initialize_unit_ui(self)
         self.ui.level_buttons[i] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
     end
     self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+    if self.ui.new_turn_button then
+        msg.post(msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = hash("button_newTurn") })
+    end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
@@ -5611,9 +5615,9 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_X,
             NEW_TURN_BUTTON_Y,
             NEW_TURN_BUTTON_Z,
-            vmath.vector4(0.2, 0.75, 0.25, 0.95),
-            NEW_TURN_BUTTON_W,
-            NEW_TURN_BUTTON_H
+            vmath.vector4(1, 1, 1, 1),
+            NEW_TURN_BUTTON_VISUAL_SCALE,
+            NEW_TURN_BUTTON_VISUAL_SCALE
         )
     end
     local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil

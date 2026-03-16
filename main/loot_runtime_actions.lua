@@ -17,6 +17,11 @@ function M.extend(runtime, ctx)
     local FACTORY_UNDERLAY_Z = 0.018
     local FACTORY_CONVEYOR_TOKEN_Z = 0.56
     local FACTORY_BELT_PAN_RATE = 0.3375
+    local FACTORY_STEAM_FX_Z = 0.57
+    local FACTORY_STEAM_OFFSET_X = -100
+    local FACTORY_STEAM_OFFSET_Y = 20
+    local FACTORY_STEAM_ROTATION_DEG = -115
+    local FACTORY_STEAM_LIFETIME_SECONDS = 1.2
     local FACTORY_STACK_SLOT_OFFSETS = {
         vmath.vector3(-94, -35, 0), vmath.vector3(-94, -1, 0), vmath.vector3(-94, 33, 0),
         vmath.vector3(-46, -35, 0), vmath.vector3(-46, -1, 0), vmath.vector3(-46, 33, 0),
@@ -627,6 +632,21 @@ function M.extend(runtime, ctx)
         return nil
     end
 
+    local function spawn_factory_steam_fx(self, world_x, world_y)
+        local fx_id = factory.create(
+            "/factory_steam_fx_factory#factory_steam_fx_factory",
+            vmath.vector3(world_x + FACTORY_STEAM_OFFSET_X, world_y + FACTORY_STEAM_OFFSET_Y, FACTORY_STEAM_FX_Z)
+        )
+        if not fx_id then
+            return
+        end
+        pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(FACTORY_STEAM_ROTATION_DEG)), fx_id)
+        pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+        timer.delay(FACTORY_STEAM_LIFETIME_SECONDS, false, function()
+            pcall(go.delete, fx_id)
+        end)
+    end
+
     local function set_factory_underlay_tint(entry, tint)
         if not entry then
             return
@@ -723,6 +743,7 @@ function M.extend(runtime, ctx)
                         msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = hash("material_unit") })
                         go.set_scale(vmath.vector3(0.85, 0.85, 1), token_id)
                         go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.96))
+                        spawn_factory_steam_fx(self, cx, cy)
                         table.insert(self.factory_conveyor_tokens, {
                             go_id = token_id,
                             tile_instance_id = tile_instance_id,

@@ -1,23 +1,22 @@
 emitters {
-  mode: PLAY_MODE_LOOP
+  mode: PLAY_MODE_ONCE
   duration: 1.0
   space: EMISSION_SPACE_WORLD
-  tile_source: "/builtins/graphics/particle_blob.tilesource"
-  animation: "anim"
+  tile_source: "/assets/tiles.atlas"
+  animation: "smokeParticle_dark"
   material: "/builtins/materials/particlefx.material"
-  blend_mode: BLEND_MODE_ADD
   max_particle_count: 128
   type: EMITTER_TYPE_2DCONE
   properties {
     key: EMITTER_KEY_SPAWN_RATE
     points {
-      y: 50.0
+      y: 30.0
     }
   }
   properties {
     key: EMITTER_KEY_SIZE_X
     points {
-      y: 8.0
+      y: 30.0
     }
   }
   properties {
@@ -29,20 +28,22 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 2.5
+      y: 5.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 100.0
+      y: 75.0
     }
+    spread: 50.0
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SIZE
     points {
-      y: 20.0
+      y: 100.0
     }
+    spread: 200.0
   }
   properties {
     key: EMITTER_KEY_PARTICLE_RED

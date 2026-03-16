@@ -5832,7 +5832,13 @@ apply_computer_emissive_accents = function(self, dt)
         if apply_off_human_proximity_rule and not powered then
             local n = tonumber(instance_key) or 0
             self.tile_off_proximity_mul_state = self.tile_off_proximity_mul_state or {}
-            local target_mul = nearby_human_tile_instances[n] and 1 or 0.5
+            local target_mul
+            if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+                -- Keep OFF tiles readable near the squad, but noticeably darker overall.
+                target_mul = nearby_human_tile_instances[n] and 0.72 or 0.35
+            else
+                target_mul = nearby_human_tile_instances[n] and 1 or 0.5
+            end
             local current_mul = self.tile_off_proximity_mul_state[n]
             if current_mul == nil then
                 current_mul = target_mul
@@ -5844,7 +5850,13 @@ apply_computer_emissive_accents = function(self, dt)
             self.tile_off_proximity_mul_state[n] = current_mul
             return vmath.vector4(current_mul, current_mul, current_mul, 1)
         end
-        if not enabled or not powered then
+        if not powered then
+            if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+                return vmath.vector4(0.42, 0.42, 0.42, 1)
+            end
+            return white_tint
+        end
+        if not enabled then
             return white_tint
         end
         local n = tonumber(instance_key) or 0
@@ -7936,6 +7948,7 @@ end
                 local id = factory.create("/cell_factory#cell_factory", pos, nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
                 if id then
                     msg.post(msg.url(nil, id, "cell_sprite1"), "set_animation", {animation = hash(animation)})
+                    msg.post(msg.url(nil, id, "cell_sprite1"), "set_tint", { tint = vmath.vector4(1, 1, 1, 0) })
                     cell_objects[cell.idNumber] = id
                     spawned_count = spawned_count + 1
                 end

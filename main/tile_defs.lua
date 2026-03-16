@@ -134,6 +134,11 @@ coms.cells[2].object1 = {
     powerLoaded = 0, powerRequired = 9
 }
 
+coms.cells[4].object2 = {
+    name = hash("gun_turret"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
+    offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+}
+
 coms.cells[5].object1 = {
     name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
     offsetX = 80, offsetY = -5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight

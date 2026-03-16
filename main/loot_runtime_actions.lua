@@ -14,7 +14,7 @@ function M.extend(runtime, ctx)
     local FACTORY_TILE_ID = hash("factory")
     local FACTORY_MACHINE_NAME = hash("factory_machine")
     local FACTORY_MAX_STOCK = 9
-    local FACTORY_UNDERLAY_Z = 0.012
+    local FACTORY_UNDERLAY_Z = 0.018
     local FACTORY_CONVEYOR_TOKEN_Z = 0.56
     local FACTORY_BELT_PAN_RATE = 0.3375
     local FACTORY_STACK_SLOT_OFFSETS = {
@@ -665,7 +665,7 @@ function M.extend(runtime, ctx)
                 local c2x, c2y = ctx.coords_to_world_pos(cell2.xCell, cell2.yCell)
                 local c5x, c5y = ctx.coords_to_world_pos(cell5.xCell, cell5.yCell)
                 local c8x, c8y = ctx.coords_to_world_pos(cell8.xCell, cell8.yCell)
-                local belt_id = factory.create("/tile_factory#tile_factory", vmath.vector3(c2x, c2y - 45, FACTORY_UNDERLAY_Z))
+                local belt_id = factory.create("/tile_factory#tile_factory", vmath.vector3(c2x, c2y - 47, FACTORY_UNDERLAY_Z))
                 if belt_id then
                     msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("tile_factory_belt") })
                     go.set_scale(vmath.vector3(2.34, 0.62, 1), belt_id)
@@ -686,7 +686,7 @@ function M.extend(runtime, ctx)
                     cog_a_id = cog_a_id,
                     cog_b_id = cog_b_id,
                     belt_base_x = c2x,
-                    belt_base_y = c2y - 45,
+                    belt_base_y = c2y - 47,
                     cog_a_base_x = c5x - 36,
                     cog_a_base_y = c5y + 66,
                     cog_a_angle = 0,
@@ -728,9 +728,9 @@ function M.extend(runtime, ctx)
                             tile_instance_id = tile_instance_id,
                             output_cell_id = output_cell.idNumber,
                             start_x = cx - ((ctx.CELL_WIDTH or 250) * 0.5) + 25,
-                            start_y = cy - 25,
+                            start_y = cy - 30,
                             end_x = cx + ((ctx.CELL_WIDTH or 250) * 0.5),
-                            end_y = cy - 25,
+                            end_y = cy - 30,
                             t = 0,
                             duration = 1 / FACTORY_BELT_PAN_RATE
                         })

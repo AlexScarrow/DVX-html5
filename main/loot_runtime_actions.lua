@@ -16,7 +16,7 @@ function M.extend(runtime, ctx)
     local FACTORY_MAX_STOCK = 9
     local FACTORY_UNDERLAY_Z = 0.012
     local FACTORY_CONVEYOR_TOKEN_Z = 0.56
-    local FACTORY_BELT_PAN_RATE = 0.675
+    local FACTORY_BELT_PAN_RATE = 0.3375
     local FACTORY_STACK_SLOT_OFFSETS = {
         vmath.vector3(-94, -35, 0), vmath.vector3(-94, -1, 0), vmath.vector3(-94, 33, 0),
         vmath.vector3(-46, -35, 0), vmath.vector3(-46, -1, 0), vmath.vector3(-46, 33, 0),
@@ -479,6 +479,7 @@ function M.extend(runtime, ctx)
         self.factory_underlay_visuals = self.factory_underlay_visuals or {}
         self.factory_conveyor_tokens = self.factory_conveyor_tokens or {}
         self.factory_underlay_clock = self.factory_underlay_clock or 0
+        self.factory_debug_cell_markers = self.factory_debug_cell_markers or {}
         self.derple_feedback_entries = self.derple_feedback_entries or {}
         self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
         self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
@@ -631,10 +632,10 @@ function M.extend(runtime, ctx)
             return
         end
         if entry.cog_a_id then
-            pcall(go.set, msg.url(nil, entry.cog_a_id, "sprite"), "tint", vmath.vector4(tint.x, tint.y, tint.z, 1))
+            pcall(go.set, msg.url(nil, entry.cog_a_id, "sprite"), "tint", tint)
         end
         if entry.cog_b_id then
-            pcall(go.set, msg.url(nil, entry.cog_b_id, "sprite"), "tint", vmath.vector4(tint.x, tint.y, tint.z, 1))
+            pcall(go.set, msg.url(nil, entry.cog_b_id, "sprite"), "tint", tint)
         end
         if entry.belt_id then
             pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", tint)
@@ -648,6 +649,12 @@ function M.extend(runtime, ctx)
             if entry and entry.cog_b_id then pcall(go.delete, entry.cog_b_id) end
             if entry and entry.belt_id then pcall(go.delete, entry.belt_id) end
         end
+        for _, marker_id in pairs(self.factory_debug_cell_markers or {}) do
+            if marker_id then
+                pcall(go.delete, marker_id)
+            end
+        end
+        self.factory_debug_cell_markers = {}
         self.factory_underlay_visuals = {}
         local instances = get_factory_instances(self)
         for tile_instance_id, instance in pairs(instances) do
@@ -660,8 +667,8 @@ function M.extend(runtime, ctx)
                 local c8x, c8y = ctx.coords_to_world_pos(cell8.xCell, cell8.yCell)
                 local belt_id = factory.create("/tile_factory#tile_factory", vmath.vector3(c2x, c2y - 45, FACTORY_UNDERLAY_Z))
                 if belt_id then
-                    msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("wiregap_straight_on") })
-                    go.set_scale(vmath.vector3(1.35, 0.62, 1), belt_id)
+                    msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("tile_factory_belt") })
+                    go.set_scale(vmath.vector3(2.34, 0.62, 1), belt_id)
                 end
                 local cog_a_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c5x - 36, c5y + 66, FACTORY_UNDERLAY_Z + 0.0002))
                 if cog_a_id then
@@ -693,6 +700,8 @@ function M.extend(runtime, ctx)
                 else
                     set_factory_underlay_tint(entry, vmath.vector4(0.34, 0.34, 0.34, 0.85))
                 end
+
+                -- Debug cell markers intentionally disabled.
             end
         end
     end
@@ -1197,6 +1206,7 @@ function M.extend(runtime, ctx)
                 and obj.name
                 and obj.name ~= hash("empty")
                 and obj.name ~= hash("machine")
+                and obj.name ~= hash("factory_machine")
                 and obj.name ~= hash("gun_turret")
                 and obj.name ~= hash("power_node")
                 and obj.isFixed ~= true then

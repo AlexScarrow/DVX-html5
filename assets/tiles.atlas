@@ -280,6 +280,9 @@ images {
 images {
   image: "/assets/images/tile_factory_piston.png"
 }
+images {
+  image: "/assets/images/tile_factory_belt.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

@@ -158,7 +158,7 @@ function M.create(ctx)
         end
         local slots = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(slots) do
-            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and (not is_loot_crate_name(obj.name)) and (not is_blip_spawn_name(obj.name)) and obj.name ~= hash("power_node") then
+            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and (not is_loot_crate_name(obj.name)) and (not is_blip_spawn_name(obj.name)) and obj.name ~= hash("power_node") and obj.name ~= hash("factory_machine") then
                 table.insert(out, obj)
             end
         end

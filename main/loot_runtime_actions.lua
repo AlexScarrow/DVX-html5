@@ -631,10 +631,10 @@ function M.extend(runtime, ctx)
             return
         end
         if entry.cog_a_id then
-            pcall(go.set, msg.url(nil, entry.cog_a_id, "sprite"), "tint", tint)
+            pcall(go.set, msg.url(nil, entry.cog_a_id, "sprite"), "tint", vmath.vector4(tint.x, tint.y, tint.z, 1))
         end
         if entry.cog_b_id then
-            pcall(go.set, msg.url(nil, entry.cog_b_id, "sprite"), "tint", tint)
+            pcall(go.set, msg.url(nil, entry.cog_b_id, "sprite"), "tint", vmath.vector4(tint.x, tint.y, tint.z, 1))
         end
         if entry.belt_id then
             pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", tint)
@@ -665,13 +665,13 @@ function M.extend(runtime, ctx)
                 end
                 local cog_a_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c5x - 36, c5y + 66, FACTORY_UNDERLAY_Z + 0.0002))
                 if cog_a_id then
-                    msg.post(msg.url(nil, cog_a_id, "sprite"), "play_animation", { id = hash("obstacle1") })
-                    go.set_scale(vmath.vector3(0.72, 0.72, 1), cog_a_id)
+                    msg.post(msg.url(nil, cog_a_id, "sprite"), "play_animation", { id = hash("tile_factory_piston") })
+                    go.set_scale(vmath.vector3(1.5, 1.875, 1), cog_a_id)
                 end
-                local cog_b_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c8x - 12, c8y - 15, FACTORY_UNDERLAY_Z + 0.0002))
+                local cog_b_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c8x - 2, c8y - 10, FACTORY_UNDERLAY_Z + 0.0002))
                 if cog_b_id then
-                    msg.post(msg.url(nil, cog_b_id, "sprite"), "play_animation", { id = hash("obstacle2") })
-                    go.set_scale(vmath.vector3(0.66, 0.66, 1), cog_b_id)
+                    msg.post(msg.url(nil, cog_b_id, "sprite"), "play_animation", { id = hash("tile_factory_cog") })
+                    go.set_scale(vmath.vector3(1.5, 1.5, 1), cog_b_id)
                 end
                 local entry = {
                     tile_instance_id = tile_instance_id,

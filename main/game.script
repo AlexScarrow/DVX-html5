@@ -5881,10 +5881,6 @@ apply_computer_emissive_accents = function(self, dt)
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local powered = self.tile_light_power_state and self.tile_light_power_state[tile_instance_id] == true
             local tint = get_instance_tint(tile_instance_id, powered, true)
-            local placement = selected_level and selected_level[tile_instance_id] or nil
-            if placement and placement.tile == "factory" then
-                tint = vmath.vector4(tint.x, tint.y, tint.z, tint.w * 0.5)
-            end
             pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", tint)
         end
     end
@@ -7793,11 +7789,7 @@ end
             if id then
                 local anim = "tile_" .. visual_tile_name
                 msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = hash(anim) })
-                local tile_alpha = TILE_OPACITY
-                if placement.tile == "factory" then
-                    tile_alpha = 0.5
-                end
-                go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, tile_alpha))
+                go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, TILE_OPACITY))
                 table.insert(tile_objects, id)
                 self.tile_base_objects[placement_index] = id
             else

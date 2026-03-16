@@ -274,6 +274,12 @@ images {
 images {
   image: "/assets/images/tile_factory_on.png"
 }
+images {
+  image: "/assets/images/tile_factory_cog.png"
+}
+images {
+  image: "/assets/images/tile_factory_piston.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

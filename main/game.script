@@ -5881,6 +5881,10 @@ apply_computer_emissive_accents = function(self, dt)
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local powered = self.tile_light_power_state and self.tile_light_power_state[tile_instance_id] == true
             local tint = get_instance_tint(tile_instance_id, powered, true)
+            local placement = selected_level and selected_level[tile_instance_id] or nil
+            if placement and placement.tile == "factory" then
+                tint = vmath.vector4(tint.x, tint.y, tint.z, tint.w * 0.5)
+            end
             pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", tint)
         end
     end
@@ -6214,6 +6218,9 @@ set_aesthetic_mode = function(self, mode)
         end
         if LOOT_RUNTIME.refresh_vent_markers then
             LOOT_RUNTIME.refresh_vent_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_factory_underlay_visuals then
+            LOOT_RUNTIME.refresh_factory_underlay_visuals(self)
         end
     end
     print("Aesthetic mode set to: " .. tostring(mode))
@@ -7786,7 +7793,11 @@ end
             if id then
                 local anim = "tile_" .. visual_tile_name
                 msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = hash(anim) })
-                go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, TILE_OPACITY))
+                local tile_alpha = TILE_OPACITY
+                if placement.tile == "factory" then
+                    tile_alpha = 0.5
+                end
+                go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, tile_alpha))
                 table.insert(tile_objects, id)
                 self.tile_base_objects[placement_index] = id
             else
@@ -7975,6 +7986,9 @@ end
         LOOT_RUNTIME.refresh_wiregap_markers(self)
         LOOT_RUNTIME.refresh_vent_markers(self)
         LOOT_RUNTIME.refresh_light_value_markers(self)
+        if LOOT_RUNTIME.refresh_factory_underlay_visuals then
+            LOOT_RUNTIME.refresh_factory_underlay_visuals(self)
+        end
     end--of spawn visuals fn
 
 local function update_exit_green_smoke_fx(self)
@@ -8428,6 +8442,12 @@ function update(self, dt)
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
+    if LOOT_RUNTIME.update_factory_conveyor_tokens then
+        LOOT_RUNTIME.update_factory_conveyor_tokens(self, dt)
+    end
+    if LOOT_RUNTIME.update_factory_underlay_animations then
+        LOOT_RUNTIME.update_factory_underlay_animations(self, dt)
+    end
     update_human_visual_state(self)
     update_derple_feedback_triggers(self, dt)
     update_exit_green_smoke_fx(self)
@@ -8796,6 +8816,9 @@ function on_input(self, action_id, action)
             return true
         end
         next_turn_reset_human_ap(self)
+        if LOOT_RUNTIME.process_factory_turn then
+            LOOT_RUNTIME.process_factory_turn(self)
+        end
         process_alien_turn(self)
     end
 end
@@ -8817,6 +8840,9 @@ function on_message(self, message_id, message, sender)
             return
         end
         next_turn_reset_human_ap(self)
+        if LOOT_RUNTIME.process_factory_turn then
+            LOOT_RUNTIME.process_factory_turn(self)
+        end
         process_alien_turn(self)
     end
 end

@@ -520,6 +520,56 @@ passage1.cells[6].object1 = {
 
     library["passage1"] = passage1
 
+-- =====================================================================
+-- FACTORY
+-- =====================================================================
+    local factory = create_tile_prototype("factory")
+    factory.visualTile = "factory_off"
+    factory.powerLightOffAnim = "tile_factory_off"
+    factory.powerLightOnAnim = "tile_factory_on"
+
+    for i = 1, 9 do
+        factory.cells[i].lightValue = 2
+        factory.cells[i].moveValue = 1
+        factory.cells[i].coverValue = 1
+        factory.cells[i].accessRight = false
+        factory.cells[i].accessDown = false
+    end
+
+    -- Requested internal connectivity:
+    -- 2: right, 4: right, 5: right, 6: right + down
+    factory.cells[2].accessRight = true
+    factory.cells[4].accessRight = true
+    factory.cells[5].accessRight = true
+    factory.cells[6].accessRight = true
+    factory.cells[6].accessDown = true
+
+    -- Power node lane (cell 4)
+    factory.cells[4].object1 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+
+    -- Wiring dependency lane (cell 6)
+    factory.cells[6].object1 = {
+        name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        offsetX = 78, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+
+    -- Factory machinery anchors (cells 5 and 8). These are fixed but only functional
+    -- when their dependency chain is satisfied.
+    factory.cells[5].object1 = {
+        name = hash("factory_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 601, isDependentOn = {}, objectId = 501,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 84, hitH = 84, requiredComponent = nil
+    }
+    factory.cells[8].object1 = {
+        name = hash("factory_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 601, isDependentOn = {}, objectId = 801,
+        offsetX = 0, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 84, hitH = 84, requiredComponent = nil
+    }
+
+    library["factory"] = factory
+
     
     return library
 end

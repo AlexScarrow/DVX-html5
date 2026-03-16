@@ -11,6 +11,17 @@ function M.extend(runtime, ctx)
     local WELD_SPARKS_Z = 0.62
     local RECEIVE_PULSE_DURATION = 0.24
     local SHUTTLE_HIDE_POS = vmath.vector3(-9999, -9999, 0.5)
+    local FACTORY_TILE_ID = hash("factory")
+    local FACTORY_MACHINE_NAME = hash("factory_machine")
+    local FACTORY_MAX_STOCK = 9
+    local FACTORY_UNDERLAY_Z = 0.012
+    local FACTORY_CONVEYOR_TOKEN_Z = 0.56
+    local FACTORY_BELT_PAN_RATE = 0.675
+    local FACTORY_STACK_SLOT_OFFSETS = {
+        vmath.vector3(-94, -35, 0), vmath.vector3(-94, -1, 0), vmath.vector3(-94, 33, 0),
+        vmath.vector3(-46, -35, 0), vmath.vector3(-46, -1, 0), vmath.vector3(-46, 33, 0),
+        vmath.vector3(2, -35, 0),   vmath.vector3(2, -1, 0),   vmath.vector3(2, 33, 0)
+    }
     local DERPLE_FEEDBACK_EVENT_DEFS = {
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
@@ -465,10 +476,355 @@ function M.extend(runtime, ctx)
         self.world_item_visuals = self.world_item_visuals or {}
         self.world_item_shadow_visuals = self.world_item_shadow_visuals or {}
         self.next_world_item_id = self.next_world_item_id or 0
+        self.factory_underlay_visuals = self.factory_underlay_visuals or {}
+        self.factory_conveyor_tokens = self.factory_conveyor_tokens or {}
+        self.factory_underlay_clock = self.factory_underlay_clock or 0
         self.derple_feedback_entries = self.derple_feedback_entries or {}
         self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
         self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
         self.derple_feedback_clock = self.derple_feedback_clock or 0
+    end
+
+    local function get_factory_instances(self)
+        local instances = {}
+        if not self or not self.world_grid then
+            return instances
+        end
+        for _, cell in ipairs(self.world_grid) do
+            local slots = cell and { cell.object1, cell.object2, cell.object3 } or nil
+            local has_factory_machine = false
+            if slots then
+                for _, obj in ipairs(slots) do
+                    if obj and obj.name == FACTORY_MACHINE_NAME then
+                        has_factory_machine = true
+                        break
+                    end
+                end
+            end
+            if cell and (cell.tileID == FACTORY_TILE_ID or has_factory_machine) then
+                local tile_instance_id = cell.tileInstanceId or 0
+                if tile_instance_id > 0 then
+                    local instance = instances[tile_instance_id]
+                    if not instance then
+                        instance = {
+                            tile_instance_id = tile_instance_id,
+                            cells = {},
+                            min_x = cell.xCell,
+                            min_y = cell.yCell,
+                            max_x = cell.xCell,
+                            max_y = cell.yCell,
+                            powered = false,
+                            machine_objects = {}
+                        }
+                        instances[tile_instance_id] = instance
+                    end
+                    table.insert(instance.cells, cell)
+                    if cell.xCell < instance.min_x then instance.min_x = cell.xCell end
+                    if cell.xCell > instance.max_x then instance.max_x = cell.xCell end
+                    if cell.yCell < instance.min_y then instance.min_y = cell.yCell end
+                    if cell.yCell > instance.max_y then instance.max_y = cell.yCell end
+                    if cell.isPowered == true then
+                        instance.powered = true
+                    end
+                    for _, obj in ipairs(slots) do
+                        if obj and obj.name == FACTORY_MACHINE_NAME then
+                            table.insert(instance.machine_objects, obj)
+                        end
+                    end
+                end
+            end
+        end
+        for _, instance in pairs(instances) do
+            instance.cell_by_local = {}
+            for _, cell in ipairs(instance.cells) do
+                local local_x = (cell.xCell - instance.min_x)
+                local local_y = (cell.yCell - instance.min_y)
+                local local_idx = (local_y * 3) + local_x + 1
+                if local_idx >= 1 and local_idx <= 9 then
+                    instance.cell_by_local[local_idx] = cell
+                end
+            end
+            local deps_ok = (#instance.machine_objects > 0)
+            if deps_ok then
+                for _, machine in ipairs(instance.machine_objects) do
+                    if machine.isFixed ~= true or not runtime.is_object_dependency_met(self.world_grid, machine) then
+                        deps_ok = false
+                        break
+                    end
+                end
+            end
+            instance.functional = (instance.powered == true) and deps_ok
+        end
+        return instances
+    end
+
+    local function count_factory_stock(self, tile_instance_id)
+        local total = 0
+        for _, item in ipairs(self.world_item_instances or {}) do
+            local meta = item and item.meta or nil
+            if item
+                and item.item_type == "material"
+                and meta
+                and meta.factory_stock == true
+                and meta.factory_tile_instance_id == tile_instance_id
+            then
+                total = total + 1
+            end
+        end
+        return total
+    end
+
+    local function count_factory_pending_tokens(self, tile_instance_id)
+        local total = 0
+        for _, token in ipairs(self.factory_conveyor_tokens or {}) do
+            if token and token.tile_instance_id == tile_instance_id then
+                total = total + 1
+            end
+        end
+        return total
+    end
+
+    local function count_material_items_on_cell(self, cell_id)
+        if not cell_id then
+            return 0
+        end
+        local total = 0
+        for _, item in ipairs(self.world_item_instances or {}) do
+            if item and item.item_type == "material" and item.cell_id == cell_id then
+                total = total + 1
+            end
+        end
+        return total
+    end
+
+    local function get_factory_used_slots(self, tile_instance_id)
+        local used = {}
+        for _, item in ipairs(self.world_item_instances or {}) do
+            local meta = item and item.meta or nil
+            if item
+                and item.item_type == "material"
+                and meta
+                and meta.factory_stock == true
+                and meta.factory_tile_instance_id == tile_instance_id
+            then
+                local slot_order = tonumber(meta.factory_slot_order or 0) or 0
+                if slot_order >= 1 and slot_order <= FACTORY_MAX_STOCK then
+                    used[slot_order] = true
+                end
+            end
+        end
+        return used
+    end
+
+    local function get_next_factory_free_slot(self, tile_instance_id)
+        local used = get_factory_used_slots(self, tile_instance_id)
+        for i = 1, FACTORY_MAX_STOCK do
+            if not used[i] then
+                return i
+            end
+        end
+        return nil
+    end
+
+    local function set_factory_underlay_tint(entry, tint)
+        if not entry then
+            return
+        end
+        if entry.cog_a_id then
+            pcall(go.set, msg.url(nil, entry.cog_a_id, "sprite"), "tint", tint)
+        end
+        if entry.cog_b_id then
+            pcall(go.set, msg.url(nil, entry.cog_b_id, "sprite"), "tint", tint)
+        end
+        if entry.belt_id then
+            pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", tint)
+        end
+    end
+
+    runtime.refresh_factory_underlay_visuals = function(self)
+        runtime.ensure_item_runtime_state(self)
+        for _, entry in pairs(self.factory_underlay_visuals or {}) do
+            if entry and entry.cog_a_id then pcall(go.delete, entry.cog_a_id) end
+            if entry and entry.cog_b_id then pcall(go.delete, entry.cog_b_id) end
+            if entry and entry.belt_id then pcall(go.delete, entry.belt_id) end
+        end
+        self.factory_underlay_visuals = {}
+        local instances = get_factory_instances(self)
+        for tile_instance_id, instance in pairs(instances) do
+            local cell2 = instance.cell_by_local[2]
+            local cell5 = instance.cell_by_local[5]
+            local cell8 = instance.cell_by_local[8]
+            if cell2 and cell5 and cell8 then
+                local c2x, c2y = ctx.coords_to_world_pos(cell2.xCell, cell2.yCell)
+                local c5x, c5y = ctx.coords_to_world_pos(cell5.xCell, cell5.yCell)
+                local c8x, c8y = ctx.coords_to_world_pos(cell8.xCell, cell8.yCell)
+                local belt_id = factory.create("/tile_factory#tile_factory", vmath.vector3(c2x, c2y - 45, FACTORY_UNDERLAY_Z))
+                if belt_id then
+                    msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("wiregap_straight_on") })
+                    go.set_scale(vmath.vector3(1.35, 0.62, 1), belt_id)
+                end
+                local cog_a_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c5x - 36, c5y + 66, FACTORY_UNDERLAY_Z + 0.0002))
+                if cog_a_id then
+                    msg.post(msg.url(nil, cog_a_id, "sprite"), "play_animation", { id = hash("obstacle1") })
+                    go.set_scale(vmath.vector3(0.72, 0.72, 1), cog_a_id)
+                end
+                local cog_b_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c8x - 12, c8y - 15, FACTORY_UNDERLAY_Z + 0.0002))
+                if cog_b_id then
+                    msg.post(msg.url(nil, cog_b_id, "sprite"), "play_animation", { id = hash("obstacle2") })
+                    go.set_scale(vmath.vector3(0.66, 0.66, 1), cog_b_id)
+                end
+                local entry = {
+                    tile_instance_id = tile_instance_id,
+                    belt_id = belt_id,
+                    cog_a_id = cog_a_id,
+                    cog_b_id = cog_b_id,
+                    belt_base_x = c2x,
+                    belt_base_y = c2y - 45,
+                    cog_a_base_x = c5x - 36,
+                    cog_a_base_y = c5y + 66,
+                    cog_a_angle = 0,
+                    cog_b_angle = 0,
+                    cog_a_piston_phase = math.random(),
+                    belt_phase = math.random() * math.pi * 2
+                }
+                self.factory_underlay_visuals[tile_instance_id] = entry
+                if instance.functional then
+                    set_factory_underlay_tint(entry, vmath.vector4(1, 1, 1, 0.92))
+                else
+                    set_factory_underlay_tint(entry, vmath.vector4(0.34, 0.34, 0.34, 0.85))
+                end
+            end
+        end
+    end
+
+    runtime.process_factory_turn = function(self)
+        runtime.ensure_item_runtime_state(self)
+        local instances = get_factory_instances(self)
+        self.factory_instance_cache = instances
+        for tile_instance_id, instance in pairs(instances) do
+            local pending = count_factory_pending_tokens(self, tile_instance_id)
+            local conveyor_cell = instance.cell_by_local[2]
+            local output_cell = instance.cell_by_local[3]
+            local stored_total = output_cell and count_material_items_on_cell(self, output_cell.idNumber) or 0
+            if instance.functional and (stored_total + pending) < FACTORY_MAX_STOCK then
+                if conveyor_cell and output_cell then
+                    local cx, cy = ctx.coords_to_world_pos(conveyor_cell.xCell, conveyor_cell.yCell)
+                    local token_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx - 75, cy - 45, FACTORY_CONVEYOR_TOKEN_Z))
+                    if token_id then
+                        msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = hash("material_unit") })
+                        go.set_scale(vmath.vector3(0.85, 0.85, 1), token_id)
+                        go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.96))
+                        table.insert(self.factory_conveyor_tokens, {
+                            go_id = token_id,
+                            tile_instance_id = tile_instance_id,
+                            output_cell_id = output_cell.idNumber,
+                            start_x = cx - ((ctx.CELL_WIDTH or 250) * 0.5) + 25,
+                            start_y = cy - 25,
+                            end_x = cx + ((ctx.CELL_WIDTH or 250) * 0.5),
+                            end_y = cy - 25,
+                            t = 0,
+                            duration = 1 / FACTORY_BELT_PAN_RATE
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    runtime.update_factory_underlay_animations = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        if not self.factory_underlay_visuals then
+            return
+        end
+        local instances = get_factory_instances(self)
+        self.factory_underlay_clock = (self.factory_underlay_clock or 0) + dt
+        for tile_instance_id, entry in pairs(self.factory_underlay_visuals) do
+            local instance = instances[tile_instance_id]
+            local functional = instance and instance.functional == true
+            local speed_mul = functional and 1.0 or 0.22
+            local tint = functional and vmath.vector4(1, 1, 1, 0.92) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
+            set_factory_underlay_tint(entry, tint)
+            if entry.belt_id then
+                local half_w = ((ctx.CELL_WIDTH or 250) * 0.5)
+                entry.belt_phase = ((entry.belt_phase or 0) + (dt * FACTORY_BELT_PAN_RATE * speed_mul)) % 1
+                local pan = -half_w + ((entry.belt_phase or 0) * (half_w * 2))
+                local x = (entry.belt_base_x or 0) + pan
+                local y = entry.belt_base_y or 0
+                pcall(go.set_position, vmath.vector3(x, y, FACTORY_UNDERLAY_Z), entry.belt_id)
+            end
+            if entry.cog_a_id then
+                -- Cell-5 machinery: piston-like vertical motion.
+                -- Down stroke is slower; up stroke is faster.
+                local phase = (entry.cog_a_piston_phase or 0) + (dt * 0.58 * speed_mul)
+                phase = phase % 1
+                entry.cog_a_piston_phase = phase
+                local down_portion = 0.75
+                local travel = 95
+                local y_offset = 0
+                if phase < down_portion then
+                    y_offset = -travel * (phase / down_portion)
+                else
+                    local up_t = (phase - down_portion) / (1 - down_portion)
+                    y_offset = -travel + (travel * up_t)
+                end
+                pcall(
+                    go.set_position,
+                    vmath.vector3(entry.cog_a_base_x or 0, (entry.cog_a_base_y or 0) + y_offset, FACTORY_UNDERLAY_Z + 0.0002),
+                    entry.cog_a_id
+                )
+                pcall(go.set_rotation, vmath.quat_rotation_z(0), entry.cog_a_id)
+            end
+            if entry.cog_b_id then
+                entry.cog_b_angle = (entry.cog_b_angle or 0) - (dt * 3.5 * speed_mul)
+                pcall(go.set_rotation, vmath.quat_rotation_z(entry.cog_b_angle), entry.cog_b_id)
+            end
+        end
+    end
+
+    runtime.update_factory_conveyor_tokens = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        if not self.factory_conveyor_tokens then
+            return
+        end
+        local needs_world_item_refresh = false
+        for i = #self.factory_conveyor_tokens, 1, -1 do
+            local token = self.factory_conveyor_tokens[i]
+            if not token or not token.go_id then
+                table.remove(self.factory_conveyor_tokens, i)
+            else
+                token.t = math.min(1, (token.t or 0) + (dt / math.max(0.01, token.duration or 0.9)))
+                local px = token.start_x + ((token.end_x - token.start_x) * token.t)
+                local py = token.start_y + ((token.end_y - token.start_y) * token.t) + (math.sin(token.t * math.pi) * 5)
+                pcall(go.set_position, vmath.vector3(px, py, FACTORY_CONVEYOR_TOKEN_Z), token.go_id)
+                if token.t >= 1 then
+                    pcall(go.delete, token.go_id)
+                    local instances = self.factory_instance_cache or get_factory_instances(self)
+                    local instance = instances[token.tile_instance_id]
+                    if instance then
+                        local output_cell = instance.cell_by_local[3]
+                        local pending = count_factory_pending_tokens(self, token.tile_instance_id)
+                        local stored_total = output_cell and count_material_items_on_cell(self, output_cell.idNumber) or 0
+                        local slot_order = get_next_factory_free_slot(self, token.tile_instance_id)
+                        if instance.functional
+                            and (stored_total + math.max(0, pending - 1)) < FACTORY_MAX_STOCK
+                            and slot_order
+                            and output_cell
+                        then
+                            runtime.create_world_item_instance(self, "material", output_cell.idNumber, nil, {
+                                factory_stock = true,
+                                factory_tile_instance_id = token.tile_instance_id,
+                                factory_slot_order = slot_order
+                            })
+                            needs_world_item_refresh = true
+                        end
+                    end
+                    table.remove(self.factory_conveyor_tokens, i)
+                end
+            end
+        end
+        if needs_world_item_refresh then
+            runtime.refresh_world_item_visuals(self)
+        end
     end
 
     runtime.emit_derple_feedback = function(self, unit_id, event_type)
@@ -650,6 +1006,18 @@ function M.extend(runtime, ctx)
         return ox, oy
     end
 
+    local function get_world_item_render_offset(item, slot_index, total_items)
+        local meta = item and item.meta or nil
+        if meta and meta.factory_stock == true then
+            local slot_order = tonumber(meta.factory_slot_order or 0) or 0
+            if slot_order >= 1 and slot_order <= #FACTORY_STACK_SLOT_OFFSETS then
+                local v = FACTORY_STACK_SLOT_OFFSETS[slot_order]
+                return v.x, v.y
+            end
+        end
+        return runtime.get_world_item_offset_for_slot(slot_index, total_items)
+    end
+
     runtime.refresh_world_item_visuals = function(self)
         runtime.ensure_item_runtime_state(self)
         for item_id, go_id in pairs(self.world_item_visuals) do
@@ -673,7 +1041,7 @@ function M.extend(runtime, ctx)
                 local items = runtime.get_world_items_on_cell(self, cell.idNumber)
                 local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 for i, item in ipairs(items) do
-                    local ox, oy = runtime.get_world_item_offset_for_slot(i, #items)
+                    local ox, oy = get_world_item_render_offset(item, i, #items)
                     local wx = cx + ox
                     local wy = cy + oy
                     local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.56))
@@ -736,7 +1104,7 @@ function M.extend(runtime, ctx)
         local hit_radius = (ctx.LOOT_UI and ctx.LOOT_UI.world_item_hit_radius) or 22
         for i = #items, 1, -1 do
             local item = items[i]
-            local ox, oy = runtime.get_world_item_offset_for_slot(i, #items)
+            local ox, oy = get_world_item_render_offset(item, i, #items)
             local ix = cx + ox
             local iy = cy + oy
             local dx = ix - world_x
@@ -1420,6 +1788,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_turret_markers(self)
         runtime.refresh_door_markers(self)
         runtime.refresh_wiregap_markers(self)
+        runtime.refresh_factory_underlay_visuals(self)
         ctx.update_human_visual_state(self)
         return true
     end
@@ -1482,6 +1851,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_wiregap_markers(self)
         runtime.refresh_vent_markers(self)
         runtime.refresh_light_value_markers(self)
+        runtime.refresh_factory_underlay_visuals(self)
         ctx.update_human_visual_state(self)
         return true
     end
@@ -2364,6 +2734,7 @@ function M.extend(runtime, ctx)
                                 runtime.refresh_wiregap_markers(self)
                                 runtime.refresh_vent_markers(self)
                                 runtime.refresh_light_value_markers(self)
+                                runtime.refresh_factory_underlay_visuals(self)
                             end
                         else
                             print("too far away")
@@ -2572,6 +2943,7 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_door_markers(self)
                                     runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_vent_markers(self)
+                                    runtime.refresh_factory_underlay_visuals(self)
                                     runtime.refresh_world_item_visuals(self)
                                     local weld_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                     print(string.format("WELD FX CALLSITE: triggering overlay on cell %d", drop_cell_id or 0))
@@ -2665,6 +3037,7 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_door_markers(self)
                                     runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_turret_markers(self)
+                                    runtime.refresh_factory_underlay_visuals(self)
                                     runtime.refresh_exit_objective_state(self)
                                     runtime.refresh_world_item_visuals(self)
                                     print(string.format(

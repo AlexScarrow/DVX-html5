@@ -16,23 +16,29 @@ function M.create_level_library()
     --5/5,8/5,11/5,14/5
 
     -- Example Level 1
+    -- levels[1] = {
+    --     { x = 8, y = 11, tile = "coms" },
+    --     { x = 8, y = 8, tile = "canteen" },
+    --     { x = 11, y = 8, tile = "medbay" },
+    --     { x = 2, y = 8, tile = "entry" },
+    --     { x = 5, y = 8, tile = "armoury" },
+    --     { x = 14, y = 9, tile = "armoury" },
+    --     { x = 11, y = 2, tile = "exit" },
+    --     { x = 9, y = 5, tile = "passage1" },
+    -- }
+
     levels[1] = {
-        --{ x = 11, y = 11, tile = "armoury" },
-        { x = 8, y = 11, tile = "coms" },
-        { x = 8, y = 8, tile = "canteen" },
-        { x = 11, y = 8, tile = "medbay" },
+        --{ x = 8, y = 11, tile = "coms" },
+        --{ x = 8, y = 8, tile = "canteen" },
+        --{ x = 11, y = 8, tile = "medbay" },
         { x = 2, y = 8, tile = "entry" },
-        --{ x = 5, y = 8, tile = "canteen" },
-        { x = 5, y = 8, tile = "armoury" },
-        { x = 14, y = 9, tile = "armoury" },
-        --{ x = 14, y = 6, tile = "armoury" },
-        { x = 11, y = 2, tile = "exit" },
-        { x = 9, y = 5, tile = "passage1" },
-        --{ x = 11, y = 5, tile = "armoury" },
-        --{ x = 8, y = 5, tile = "medbay" },
-        --{ x = 8, y = 5, tile = "medbay" },
+        { x = 5, y = 9, tile = "factory" },
+        --{ x = 14, y = 9, tile = "armoury" },
+        --{ x = 11, y = 2, tile = "exit" },
+        --{ x = 9, y = 5, tile = "passage1" },
     }
 
+    
     -- Example Level 2
     -- EXPERIMENTAL layout: temporary playtest board, intended to be easy to replace.
     levels[2] = {

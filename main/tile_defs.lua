@@ -553,7 +553,7 @@ passage1.cells[6].object1 = {
 
     -- Wiring dependency lane (cell 6)
     factory.cells[6].object1 = {
-        name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        name = hash("wiregap"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
         offsetX = 78, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
     }
 

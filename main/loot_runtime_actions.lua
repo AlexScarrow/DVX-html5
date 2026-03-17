@@ -34,12 +34,17 @@ function M.extend(runtime, ctx)
     local WORKSHOP_PRODUCTION_DURATION = 10.0
     local WORKSHOP_CONVEYOR_TOKEN_Z = 0.56
     local WORKSHOP_CONVEYOR_TRAVEL_SECONDS = 0.9
+    local WORKSHOP_PRINTER_Z = 0.74
+    local WORKSHOP_EMITTER_Z = 0.741
     local WORKSHOP_SLOT_GRID_W = 3
     local WORKSHOP_SLOT_GRID_H = 3
     local WORKSHOP_MENU_HALF_W = 85
     local WORKSHOP_MENU_HALF_H = 59
     local WORKSHOP_MENU_SLOT_W = (WORKSHOP_MENU_HALF_W * 2) / WORKSHOP_SLOT_GRID_W
     local WORKSHOP_MENU_SLOT_H = (WORKSHOP_MENU_HALF_H * 2) / WORKSHOP_SLOT_GRID_H
+    local WORKSHOP_PAY_HOTSPOT_OFFSET_X = -6
+    local WORKSHOP_PAY_HOTSPOT_OFFSET_Y = -22
+    local WORKSHOP_PAY_HOTSPOT_HALF_SIZE = 17
     local WORKSHOP_PRODUCT_BY_SLOT = {
         [1] = { item_type = ctx.COMPONENT_UI.component_wiring_straight, price = 1, label = "wiring" },
         [2] = { item_type = ctx.COMPONENT_UI.component_fuse, price = 1, label = "fuse" },
@@ -753,6 +758,22 @@ function M.extend(runtime, ctx)
         return slot_idx
     end
 
+    local function is_workshop_payment_hotspot(cell, obj, world_x, world_y)
+        if not cell or not obj then
+            return false
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local mx = cx + (obj.offsetX or 0)
+        local my = cy + (obj.offsetY or 0)
+        local hx = mx + WORKSHOP_PAY_HOTSPOT_OFFSET_X
+        local hy = my + WORKSHOP_PAY_HOTSPOT_OFFSET_Y
+        local half = WORKSHOP_PAY_HOTSPOT_HALF_SIZE
+        return world_x >= (hx - half)
+            and world_x <= (hx + half)
+            and world_y >= (hy - half)
+            and world_y <= (hy + half)
+    end
+
     local function count_factory_stock(self, tile_instance_id)
         local total = 0
         for _, item in ipairs(self.world_item_instances or {}) do
@@ -922,19 +943,23 @@ function M.extend(runtime, ctx)
         if not entry then
             return
         end
-        if entry.top_id then
-            pcall(go.set, msg.url(nil, entry.top_id, "sprite"), "tint", tint)
+        if entry.printer_id then
+            pcall(go.set, msg.url(nil, entry.printer_id, "sprite"), "tint", tint)
         end
-        if entry.bottom_id then
-            pcall(go.set, msg.url(nil, entry.bottom_id, "sprite"), "tint", tint)
+        if entry.emitter_id then
+            pcall(go.set, msg.url(nil, entry.emitter_id, "sprite"), "tint", tint)
+        end
+        if entry.belt_id then
+            pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", tint)
         end
     end
 
     runtime.refresh_workshop_underlay_visuals = function(self)
         runtime.ensure_item_runtime_state(self)
         for _, entry in pairs(self.workshop_underlay_visuals or {}) do
-            if entry and entry.top_id then pcall(go.delete, entry.top_id) end
-            if entry and entry.bottom_id then pcall(go.delete, entry.bottom_id) end
+            if entry and entry.printer_id then pcall(go.delete, entry.printer_id) end
+            if entry and entry.emitter_id then pcall(go.delete, entry.emitter_id) end
+            if entry and entry.belt_id then pcall(go.delete, entry.belt_id) end
         end
         self.workshop_underlay_visuals = {}
         local instances = get_workshop_instances(self)
@@ -944,24 +969,39 @@ function M.extend(runtime, ctx)
             if cell1 and cell4 then
                 local c1x, c1y = ctx.coords_to_world_pos(cell1.xCell, cell1.yCell)
                 local c4x, c4y = ctx.coords_to_world_pos(cell4.xCell, cell4.yCell)
-                local top_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c1x - 56, c1y, FACTORY_UNDERLAY_Z + 0.0003))
-                if top_id then
-                    msg.post(msg.url(nil, top_id, "sprite"), "play_animation", { id = hash("tile_factory_cog") })
-                    go.set_scale(vmath.vector3(1.1, 1.1, 1), top_id)
+                local printer_base_x = c4x
+                local printer_base_y = c4y + ((ctx.CELL_HEIGHT or 150) * 0.5) - 10
+                local printer_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y, WORKSHOP_PRINTER_Z))
+                if printer_id then
+                    msg.post(msg.url(nil, printer_id, "sprite"), "play_animation", { id = hash("gun_turret_tripod") })
+                    go.set_scale(vmath.vector3(0.9, 0.9, 1), printer_id)
                 end
-                local bottom_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c4x - 56, c4y, FACTORY_UNDERLAY_Z + 0.0003))
-                if bottom_id then
-                    msg.post(msg.url(nil, bottom_id, "sprite"), "play_animation", { id = hash("tile_factory_piston") })
-                    go.set_scale(vmath.vector3(1.25, 1.55, 1), bottom_id)
+                local emitter_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y - 100, WORKSHOP_EMITTER_Z))
+                if emitter_id then
+                    msg.post(msg.url(nil, emitter_id, "sprite"), "play_animation", { id = hash("med_unit") })
+                    go.set_scale(vmath.vector3(0.95, 0.95, 1), emitter_id)
+                    -- Best-effort additive blend for placeholder emitter.
+                    pcall(go.set, msg.url(nil, emitter_id, "sprite"), "blend_mode", hash("add"))
+                end
+                local belt_base_y = c1y - 47
+                local belt_id = factory.create("/tile_factory#tile_factory", vmath.vector3(c1x, belt_base_y, FACTORY_UNDERLAY_Z))
+                if belt_id then
+                    msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("tile_factory_belt") })
+                    go.set_scale(vmath.vector3(2.34, 0.62, 1), belt_id)
                 end
                 self.workshop_underlay_visuals[tile_instance_id] = {
                     tile_instance_id = tile_instance_id,
-                    top_id = top_id,
-                    bottom_id = bottom_id,
-                    top_base_x = c1x - 56,
-                    top_base_y = c1y,
-                    bottom_base_x = c4x - 56,
-                    bottom_base_y = c4y,
+                    printer_id = printer_id,
+                    emitter_id = emitter_id,
+                    belt_id = belt_id,
+                    printer_base_x = printer_base_x,
+                    printer_base_y = printer_base_y,
+                    belt_base_x = c1x,
+                    belt_base_y = belt_base_y,
+                    printer_current_x = 0,
+                    printer_target_x = 0,
+                    printer_change_timer = 0,
+                    belt_phase = math.random(),
                     phase = math.random() * math.pi * 2
                 }
             end
@@ -975,16 +1015,51 @@ function M.extend(runtime, ctx)
             local instance = instances[tile_instance_id]
             local functional = instance and instance.functional == true
             local speed = functional and 1.0 or 0.22
-            local tint = functional and vmath.vector4(1, 1, 1, 0.92) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
-            set_workshop_underlay_tint(entry, tint)
-            entry.phase = (entry.phase or 0) + ((dt or 0) * speed * 2.4)
-            local slide = math.sin(entry.phase or 0) * 9
-            if entry.top_id then
-                pcall(go.set_position, vmath.vector3((entry.top_base_x or 0) + slide, entry.top_base_y or 0, FACTORY_UNDERLAY_Z + 0.0003), entry.top_id)
-                pcall(go.set_rotation, vmath.quat_rotation_z((entry.phase or 0) * 0.35), entry.top_id)
+            local state = get_workshop_state(self, tile_instance_id)
+            local is_producing = (state.production_time_left or 0) > 0
+            entry.phase = (entry.phase or 0) + ((dt or 0) * speed * 8.0)
+            local flicker = 0.65 + (0.35 * math.abs(math.sin(entry.phase or 0)))
+            local printer_tint = functional and vmath.vector4(flicker, flicker, flicker, 0.98) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
+            local emitter_tint = functional and vmath.vector4(1, 1, 1, 0.45 + (0.35 * flicker)) or vmath.vector4(0.34, 0.34, 0.34, 0.4)
+            local belt_tint = functional and vmath.vector4(1, 1, 1, 0.9) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
+            if entry.printer_id then
+                pcall(go.set, msg.url(nil, entry.printer_id, "sprite"), "tint", printer_tint)
             end
-            if entry.bottom_id then
-                pcall(go.set_position, vmath.vector3((entry.bottom_base_x or 0) - slide, entry.bottom_base_y or 0, FACTORY_UNDERLAY_Z + 0.0003), entry.bottom_id)
+            if entry.emitter_id then
+                pcall(go.set, msg.url(nil, entry.emitter_id, "sprite"), "tint", emitter_tint)
+            end
+            if entry.belt_id then
+                pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", belt_tint)
+            end
+            if is_producing and functional then
+                entry.printer_change_timer = (entry.printer_change_timer or 0) - (dt or 0)
+                if (entry.printer_change_timer or 0) <= 0 then
+                    entry.printer_target_x = -90 + (math.random() * 180)
+                    entry.printer_change_timer = 0.05 + (math.random() * 0.09)
+                end
+                local move_blend = math.min(1, (dt or 0) * 16)
+                entry.printer_current_x = (entry.printer_current_x or 0) + (((entry.printer_target_x or 0) - (entry.printer_current_x or 0)) * move_blend)
+            else
+                entry.printer_target_x = 0
+                entry.printer_change_timer = 0
+                local idle_blend = math.min(1, (dt or 0) * 5)
+                entry.printer_current_x = (entry.printer_current_x or 0) + ((0 - (entry.printer_current_x or 0)) * idle_blend)
+            end
+            local px = (entry.printer_base_x or 0) + (entry.printer_current_x or 0)
+            local py = entry.printer_base_y or 0
+            if entry.printer_id then
+                pcall(go.set_position, vmath.vector3(px, py, WORKSHOP_PRINTER_Z), entry.printer_id)
+            end
+            if entry.emitter_id then
+                pcall(go.set_position, vmath.vector3(px, py - 100, WORKSHOP_EMITTER_Z), entry.emitter_id)
+            end
+            if entry.belt_id then
+                local half_w = ((ctx.CELL_WIDTH or 250) * 0.5)
+                entry.belt_phase = ((entry.belt_phase or 0) + ((dt or 0) * FACTORY_BELT_PAN_RATE * speed)) % 1
+                local pan = -half_w + ((entry.belt_phase or 0) * (half_w * 2))
+                local bx = (entry.belt_base_x or 0) + pan
+                local by = entry.belt_base_y or 0
+                pcall(go.set_position, vmath.vector3(bx, by, FACTORY_UNDERLAY_Z), entry.belt_id)
             end
         end
     end
@@ -3031,8 +3106,11 @@ function M.extend(runtime, ctx)
                             local instances = get_workshop_instances(self)
                             local tile_instance_id = drop_cell.tileInstanceId or 0
                             local instance = instances[tile_instance_id]
-                            local slot_idx = get_workshop_menu_slot_by_world_point(drop_cell, workshop_menu, world_x, world_y)
-                            local is_pay_hotspot = slot_idx == 9
+                            local inside_menu_panel = is_point_in_object_hitbox(drop_cell, workshop_menu, world_x, world_y)
+                            local pay_slot_idx = get_workshop_menu_slot_by_world_point(drop_cell, workshop_menu, world_x, world_y)
+                            local is_pay_hotspot = (pay_slot_idx == 9)
+                                or is_workshop_payment_hotspot(drop_cell, workshop_menu, world_x, world_y)
+                                or inside_menu_panel
                             if is_pay_hotspot then
                                 vending_attempted = true
                                 local sx, sy = ctx.id_to_coords(source_unit.cell_id)

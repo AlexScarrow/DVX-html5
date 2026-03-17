@@ -973,14 +973,14 @@ function M.extend(runtime, ctx)
                 local printer_base_y = c4y + ((ctx.CELL_HEIGHT or 150) * 0.5) - 10
                 local printer_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y, WORKSHOP_PRINTER_Z))
                 if printer_id then
-                    msg.post(msg.url(nil, printer_id, "sprite"), "play_animation", { id = hash("gun_turret_tripod") })
+                    msg.post(msg.url(nil, printer_id, "sprite"), "play_animation", { id = hash("tile_workshop_printerOff") })
                     go.set_scale(vmath.vector3(0.9, 0.9, 1), printer_id)
+                    pcall(go.set, msg.url(nil, printer_id, "sprite"), "blend_mode", hash("add"))
                 end
                 local emitter_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y - 100, WORKSHOP_EMITTER_Z))
                 if emitter_id then
-                    msg.post(msg.url(nil, emitter_id, "sprite"), "play_animation", { id = hash("med_unit") })
+                    msg.post(msg.url(nil, emitter_id, "sprite"), "play_animation", { id = hash("tile_workshop_printerGlow") })
                     go.set_scale(vmath.vector3(0.95, 0.95, 1), emitter_id)
-                    -- Best-effort additive blend for placeholder emitter.
                     pcall(go.set, msg.url(nil, emitter_id, "sprite"), "blend_mode", hash("add"))
                 end
                 local belt_base_y = c1y - 47
@@ -1002,6 +1002,9 @@ function M.extend(runtime, ctx)
                     printer_target_x = 0,
                     printer_change_timer = 0,
                     belt_phase = math.random(),
+                    flicker_timer = 0,
+                    flicker_value = 1,
+                    printer_anim_mode = "off",
                     phase = math.random() * math.pi * 2
                 }
             end
@@ -1017,10 +1020,30 @@ function M.extend(runtime, ctx)
             local speed = functional and 1.0 or 0.22
             local state = get_workshop_state(self, tile_instance_id)
             local is_producing = (state.production_time_left or 0) > 0
+            local workshop_anim_speed_scale = 0.5
+            local scaled_dt = (dt or 0) * workshop_anim_speed_scale
             entry.phase = (entry.phase or 0) + ((dt or 0) * speed * 8.0)
-            local flicker = 0.65 + (0.35 * math.abs(math.sin(entry.phase or 0)))
+            local desired_mode = (functional and is_producing) and "on" or "off"
+            if entry.printer_id and entry.printer_anim_mode ~= desired_mode then
+                local anim_id = (desired_mode == "on") and hash("tile_workshop_printer") or hash("tile_workshop_printerOff")
+                msg.post(msg.url(nil, entry.printer_id, "sprite"), "play_animation", { id = anim_id })
+                entry.printer_anim_mode = desired_mode
+            end
+            if functional and is_producing then
+                entry.flicker_timer = (entry.flicker_timer or 0) - scaled_dt
+                if (entry.flicker_timer or 0) <= 0 then
+                    entry.flicker_timer = 0.03 + (math.random() * 0.07)
+                    local r = math.random()
+                    entry.flicker_value = r * r
+                end
+            else
+                entry.flicker_timer = 0
+                entry.flicker_value = functional and 0.72 or 0.34
+            end
+            local flicker = entry.flicker_value or 1
             local printer_tint = functional and vmath.vector4(flicker, flicker, flicker, 0.98) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
-            local emitter_tint = functional and vmath.vector4(1, 1, 1, 0.45 + (0.35 * flicker)) or vmath.vector4(0.34, 0.34, 0.34, 0.4)
+            local emitter_alpha = (functional and is_producing) and flicker or 0
+            local emitter_tint = vmath.vector4(1, 1, 1, emitter_alpha)
             local belt_tint = functional and vmath.vector4(1, 1, 1, 0.9) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
             if entry.printer_id then
                 pcall(go.set, msg.url(nil, entry.printer_id, "sprite"), "tint", printer_tint)
@@ -1032,12 +1055,12 @@ function M.extend(runtime, ctx)
                 pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", belt_tint)
             end
             if is_producing and functional then
-                entry.printer_change_timer = (entry.printer_change_timer or 0) - (dt or 0)
+                entry.printer_change_timer = (entry.printer_change_timer or 0) - scaled_dt
                 if (entry.printer_change_timer or 0) <= 0 then
-                    entry.printer_target_x = -90 + (math.random() * 180)
+                    entry.printer_target_x = -60 + (math.random() * 120)
                     entry.printer_change_timer = 0.05 + (math.random() * 0.09)
                 end
-                local move_blend = math.min(1, (dt or 0) * 16)
+                local move_blend = math.min(1, scaled_dt * 16)
                 entry.printer_current_x = (entry.printer_current_x or 0) + (((entry.printer_target_x or 0) - (entry.printer_current_x or 0)) * move_blend)
             else
                 entry.printer_target_x = 0

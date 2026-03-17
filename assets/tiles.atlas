@@ -289,6 +289,15 @@ images {
 images {
   image: "/assets/images/tile_workshop_on.png"
 }
+images {
+  image: "/assets/images/tile_workshop_printer.png"
+}
+images {
+  image: "/assets/images/tile_workshop_printerGlow.png"
+}
+images {
+  image: "/assets/images/tile_workshop_printerOff.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

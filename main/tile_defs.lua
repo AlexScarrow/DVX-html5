@@ -340,7 +340,7 @@ library["canteen"] = canteen
     armoury.cells[1].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
         offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "meds", "material","power","plate", COMPONENT_UI.component_fuse }
+        lootItems = { "material", "material", "material", "material","power","material", COMPONENT_UI.component_fuse }
     }
     -- armoury.cells[2].object1 = {
     --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
@@ -361,7 +361,7 @@ library["canteen"] = canteen
     armoury.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "meds", "material","plate" ,COMPONENT_UI.component_fuse }
+        lootItems = { "ammo", "ammo", "material", "material","power" ,COMPONENT_UI.component_fuse }
     }
     armoury.cells[7].object1 = {
         name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
@@ -569,6 +569,67 @@ passage1.cells[6].object1 = {
     }
 
     library["factory"] = factory
+
+-- =====================================================================
+-- WORKSHOP
+-- =====================================================================
+    local workshop = create_tile_prototype("workshop")
+    workshop.visualTile = "workshop_off"
+    workshop.powerLightOffAnim = "tile_workshop_off"
+    workshop.powerLightOnAnim = "tile_workshop_on"
+
+    for i = 1, 9 do
+        workshop.cells[i].lightValue = 2
+        workshop.cells[i].moveValue = 1
+        workshop.cells[i].coverValue = 1
+        workshop.cells[i].accessRight = false
+        workshop.cells[i].accessDown = false
+    end
+
+    -- Internal connectivity:
+    -- - Ladder lane in center column (2 <-> 5 <-> 8)
+    -- - Cell 7 menu is reachable from cell 8
+    -- - Cell 2 output lane can reach power-node lane (cell 3)
+    -- - Cell 9 remains blocked
+    workshop.cells[2].accessRight = true
+    workshop.cells[2].accessDown = true
+    workshop.cells[5].accessDown = true
+    workshop.cells[6].accessRight = true
+    workshop.cells[7].accessRight = true
+    workshop.cells[8].accessDown = true
+
+    -- Power node lane (cell 3)
+    workshop.cells[3].object1 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+
+    -- Wiring dependency lane (cell 6)
+    workshop.cells[6].object1 = {
+        name = hash("wiregap"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        offsetX = 82, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+
+    -- Machine base (cell 4) is the fixable workshop machine.
+    workshop.cells[4].object1 = {
+        name = hash("workshop_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 601, isDependentOn = {}, objectId = 401,
+        offsetX = -56, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 132, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+    }
+
+    -- Machine top visual anchor (cell 1). Non-fixable.
+    workshop.cells[1].object1 = {
+        name = hash("workshop_machine_top"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 401, isDependentOn = {}, objectId = 101,
+        offsetX = -56, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 132, hitH = 116, requiredComponent = nil
+    }
+
+    -- Workshop order menu + payment hotspot lane (cell 7).
+    workshop.cells[7].object1 = {
+        name = hash("workshop_menu"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 401, isDependentOn = {}, objectId = 701,
+        offsetX = -56, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 170, hitH = 118, requiredComponent = nil
+    }
+
+    library["workshop"] = workshop
 
     
     return library

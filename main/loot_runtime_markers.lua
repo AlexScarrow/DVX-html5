@@ -287,6 +287,7 @@ function M.extend(runtime, ctx)
                     end
                 elseif cell.isPowered then
                 local slots = { cell.object1, cell.object2, cell.object3 }
+                local obstacle_draw_index = 0
                 for _, obj in ipairs(slots) do
                     if obj and obj.name == hash("obstacle") then
                         local count = obj.stackCount or obj.obstacleCount or 1
@@ -295,15 +296,13 @@ function M.extend(runtime, ctx)
                         end
                         local base_x = cx + (obj.offsetX or 0)
                         local base_y = cy + (obj.offsetY or 0)
+                        local current_by_index = cell.obstacleNudgeCurrentByIndex
                         for i = 1, count do
+                            obstacle_draw_index = obstacle_draw_index + 1
                             local shudder_dx = 0
                             local shudder_dy = 0
-                            if (cell.obstacleShudderTimer or 0) > 0 then
-                                local phase = (cell.obstacleShudderPhase or 0) + (i * 1.3)
-                                shudder_dx = math.sin(phase) * 10
-                                shudder_dy = math.cos(phase * 1.7) * 4
-                            end
-                            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16) + shudder_dx, base_y + shudder_dy, 0.56))
+                            local per_obstacle_dx = (current_by_index and current_by_index[obstacle_draw_index]) or 0
+                            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(base_x + ((i - 1) * 16) + per_obstacle_dx + shudder_dx, base_y + shudder_dy, 0.555))
                             if marker_id then
                                 local variant_idx = (((obj.objectId or 0) + i) % 3) + 1
                                 local obstacle_anim = hash("obstacle1")

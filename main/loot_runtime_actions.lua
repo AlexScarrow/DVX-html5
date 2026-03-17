@@ -33,9 +33,9 @@ function M.extend(runtime, ctx)
     local WORKSHOP_OUTPUT_MAX_STOCK = 9
     local WORKSHOP_PRODUCTION_DURATION = 10.0
     local WORKSHOP_CONVEYOR_TOKEN_Z = 0.56
-    local WORKSHOP_CONVEYOR_TRAVEL_SECONDS = 0.9
+    local WORKSHOP_CONVEYOR_TRAVEL_SECONDS = 2.67
     local WORKSHOP_PRINTER_Z = 0.74
-    local WORKSHOP_EMITTER_Z = 0.741
+    local WORKSHOP_EMITTER_Z = 0.69
     local WORKSHOP_SLOT_GRID_W = 3
     local WORKSHOP_SLOT_GRID_H = 3
     local WORKSHOP_MENU_HALF_W = 85
@@ -970,7 +970,7 @@ function M.extend(runtime, ctx)
                 local c1x, c1y = ctx.coords_to_world_pos(cell1.xCell, cell1.yCell)
                 local c4x, c4y = ctx.coords_to_world_pos(cell4.xCell, cell4.yCell)
                 local printer_base_x = c4x
-                local printer_base_y = c4y + ((ctx.CELL_HEIGHT or 150) * 0.5) - 10
+                local printer_base_y = c4y + ((ctx.CELL_HEIGHT or 150) * 0.5) - 30
                 local printer_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y, WORKSHOP_PRINTER_Z))
                 if printer_id then
                     msg.post(msg.url(nil, printer_id, "sprite"), "play_animation", { id = hash("tile_workshop_printerOff") })
@@ -1261,9 +1261,9 @@ function M.extend(runtime, ctx)
                                     item_type = selected.item_type,
                                     label = selected.label,
                                     start_x = c1x - 98,
-                                    start_y = c1y - 36,
-                                    end_x = c2x + 12,
-                                    end_y = c2y - 36,
+                                    start_y = c1y - 26,
+                                    end_x = c2x - 90,
+                                    end_y = c2y - 26,
                                     t = 0,
                                     duration = WORKSHOP_CONVEYOR_TRAVEL_SECONDS
                                 })

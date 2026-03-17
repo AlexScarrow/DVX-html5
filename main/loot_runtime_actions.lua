@@ -31,7 +31,9 @@ function M.extend(runtime, ctx)
     local WORKSHOP_MACHINE_NAME = hash("workshop_machine")
     local WORKSHOP_MENU_NAME = hash("workshop_menu")
     local WORKSHOP_OUTPUT_MAX_STOCK = 9
-    local WORKSHOP_PRODUCTION_DURATION = 1.0
+    local WORKSHOP_PRODUCTION_DURATION = 10.0
+    local WORKSHOP_CONVEYOR_TOKEN_Z = 0.56
+    local WORKSHOP_CONVEYOR_TRAVEL_SECONDS = 0.9
     local WORKSHOP_SLOT_GRID_W = 3
     local WORKSHOP_SLOT_GRID_H = 3
     local WORKSHOP_MENU_HALF_W = 85
@@ -526,6 +528,7 @@ function M.extend(runtime, ctx)
         self.factory_underlay_clock = self.factory_underlay_clock or 0
         self.factory_debug_cell_markers = self.factory_debug_cell_markers or {}
         self.workshop_underlay_visuals = self.workshop_underlay_visuals or {}
+        self.workshop_conveyor_tokens = self.workshop_conveyor_tokens or {}
         self.workshop_states = self.workshop_states or {}
         self.derple_feedback_entries = self.derple_feedback_entries or {}
         self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
@@ -710,6 +713,16 @@ function M.extend(runtime, ctx)
             end
         end
         return nil
+    end
+
+    local function count_workshop_pending_tokens(self, tile_instance_id)
+        local total = 0
+        for _, token in ipairs(self.workshop_conveyor_tokens or {}) do
+            if token and token.tile_instance_id == tile_instance_id then
+                total = total + 1
+            end
+        end
+        return total
     end
 
     local function get_workshop_menu_slot_by_world_point(cell, obj, world_x, world_y)
@@ -1109,12 +1122,14 @@ function M.extend(runtime, ctx)
         if needs_world_item_refresh then
             runtime.refresh_world_item_visuals(self)
         end
+        if runtime.update_workshop_conveyor_tokens then
+            runtime.update_workshop_conveyor_tokens(self, dt)
+        end
     end
 
     runtime.update_workshop_production = function(self, dt)
         runtime.ensure_item_runtime_state(self)
         local instances = get_workshop_instances(self)
-        local needs_world_item_refresh = false
         for tile_instance_id, instance in pairs(instances) do
             local state = get_workshop_state(self, tile_instance_id)
             if (state.production_time_left or 0) > 0 then
@@ -1123,24 +1138,75 @@ function M.extend(runtime, ctx)
                 end
                 if state.production_time_left <= 0 then
                     local selected = get_workshop_product_for_slot(state.selected_slot)
+                    local source_cell = instance.cell_by_local[1]
                     local output_cell = instance.cell_by_local[2]
-                    if selected and output_cell then
+                    local pending = count_workshop_pending_tokens(self, tile_instance_id)
+                    if selected and source_cell and output_cell then
                         local all_items = runtime.get_world_items_on_cell(self, output_cell.idNumber)
-                        if #all_items >= WORKSHOP_OUTPUT_MAX_STOCK then
+                        if (#all_items + pending) >= WORKSHOP_OUTPUT_MAX_STOCK then
                             print("Workshop output cell is full.")
                         else
-                            local slot_order = get_next_workshop_free_slot(self, tile_instance_id)
-                            if slot_order then
-                                runtime.create_world_item_instance(self, selected.item_type, output_cell.idNumber, nil, {
-                                    workshop_stock = true,
-                                    workshop_tile_instance_id = tile_instance_id,
-                                    workshop_slot_order = slot_order
+                            local c1x, c1y = ctx.coords_to_world_pos(source_cell.xCell, source_cell.yCell)
+                            local c2x, c2y = ctx.coords_to_world_pos(output_cell.xCell, output_cell.yCell)
+                            local token_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c1x - 98, c1y - 36, WORKSHOP_CONVEYOR_TOKEN_Z))
+                            if token_id then
+                                local anim = get_world_item_animation(selected.item_type)
+                                if anim then
+                                    msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = anim })
+                                end
+                                go.set_scale(vmath.vector3(0.85, 0.85, 1), token_id)
+                                go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.98))
+                                table.insert(self.workshop_conveyor_tokens, {
+                                    go_id = token_id,
+                                    tile_instance_id = tile_instance_id,
+                                    output_cell_id = output_cell.idNumber,
+                                    item_type = selected.item_type,
+                                    label = selected.label,
+                                    start_x = c1x - 98,
+                                    start_y = c1y - 36,
+                                    end_x = c2x + 12,
+                                    end_y = c2y - 36,
+                                    t = 0,
+                                    duration = WORKSHOP_CONVEYOR_TRAVEL_SECONDS
                                 })
-                                needs_world_item_refresh = true
-                                print(string.format("Workshop dispensed %s.", selected.label))
+                                print(string.format("Workshop moving %s to output lane.", selected.label))
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+
+    runtime.update_workshop_conveyor_tokens = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        if not self.workshop_conveyor_tokens then
+            return
+        end
+        local needs_world_item_refresh = false
+        for i = #self.workshop_conveyor_tokens, 1, -1 do
+            local token = self.workshop_conveyor_tokens[i]
+            if not token or not token.go_id then
+                table.remove(self.workshop_conveyor_tokens, i)
+            else
+                token.t = math.min(1, (token.t or 0) + ((dt or 0) / math.max(0.01, token.duration or 0.9)))
+                local px = token.start_x + ((token.end_x - token.start_x) * token.t)
+                local py = token.start_y + ((token.end_y - token.start_y) * token.t)
+                pcall(go.set_position, vmath.vector3(px, py, WORKSHOP_CONVEYOR_TOKEN_Z), token.go_id)
+                if token.t >= 1 then
+                    pcall(go.delete, token.go_id)
+                    local slot_order = get_next_workshop_free_slot(self, token.tile_instance_id)
+                    local output_cell_id = token.output_cell_id
+                    if slot_order and output_cell_id then
+                        runtime.create_world_item_instance(self, token.item_type, output_cell_id, nil, {
+                            workshop_stock = true,
+                            workshop_tile_instance_id = token.tile_instance_id,
+                            workshop_slot_order = slot_order
+                        })
+                        needs_world_item_refresh = true
+                        print(string.format("Workshop dispensed %s.", tostring(token.label or token.item_type)))
+                    end
+                    table.remove(self.workshop_conveyor_tokens, i)
                 end
             end
         end

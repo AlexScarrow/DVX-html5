@@ -50,6 +50,17 @@ function M.extend(runtime, ctx)
     local WORKSHOP_PAY_HOTSPOT_OFFSET_X = -6
     local WORKSHOP_PAY_HOTSPOT_OFFSET_Y = -22
     local WORKSHOP_PAY_HOTSPOT_HALF_SIZE = 17
+    local WORKSHOP_MENU_MARKER_Z = 0.72
+    local WORKSHOP_MENU_MARKER_SIZE = 32
+    local WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_X = -7
+    local WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_Y = 10
+    local WORKSHOP_MENU_SELECTION_GAP_PX = 4
+    local WORKSHOP_MENU_PAY_MARKER_OFFSET_X = -28
+    local WORKSHOP_MENU_PAY_MARKER_OFFSET_Y = 12
+    local WORKSHOP_MENU_SELECTION_TINT = vmath.vector4(0.2, 1.0, 0.2, 0.82)
+    local WORKSHOP_MENU_PAY_TINT_RED = vmath.vector4(1.0, 0.18, 0.18, 0.86)
+    local WORKSHOP_MENU_PAY_TINT_GREEN = vmath.vector4(0.2, 1.0, 0.2, 0.86)
+    local WORKSHOP_PAY_CONFIRM_FLASH_SECONDS = 0.2
     local WORKSHOP_PRODUCT_BY_SLOT = {
         [1] = { item_type = ctx.COMPONENT_UI.component_wiring_straight, price = 1, label = "wiring" },
         [2] = { item_type = ctx.COMPONENT_UI.component_fuse, price = 1, label = "fuse" },
@@ -685,7 +696,8 @@ function M.extend(runtime, ctx)
             selected_slot = nil,
             paid_units = 0,
             payment_locked = false,
-            production_time_left = 0
+            production_time_left = 0,
+            payment_confirm_flash = 0
         }
         return self.workshop_states[tile_instance_id]
     end
@@ -777,6 +789,54 @@ function M.extend(runtime, ctx)
             and world_x <= (hx + half)
             and world_y >= (hy - half)
             and world_y <= (hy + half)
+    end
+
+    local function get_workshop_menu_slot_center_world(cell, obj, slot_idx, spacing_mul)
+        if not cell or not obj or not slot_idx or slot_idx < 1 or slot_idx > 9 then
+            return nil, nil
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local mx = cx + (obj.offsetX or 0)
+        local my = cy + (obj.offsetY or 0)
+        local col = ((slot_idx - 1) % WORKSHOP_SLOT_GRID_W) + 1
+        local row_from_top = math.floor((slot_idx - 1) / WORKSHOP_SLOT_GRID_W) + 1
+        local left = mx - WORKSHOP_MENU_HALF_W
+        local top = my + WORKSHOP_MENU_HALF_H
+        local sx = left + ((col - 0.5) * WORKSHOP_MENU_SLOT_W)
+        local sy = top - ((row_from_top - 0.5) * WORKSHOP_MENU_SLOT_H)
+        local mul = spacing_mul or 1
+        sx = mx + ((sx - mx) * mul)
+        sy = my + ((sy - my) * mul)
+        return sx, sy
+    end
+
+    local function get_workshop_selection_marker_center_world(cell, obj, slot_idx)
+        if not cell or not obj or not slot_idx or slot_idx < 1 or slot_idx > 9 then
+            return nil, nil
+        end
+        local anchor_x, anchor_y = get_workshop_menu_slot_center_world(cell, obj, 5, 1)
+        if not anchor_x or not anchor_y then
+            return nil, nil
+        end
+        anchor_x = anchor_x + WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_X
+        anchor_y = anchor_y + WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_Y
+        local col = ((slot_idx - 1) % WORKSHOP_SLOT_GRID_W) + 1
+        local row_from_top = math.floor((slot_idx - 1) / WORKSHOP_SLOT_GRID_W) + 1
+        local step = WORKSHOP_MENU_MARKER_SIZE + WORKSHOP_MENU_SELECTION_GAP_PX
+        local sx = anchor_x + ((col - 2) * step)
+        local sy = anchor_y - ((row_from_top - 2) * step)
+        return sx, sy
+    end
+
+    local function create_workshop_menu_marker(world_x, world_y)
+        local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(world_x, world_y, WORKSHOP_MENU_MARKER_Z))
+        if not marker_id then
+            return nil
+        end
+        go.set_scale(vmath.vector3(WORKSHOP_MENU_MARKER_SIZE, WORKSHOP_MENU_MARKER_SIZE, 1), marker_id)
+        pcall(go.set, msg.url(nil, marker_id, "sprite"), "blend_mode", hash("add"))
+        pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+        return marker_id
     end
 
     local function count_factory_stock(self, tile_instance_id)
@@ -965,6 +1025,8 @@ function M.extend(runtime, ctx)
             if entry and entry.printer_id then pcall(go.delete, entry.printer_id) end
             if entry and entry.emitter_id then pcall(go.delete, entry.emitter_id) end
             if entry and entry.belt_id then pcall(go.delete, entry.belt_id) end
+            if entry and entry.selected_marker_id then pcall(go.delete, entry.selected_marker_id) end
+            if entry and entry.pay_marker_id then pcall(go.delete, entry.pay_marker_id) end
         end
         self.workshop_underlay_visuals = {}
         local instances = get_workshop_instances(self)
@@ -994,11 +1056,25 @@ function M.extend(runtime, ctx)
                     msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("tile_factory_belt") })
                     go.set_scale(vmath.vector3(2.34, 0.62, 1), belt_id)
                 end
+                local menu_cell = instance.cell_by_local[7]
+                local menu_obj = instance.menu_obj
+                local selected_marker_id = nil
+                local pay_marker_id = nil
+                if menu_cell and menu_obj then
+                    local sel_x, sel_y = get_workshop_selection_marker_center_world(menu_cell, menu_obj, 1)
+                    local pay_x, pay_y = get_workshop_menu_slot_center_world(menu_cell, menu_obj, 9)
+                    pay_x = (pay_x or c1x) + WORKSHOP_MENU_PAY_MARKER_OFFSET_X
+                    pay_y = (pay_y or c1y) + WORKSHOP_MENU_PAY_MARKER_OFFSET_Y
+                    selected_marker_id = create_workshop_menu_marker(sel_x or c1x, sel_y or c1y)
+                    pay_marker_id = create_workshop_menu_marker(pay_x, pay_y)
+                end
                 self.workshop_underlay_visuals[tile_instance_id] = {
                     tile_instance_id = tile_instance_id,
                     printer_id = printer_id,
                     emitter_id = emitter_id,
                     belt_id = belt_id,
+                    selected_marker_id = selected_marker_id,
+                    pay_marker_id = pay_marker_id,
                     printer_base_x = printer_base_x,
                     printer_base_y = printer_base_y,
                     belt_base_x = c1x,
@@ -1026,6 +1102,7 @@ function M.extend(runtime, ctx)
             local speed = functional and 1.0 or 0.22
             local state = get_workshop_state(self, tile_instance_id)
             local is_producing = (state.production_time_left or 0) > 0
+            state.payment_confirm_flash = math.max(0, (state.payment_confirm_flash or 0) - (dt or 0))
             local workshop_anim_speed_scale = 0.5
             local scaled_dt = (dt or 0) * workshop_anim_speed_scale
             entry.phase = (entry.phase or 0) + ((dt or 0) * speed * 8.0)
@@ -1058,6 +1135,45 @@ function M.extend(runtime, ctx)
             end
             if entry.belt_id then
                 pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", belt_tint)
+            end
+            local menu_cell = instance and instance.cell_by_local and instance.cell_by_local[7] or nil
+            local menu_obj = instance and instance.menu_obj or nil
+            local selected = get_workshop_product_for_slot(state.selected_slot)
+            local confirm_flash_active = (state.payment_confirm_flash or 0) > 0
+            local show_selected_marker = false
+            local show_pay_marker = false
+            local pay_marker_tint = WORKSHOP_MENU_PAY_TINT_RED
+            if confirm_flash_active then
+                show_pay_marker = true
+                pay_marker_tint = WORKSHOP_MENU_PAY_TINT_GREEN
+            elseif selected and functional and not state.payment_locked and not is_producing then
+                show_selected_marker = true
+                show_pay_marker = true
+                pay_marker_tint = WORKSHOP_MENU_PAY_TINT_RED
+            end
+            if entry.selected_marker_id then
+                if show_selected_marker and menu_cell and menu_obj and state.selected_slot then
+                    local sx, sy = get_workshop_selection_marker_center_world(menu_cell, menu_obj, state.selected_slot)
+                    if sx and sy then
+                        pcall(go.set_position, vmath.vector3(sx, sy, WORKSHOP_MENU_MARKER_Z), entry.selected_marker_id)
+                    end
+                    pcall(go.set, msg.url(nil, entry.selected_marker_id, "sprite"), "tint", WORKSHOP_MENU_SELECTION_TINT)
+                else
+                    pcall(go.set, msg.url(nil, entry.selected_marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+                end
+            end
+            if entry.pay_marker_id then
+                if show_pay_marker and menu_cell and menu_obj then
+                    local px_marker, py_marker = get_workshop_menu_slot_center_world(menu_cell, menu_obj, 9)
+                    if px_marker and py_marker then
+                        px_marker = px_marker + WORKSHOP_MENU_PAY_MARKER_OFFSET_X
+                        py_marker = py_marker + WORKSHOP_MENU_PAY_MARKER_OFFSET_Y
+                        pcall(go.set_position, vmath.vector3(px_marker, py_marker, WORKSHOP_MENU_MARKER_Z), entry.pay_marker_id)
+                    end
+                    pcall(go.set, msg.url(nil, entry.pay_marker_id, "sprite"), "tint", pay_marker_tint)
+                else
+                    pcall(go.set, msg.url(nil, entry.pay_marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+                end
             end
             if is_producing and functional then
                 entry.printer_change_timer = (entry.printer_change_timer or 0) - scaled_dt
@@ -2871,6 +2987,7 @@ function M.extend(runtime, ctx)
         state.selected_slot = slot_idx
         state.paid_units = 0
         state.payment_locked = false
+        state.payment_confirm_flash = 0
         print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
         return true
     end
@@ -3176,6 +3293,7 @@ function M.extend(runtime, ctx)
                                         if state.paid_units >= selected.price then
                                             state.payment_locked = true
                                             state.production_time_left = WORKSHOP_PRODUCTION_DURATION
+                                            state.payment_confirm_flash = WORKSHOP_PAY_CONFIRM_FLASH_SECONDS
                                             print(string.format("Workshop production started for %s.", selected.label))
                                         end
                                         consumed = true

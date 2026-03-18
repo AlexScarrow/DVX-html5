@@ -27,6 +27,11 @@ function M.extend(runtime, ctx)
         vmath.vector3(-46, -35, 0), vmath.vector3(-46, -1, 0), vmath.vector3(-46, 33, 0),
         vmath.vector3(2, -35, 0),   vmath.vector3(2, -1, 0),   vmath.vector3(2, 33, 0)
     }
+    local WORKSHOP_STACK_SLOT_OFFSETS = {
+        vmath.vector3(-102, -44, 0), vmath.vector3(-102, 1, 0), vmath.vector3(-102, 46, 0),
+        vmath.vector3(-46, -44, 0),  vmath.vector3(-46, 1, 0),  vmath.vector3(-46, 46, 0),
+        vmath.vector3(10, -44, 0),   vmath.vector3(10, 1, 0),   vmath.vector3(10, 46, 0)
+    }
     local WORKSHOP_TILE_ID = hash("workshop")
     local WORKSHOP_MACHINE_NAME = hash("workshop_machine")
     local WORKSHOP_MENU_NAME = hash("workshop_menu")
@@ -1004,6 +1009,7 @@ function M.extend(runtime, ctx)
                     belt_phase = math.random(),
                     flicker_timer = 0,
                     flicker_value = 1,
+                    flicker_phase = 0,
                     printer_anim_mode = "off",
                     phase = math.random() * math.pi * 2
                 }
@@ -1030,14 +1036,13 @@ function M.extend(runtime, ctx)
                 entry.printer_anim_mode = desired_mode
             end
             if functional and is_producing then
-                entry.flicker_timer = (entry.flicker_timer or 0) - scaled_dt
-                if (entry.flicker_timer or 0) <= 0 then
-                    entry.flicker_timer = 0.03 + (math.random() * 0.07)
-                    local r = math.random()
-                    entry.flicker_value = r * r
-                end
+                -- Workshop-specific profile: high emission with slow, even pulse.
+                entry.flicker_phase = (entry.flicker_phase or 0) + (scaled_dt * math.pi * 2 * 0.42)
+                local pulse01 = 0.5 + (0.5 * math.sin(entry.flicker_phase or 0))
+                entry.flicker_value = 0.9 + (0.1 * pulse01)
             else
                 entry.flicker_timer = 0
+                entry.flicker_phase = 0
                 entry.flicker_value = functional and 0.72 or 0.34
             end
             local flicker = entry.flicker_value or 1
@@ -1503,8 +1508,8 @@ function M.extend(runtime, ctx)
         end
         if meta and meta.workshop_stock == true then
             local slot_order = tonumber(meta.workshop_slot_order or 0) or 0
-            if slot_order >= 1 and slot_order <= #FACTORY_STACK_SLOT_OFFSETS then
-                local v = FACTORY_STACK_SLOT_OFFSETS[slot_order]
+            if slot_order >= 1 and slot_order <= #WORKSHOP_STACK_SLOT_OFFSETS then
+                local v = WORKSHOP_STACK_SLOT_OFFSETS[slot_order]
                 return v.x, v.y
             end
         end

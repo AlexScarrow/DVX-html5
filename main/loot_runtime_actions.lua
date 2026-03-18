@@ -999,9 +999,6 @@ function M.extend(runtime, ctx)
                 -- Debug cell markers intentionally disabled.
             end
         end
-        if runtime.refresh_workshop_underlay_visuals then
-            runtime.refresh_workshop_underlay_visuals(self)
-        end
     end
 
     local function set_workshop_underlay_tint(entry, tint)
@@ -1095,6 +1092,9 @@ function M.extend(runtime, ctx)
 
     runtime.update_workshop_underlay_animations = function(self, dt)
         runtime.ensure_item_runtime_state(self)
+        if (not self.workshop_underlay_visuals) or (next(self.workshop_underlay_visuals) == nil) then
+            runtime.refresh_workshop_underlay_visuals(self)
+        end
         local instances = get_workshop_instances(self)
         for tile_instance_id, entry in pairs(self.workshop_underlay_visuals or {}) do
             local instance = instances[tile_instance_id]

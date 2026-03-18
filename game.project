@@ -31,6 +31,9 @@ shared_state = 1
 [sprite]
 max_count = 2500
 
+[collection]
+max_instances = 2048
+
 [html5]
 htmlfile = /web/index.html
 

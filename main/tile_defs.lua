@@ -594,6 +594,7 @@ passage1.cells[6].object1 = {
     workshop.cells[2].accessRight = true
     workshop.cells[2].accessDown = true
     workshop.cells[5].accessDown = true
+    workshop.cells[5].accessRight = true
     workshop.cells[6].accessRight = true
     workshop.cells[7].accessRight = true
     workshop.cells[8].accessDown = true

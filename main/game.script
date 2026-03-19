@@ -3458,6 +3458,10 @@ local function update_alien_movement(self, dt)
                             alien.counter_shadow_offset = nil
                             sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                         end
+                        if alien.type == ALIEN_TYPE_BRUTE then
+                            -- Keep brute width constant in transit (no x squash/stretch).
+                            sx = base_scale
+                        end
                         go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
                     end
                     if sdist <= sstep then
@@ -3629,6 +3633,10 @@ local function update_alien_movement(self, dt)
                     else
                         alien.counter_shadow_offset = nil
                         sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
+                    end
+                    if alien.type == ALIEN_TYPE_BRUTE then
+                        -- Keep brute width constant in transit (no x squash/stretch).
+                        sx = base_scale
                     end
                     go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
                 end

@@ -14,6 +14,8 @@ function M.extend(runtime, ctx)
     local BARRICADE_HP_BAR_Z = 0.81
     local BARRICADE_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
     local BARRICADE_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
+    local DOOR_HP_DEFAULT = 3
+    local DOOR_HP_MAX = 3
 
     local function boardgame_shadows_enabled(self)
         return self and self.aesthetic_mode == "boardgame"
@@ -640,6 +642,8 @@ function M.extend(runtime, ctx)
         self.door_objects = self.door_objects or {}
         self.door_shadow_objects = self.door_shadow_objects or {}
         self.door_visual_state = self.door_visual_state or {}
+        self.door_hp_bar_bg_objects = self.door_hp_bar_bg_objects or {}
+        self.door_hp_bar_fill_objects = self.door_hp_bar_fill_objects or {}
 
         if not self.world_grid then
             return
@@ -675,6 +679,18 @@ function M.extend(runtime, ctx)
         end
 
         local seen = {}
+        local function clear_door_hp_bar(cell_id)
+            local bg = self.door_hp_bar_bg_objects[cell_id]
+            if bg then
+                go.delete(bg)
+                self.door_hp_bar_bg_objects[cell_id] = nil
+            end
+            local fill = self.door_hp_bar_fill_objects[cell_id]
+            if fill then
+                go.delete(fill)
+                self.door_hp_bar_fill_objects[cell_id] = nil
+            end
+        end
         for cell_id, cell in ipairs(self.world_grid) do
             if cell.tileID ~= hash("empty") and cell.isPowered == true then
                 local door = get_door_obj(cell)
@@ -774,6 +790,59 @@ function M.extend(runtime, ctx)
                             go.set(sprite_url, "tint", closed_tint)
                         end
                     end
+                    local show_hp_bar = closed
+                    if show_hp_bar then
+                        local hp_count = math.max(0, math.min(DOOR_HP_MAX, door.door_hp or DOOR_HP_DEFAULT))
+                        local hp_step = hp_count * 0.1
+                        local hp_bar_x = dx
+                        local hp_bar_y = dy + BARRICADE_HP_BAR_OFFSET_Y
+                        local bar_left = hp_bar_x - (BARRICADE_HP_BAR_BG_FULL_W * 0.5)
+                        local bg_id = self.door_hp_bar_bg_objects[cell_id]
+                        if not bg_id then
+                            bg_id = factory.create("/tile_factory#tile_factory", vmath.vector3(hp_bar_x, hp_bar_y, BARRICADE_HP_BAR_Z))
+                            if bg_id then
+                                self.door_hp_bar_bg_objects[cell_id] = bg_id
+                                msg.post(msg.url(nil, bg_id, "sprite"), "play_animation", { id = BARRICADE_HP_BAR_BG_ANIM })
+                                pcall(go.set, msg.url(nil, bg_id, "sprite"), "blend_mode", hash("alpha"))
+                                go.set_scale(vmath.vector3(BARRICADE_HP_BAR_BG_SCALE_X, BARRICADE_HP_BAR_BG_SCALE_Y, 1), bg_id)
+                                go.set(msg.url(nil, bg_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                            end
+                        else
+                            go.set_position(vmath.vector3(hp_bar_x, hp_bar_y, BARRICADE_HP_BAR_Z), bg_id)
+                        end
+                        local fill_id = self.door_hp_bar_fill_objects[cell_id]
+                        if hp_step > 0 then
+                            local fill_scale_x = BARRICADE_HP_BAR_BG_SCALE_X * hp_count
+                            local fill_full_w = BARRICADE_HP_FILL_ART_W * fill_scale_x
+                            local fill_x = bar_left + (fill_full_w * 0.5)
+                            local fill_color = vmath.vector4(0.28, 1.0, 0.38, 1.0)
+                            if hp_step <= 0.1 then
+                                fill_color = vmath.vector4(1.0, 0.36, 0.3, 1.0)
+                            elseif hp_step <= 0.2 then
+                                fill_color = vmath.vector4(1.0, 0.9, 0.3, 1.0)
+                            end
+                            if not fill_id then
+                                fill_id = factory.create("/tile_factory#tile_factory", vmath.vector3(fill_x, hp_bar_y, BARRICADE_HP_BAR_Z + 0.0001))
+                                if fill_id then
+                                    self.door_hp_bar_fill_objects[cell_id] = fill_id
+                                    msg.post(msg.url(nil, fill_id, "sprite"), "play_animation", { id = BARRICADE_HP_BAR_FILL_ANIM })
+                                    pcall(go.set, msg.url(nil, fill_id, "sprite"), "blend_mode", hash("alpha"))
+                                end
+                            end
+                            if fill_id then
+                                go.set_position(vmath.vector3(fill_x, hp_bar_y, BARRICADE_HP_BAR_Z + 0.0001), fill_id)
+                                go.set_scale(vmath.vector3(fill_scale_x, BARRICADE_HP_BAR_BG_SCALE_Y, 1), fill_id)
+                                go.set(msg.url(nil, fill_id, "sprite"), "tint", fill_color)
+                            end
+                        else
+                            if fill_id then
+                                go.delete(fill_id)
+                                self.door_hp_bar_fill_objects[cell_id] = nil
+                            end
+                        end
+                    else
+                        clear_door_hp_bar(cell_id)
+                    end
                 end
             end
         end
@@ -790,6 +859,7 @@ function M.extend(runtime, ctx)
                     go.delete(shadow_id)
                 end
                 self.door_shadow_objects[cell_id] = nil
+                clear_door_hp_bar(cell_id)
             end
         end
     end

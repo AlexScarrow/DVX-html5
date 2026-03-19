@@ -547,7 +547,7 @@ passage1.cells[6].object1 = {
     -- Power node lane (cell 4)
     factory.cells[4].object1 = {
         name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
-        offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        offsetX = 90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
     }
 
@@ -602,14 +602,24 @@ passage1.cells[6].object1 = {
     -- Power node lane (cell 3)
     workshop.cells[3].object1 = {
         name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
-        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
     }
+    workshop.cells[3].object2 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+        offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "material", "ammo","material","material","material","material","fuse","wiring_straight", COMPONENT_UI.component_fuse }
+    }
+
 
     -- Wiring dependency lane (cell 6)
     workshop.cells[6].object1 = {
-        name = hash("wiregap"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
-        offsetX = 82, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+        name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        offsetX = 84, offsetY = 34, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+    workshop.cells[6].object2 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
     }
 
     -- Machine base (cell 4) is the fixable workshop machine.
@@ -617,6 +627,8 @@ passage1.cells[6].object1 = {
         name = hash("workshop_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 601, isDependentOn = {}, objectId = 401,
         offsetX = -56, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 132, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
     }
+
+   
 
     -- Machine top visual anchor (cell 1). Non-fixable.
     workshop.cells[1].object1 = {
@@ -629,6 +641,8 @@ passage1.cells[6].object1 = {
         name = hash("workshop_menu"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 401, isDependentOn = {}, objectId = 701,
         offsetX = -56, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 170, hitH = 118, requiredComponent = nil
     }
+
+   
 
     library["workshop"] = workshop
 

@@ -516,7 +516,7 @@ function M.extend(runtime, ctx)
                                 table.insert(self.wiregap_shadow_objects, shadow_id)
                             end
                         end
-                        local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(wx, wy, 0.56))
+                        local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(wx, wy, 0.554))
                         if marker_id then
                             msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                             go.set_scale(vmath.vector3(1, 1, 1), marker_id)

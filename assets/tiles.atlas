@@ -304,6 +304,36 @@ images {
 images {
   image: "/assets/images/healthBar_fillAmount.png"
 }
+images {
+  image: "/assets/images/score_0.png"
+}
+images {
+  image: "/assets/images/score_1.png"
+}
+images {
+  image: "/assets/images/score_2.png"
+}
+images {
+  image: "/assets/images/score_3.png"
+}
+images {
+  image: "/assets/images/score_4.png"
+}
+images {
+  image: "/assets/images/score_5.png"
+}
+images {
+  image: "/assets/images/score_6.png"
+}
+images {
+  image: "/assets/images/score_7.png"
+}
+images {
+  image: "/assets/images/score_8.png"
+}
+images {
+  image: "/assets/images/score_9.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

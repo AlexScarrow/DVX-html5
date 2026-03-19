@@ -134,6 +134,13 @@ LAUNCH_BUTTON_Y = 64
 LAUNCH_BUTTON_W = 180
 LAUNCH_BUTTON_H = 64
 LAUNCH_BUTTON_Z = 0.845
+SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
+SCORE_HUD_Y = SCREEN_HEIGHT - 20
+SCORE_HUD_Z = 0.846
+SCORE_HUD_MAX_DIGITS = 8
+SCORE_HUD_DIGIT_SPACING_PX = 16
+SCORE_HUD_DIGIT_DRAW_W = 20.25
+SCORE_HUD_DIGIT_DRAW_H = 23.625
 FLOW_UI_OVERLAY_Z = 1.41
 FLOW_UI_PANEL_Z = 1.42
 FLOW_UI_BUTTON_Z = 1.43
@@ -170,6 +177,7 @@ local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     local cfg = require("main.config").create_ui_config(UI_PANEL_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H)
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
 end)()
+SCORE_RUNTIME = require("main.score_runtime")
 local LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
@@ -2816,6 +2824,7 @@ local function update_spitter_projectiles(self, dt)
                             target.is_moving = false
                             target.move_path = nil
                             target.move_path_index = 0
+                            score_record_alien_kill(self, target.type)
                             remove_dead_aliens(self)
                         else
                             print(string.format(
@@ -3043,6 +3052,7 @@ local function resolve_turret_pending_shot(self, shot_id)
                     target_alien.is_moving = false
                     target_alien.move_path = nil
                     target_alien.move_path_index = 0
+                    score_record_alien_kill(self, target_alien.type)
                     if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
                         MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target_alien)
                     end
@@ -5092,6 +5102,7 @@ local function initialize_unit_ui(self)
         close_button = nil,
         not_enough_ap_icon = nil,
         level_buttons = {},
+        score_digit_icons = {},
         new_turn_button = nil,
         launch_button = nil,
         aesthetic_toggle_button = nil,
@@ -5143,6 +5154,12 @@ local function initialize_unit_ui(self)
     local level_count = (self.level_library and #self.level_library) or 0
     for i = 1, level_count do
         self.ui.level_buttons[i] = create_ui_square(0, 0, LEVEL_BUTTON_Z, vmath.vector4(0.2, 0.6, 0.95, 0.9), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+    end
+    for i = 1, SCORE_HUD_MAX_DIGITS do
+        self.ui.score_digit_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, SCORE_HUD_Z))
+        if self.ui.score_digit_icons[i] then
+            msg.post(msg.url(nil, self.ui.score_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
+        end
     end
     self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     if self.ui.new_turn_button then
@@ -5213,6 +5230,11 @@ local function set_ui_hidden(self)
             end
         end
     end
+    if self.ui.score_digit_icons then
+        for _, digit_id in ipairs(self.ui.score_digit_icons) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
+        end
+    end
     set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
@@ -5246,24 +5268,131 @@ function is_point_in_screen_rect(screen_x, screen_y, cx, cy, w, h)
         and screen_y <= (cy + half_h)
 end
 
-function compute_placeholder_score_breakdown(self)
-    local status = (LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self)) or {}
-    local survivors = 0
-    local seated = 0
-    local dead = 0
+function ensure_score_state(self)
+    if not self.score_state then
+        self.score_state = SCORE_RUNTIME.create_state("escape_pod")
+    end
+    return self.score_state
+end
+
+function get_current_score_total(self)
+    local state = ensure_score_state(self)
+    local result = SCORE_RUNTIME.compute_score(state)
+    local total = math.max(0, math.floor((result and result.total) or 0))
+    self.score_display_total = math.max(self.score_display_total or 0, total)
+    return self.score_display_total
+end
+
+function update_score_hud(self, visible)
+    if not self.ui or not self.ui.score_digit_icons then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if visible ~= true then
+        for _, digit_id in ipairs(self.ui.score_digit_icons) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
+        end
+        return
+    end
+
+    local score_text = tostring(get_current_score_total(self))
+    if #score_text > SCORE_HUD_MAX_DIGITS then
+        score_text = string.sub(score_text, #score_text - SCORE_HUD_MAX_DIGITS + 1)
+    end
+    local count = #score_text
+    local start_x = SCORE_HUD_CENTER_X - ((count - 1) * SCORE_HUD_DIGIT_SPACING_PX * 0.5)
+    for idx, digit_id in ipairs(self.ui.score_digit_icons) do
+        if idx <= count then
+            local ch = string.sub(score_text, idx, idx)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            local dx = start_x + ((idx - 1) * SCORE_HUD_DIGIT_SPACING_PX)
+            set_ui_square_transform(
+                self,
+                digit_id,
+                dx,
+                SCORE_HUD_Y,
+                SCORE_HUD_Z,
+                vmath.vector4(1, 1, 1, 1),
+                SCORE_HUD_DIGIT_DRAW_W * 0.021,
+                SCORE_HUD_DIGIT_DRAW_H * 0.021
+            )
+        else
+            set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
+        end
+    end
+end
+
+function score_log_snapshot(self, label)
+    local state = ensure_score_state(self)
+    local result = SCORE_RUNTIME.compute_score(state)
+    local b = result.breakdown or {}
+    local m = result.metrics or {}
+    print(string.format(
+        "SCORE TRACE [%s] total=%d | kills=%d tiles=%d escaped=%d turns=%d eff=%d win=%d",
+        tostring(label or "event"),
+        result.total or 0,
+        b.aliens_killed_points or 0,
+        b.tiles_powered_points or 0,
+        b.humans_escaped_points or 0,
+        m.turns_elapsed or 0,
+        b.efficiency_points or 0,
+        b.win_bonus_points or 0
+    ))
+    print(string.format(
+        "UI DEBUG | SCORE [%s] total=%d turns=%d kills=%d tiles=%d escaped=%d",
+        tostring(label or "event"),
+        result.total or 0,
+        m.turns_elapsed or 0,
+        m.aliens_killed_total or 0,
+        m.tiles_powered_first_time or 0,
+        m.humans_escaped_on_launch or 0
+    ))
+end
+
+function score_record_turn_started(self)
+    self.score_turn_counter = (self.score_turn_counter or 0) + 1
+    SCORE_RUNTIME.record_turn_started(ensure_score_state(self), self.score_turn_counter)
+    score_log_snapshot(self, "turn_started")
+end
+
+function score_record_alien_kill(self, alien_type)
+    SCORE_RUNTIME.record_alien_killed(ensure_score_state(self), alien_type)
+    score_log_snapshot(self, "alien_killed")
+end
+
+function score_record_tile_powered_first_time(self, tile_instance_id)
+    SCORE_RUNTIME.record_tile_powered(ensure_score_state(self), tile_instance_id)
+    score_log_snapshot(self, "tile_powered")
+end
+
+function score_record_launch_success(self, escaped_humans_alive_count)
+    local state = ensure_score_state(self)
+    SCORE_RUNTIME.record_launch_success(state, escaped_humans_alive_count or 0)
+    local alive = 0
     if self.squad_units then
         for _, unit in pairs(self.squad_units) do
             if unit and (unit.current_health or 0) > 0 then
-                survivors = survivors + 1
-                if unit.in_shuttle == true then
-                    seated = seated + 1
-                end
-            else
-                dead = dead + 1
+                alive = alive + 1
             end
         end
     end
-    local power_units = status.power_loaded or 0
+    SCORE_RUNTIME.record_humans_alive_at_end(state, alive)
+    SCORE_RUNTIME.record_mission_complete(state)
+    score_log_snapshot(self, "launch_success")
+end
+
+function compute_placeholder_score_breakdown(self)
+    local state = ensure_score_state(self)
+    local result = SCORE_RUNTIME.compute_score(state)
+    local m = result.metrics or {}
+    local b = result.breakdown or {}
+    local status = (LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self)) or {}
+    local total_units = 0
+    if self.squad_units then
+        for _, _ in pairs(self.squad_units) do
+            total_units = total_units + 1
+        end
+    end
     local objectives = 0
     if status.nav_ready then
         objectives = objectives + 1
@@ -5271,17 +5400,18 @@ function compute_placeholder_score_breakdown(self)
     if status.supplies_ready then
         objectives = objectives + 1
     end
-    local total = (survivors * 100) + (seated * 75) + (power_units * 10) + (objectives * 120) - (dead * 30)
-    if total < 0 then
-        total = 0
-    end
+    local seated = m.humans_escaped_on_launch or 0
+    local survivors = math.max(seated, m.humans_alive_at_end or 0)
+    local dead = math.max(0, total_units - (m.humans_alive_at_end or 0))
     return {
         survivors = survivors,
         seated = seated,
         dead = dead,
-        power_units = power_units,
+        power_units = status.power_loaded or 0,
         objectives = objectives,
-        total = total
+        total = result.total or 0,
+        score_breakdown = b,
+        score_metrics = m
     }
 end
 
@@ -5671,6 +5801,9 @@ function reset_and_load_level(self, level_index)
     self.exit_objective_state = nil
     self.launch_fx_timer = 0
     self.game_won = false
+    self.score_turn_counter = 0
+    self.score_state = SCORE_RUNTIME.create_state("escape_pod")
+    self.score_display_total = 0
     self.power_node_loop_fx = {}
     self.melee_swipe_fx = {}
     self.melee_swipe_next_id = 0
@@ -5689,6 +5822,8 @@ function reset_and_load_level(self, level_index)
         spawn_human_unit(self)
     end
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    print("SCORE TRACE READY | scoring runtime initialized")
+    score_log_snapshot(self, "level_reset")
     spawn_exit_test_stash(self)
     LOOT_RUNTIME.refresh_exit_objective_state(self)
     update_human_visual_state(self)
@@ -5710,6 +5845,7 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
+        update_score_hud(self, false)
         return
     end
     local alien_cycle_active = self.alien_turn_active
@@ -5789,6 +5925,7 @@ function update_global_ui_buttons(self)
         ZOOM_OUT_BUTTON_W,
         ZOOM_OUT_BUTTON_H
     )
+    update_score_hud(self, true)
 end
 
 get_aesthetic_profile = function(self)
@@ -6876,12 +7013,15 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     id_to_coords = id_to_coords,
     coords_to_world_pos = coords_to_world_pos,
     set_ui_square_transform = set_ui_square_transform,
-    update_human_visual_state = update_human_visual_state
+    update_human_visual_state = update_human_visual_state,
+    record_tile_powered_first_time = score_record_tile_powered_first_time,
+    record_launch_success = score_record_launch_success
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
     ALIEN_TYPE_BRUTE = ALIEN_TYPE_BRUTE,
-    any_alien_is_moving = any_alien_is_moving
+    any_alien_is_moving = any_alien_is_moving,
+    record_alien_kill = score_record_alien_kill
 })
 
 local function update_human_ap_debug_label(self)
@@ -6898,6 +7038,7 @@ local function update_human_ap_debug_label(self)
 end
 
 local function next_turn_reset_human_ap(self)
+    score_record_turn_started(self)
     if not self.squad_units then
         return
     end
@@ -8312,6 +8453,11 @@ function init(self)
     self.drag_resource = { active = false }
     reset_derple_feedback_runtime(self)
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    self.score_turn_counter = 0
+    self.score_state = SCORE_RUNTIME.create_state("escape_pod")
+    self.score_display_total = 0
+    print("SCORE TRACE READY | scoring runtime initialized")
+    score_log_snapshot(self, "init")
     self.flow_score_breakdown = { total = 0, survivors = 0, seated = 0, dead = 0, power_units = 0, objectives = 0 }
     self.flow_outro_timer = 0
     self.flow_submit_done = false

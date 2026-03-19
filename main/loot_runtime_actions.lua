@@ -501,6 +501,18 @@ function M.extend(runtime, ctx)
         unit.backpack_used = #unit.backpack_items
     end
 
+    local function record_tile_powered(self, tile_instance_id)
+        if ctx and ctx.record_tile_powered_first_time then
+            ctx.record_tile_powered_first_time(self, tile_instance_id)
+        end
+    end
+
+    local function record_launch_success(self, escaped_humans_alive_count)
+        if ctx and ctx.record_launch_success then
+            ctx.record_launch_success(self, escaped_humans_alive_count)
+        end
+    end
+
     local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
         if not self.world_grid then
             return nil, nil
@@ -2108,6 +2120,7 @@ function M.extend(runtime, ctx)
         end
         self.game_won = true
         self.launch_fx_timer = 1.2
+        record_launch_success(self, status.seated_humans or 0)
         print("LAUNCH SUCCESS | Escape pod departed.")
         return true
     end
@@ -3439,6 +3452,7 @@ function M.extend(runtime, ctx)
                                         end
                                     end
                                 end
+                                record_tile_powered(self, target_tile_instance)
                                 print(string.format(
                                     "%s activated a power node. (AP -%d)",
                                     source_unit.display_name,

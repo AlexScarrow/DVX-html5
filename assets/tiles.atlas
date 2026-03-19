@@ -298,6 +298,12 @@ images {
 images {
   image: "/assets/images/tile_workshop_printerOff.png"
 }
+images {
+  image: "/assets/images/healthBar_backdrop.png"
+}
+images {
+  image: "/assets/images/healthBar_fillAmount.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

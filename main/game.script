@@ -8424,10 +8424,12 @@ function update(self, dt)
         for _, cell in ipairs(self.world_grid) do
             if cell and (cell.obstacleShudderTimer or 0) > 0 then
                 cell.obstacleShudderTimer = math.max(0, (cell.obstacleShudderTimer or 0) - dt)
+                cell.obstacleShudderPhase = (cell.obstacleShudderPhase or 0) + (dt * 48)
                 if cell.obstacleShudderTimer > 0 then
                     obstacle_shudder_active = true
                 else
                     cell.obstacleShudderTimer = nil
+                    cell.obstacleShudderPhase = nil
                 end
             end
             if cell then

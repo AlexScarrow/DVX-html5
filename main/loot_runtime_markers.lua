@@ -4,6 +4,16 @@ function M.extend(runtime, ctx)
     local WELD_OVERLAY_OFFSET_X = -0.5
     local WELD_OVERLAY_OFFSET_Y = -0.5
     local WELD_OVERLAY_Z = 0.54
+    local BARRICADE_HP_MAX = 10
+    local BARRICADE_HP_BAR_ART_W = 197
+    local BARRICADE_HP_FILL_ART_W = 197
+    local BARRICADE_HP_BAR_BG_SCALE_X = 0.32
+    local BARRICADE_HP_BAR_BG_SCALE_Y = 0.32
+    local BARRICADE_HP_BAR_BG_FULL_W = BARRICADE_HP_BAR_ART_W * BARRICADE_HP_BAR_BG_SCALE_X
+    local BARRICADE_HP_BAR_OFFSET_Y = -100
+    local BARRICADE_HP_BAR_Z = 0.81
+    local BARRICADE_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
+    local BARRICADE_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
 
     local function boardgame_shadows_enabled(self)
         return self and self.aesthetic_mode == "boardgame"
@@ -284,6 +294,39 @@ function M.extend(runtime, ctx)
                         go.set_scale(vmath.vector3(barricade_scale * 0.75, barricade_scale, 1), marker_id)
                         go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(barricade_brightness, barricade_brightness, barricade_brightness, 1))
                         table.insert(self.obstacle_debug_objects, marker_id)
+                    end
+                    local hp_ratio = math.max(0, math.min(1, barricade_hp / BARRICADE_HP_MAX))
+                    local hp_bar_x = cx + barricade_anchor_x + shudder_dx
+                    local hp_bar_y = cy + barricade_anchor_y + BARRICADE_HP_BAR_OFFSET_Y
+                    local bar_left = hp_bar_x - (BARRICADE_HP_BAR_BG_FULL_W * 0.5)
+                    local bg_id = factory.create("/tile_factory#tile_factory", vmath.vector3(hp_bar_x, hp_bar_y, BARRICADE_HP_BAR_Z))
+                    if bg_id then
+                        msg.post(msg.url(nil, bg_id, "sprite"), "play_animation", { id = BARRICADE_HP_BAR_BG_ANIM })
+                        pcall(go.set, msg.url(nil, bg_id, "sprite"), "blend_mode", hash("alpha"))
+                        go.set_scale(vmath.vector3(BARRICADE_HP_BAR_BG_SCALE_X, BARRICADE_HP_BAR_BG_SCALE_Y, 1), bg_id)
+                        go.set(msg.url(nil, bg_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        table.insert(self.obstacle_debug_objects, bg_id)
+                    end
+                    if hp_ratio > 0 then
+                        local hp_count = math.max(0, math.min(BARRICADE_HP_MAX, barricade_hp or 0))
+                        -- Left-anchored fill growth: 0.1 width step per HP from the bar's left edge.
+                        local fill_scale_x = BARRICADE_HP_BAR_BG_SCALE_X * hp_count
+                        local fill_full_w = BARRICADE_HP_FILL_ART_W * fill_scale_x
+                        local fill_x = bar_left + (fill_full_w * 0.5)
+                        local fill_color = vmath.vector4(0.28, 1.0, 0.38, 1.0)
+                        if hp_ratio <= 0.3 then
+                            fill_color = vmath.vector4(1.0, 0.36, 0.3, 1.0)
+                        elseif hp_ratio <= 0.6 then
+                            fill_color = vmath.vector4(1.0, 0.9, 0.3, 1.0)
+                        end
+                        local fill_id = factory.create("/tile_factory#tile_factory", vmath.vector3(fill_x, hp_bar_y, BARRICADE_HP_BAR_Z + 0.0001))
+                        if fill_id then
+                            msg.post(msg.url(nil, fill_id, "sprite"), "play_animation", { id = BARRICADE_HP_BAR_FILL_ANIM })
+                            pcall(go.set, msg.url(nil, fill_id, "sprite"), "blend_mode", hash("alpha"))
+                            go.set_scale(vmath.vector3(fill_scale_x, BARRICADE_HP_BAR_BG_SCALE_Y, 1), fill_id)
+                            go.set(msg.url(nil, fill_id, "sprite"), "tint", fill_color)
+                            table.insert(self.obstacle_debug_objects, fill_id)
+                        end
                     end
                 elseif cell.isPowered then
                 local slots = { cell.object1, cell.object2, cell.object3 }

@@ -921,8 +921,16 @@ try_brute_break_adjacent_barricade = function(self, alien)
         for _, dir in ipairs(search_dirs) do
             local adj_id = get_adjacent_cell(alien.cell_id, dir)
             if adj_id and is_cell_barricaded(self.world_grid, adj_id) and can_cross_between_cells(self.world_grid, alien.cell_id, adj_id) then
-                target_cell_id = adj_id
-                break
+                local _, _, edge_door_closed = get_edge_door_context(self.world_grid, alien.cell_id, adj_id)
+                if edge_door_closed then
+                    -- Closed door on the edge blocks barricade attacks; brute should hit the door first.
+                    if try_brute_damage_edge_door(self, alien, alien.cell_id, adj_id) then
+                        return true
+                    end
+                else
+                    target_cell_id = adj_id
+                    break
+                end
             end
         end
         if not target_cell_id then

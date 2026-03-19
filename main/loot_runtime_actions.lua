@@ -27,6 +27,50 @@ function M.extend(runtime, ctx)
         vmath.vector3(-46, -35, 0), vmath.vector3(-46, -1, 0), vmath.vector3(-46, 33, 0),
         vmath.vector3(2, -35, 0),   vmath.vector3(2, -1, 0),   vmath.vector3(2, 33, 0)
     }
+    local WORKSHOP_STACK_SLOT_OFFSETS = {
+        vmath.vector3(-102, -44, 0), vmath.vector3(-102, 1, 0), vmath.vector3(-102, 46, 0),
+        vmath.vector3(-46, -44, 0),  vmath.vector3(-46, 1, 0),  vmath.vector3(-46, 46, 0),
+        vmath.vector3(10, -44, 0),   vmath.vector3(10, 1, 0),   vmath.vector3(10, 46, 0)
+    }
+    local WORKSHOP_TILE_ID = hash("workshop")
+    local WORKSHOP_MACHINE_NAME = hash("workshop_machine")
+    local WORKSHOP_MENU_NAME = hash("workshop_menu")
+    local WORKSHOP_OUTPUT_MAX_STOCK = 9
+    local WORKSHOP_PRODUCTION_DURATION = 10.0
+    local WORKSHOP_CONVEYOR_TOKEN_Z = 0.56
+    local WORKSHOP_CONVEYOR_TRAVEL_SECONDS = 2.67
+    local WORKSHOP_PRINTER_Z = 0.74
+    local WORKSHOP_EMITTER_Z = 0.69
+    local WORKSHOP_SLOT_GRID_W = 3
+    local WORKSHOP_SLOT_GRID_H = 3
+    local WORKSHOP_MENU_HALF_W = 85
+    local WORKSHOP_MENU_HALF_H = 59
+    local WORKSHOP_MENU_SLOT_W = (WORKSHOP_MENU_HALF_W * 2) / WORKSHOP_SLOT_GRID_W
+    local WORKSHOP_MENU_SLOT_H = (WORKSHOP_MENU_HALF_H * 2) / WORKSHOP_SLOT_GRID_H
+    local WORKSHOP_PAY_HOTSPOT_OFFSET_X = -6
+    local WORKSHOP_PAY_HOTSPOT_OFFSET_Y = -22
+    local WORKSHOP_PAY_HOTSPOT_HALF_SIZE = 17
+    local WORKSHOP_MENU_MARKER_Z = 0.72
+    local WORKSHOP_MENU_MARKER_SIZE = 32
+    local WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_X = -7
+    local WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_Y = 10
+    local WORKSHOP_MENU_SELECTION_GAP_PX = 4
+    local WORKSHOP_MENU_PAY_MARKER_OFFSET_X = -28
+    local WORKSHOP_MENU_PAY_MARKER_OFFSET_Y = 12
+    local WORKSHOP_MENU_SELECTION_TINT = vmath.vector4(0.2, 1.0, 0.2, 0.82)
+    local WORKSHOP_MENU_PAY_TINT_RED = vmath.vector4(1.0, 0.18, 0.18, 0.86)
+    local WORKSHOP_MENU_PAY_TINT_GREEN = vmath.vector4(0.2, 1.0, 0.2, 0.86)
+    local WORKSHOP_PAY_CONFIRM_FLASH_SECONDS = 0.2
+    local WORKSHOP_PRODUCT_BY_SLOT = {
+        [1] = { item_type = ctx.COMPONENT_UI.component_wiring_straight, price = 1, label = "wiring" },
+        [2] = { item_type = ctx.COMPONENT_UI.component_fuse, price = 1, label = "fuse" },
+        [3] = { item_type = "obstacle1", price = 2, label = "obstacle1" },
+        [4] = { item_type = "obstacle2", price = 2, label = "obstacle2" },
+        [5] = { item_type = "obstacle3", price = 2, label = "obstacle3" },
+        [6] = { item_type = "obstacle4", price = 2, label = "obstacle4" },
+        [7] = { item_type = "obstacle5", price = 2, label = "obstacle5" },
+        [8] = { item_type = "power", price = 5, label = "power" }
+    }
     local DERPLE_FEEDBACK_EVENT_DEFS = {
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
@@ -108,12 +152,31 @@ function M.extend(runtime, ctx)
             return hash("gun_turret")
         elseif item_type == OBSTACLE_ITEM then
             return hash("obstacle_icon")
+        elseif item_type == "obstacle1" then
+            return hash("obstacle1")
+        elseif item_type == "obstacle2" then
+            return hash("obstacle2")
+        elseif item_type == "obstacle3" then
+            return hash("obstacle3")
+        elseif item_type == "obstacle4" then
+            return hash("obstacle2")
+        elseif item_type == "obstacle5" then
+            return hash("obstacle3")
         elseif is_nav_data_item(item_type) then
             return hash("nav_data")
         elseif is_food_supplies_item(item_type) then
             return hash("food_supplies")
         end
         return nil
+    end
+
+    local function is_obstacle_backpack_item(item_type)
+        return item_type == OBSTACLE_ITEM
+            or item_type == "obstacle1"
+            or item_type == "obstacle2"
+            or item_type == "obstacle3"
+            or item_type == "obstacle4"
+            or item_type == "obstacle5"
     end
 
     local function get_turret_object_on_cell(cell)
@@ -485,6 +548,9 @@ function M.extend(runtime, ctx)
         self.factory_conveyor_tokens = self.factory_conveyor_tokens or {}
         self.factory_underlay_clock = self.factory_underlay_clock or 0
         self.factory_debug_cell_markers = self.factory_debug_cell_markers or {}
+        self.workshop_underlay_visuals = self.workshop_underlay_visuals or {}
+        self.workshop_conveyor_tokens = self.workshop_conveyor_tokens or {}
+        self.workshop_states = self.workshop_states or {}
         self.derple_feedback_entries = self.derple_feedback_entries or {}
         self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
         self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
@@ -562,6 +628,215 @@ function M.extend(runtime, ctx)
             instance.functional = (instance.powered == true) and deps_ok
         end
         return instances
+    end
+
+    local function get_workshop_instances(self)
+        local instances = {}
+        if not self or not self.world_grid then
+            return instances
+        end
+        for _, cell in ipairs(self.world_grid) do
+            if cell and cell.tileID == WORKSHOP_TILE_ID then
+                local tile_instance_id = cell.tileInstanceId or 0
+                if tile_instance_id > 0 then
+                    local instance = instances[tile_instance_id]
+                    if not instance then
+                        instance = {
+                            tile_instance_id = tile_instance_id,
+                            cells = {},
+                            min_x = cell.xCell,
+                            min_y = cell.yCell,
+                            max_x = cell.xCell,
+                            max_y = cell.yCell,
+                            powered = false,
+                            machine_obj = nil,
+                            menu_obj = nil
+                        }
+                        instances[tile_instance_id] = instance
+                    end
+                    table.insert(instance.cells, cell)
+                    if cell.xCell < instance.min_x then instance.min_x = cell.xCell end
+                    if cell.xCell > instance.max_x then instance.max_x = cell.xCell end
+                    if cell.yCell < instance.min_y then instance.min_y = cell.yCell end
+                    if cell.yCell > instance.max_y then instance.max_y = cell.yCell end
+                    if cell.isPowered == true then
+                        instance.powered = true
+                    end
+                end
+            end
+        end
+        for _, instance in pairs(instances) do
+            instance.cell_by_local = {}
+            for _, cell in ipairs(instance.cells) do
+                local local_x = (cell.xCell - instance.min_x)
+                local local_y = (cell.yCell - instance.min_y)
+                local local_idx = (local_y * 3) + local_x + 1
+                if local_idx >= 1 and local_idx <= 9 then
+                    instance.cell_by_local[local_idx] = cell
+                end
+                local slots = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(slots) do
+                    if obj and obj.name == WORKSHOP_MACHINE_NAME then
+                        instance.machine_obj = obj
+                    elseif obj and obj.name == WORKSHOP_MENU_NAME then
+                        instance.menu_obj = obj
+                    end
+                end
+            end
+            local machine_ok = instance.machine_obj and instance.machine_obj.isFixed == true
+            local deps_ok = machine_ok and runtime.is_object_dependency_met(self.world_grid, instance.machine_obj)
+            instance.functional = (instance.powered == true) and deps_ok
+        end
+        return instances
+    end
+
+    local function get_workshop_state(self, tile_instance_id)
+        runtime.ensure_item_runtime_state(self)
+        self.workshop_states[tile_instance_id] = self.workshop_states[tile_instance_id] or {
+            selected_slot = nil,
+            paid_units = 0,
+            payment_locked = false,
+            production_time_left = 0,
+            payment_confirm_flash = 0
+        }
+        return self.workshop_states[tile_instance_id]
+    end
+
+    local function get_workshop_product_for_slot(slot_idx)
+        if not slot_idx then
+            return nil
+        end
+        return WORKSHOP_PRODUCT_BY_SLOT[slot_idx]
+    end
+
+    local function get_workshop_used_slots(self, tile_instance_id)
+        local used = {}
+        for _, item in ipairs(self.world_item_instances or {}) do
+            local meta = item and item.meta or nil
+            if item
+                and meta
+                and meta.workshop_stock == true
+                and meta.workshop_tile_instance_id == tile_instance_id
+            then
+                local slot_order = tonumber(meta.workshop_slot_order or 0) or 0
+                if slot_order >= 1 and slot_order <= WORKSHOP_OUTPUT_MAX_STOCK then
+                    used[slot_order] = true
+                end
+            end
+        end
+        return used
+    end
+
+    local function get_next_workshop_free_slot(self, tile_instance_id)
+        local used = get_workshop_used_slots(self, tile_instance_id)
+        for i = 1, WORKSHOP_OUTPUT_MAX_STOCK do
+            if not used[i] then
+                return i
+            end
+        end
+        return nil
+    end
+
+    local function count_workshop_pending_tokens(self, tile_instance_id)
+        local total = 0
+        for _, token in ipairs(self.workshop_conveyor_tokens or {}) do
+            if token and token.tile_instance_id == tile_instance_id then
+                total = total + 1
+            end
+        end
+        return total
+    end
+
+    local function get_workshop_menu_slot_by_world_point(cell, obj, world_x, world_y)
+        if not cell or not obj then
+            return nil
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local mx = cx + (obj.offsetX or 0)
+        local my = cy + (obj.offsetY or 0)
+        local local_x = world_x - mx
+        local local_y = world_y - my
+        if local_x < -WORKSHOP_MENU_HALF_W or local_x > WORKSHOP_MENU_HALF_W then
+            return nil
+        end
+        if local_y < -WORKSHOP_MENU_HALF_H or local_y > WORKSHOP_MENU_HALF_H then
+            return nil
+        end
+        local col = math.floor((local_x + WORKSHOP_MENU_HALF_W) / WORKSHOP_MENU_SLOT_W) + 1
+        local row_from_top = math.floor((WORKSHOP_MENU_HALF_H - local_y) / WORKSHOP_MENU_SLOT_H) + 1
+        if col < 1 then col = 1 end
+        if col > WORKSHOP_SLOT_GRID_W then col = WORKSHOP_SLOT_GRID_W end
+        if row_from_top < 1 then row_from_top = 1 end
+        if row_from_top > WORKSHOP_SLOT_GRID_H then row_from_top = WORKSHOP_SLOT_GRID_H end
+        local slot_idx = ((row_from_top - 1) * WORKSHOP_SLOT_GRID_W) + col
+        if slot_idx < 1 or slot_idx > 9 then
+            return nil
+        end
+        return slot_idx
+    end
+
+    local function is_workshop_payment_hotspot(cell, obj, world_x, world_y)
+        if not cell or not obj then
+            return false
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local mx = cx + (obj.offsetX or 0)
+        local my = cy + (obj.offsetY or 0)
+        local hx = mx + WORKSHOP_PAY_HOTSPOT_OFFSET_X
+        local hy = my + WORKSHOP_PAY_HOTSPOT_OFFSET_Y
+        local half = WORKSHOP_PAY_HOTSPOT_HALF_SIZE
+        return world_x >= (hx - half)
+            and world_x <= (hx + half)
+            and world_y >= (hy - half)
+            and world_y <= (hy + half)
+    end
+
+    local function get_workshop_menu_slot_center_world(cell, obj, slot_idx, spacing_mul)
+        if not cell or not obj or not slot_idx or slot_idx < 1 or slot_idx > 9 then
+            return nil, nil
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local mx = cx + (obj.offsetX or 0)
+        local my = cy + (obj.offsetY or 0)
+        local col = ((slot_idx - 1) % WORKSHOP_SLOT_GRID_W) + 1
+        local row_from_top = math.floor((slot_idx - 1) / WORKSHOP_SLOT_GRID_W) + 1
+        local left = mx - WORKSHOP_MENU_HALF_W
+        local top = my + WORKSHOP_MENU_HALF_H
+        local sx = left + ((col - 0.5) * WORKSHOP_MENU_SLOT_W)
+        local sy = top - ((row_from_top - 0.5) * WORKSHOP_MENU_SLOT_H)
+        local mul = spacing_mul or 1
+        sx = mx + ((sx - mx) * mul)
+        sy = my + ((sy - my) * mul)
+        return sx, sy
+    end
+
+    local function get_workshop_selection_marker_center_world(cell, obj, slot_idx)
+        if not cell or not obj or not slot_idx or slot_idx < 1 or slot_idx > 9 then
+            return nil, nil
+        end
+        local anchor_x, anchor_y = get_workshop_menu_slot_center_world(cell, obj, 5, 1)
+        if not anchor_x or not anchor_y then
+            return nil, nil
+        end
+        anchor_x = anchor_x + WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_X
+        anchor_y = anchor_y + WORKSHOP_MENU_SELECTION_ANCHOR_OFFSET_Y
+        local col = ((slot_idx - 1) % WORKSHOP_SLOT_GRID_W) + 1
+        local row_from_top = math.floor((slot_idx - 1) / WORKSHOP_SLOT_GRID_W) + 1
+        local step = WORKSHOP_MENU_MARKER_SIZE + WORKSHOP_MENU_SELECTION_GAP_PX
+        local sx = anchor_x + ((col - 2) * step)
+        local sy = anchor_y - ((row_from_top - 2) * step)
+        return sx, sy
+    end
+
+    local function create_workshop_menu_marker(world_x, world_y)
+        local marker_id = factory.create("/ui_factory#ui_factory", vmath.vector3(world_x, world_y, WORKSHOP_MENU_MARKER_Z))
+        if not marker_id then
+            return nil
+        end
+        go.set_scale(vmath.vector3(WORKSHOP_MENU_MARKER_SIZE, WORKSHOP_MENU_MARKER_SIZE, 1), marker_id)
+        pcall(go.set, msg.url(nil, marker_id, "sprite"), "blend_mode", hash("add"))
+        pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+        return marker_id
     end
 
     local function count_factory_stock(self, tile_instance_id)
@@ -726,6 +1001,213 @@ function M.extend(runtime, ctx)
         end
     end
 
+    local function set_workshop_underlay_tint(entry, tint)
+        if not entry then
+            return
+        end
+        if entry.printer_id then
+            pcall(go.set, msg.url(nil, entry.printer_id, "sprite"), "tint", tint)
+        end
+        if entry.emitter_id then
+            pcall(go.set, msg.url(nil, entry.emitter_id, "sprite"), "tint", tint)
+        end
+        if entry.belt_id then
+            pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", tint)
+        end
+    end
+
+    runtime.refresh_workshop_underlay_visuals = function(self)
+        runtime.ensure_item_runtime_state(self)
+        for _, entry in pairs(self.workshop_underlay_visuals or {}) do
+            if entry and entry.printer_id then pcall(go.delete, entry.printer_id) end
+            if entry and entry.emitter_id then pcall(go.delete, entry.emitter_id) end
+            if entry and entry.belt_id then pcall(go.delete, entry.belt_id) end
+            if entry and entry.selected_marker_id then pcall(go.delete, entry.selected_marker_id) end
+            if entry and entry.pay_marker_id then pcall(go.delete, entry.pay_marker_id) end
+        end
+        self.workshop_underlay_visuals = {}
+        local instances = get_workshop_instances(self)
+        for tile_instance_id, instance in pairs(instances) do
+            local cell1 = instance.cell_by_local[1]
+            local cell4 = instance.cell_by_local[4]
+            if cell1 and cell4 then
+                local c1x, c1y = ctx.coords_to_world_pos(cell1.xCell, cell1.yCell)
+                local c4x, c4y = ctx.coords_to_world_pos(cell4.xCell, cell4.yCell)
+                local printer_base_x = c4x
+                local printer_base_y = c4y + ((ctx.CELL_HEIGHT or 150) * 0.5) - 30
+                local printer_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y, WORKSHOP_PRINTER_Z))
+                if printer_id then
+                    msg.post(msg.url(nil, printer_id, "sprite"), "play_animation", { id = hash("tile_workshop_printerOff") })
+                    go.set_scale(vmath.vector3(0.9, 0.9, 1), printer_id)
+                    pcall(go.set, msg.url(nil, printer_id, "sprite"), "blend_mode", hash("add"))
+                end
+                local emitter_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(printer_base_x, printer_base_y - 100, WORKSHOP_EMITTER_Z))
+                if emitter_id then
+                    msg.post(msg.url(nil, emitter_id, "sprite"), "play_animation", { id = hash("tile_workshop_printerGlow") })
+                    go.set_scale(vmath.vector3(0.95, 0.95, 1), emitter_id)
+                    pcall(go.set, msg.url(nil, emitter_id, "sprite"), "blend_mode", hash("add"))
+                end
+                local belt_base_y = c1y - 47
+                local belt_id = factory.create("/tile_factory#tile_factory", vmath.vector3(c1x, belt_base_y, FACTORY_UNDERLAY_Z))
+                if belt_id then
+                    msg.post(msg.url(nil, belt_id, "sprite"), "play_animation", { id = hash("tile_factory_belt") })
+                    go.set_scale(vmath.vector3(2.34, 0.62, 1), belt_id)
+                end
+                local menu_cell = instance.cell_by_local[7]
+                local menu_obj = instance.menu_obj
+                local selected_marker_id = nil
+                local pay_marker_id = nil
+                if menu_cell and menu_obj then
+                    local sel_x, sel_y = get_workshop_selection_marker_center_world(menu_cell, menu_obj, 1)
+                    local pay_x, pay_y = get_workshop_menu_slot_center_world(menu_cell, menu_obj, 9)
+                    pay_x = (pay_x or c1x) + WORKSHOP_MENU_PAY_MARKER_OFFSET_X
+                    pay_y = (pay_y or c1y) + WORKSHOP_MENU_PAY_MARKER_OFFSET_Y
+                    selected_marker_id = create_workshop_menu_marker(sel_x or c1x, sel_y or c1y)
+                    pay_marker_id = create_workshop_menu_marker(pay_x, pay_y)
+                end
+                self.workshop_underlay_visuals[tile_instance_id] = {
+                    tile_instance_id = tile_instance_id,
+                    printer_id = printer_id,
+                    emitter_id = emitter_id,
+                    belt_id = belt_id,
+                    selected_marker_id = selected_marker_id,
+                    pay_marker_id = pay_marker_id,
+                    printer_base_x = printer_base_x,
+                    printer_base_y = printer_base_y,
+                    belt_base_x = c1x,
+                    belt_base_y = belt_base_y,
+                    printer_current_x = 0,
+                    printer_target_x = 0,
+                    printer_change_timer = 0,
+                    belt_phase = math.random(),
+                    flicker_timer = 0,
+                    flicker_value = 1,
+                    flicker_phase = 0,
+                    printer_anim_mode = "off",
+                    phase = math.random() * math.pi * 2
+                }
+            end
+        end
+    end
+
+    runtime.update_workshop_underlay_animations = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        if (not self.workshop_underlay_visuals) or (next(self.workshop_underlay_visuals) == nil) then
+            runtime.refresh_workshop_underlay_visuals(self)
+        end
+        local instances = get_workshop_instances(self)
+        for tile_instance_id, entry in pairs(self.workshop_underlay_visuals or {}) do
+            local instance = instances[tile_instance_id]
+            local functional = instance and instance.functional == true
+            local speed = functional and 1.0 or 0.22
+            local state = get_workshop_state(self, tile_instance_id)
+            local is_producing = (state.production_time_left or 0) > 0
+            state.payment_confirm_flash = math.max(0, (state.payment_confirm_flash or 0) - (dt or 0))
+            local workshop_anim_speed_scale = 0.5
+            local scaled_dt = (dt or 0) * workshop_anim_speed_scale
+            entry.phase = (entry.phase or 0) + ((dt or 0) * speed * 8.0)
+            local desired_mode = (functional and is_producing) and "on" or "off"
+            if entry.printer_id and entry.printer_anim_mode ~= desired_mode then
+                local anim_id = (desired_mode == "on") and hash("tile_workshop_printer") or hash("tile_workshop_printerOff")
+                msg.post(msg.url(nil, entry.printer_id, "sprite"), "play_animation", { id = anim_id })
+                entry.printer_anim_mode = desired_mode
+            end
+            if functional and is_producing then
+                -- Workshop-specific profile: high emission with slow, even pulse.
+                entry.flicker_phase = (entry.flicker_phase or 0) + (scaled_dt * math.pi * 2 * 0.42)
+                local pulse01 = 0.5 + (0.5 * math.sin(entry.flicker_phase or 0))
+                entry.flicker_value = 0.9 + (0.1 * pulse01)
+            else
+                entry.flicker_timer = 0
+                entry.flicker_phase = 0
+                entry.flicker_value = functional and 0.72 or 0.34
+            end
+            local flicker = entry.flicker_value or 1
+            local printer_tint = functional and vmath.vector4(flicker, flicker, flicker, 0.98) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
+            local emitter_alpha = (functional and is_producing) and flicker or 0
+            local emitter_tint = vmath.vector4(1, 1, 1, emitter_alpha)
+            local belt_tint = functional and vmath.vector4(1, 1, 1, 0.9) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
+            if entry.printer_id then
+                pcall(go.set, msg.url(nil, entry.printer_id, "sprite"), "tint", printer_tint)
+            end
+            if entry.emitter_id then
+                pcall(go.set, msg.url(nil, entry.emitter_id, "sprite"), "tint", emitter_tint)
+            end
+            if entry.belt_id then
+                pcall(go.set, msg.url(nil, entry.belt_id, "sprite"), "tint", belt_tint)
+            end
+            local menu_cell = instance and instance.cell_by_local and instance.cell_by_local[7] or nil
+            local menu_obj = instance and instance.menu_obj or nil
+            local selected = get_workshop_product_for_slot(state.selected_slot)
+            local confirm_flash_active = (state.payment_confirm_flash or 0) > 0
+            local show_selected_marker = false
+            local show_pay_marker = false
+            local pay_marker_tint = WORKSHOP_MENU_PAY_TINT_RED
+            if confirm_flash_active then
+                show_pay_marker = true
+                pay_marker_tint = WORKSHOP_MENU_PAY_TINT_GREEN
+            elseif selected and functional and not state.payment_locked and not is_producing then
+                show_selected_marker = true
+                show_pay_marker = true
+                pay_marker_tint = WORKSHOP_MENU_PAY_TINT_RED
+            end
+            if entry.selected_marker_id then
+                if show_selected_marker and menu_cell and menu_obj and state.selected_slot then
+                    local sx, sy = get_workshop_selection_marker_center_world(menu_cell, menu_obj, state.selected_slot)
+                    if sx and sy then
+                        pcall(go.set_position, vmath.vector3(sx, sy, WORKSHOP_MENU_MARKER_Z), entry.selected_marker_id)
+                    end
+                    pcall(go.set, msg.url(nil, entry.selected_marker_id, "sprite"), "tint", WORKSHOP_MENU_SELECTION_TINT)
+                else
+                    pcall(go.set, msg.url(nil, entry.selected_marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+                end
+            end
+            if entry.pay_marker_id then
+                if show_pay_marker and menu_cell and menu_obj then
+                    local px_marker, py_marker = get_workshop_menu_slot_center_world(menu_cell, menu_obj, 9)
+                    if px_marker and py_marker then
+                        px_marker = px_marker + WORKSHOP_MENU_PAY_MARKER_OFFSET_X
+                        py_marker = py_marker + WORKSHOP_MENU_PAY_MARKER_OFFSET_Y
+                        pcall(go.set_position, vmath.vector3(px_marker, py_marker, WORKSHOP_MENU_MARKER_Z), entry.pay_marker_id)
+                    end
+                    pcall(go.set, msg.url(nil, entry.pay_marker_id, "sprite"), "tint", pay_marker_tint)
+                else
+                    pcall(go.set, msg.url(nil, entry.pay_marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
+                end
+            end
+            if is_producing and functional then
+                entry.printer_change_timer = (entry.printer_change_timer or 0) - scaled_dt
+                if (entry.printer_change_timer or 0) <= 0 then
+                    entry.printer_target_x = -60 + (math.random() * 120)
+                    entry.printer_change_timer = 0.05 + (math.random() * 0.09)
+                end
+                local move_blend = math.min(1, scaled_dt * 16)
+                entry.printer_current_x = (entry.printer_current_x or 0) + (((entry.printer_target_x or 0) - (entry.printer_current_x or 0)) * move_blend)
+            else
+                entry.printer_target_x = 0
+                entry.printer_change_timer = 0
+                local idle_blend = math.min(1, (dt or 0) * 5)
+                entry.printer_current_x = (entry.printer_current_x or 0) + ((0 - (entry.printer_current_x or 0)) * idle_blend)
+            end
+            local px = (entry.printer_base_x or 0) + (entry.printer_current_x or 0)
+            local py = entry.printer_base_y or 0
+            if entry.printer_id then
+                pcall(go.set_position, vmath.vector3(px, py, WORKSHOP_PRINTER_Z), entry.printer_id)
+            end
+            if entry.emitter_id then
+                pcall(go.set_position, vmath.vector3(px, py - 100, WORKSHOP_EMITTER_Z), entry.emitter_id)
+            end
+            if entry.belt_id then
+                local half_w = ((ctx.CELL_WIDTH or 250) * 0.5)
+                entry.belt_phase = ((entry.belt_phase or 0) + ((dt or 0) * FACTORY_BELT_PAN_RATE * speed)) % 1
+                local pan = -half_w + ((entry.belt_phase or 0) * (half_w * 2))
+                local bx = (entry.belt_base_x or 0) + pan
+                local by = entry.belt_base_y or 0
+                pcall(go.set_position, vmath.vector3(bx, by, FACTORY_UNDERLAY_Z), entry.belt_id)
+            end
+        end
+    end
+
     runtime.process_factory_turn = function(self)
         runtime.ensure_item_runtime_state(self)
         local instances = get_factory_instances(self)
@@ -809,6 +1291,10 @@ function M.extend(runtime, ctx)
                 pcall(go.set_rotation, vmath.quat_rotation_z(entry.cog_b_angle), entry.cog_b_id)
             end
         end
+        if runtime.update_workshop_underlay_animations then
+            runtime.update_workshop_underlay_animations(self, dt)
+        end
+        runtime.update_workshop_production(self, dt)
     end
 
     runtime.update_factory_conveyor_tokens = function(self, dt)
@@ -849,6 +1335,97 @@ function M.extend(runtime, ctx)
                         end
                     end
                     table.remove(self.factory_conveyor_tokens, i)
+                end
+            end
+        end
+        if needs_world_item_refresh then
+            runtime.refresh_world_item_visuals(self)
+        end
+        if runtime.update_workshop_conveyor_tokens then
+            runtime.update_workshop_conveyor_tokens(self, dt)
+        end
+    end
+
+    runtime.update_workshop_production = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        local instances = get_workshop_instances(self)
+        for tile_instance_id, instance in pairs(instances) do
+            local state = get_workshop_state(self, tile_instance_id)
+            if (state.production_time_left or 0) > 0 then
+                if instance.functional then
+                    state.production_time_left = math.max(0, (state.production_time_left or 0) - (dt or 0))
+                end
+                if state.production_time_left <= 0 then
+                    local selected = get_workshop_product_for_slot(state.selected_slot)
+                    local source_cell = instance.cell_by_local[1]
+                    local output_cell = instance.cell_by_local[2]
+                    local pending = count_workshop_pending_tokens(self, tile_instance_id)
+                    if selected and source_cell and output_cell then
+                        local all_items = runtime.get_world_items_on_cell(self, output_cell.idNumber)
+                        if (#all_items + pending) >= WORKSHOP_OUTPUT_MAX_STOCK then
+                            print("Workshop output cell is full.")
+                        else
+                            local c1x, c1y = ctx.coords_to_world_pos(source_cell.xCell, source_cell.yCell)
+                            local c2x, c2y = ctx.coords_to_world_pos(output_cell.xCell, output_cell.yCell)
+                            local token_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c1x - 98, c1y - 36, WORKSHOP_CONVEYOR_TOKEN_Z))
+                            if token_id then
+                                local anim = get_world_item_animation(selected.item_type)
+                                if anim then
+                                    msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = anim })
+                                end
+                                go.set_scale(vmath.vector3(0.85, 0.85, 1), token_id)
+                                go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.98))
+                                table.insert(self.workshop_conveyor_tokens, {
+                                    go_id = token_id,
+                                    tile_instance_id = tile_instance_id,
+                                    output_cell_id = output_cell.idNumber,
+                                    item_type = selected.item_type,
+                                    label = selected.label,
+                                    start_x = c1x - 98,
+                                    start_y = c1y - 26,
+                                    end_x = c2x - 90,
+                                    end_y = c2y - 26,
+                                    t = 0,
+                                    duration = WORKSHOP_CONVEYOR_TRAVEL_SECONDS
+                                })
+                                print(string.format("Workshop moving %s to output lane.", selected.label))
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    runtime.update_workshop_conveyor_tokens = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        if not self.workshop_conveyor_tokens then
+            return
+        end
+        local needs_world_item_refresh = false
+        for i = #self.workshop_conveyor_tokens, 1, -1 do
+            local token = self.workshop_conveyor_tokens[i]
+            if not token or not token.go_id then
+                table.remove(self.workshop_conveyor_tokens, i)
+            else
+                token.t = math.min(1, (token.t or 0) + ((dt or 0) / math.max(0.01, token.duration or 0.9)))
+                local px = token.start_x + ((token.end_x - token.start_x) * token.t)
+                local py = token.start_y + ((token.end_y - token.start_y) * token.t)
+                pcall(go.set_position, vmath.vector3(px, py, WORKSHOP_CONVEYOR_TOKEN_Z), token.go_id)
+                if token.t >= 1 then
+                    pcall(go.delete, token.go_id)
+                    local slot_order = get_next_workshop_free_slot(self, token.tile_instance_id)
+                    local output_cell_id = token.output_cell_id
+                    if slot_order and output_cell_id then
+                        runtime.create_world_item_instance(self, token.item_type, output_cell_id, nil, {
+                            workshop_stock = true,
+                            workshop_tile_instance_id = token.tile_instance_id,
+                            workshop_slot_order = slot_order
+                        })
+                        needs_world_item_refresh = true
+                        print(string.format("Workshop dispensed %s.", tostring(token.label or token.item_type)))
+                    end
+                    table.remove(self.workshop_conveyor_tokens, i)
                 end
             end
         end
@@ -1045,6 +1622,13 @@ function M.extend(runtime, ctx)
                 return v.x, v.y
             end
         end
+        if meta and meta.workshop_stock == true then
+            local slot_order = tonumber(meta.workshop_slot_order or 0) or 0
+            if slot_order >= 1 and slot_order <= #WORKSHOP_STACK_SLOT_OFFSETS then
+                local v = WORKSHOP_STACK_SLOT_OFFSETS[slot_order]
+                return v.x, v.y
+            end
+        end
         return runtime.get_world_item_offset_for_slot(slot_index, total_items)
     end
 
@@ -1228,6 +1812,8 @@ function M.extend(runtime, ctx)
                 and obj.name ~= hash("empty")
                 and obj.name ~= hash("machine")
                 and obj.name ~= hash("factory_machine")
+                and obj.name ~= hash("workshop_menu")
+                and obj.name ~= hash("workshop_machine_top")
                 and obj.name ~= hash("gun_turret")
                 and obj.name ~= hash("power_node")
                 and obj.isFixed ~= true then
@@ -2357,7 +2943,53 @@ function M.extend(runtime, ctx)
         if supply_loader and is_point_in_object_hitbox(cell, supply_loader, world_x, world_y) then
             return "supply_loader", cell, supply_loader
         end
+        local workshop_menu = runtime.get_workshop_menu_object and runtime.get_workshop_menu_object(cell) or nil
+        if workshop_menu and is_point_in_object_hitbox(cell, workshop_menu, world_x, world_y) then
+            return "workshop_menu", cell, workshop_menu
+        end
         return nil, nil, nil
+    end
+
+    runtime.try_interact_workshop_menu_selected_unit_on_cell = function(self, unit, cell, workshop_menu_obj, world_x, world_y)
+        if not unit or not cell or not workshop_menu_obj or not cell.tileInstanceId then
+            return false
+        end
+        if unit.cell_id ~= cell.idNumber then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local instances = get_workshop_instances(self)
+        local instance = instances[cell.tileInstanceId]
+        if not instance then
+            return true
+        end
+        if not instance.functional then
+            print("Workshop is offline or not yet repaired.")
+            return true
+        end
+        local slot_idx = get_workshop_menu_slot_by_world_point(cell, workshop_menu_obj, world_x, world_y)
+        if not slot_idx then
+            return true
+        end
+        if slot_idx == 9 then
+            return true
+        end
+        local product = get_workshop_product_for_slot(slot_idx)
+        if not product then
+            return true
+        end
+        local state = get_workshop_state(self, cell.tileInstanceId)
+        if (state.production_time_left or 0) > 0 then
+            print("Workshop is currently producing. Wait for output.")
+            return true
+        end
+        state.selected_slot = slot_idx
+        state.paid_units = 0
+        state.payment_locked = false
+        state.payment_confirm_flash = 0
+        print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
+        return true
     end
 
     runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
@@ -2366,7 +2998,7 @@ function M.extend(runtime, ctx)
             return false
         end
         local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
-        local object_kind, clicked_cell = runtime.get_clicked_interactive_object(self, world_x, world_y, clicked_cell_id)
+        local object_kind, clicked_cell, clicked_obj = runtime.get_clicked_interactive_object(self, world_x, world_y, clicked_cell_id)
         if object_kind then
             if clicked_cell.isPowered ~= true or clicked_cell_id ~= unit.cell_id then
                 return false
@@ -2388,6 +3020,9 @@ function M.extend(runtime, ctx)
                 if loader_obj then
                     return runtime.try_interact_supply_loader_selected_unit_on_cell(self, unit, clicked_cell, loader_obj)
                 end
+            end
+            if object_kind == "workshop_menu" then
+                return runtime.try_interact_workshop_menu_selected_unit_on_cell(self, unit, clicked_cell, clicked_obj, world_x, world_y)
             end
             return true
         end
@@ -2486,7 +3121,7 @@ function M.extend(runtime, ctx)
                 local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
                 local vending_attempted = false
                 local force_barricade_drop = false
-                if source_item == OBSTACLE_ITEM and drop_cell_id then
+                if is_obstacle_backpack_item(source_item) and drop_cell_id then
                     -- Prioritize reinforcing the selected unit's own barricade even near cell borders.
                     -- This prevents side-slot barricade drops from resolving to a neighboring cell.
                     local source_cell = self.world_grid and self.world_grid[source_unit.cell_id]
@@ -2611,8 +3246,63 @@ function M.extend(runtime, ctx)
                     end
                     if source_item == "material" and drop_cell_id and source_unit.cell_id then
                         local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
+                        local workshop_menu = drop_cell and runtime.get_workshop_menu_object and runtime.get_workshop_menu_object(drop_cell) or nil
+                        if workshop_menu then
+                            local instances = get_workshop_instances(self)
+                            local tile_instance_id = drop_cell.tileInstanceId or 0
+                            local instance = instances[tile_instance_id]
+                            local inside_menu_panel = is_point_in_object_hitbox(drop_cell, workshop_menu, world_x, world_y)
+                            local pay_slot_idx = get_workshop_menu_slot_by_world_point(drop_cell, workshop_menu, world_x, world_y)
+                            local is_pay_hotspot = (pay_slot_idx == 9)
+                                or is_workshop_payment_hotspot(drop_cell, workshop_menu, world_x, world_y)
+                                or inside_menu_panel
+                            if is_pay_hotspot then
+                                vending_attempted = true
+                                local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+                                local tx, ty = ctx.id_to_coords(drop_cell_id)
+                                local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+                                if manhattan ~= 0 then
+                                    print("too far away")
+                                    flash_invalid_drag_units(source_unit, nil)
+                                elseif not instance or instance.functional ~= true then
+                                    print("Workshop is offline or not yet repaired.")
+                                else
+                                    local state = get_workshop_state(self, tile_instance_id)
+                                    local selected = get_workshop_product_for_slot(state.selected_slot)
+                                    if not selected then
+                                        print("Select an item in the workshop menu first.")
+                                        flash_invalid_drag_units(source_unit, nil)
+                                    elseif (state.production_time_left or 0) > 0 then
+                                        print("Workshop is currently producing. Wait for output.")
+                                    elseif state.payment_locked == true then
+                                        print("Workshop payment is locked. Select an item again to start a new order.")
+                                    else
+                                        if not try_consume_drag_ap(source_unit, nil) then
+                                            self.drag_resource = { active = false }
+                                            return true
+                                        end
+                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
+                                        source_unit.backpack_used = #source_unit.backpack_items
+                                        state.paid_units = (state.paid_units or 0) + 1
+                                        print(string.format(
+                                            "%s paid 1 material to workshop: %d/%d.",
+                                            source_unit.display_name,
+                                            state.paid_units,
+                                            selected.price
+                                        ))
+                                        if state.paid_units >= selected.price then
+                                            state.payment_locked = true
+                                            state.production_time_left = WORKSHOP_PRODUCTION_DURATION
+                                            state.payment_confirm_flash = WORKSHOP_PAY_CONFIRM_FLASH_SECONDS
+                                            print(string.format("Workshop production started for %s.", selected.label))
+                                        end
+                                        consumed = true
+                                    end
+                                end
+                            end
+                        end
                         local vending_machine = drop_cell and runtime.get_vending_machine_on_cell(drop_cell) or nil
-                        if vending_machine then
+                        if vending_machine and not consumed then
                             local cx, cy = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
                             local vx = cx + (vending_machine.offsetX or 0)
                             local vy = cy + (vending_machine.offsetY or 0)
@@ -2834,7 +3524,7 @@ function M.extend(runtime, ctx)
                         end
                     end
                     if not consumed then
-                        if source_item == OBSTACLE_ITEM and drop_cell_id and source_unit.cell_id then
+                        if is_obstacle_backpack_item(source_item) and drop_cell_id and source_unit.cell_id then
                             local sx, sy = ctx.id_to_coords(source_unit.cell_id)
                             local tx, ty = ctx.id_to_coords(drop_cell_id)
                             local manhattan = math.abs(sx - tx) + math.abs(sy - ty)

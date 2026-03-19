@@ -17,9 +17,11 @@ function M.create_level_library()
 
     -- Example Level 1
     levels[1] = {
-        { x = 8, y = 11, tile = "coms" },
+       
         { x = 8, y = 8, tile = "canteen" },
-        { x = 5, y = 11, tile = "factory" },
+        { x = 11, y = 11, tile = "factory" },
+        { x = 8, y = 11, tile = "workshop" },
+        { x = 5, y = 11, tile = "coms" },
         { x = 11, y = 8, tile = "medbay" },
         { x = 2, y = 8, tile = "entry" },
         { x = 5, y = 8, tile = "armoury" },

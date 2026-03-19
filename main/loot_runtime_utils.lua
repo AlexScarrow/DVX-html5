@@ -7,6 +7,15 @@ function M.create(ctx)
             or name_hash == hash("ammo_vending_machine")
             or name_hash == hash("med_vending_machine")
     end
+    local function is_workshop_menu_name(name_hash)
+        return name_hash == hash("workshop_menu")
+    end
+    local function is_workshop_machine_name(name_hash)
+        return name_hash == hash("workshop_machine")
+    end
+    local function is_workshop_machine_top_name(name_hash)
+        return name_hash == hash("workshop_machine_top")
+    end
     local function is_turret_name(name_hash)
         return name_hash == hash("gun_turret")
     end
@@ -31,6 +40,13 @@ function M.create(ctx)
         elseif item_type == "turret_packed" then
             return vmath.vector4(0.55, 0.75, 0.95, 1)
         elseif item_type == "obstacle" then
+            return vmath.vector4(0.7, 0.65, 0.55, 1)
+        elseif item_type == "obstacle1"
+            or item_type == "obstacle2"
+            or item_type == "obstacle3"
+            or item_type == "obstacle4"
+            or item_type == "obstacle5"
+        then
             return vmath.vector4(0.7, 0.65, 0.55, 1)
         elseif item_type == ctx.COMPONENT_UI.item_type_blue
             or item_type == ctx.COMPONENT_UI.component_wiring_straight
@@ -73,6 +89,16 @@ function M.create(ctx)
             return hash("gun_turret_icon")
         elseif item_type == "obstacle" then
             return hash("obstacle_icon")
+        elseif item_type == "obstacle1" then
+            return hash("obstacle1")
+        elseif item_type == "obstacle2" then
+            return hash("obstacle2")
+        elseif item_type == "obstacle3" then
+            return hash("obstacle3")
+        elseif item_type == "obstacle4" then
+            return hash("obstacle2")
+        elseif item_type == "obstacle5" then
+            return hash("obstacle3")
         end
         return nil
     end
@@ -151,6 +177,32 @@ function M.create(ctx)
         return runtime.get_vending_machine_on_cell(cell) ~= nil
     end
 
+    runtime.get_workshop_menu_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name and is_workshop_menu_name(obj.name) then
+                return obj
+            end
+        end
+        return nil
+    end
+
+    runtime.get_workshop_machine_object = function(cell)
+        if not cell then
+            return nil
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, obj in ipairs(slots) do
+            if obj and obj.name and is_workshop_machine_name(obj.name) then
+                return obj
+            end
+        end
+        return nil
+    end
+
     runtime.get_fixable_objects_in_cell = function(cell)
         local out = {}
         if not cell then
@@ -158,7 +210,16 @@ function M.create(ctx)
         end
         local slots = { cell.object1, cell.object2, cell.object3 }
         for _, obj in ipairs(slots) do
-            if obj and obj.name and obj.name ~= hash("empty") and (not is_any_vending_machine_name(obj.name)) and (not is_turret_name(obj.name)) and (not is_loot_crate_name(obj.name)) and (not is_blip_spawn_name(obj.name)) and obj.name ~= hash("power_node") and obj.name ~= hash("factory_machine") then
+            if obj and obj.name and obj.name ~= hash("empty")
+                and (not is_any_vending_machine_name(obj.name))
+                and (not is_turret_name(obj.name))
+                and (not is_loot_crate_name(obj.name))
+                and (not is_blip_spawn_name(obj.name))
+                and obj.name ~= hash("power_node")
+                and obj.name ~= hash("factory_machine")
+                and (not is_workshop_menu_name(obj.name))
+                and (not is_workshop_machine_top_name(obj.name))
+            then
                 table.insert(out, obj)
             end
         end

@@ -5895,6 +5895,7 @@ apply_computer_emissive_accents = function(self, dt)
         global_intensity_mul = 1 + (math.cos(self.computer_emissive_variation_phase * 0.73) * variation_amount)
         local speed = (profile.computer_emissive_pulse_speed or 1.25) * speed_mul * math.pi * 2
         self.computer_emissive_phase = (self.computer_emissive_phase or 0) + (dt * speed)
+        self.workshop_emissive_phase = (self.workshop_emissive_phase or 0) + (dt * math.pi * 2 * 0.42)
     end
 
     local human_tile_instances = {}
@@ -5971,6 +5972,12 @@ apply_computer_emissive_accents = function(self, dt)
             return white_tint
         end
         local n = tonumber(instance_key) or 0
+        local placement = selected_level and selected_level[n] or nil
+        if placement and placement.tile == "workshop" then
+            local workshop_wave = 0.5 + (0.5 * math.sin((self.workshop_emissive_phase or 0) + (n * 0.11)))
+            local workshop_mul = 0.8 + (0.2 * workshop_wave)
+            return vmath.vector4(base.x * workshop_mul, base.y * workshop_mul, base.z * workshop_mul, 1)
+        end
         local phase_offset = (0.5 + (0.5 * math.sin((n + 1) * 12.9898))) * math.pi * 2
         local drift = (self.computer_emissive_variation_phase or 0) + phase_offset
         local speed_jitter = 1
@@ -7866,6 +7873,7 @@ end
         self.tile_light_power_state = {}
         self.tile_light_flicker_state = {}
         self.tile_light_anim_ids = {}
+        self.tile_light_is_workshop = {}
         self.tile_alpha_layers = {}
         self.tile_room_shadows = {}
         self.exterior_detail_objects = {}
@@ -8025,6 +8033,7 @@ end
                     self.tile_light_layers[placement_index] = light_id
                     self.tile_light_power_state[placement_index] = false
                     self.tile_light_flicker_state[placement_index] = nil
+                    self.tile_light_is_workshop[placement_index] = (placement.tile == "workshop")
                     self.tile_light_anim_ids[placement_index] = {
                         on = hash(power_light_on_anim),
                         off = hash(power_light_off_anim)
@@ -8337,13 +8346,19 @@ function update(self, dt)
                 local was_powered = self.tile_light_power_state[tile_instance_id]
                 if was_powered == nil or was_powered ~= tile_powered then
                     if tile_powered then
-                        -- Fluorescent-style startup flicker: OFF/ON pulses before stabilizing ON.
-                        self.tile_light_flicker_state[tile_instance_id] = {
-                            active = true,
-                            timer = 0.06,
-                            step = 1
-                        }
-                        msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
+                        if self.tile_light_is_workshop and self.tile_light_is_workshop[tile_instance_id] then
+                            -- Workshop keeps its own smooth emissive profile without startup stutter.
+                            self.tile_light_flicker_state[tile_instance_id] = nil
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
+                        else
+                            -- Fluorescent-style startup flicker: OFF/ON pulses before stabilizing ON.
+                            self.tile_light_flicker_state[tile_instance_id] = {
+                                active = true,
+                                timer = 0.06,
+                                step = 1
+                            }
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
+                        end
                     else
                         self.tile_light_flicker_state[tile_instance_id] = nil
                         msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })

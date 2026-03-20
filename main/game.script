@@ -3387,8 +3387,8 @@ apply_brute_alpha_pulse = function(self, alien, dt)
             return
         end
         if alien.is_moving then
-            -- Keep moving brute fully visible in computer aesthetic.
-            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+            -- Pulse moving brute alpha 0..1 in computer aesthetic.
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, glow))
             return
         end
         local alpha = math.pow(glow, 3.8)

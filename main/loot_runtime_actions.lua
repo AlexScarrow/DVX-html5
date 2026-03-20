@@ -71,6 +71,31 @@ function M.extend(runtime, ctx)
         [7] = { item_type = "obstacle5", price = 2, label = "obstacle5" },
         [8] = { item_type = "power", price = 5, label = "power" }
     }
+    local MEDBAY_TILE_ID = hash("medbay")
+    local MEDBAY_MACHINE_NAME = hash("medbay_reviver")
+    local MEDBAY_RIPPLE_Z = FACTORY_UNDERLAY_Z + 0.0003
+    local MEDBAY_EMBRYO_Z = 0.70
+    local MEDBAY_REVIVE_DURATION = 10.0
+    local MEDBAY_RIPPLE_PAN_RATE = 0.55
+    local MEDBAY_DROP_HOTSPOT_HALF_W = 34
+    local MEDBAY_DROP_HOTSPOT_HALF_H = 24
+    local MEDBAY_DROP_HOTSPOT_LOCAL_CELL = 7
+    local MEDBAY_DROP_HOTSPOT_OFFSET_X = -56
+    local MEDBAY_DROP_HOTSPOT_OFFSET_Y = -46
+    local MEDBAY_RIPPLE_LOCAL_CELL = 4
+    local MEDBAY_RIPPLE_OFFSET_X = -60
+    local MEDBAY_RIPPLE_OFFSET_Y = -5
+    local MEDBAY_EMBRYO_LOCAL_CELL = 1
+    local MEDBAY_EMBRYO_OFFSET_X = -56
+    local MEDBAY_EMBRYO_OFFSET_Y = -2
+    local MEDBAY_EMBRYO_MIN_SCALE = 0.20
+    local MEDBAY_EMBRYO_MAX_SCALE = 1.2
+    local MEDBAY_EMBRYO_DESCENT_PX = 100
+    local MEDBAY_EMBRYO_SWAY_X = 10
+    local MEDBAY_EMBRYO_SWAY_CYCLES = 2.5
+    local MEDBAY_REVIVE_LOCAL_CELL = 1
+    local MEDBAY_REVIVE_OFFSET_X = 20
+    local MEDBAY_REVIVE_OFFSET_Y = -14
     local DERPLE_FEEDBACK_EVENT_DEFS = {
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
@@ -168,6 +193,23 @@ function M.extend(runtime, ctx)
             return hash("food_supplies")
         end
         return nil
+    end
+
+    local function get_alive_human_anim_for_aesthetic(self, unit)
+        local boardgame = (self and self.aesthetic_mode == "boardgame")
+        if not unit then
+            return hash("human_sarge")
+        end
+        if unit.class_id == ctx.UNIT_CLASS_SARGE then
+            return boardgame and hash("human_sarge_boardgame") or hash("human_sarge")
+        elseif unit.class_id == ctx.UNIT_CLASS_TECHIE then
+            return boardgame and hash("human_techie_boardgame") or hash("human_techie")
+        elseif unit.class_id == ctx.UNIT_CLASS_MEDIC then
+            return boardgame and hash("human_medic_boardgame") or hash("human_medic")
+        elseif unit.class_id == ctx.UNIT_CLASS_GUNNER then
+            return boardgame and hash("human_gunner_boardgame") or hash("human_gunner")
+        end
+        return boardgame and hash("human_sarge_boardgame") or hash("human_sarge")
     end
 
     local function is_obstacle_backpack_item(item_type)
@@ -563,6 +605,8 @@ function M.extend(runtime, ctx)
         self.workshop_underlay_visuals = self.workshop_underlay_visuals or {}
         self.workshop_conveyor_tokens = self.workshop_conveyor_tokens or {}
         self.workshop_states = self.workshop_states or {}
+        self.medbay_states = self.medbay_states or {}
+        self.medbay_underlay_visuals = self.medbay_underlay_visuals or {}
         self.derple_feedback_entries = self.derple_feedback_entries or {}
         self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
         self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
@@ -712,6 +756,74 @@ function M.extend(runtime, ctx)
             payment_confirm_flash = 0
         }
         return self.workshop_states[tile_instance_id]
+    end
+
+    local function get_medbay_instances(self)
+        local instances = {}
+        if not self or not self.world_grid then
+            return instances
+        end
+        for _, cell in ipairs(self.world_grid) do
+            if cell and cell.tileID == MEDBAY_TILE_ID then
+                local tile_instance_id = cell.tileInstanceId or 0
+                if tile_instance_id > 0 then
+                    local instance = instances[tile_instance_id]
+                    if not instance then
+                        instance = {
+                            tile_instance_id = tile_instance_id,
+                            cells = {},
+                            min_x = cell.xCell,
+                            min_y = cell.yCell,
+                            max_x = cell.xCell,
+                            max_y = cell.yCell,
+                            powered = false,
+                            machine_obj = nil
+                        }
+                        instances[tile_instance_id] = instance
+                    end
+                    table.insert(instance.cells, cell)
+                    if cell.xCell < instance.min_x then instance.min_x = cell.xCell end
+                    if cell.xCell > instance.max_x then instance.max_x = cell.xCell end
+                    if cell.yCell < instance.min_y then instance.min_y = cell.yCell end
+                    if cell.yCell > instance.max_y then instance.max_y = cell.yCell end
+                    if cell.isPowered == true then
+                        instance.powered = true
+                    end
+                end
+            end
+        end
+        for _, instance in pairs(instances) do
+            instance.cell_by_local = {}
+            for _, cell in ipairs(instance.cells) do
+                local local_x = (cell.xCell - instance.min_x)
+                local local_y = (cell.yCell - instance.min_y)
+                local local_idx = (local_y * 3) + local_x + 1
+                if local_idx >= 1 and local_idx <= 9 then
+                    instance.cell_by_local[local_idx] = cell
+                end
+                local slots = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(slots) do
+                    if obj and obj.name == MEDBAY_MACHINE_NAME then
+                        instance.machine_obj = obj
+                    end
+                end
+            end
+            local machine_ok = instance.machine_obj and instance.machine_obj.isFixed == true
+            local deps_ok = machine_ok and runtime.is_object_dependency_met(self.world_grid, instance.machine_obj)
+            instance.functional = (instance.powered == true) and deps_ok
+        end
+        return instances
+    end
+
+    local function get_medbay_state(self, tile_instance_id)
+        runtime.ensure_item_runtime_state(self)
+        self.medbay_states[tile_instance_id] = self.medbay_states[tile_instance_id] or {
+            busy = false,
+            corpse_unit_id = nil,
+            progress = 0,
+            bob_phase = 0
+        }
+        return self.medbay_states[tile_instance_id]
     end
 
     local function get_workshop_product_for_slot(slot_idx)
@@ -1011,6 +1123,7 @@ function M.extend(runtime, ctx)
                 -- Debug cell markers intentionally disabled.
             end
         end
+        runtime.refresh_medbay_underlay_visuals(self)
     end
 
     local function set_workshop_underlay_tint(entry, tint)
@@ -1098,6 +1211,136 @@ function M.extend(runtime, ctx)
                     printer_anim_mode = "off",
                     phase = math.random() * math.pi * 2
                 }
+            end
+        end
+    end
+
+    runtime.refresh_medbay_underlay_visuals = function(self)
+        runtime.ensure_item_runtime_state(self)
+        for _, entry in pairs(self.medbay_underlay_visuals or {}) do
+            if entry and entry.ripple_id then pcall(go.delete, entry.ripple_id) end
+            if entry and entry.embryo_id then pcall(go.delete, entry.embryo_id) end
+        end
+        self.medbay_underlay_visuals = {}
+        local instances = get_medbay_instances(self)
+        for tile_instance_id, instance in pairs(instances) do
+            local ripple_cell = instance.cell_by_local[MEDBAY_RIPPLE_LOCAL_CELL]
+            local embryo_cell = instance.cell_by_local[MEDBAY_EMBRYO_LOCAL_CELL]
+            if ripple_cell and embryo_cell then
+                local rx, ry = ctx.coords_to_world_pos(ripple_cell.xCell, ripple_cell.yCell)
+                local ex, ey = ctx.coords_to_world_pos(embryo_cell.xCell, embryo_cell.yCell)
+                local ripple_id = factory.create(
+                    "/tile_factory#tile_factory",
+                    vmath.vector3(rx + MEDBAY_RIPPLE_OFFSET_X, ry + MEDBAY_RIPPLE_OFFSET_Y, MEDBAY_RIPPLE_Z)
+                )
+                if ripple_id then
+                    msg.post(msg.url(nil, ripple_id, "sprite"), "play_animation", { id = hash("tile_medbay_ripple") })
+                    pcall(go.set, msg.url(nil, ripple_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.95))
+                end
+                local embryo_id = factory.create(
+                    "/loot_marker_factory#loot_marker_factory",
+                    vmath.vector3(ex + MEDBAY_EMBRYO_OFFSET_X, ey + MEDBAY_EMBRYO_OFFSET_Y, MEDBAY_EMBRYO_Z)
+                )
+                if embryo_id then
+                    msg.post(msg.url(nil, embryo_id, "sprite"), "play_animation", { id = hash("tile_medbay_embryo") })
+                    pcall(go.set_scale, vmath.vector3(MEDBAY_EMBRYO_MIN_SCALE, MEDBAY_EMBRYO_MIN_SCALE, 1), embryo_id)
+                    pcall(go.set, msg.url(nil, embryo_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+                end
+                self.medbay_underlay_visuals[tile_instance_id] = {
+                    tile_instance_id = tile_instance_id,
+                    ripple_id = ripple_id,
+                    embryo_id = embryo_id,
+                    ripple_base_x = rx + MEDBAY_RIPPLE_OFFSET_X,
+                    ripple_base_y = ry + MEDBAY_RIPPLE_OFFSET_Y,
+                    embryo_base_x = ex + MEDBAY_EMBRYO_OFFSET_X,
+                    embryo_base_y = ey + MEDBAY_EMBRYO_OFFSET_Y,
+                    ripple_phase = math.random()
+                }
+            end
+        end
+    end
+
+    runtime.update_medbay_animations = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        if (not self.medbay_underlay_visuals) or (next(self.medbay_underlay_visuals) == nil) then
+            runtime.refresh_medbay_underlay_visuals(self)
+        end
+        local instances = get_medbay_instances(self)
+        for tile_instance_id, entry in pairs(self.medbay_underlay_visuals or {}) do
+            local instance = instances[tile_instance_id]
+            local state = get_medbay_state(self, tile_instance_id)
+            local functional = instance and instance.functional == true
+            if entry.ripple_id then
+                local speed_mul = functional and 1.0 or 0.35
+                entry.ripple_phase = ((entry.ripple_phase or 0) + ((dt or 0) * MEDBAY_RIPPLE_PAN_RATE * speed_mul)) % 1
+                local pan = -44 + ((entry.ripple_phase or 0) * 88)
+                pcall(
+                    go.set_position,
+                    vmath.vector3((entry.ripple_base_x or 0) + pan, entry.ripple_base_y or 0, MEDBAY_RIPPLE_Z),
+                    entry.ripple_id
+                )
+                local ripple_tint = functional and vmath.vector4(1, 1, 1, 0.95) or vmath.vector4(0.45, 0.45, 0.45, 0.85)
+                pcall(go.set, msg.url(nil, entry.ripple_id, "sprite"), "tint", ripple_tint)
+            end
+
+            if state.busy and state.corpse_unit_id then
+                if functional then
+                    state.progress = math.min(1, (state.progress or 0) + ((dt or 0) / MEDBAY_REVIVE_DURATION))
+                end
+                local t = state.progress or 0
+                local scale = MEDBAY_EMBRYO_MIN_SCALE + ((MEDBAY_EMBRYO_MAX_SCALE - MEDBAY_EMBRYO_MIN_SCALE) * t)
+                local x_step = math.sin(t * math.pi * 2 * MEDBAY_EMBRYO_SWAY_CYCLES) * MEDBAY_EMBRYO_SWAY_X
+                local y_descent = (1 - t) * MEDBAY_EMBRYO_DESCENT_PX
+                local alpha = 0.25 + (0.75 * t)
+                if entry.embryo_id then
+                    pcall(go.set_scale, vmath.vector3(scale, scale, 1), entry.embryo_id)
+                    pcall(
+                        go.set_position,
+                        vmath.vector3((entry.embryo_base_x or 0) + x_step, (entry.embryo_base_y or 0) + y_descent, MEDBAY_EMBRYO_Z),
+                        entry.embryo_id
+                    )
+                    pcall(go.set, msg.url(nil, entry.embryo_id, "sprite"), "tint", vmath.vector4(1, 1, 1, alpha))
+                end
+                if state.progress >= 1 then
+                    local revive_cell = instance and instance.cell_by_local and instance.cell_by_local[MEDBAY_REVIVE_LOCAL_CELL] or nil
+                    local corpse_unit = self.squad_units and self.squad_units[state.corpse_unit_id] or nil
+                    if corpse_unit and revive_cell then
+                        corpse_unit.current_health = math.max(1, corpse_unit.max_health or 1)
+                        corpse_unit.cell_id = revive_cell.idNumber
+                        corpse_unit.is_corpse_stowed = false
+                        corpse_unit.in_shuttle = false
+                        local revived_anim = get_alive_human_anim_for_aesthetic(self, corpse_unit)
+                        corpse_unit.occupancy_hash = revived_anim
+                        if corpse_unit.go_path then
+                            local wx, wy = ctx.coords_to_world_pos(revive_cell.xCell, revive_cell.yCell)
+                            pcall(
+                                go.set_position,
+                                vmath.vector3(wx + MEDBAY_REVIVE_OFFSET_X, wy + MEDBAY_REVIVE_OFFSET_Y, 0.5),
+                                corpse_unit.go_path
+                            )
+                            if corpse_unit.sprite_path and revived_anim then
+                                pcall(msg.post, corpse_unit.sprite_path, "play_animation", { id = revived_anim })
+                            end
+                        end
+                        print(string.format("%s revived in medbay.", tostring(corpse_unit.display_name or "Human")))
+                    else
+                        print("Medbay revive failed: source corpse unavailable.")
+                    end
+                    state.busy = false
+                    state.corpse_unit_id = nil
+                    state.progress = 0
+                end
+            else
+                state.progress = 0
+                if entry.embryo_id then
+                    pcall(go.set_scale, vmath.vector3(MEDBAY_EMBRYO_MIN_SCALE, MEDBAY_EMBRYO_MIN_SCALE, 1), entry.embryo_id)
+                    pcall(
+                        go.set_position,
+                        vmath.vector3(entry.embryo_base_x or 0, entry.embryo_base_y or 0, MEDBAY_EMBRYO_Z),
+                        entry.embryo_id
+                    )
+                    pcall(go.set, msg.url(nil, entry.embryo_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+                end
             end
         end
     end
@@ -1305,6 +1548,9 @@ function M.extend(runtime, ctx)
         end
         if runtime.update_workshop_underlay_animations then
             runtime.update_workshop_underlay_animations(self, dt)
+        end
+        if runtime.update_medbay_animations then
+            runtime.update_medbay_animations(self, dt)
         end
         runtime.update_workshop_production(self, dt)
     end
@@ -1589,6 +1835,78 @@ function M.extend(runtime, ctx)
             return unit
         end
         return nil
+    end
+
+    local function try_drop_corpse_into_medbay(self, source_unit, drop_cell_id, world_x, world_y)
+        local drop_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
+        if not drop_cell or drop_cell.tileID ~= MEDBAY_TILE_ID then
+            return false, false, false
+        end
+        local tile_instance_id = drop_cell.tileInstanceId or 0
+        if tile_instance_id <= 0 then
+            return false, false, false
+        end
+        local instances = get_medbay_instances(self)
+        local instance = instances[tile_instance_id]
+        local hotspot_cell = instance and instance.cell_by_local and instance.cell_by_local[MEDBAY_DROP_HOTSPOT_LOCAL_CELL] or nil
+        if not hotspot_cell then
+            return false, false, false
+        end
+        local hx, hy = ctx.coords_to_world_pos(hotspot_cell.xCell, hotspot_cell.yCell)
+        hx = hx + MEDBAY_DROP_HOTSPOT_OFFSET_X
+        hy = hy + MEDBAY_DROP_HOTSPOT_OFFSET_Y
+        local inside = world_x >= (hx - MEDBAY_DROP_HOTSPOT_HALF_W)
+            and world_x <= (hx + MEDBAY_DROP_HOTSPOT_HALF_W)
+            and world_y >= (hy - MEDBAY_DROP_HOTSPOT_HALF_H)
+            and world_y <= (hy + MEDBAY_DROP_HOTSPOT_HALF_H)
+        local on_hotspot_cell = (hotspot_cell.idNumber == drop_cell_id)
+        if (not inside) and (not on_hotspot_cell) then
+            return false, false, false
+        end
+        local sx, sy = ctx.id_to_coords(source_unit.cell_id)
+        local tx, ty = ctx.id_to_coords(drop_cell_id)
+        local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
+        if manhattan ~= 0 then
+            print("too far away")
+            flash_invalid_drag_units(source_unit, nil)
+            return true, false, false
+        end
+        if not instance or instance.functional ~= true then
+            print("Medbay is offline or not repaired.")
+            flash_invalid_drag_units(source_unit, nil)
+            return true, false, false
+        end
+        local state = get_medbay_state(self, tile_instance_id)
+        if state.busy == true then
+            print("Medbay is already processing another patient.")
+            flash_invalid_drag_units(source_unit, nil)
+            return true, false, false
+        end
+        local corpse_id = source_unit.carrying_corpse_id
+        local corpse_unit = get_dead_human_by_id(self, corpse_id)
+        if not corpse_unit then
+            print("No valid dead human found in backpack.")
+            flash_invalid_drag_units(source_unit, nil)
+            return true, false, false
+        end
+        if not try_consume_drag_ap(source_unit, nil) then
+            return true, false, true
+        end
+        source_unit.backpack_items = {}
+        source_unit.backpack_used = 0
+        source_unit.carrying_corpse_id = nil
+        corpse_unit.cell_id = nil
+        corpse_unit.is_corpse_stowed = true
+        corpse_unit.in_shuttle = false
+        if corpse_unit.go_path then
+            pcall(go.set_position, SHUTTLE_HIDE_POS, corpse_unit.go_path)
+        end
+        state.busy = true
+        state.corpse_unit_id = corpse_id
+        state.progress = 0
+        state.bob_phase = 0
+        print(string.format("%s placed %s into medbay revival chamber. (AP -%d)", source_unit.display_name, corpse_unit.display_name, get_drag_ap_cost()))
+        return true, true, false
     end
 
     runtime.find_cell_id_at_world_point = function(self, world_x, world_y)
@@ -3256,6 +3574,23 @@ function M.extend(runtime, ctx)
                 else
                     if source_item == TURRET_PACKED_ITEM then
                         suppress_generic_world_drop = true
+                    end
+                    if source_item == "corpse" and drop_cell_id and source_unit.cell_id and not consumed then
+                        local medbay_handled, medbay_consumed, medbay_ap_blocked = try_drop_corpse_into_medbay(
+                            self,
+                            source_unit,
+                            drop_cell_id,
+                            world_x,
+                            world_y
+                        )
+                        if medbay_handled then
+                            suppress_generic_world_drop = true
+                            consumed = medbay_consumed == true
+                            if medbay_ap_blocked then
+                                self.drag_resource = { active = false }
+                                return true
+                            end
+                        end
                     end
                     if source_item == "material" and drop_cell_id and source_unit.cell_id then
                         local drop_cell = self.world_grid and self.world_grid[drop_cell_id]

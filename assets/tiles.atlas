@@ -218,6 +218,12 @@ images {
   image: "/assets/images/tile_medbay_on.png"
 }
 images {
+  image: "/assets/images/tile_medbay_ripple.png"
+}
+images {
+  image: "/assets/images/tile_medbay_embryo.png"
+}
+images {
   image: "/assets/images/sweep_shadow.png"
 }
 images {

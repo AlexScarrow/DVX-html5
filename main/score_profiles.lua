@@ -13,12 +13,12 @@ M.PROFILES = {
             alien_kill_default = 25,
             alien_kill_by_type = {
                 blip = 20,
-                cannon_fodder = 20,
+                cannon_fodder = 5,
                 speedy = 25,
-                spitter = 30,
-                brute = 50
+                spitter = 50,
+                brute = 200
             },
-            tile_powered_first_time = 20,
+            tile_powered_first_time = 50,
             spawn_point_destroyed = 40,
             civilian_escorted = 0,
             human_escaped_alive = 250,

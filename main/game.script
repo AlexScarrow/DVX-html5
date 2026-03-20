@@ -3386,6 +3386,11 @@ apply_brute_alpha_pulse = function(self, alien, dt)
             pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.9, 0.3, 1.0))
             return
         end
+        if alien.is_moving then
+            -- Keep moving brute fully visible in computer aesthetic.
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+            return
+        end
         local alpha = math.pow(glow, 3.8)
         pcall(go.set, sprite_url, "tint", vmath.vector4(0, 0, 0, alpha))
     else
@@ -3458,9 +3463,19 @@ local function update_alien_movement(self, dt)
                             alien.counter_shadow_offset = nil
                             sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                         end
+                        if alien.type == ALIEN_TYPE_BRUTE and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+                            local subtle = 0.05
+                            local pulse = math.sin((alien.spitter_anim_phase or 0) * 0.5)
+                            sx = base_scale * (1 + (subtle * pulse))
+                            sy = base_scale * (1 - (subtle * pulse * 0.6))
+                            local rock = math.sin((alien.spitter_anim_phase or 0) * 0.25)
+                            pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(5 * rock)), alien.go_id)
+                        end
                         if alien.type == ALIEN_TYPE_BRUTE then
                             -- Keep brute width constant in transit (no x squash/stretch).
-                            sx = base_scale
+                            if self.aesthetic_mode ~= AESTHETIC_MODE_COMPUTER then
+                                sx = base_scale
+                            end
                         end
                         go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
                     end
@@ -3634,9 +3649,19 @@ local function update_alien_movement(self, dt)
                         alien.counter_shadow_offset = nil
                         sy = base_scale * (1 + (HUMAN_PINGPONG_AMPLITUDE * 1.8) * ping)
                     end
+                    if alien.type == ALIEN_TYPE_BRUTE and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+                        local subtle = 0.05
+                        local pulse = math.sin((alien.spitter_anim_phase or 0) * 0.5)
+                        sx = base_scale * (1 + (subtle * pulse))
+                        sy = base_scale * (1 - (subtle * pulse * 0.6))
+                        local rock = math.sin((alien.spitter_anim_phase or 0) * 0.25)
+                        pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(5 * rock)), alien.go_id)
+                    end
                     if alien.type == ALIEN_TYPE_BRUTE then
                         -- Keep brute width constant in transit (no x squash/stretch).
-                        sx = base_scale
+                        if self.aesthetic_mode ~= AESTHETIC_MODE_COMPUTER then
+                            sx = base_scale
+                        end
                     end
                     go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
                 end
@@ -8736,6 +8761,7 @@ function update(self, dt)
                 elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
                     base_scale = base_scale * 0.75
                 elseif alien.type == ALIEN_TYPE_BRUTE then
+                    pcall(go.set_rotation, vmath.quat_rotation_z(0), alien.go_id)
                     if (alien.melee_pose_lock_timer or 0) <= 0 then
                         local front_anim = get_alien_anim_for_aesthetic(self, alien.type)
                         if front_anim and alien.current_aesthetic_anim ~= front_anim then

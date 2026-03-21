@@ -5475,9 +5475,9 @@ local function spawn_exit_test_stash(self)
     if not (cell5_id and self.world_grid[cell5_id] and self.world_grid[cell5_id].tileID ~= hash("empty")) then
         return
     end
-    for _ = 1, 9 do
-        LOOT_RUNTIME.create_world_item_instance(self, "power", cell5_id, nil, { test_stash = true })
-    end
+    -- for _ = 1, 9 do
+    --     LOOT_RUNTIME.create_world_item_instance(self, "power", cell5_id, nil, { test_stash = true })
+    -- end
     if LOOT_RUNTIME.refresh_world_item_visuals then
         LOOT_RUNTIME.refresh_world_item_visuals(self)
     end

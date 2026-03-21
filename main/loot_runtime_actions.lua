@@ -1152,8 +1152,10 @@ function M.extend(runtime, ctx)
                 self.factory_underlay_visuals[tile_instance_id] = entry
                 if instance.functional then
                     set_factory_underlay_tint(entry, vmath.vector4(1, 1, 1, 0.92))
-                else
+                elseif instance.powered == true then
                     set_factory_underlay_tint(entry, vmath.vector4(0.34, 0.34, 0.34, 0.85))
+                else
+                    set_factory_underlay_tint(entry, vmath.vector4(1, 1, 1, 0))
                 end
 
                 -- Debug cell markers intentionally disabled.
@@ -1354,7 +1356,8 @@ function M.extend(runtime, ctx)
                     vmath.vector3((entry.ripple_base_x or 0) + pan, entry.ripple_base_y or 0, MEDBAY_RIPPLE_Z),
                     entry.ripple_id
                 )
-                local ripple_tint = functional and vmath.vector4(1, 1, 1, 0.95) or vmath.vector4(0.45, 0.45, 0.45, 0.85)
+                local ripple_tint = (not powered) and vmath.vector4(1, 1, 1, 0)
+                    or (functional and vmath.vector4(1, 1, 1, 0.95) or vmath.vector4(0.45, 0.45, 0.45, 0.85))
                 pcall(go.set, msg.url(nil, entry.ripple_id, "sprite"), "tint", ripple_tint)
             end
 
@@ -1611,7 +1614,9 @@ function M.extend(runtime, ctx)
             local instance = instances[tile_instance_id]
             local functional = instance and instance.functional == true
             local speed_mul = functional and 1.0 or 0.22
-            local tint = functional and vmath.vector4(1, 1, 1, 0.92) or vmath.vector4(0.34, 0.34, 0.34, 0.85)
+            local powered = instance and instance.powered == true
+            local tint = functional and vmath.vector4(1, 1, 1, 0.92)
+                or (powered and vmath.vector4(0.34, 0.34, 0.34, 0.85) or vmath.vector4(1, 1, 1, 0))
             set_factory_underlay_tint(entry, tint)
             if entry.belt_id then
                 local half_w = ((ctx.CELL_WIDTH or 250) * 0.5)

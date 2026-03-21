@@ -346,6 +346,12 @@ images {
 images {
   image: "/assets/images/score_9.png"
 }
+images {
+  image: "/assets/images/tile_portal_off.png"
+}
+images {
+  image: "/assets/images/tile_portal_on.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

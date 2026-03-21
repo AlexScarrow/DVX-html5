@@ -218,6 +218,18 @@ images {
   image: "/assets/images/tile_medbay_on.png"
 }
 images {
+  image: "/assets/images/tile_medbay_ripple.png"
+}
+images {
+  image: "/assets/images/tile_medbay_embryo.png"
+}
+images {
+  image: "/assets/images/tile_medbay_blade.png"
+}
+images {
+  image: "/assets/images/bubble.png"
+}
+images {
   image: "/assets/images/sweep_shadow.png"
 }
 images {
@@ -303,6 +315,42 @@ images {
 }
 images {
   image: "/assets/images/healthBar_fillAmount.png"
+}
+images {
+  image: "/assets/images/score_0.png"
+}
+images {
+  image: "/assets/images/score_1.png"
+}
+images {
+  image: "/assets/images/score_2.png"
+}
+images {
+  image: "/assets/images/score_3.png"
+}
+images {
+  image: "/assets/images/score_4.png"
+}
+images {
+  image: "/assets/images/score_5.png"
+}
+images {
+  image: "/assets/images/score_6.png"
+}
+images {
+  image: "/assets/images/score_7.png"
+}
+images {
+  image: "/assets/images/score_8.png"
+}
+images {
+  image: "/assets/images/score_9.png"
+}
+images {
+  image: "/assets/images/tile_portal_off.png"
+}
+images {
+  image: "/assets/images/tile_portal_on.png"
 }
 margin: 2
 extrude_borders: 2

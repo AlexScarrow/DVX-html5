@@ -130,7 +130,7 @@ coms.cells[7].object1 = {
 }
 coms.cells[2].object1 = {
     name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
-    offsetX = -90, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 64, requiredComponent = nil,
+    offsetX = -90, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 64, requiredComponent = nil,
     powerLoaded = 0, powerRequired = 9
 }
 
@@ -144,6 +144,14 @@ coms.cells[5].object1 = {
     offsetX = 80, offsetY = -5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
 }
 
+coms.cells[5].object2 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 502,
+    offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
+}
+
+
+
 coms.cells[4].object1 = {
     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
     offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
@@ -153,6 +161,23 @@ coms.cells[9].object1 = {
     name = hash("nav_computer"), isFixed = true, hasNavData = true, contributesToExitObjective = false,
     isWelded = false, isOpen = false, dependsOn = 501, isDependentOn = {}, objectId = 901,
     offsetX = 70, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
+}
+
+coms.cells[9].object2 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
+    offsetX = 45, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
+}
+
+coms.cells[8].object1 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
+    offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
+}
+coms.cells[8].object2 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+    offsetX = 0, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
 }
 -- 
 library["coms"] = coms
@@ -206,17 +231,17 @@ canteen.cells[4].object1 = {
 }
 canteen.cells[2].object1 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 551,
-    offsetX = -90, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
 canteen.cells[2].object2 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 552,
-    offsetX = 0, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
-    stackCount = 2, obstacleCount = 2
+    offsetX = 0, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
 }
 canteen.cells[2].object3 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 553,
-    offsetX = 32, offsetY = -30, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
 canteen.cells[1].object1 = {
@@ -225,7 +250,7 @@ canteen.cells[1].object1 = {
     powerLoaded = 0, powerRequired = 9
 }
 canteen.cells[8].object1 = {
-    name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+    name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
 }
 
@@ -238,6 +263,21 @@ canteen.cells[9].object1 = {
 --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
 --     offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
 -- }
+canteen.cells[8].object2 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+    offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
+}
+canteen.cells[8].object3 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 803,
+    offsetX = 0, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
+}
+canteen.cells[8].object4 = {
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 804,
+    offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+    stackCount = 1, obstacleCount = 1
+}
 
 canteen.cells[9].object2 = {
     name = hash("supply_loader"), isFixed = true, hasFood = true, contributesToExitObjective = false,
@@ -342,10 +382,10 @@ library["canteen"] = canteen
         offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
         lootItems = { "material", "material", "material", "material","power","material", COMPONENT_UI.component_fuse }
     }
-    -- armoury.cells[2].object1 = {
-    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
-    --     offsetX = -100, offsetY = 35, hitW = 32, hitH = 32, requiredComponent = nil
-    -- }
+    armoury.cells[2].object1 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+        offsetX = -100, offsetY = 35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
     armoury.cells[2].object2 = {
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
@@ -361,7 +401,7 @@ library["canteen"] = canteen
     armoury.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "material", "material","power" ,COMPONENT_UI.component_fuse }
+        lootItems = { "ammo", "ammo", "material","plate", "material","power" ,COMPONENT_UI.component_fuse }
     }
     armoury.cells[7].object1 = {
         name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
@@ -391,10 +431,10 @@ library["canteen"] = canteen
         name = hash("gun_turret"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
     }
-    armoury.cells[9].object3 = {
-        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
-    }
+    -- armoury.cells[9].object3 = {
+    --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+    --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    -- }
     assign_random_loot_cell(armoury)
     library["armoury"] = armoury
 
@@ -447,7 +487,7 @@ library["canteen"] = canteen
     }
     medbay.cells[5].object3 = {
         name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 503,
-        offsetX = -10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+        offsetX = -5, offsetY = 45, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
     }
     medbay.cells[6].object1 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
@@ -461,6 +501,10 @@ library["canteen"] = canteen
     medbay.cells[9].object1 = {
         name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 901,
         offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+    }
+    medbay.cells[9].object2 = {
+        name = hash("medbay_reviver"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
+        offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 1, hitH = 1, requiredComponent = nil
     }
      -- medbay.cells[8].object2 = {
      --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 5802,
@@ -646,6 +690,56 @@ passage1.cells[6].object1 = {
 
     library["workshop"] = workshop
 
+
+-- =====================================================================
+-- PORTAL (alien spawn point to be destoryed)
+-- =====================================================================
+    local portal = create_tile_prototype("portal")
+    portal.visualTile = "portal_off"
+    portal.powerLightOffAnim = "tile_portal_off"
+    portal.powerLightOnAnim = "tile_portal_on"
+    
+    for i = 1, 9 do
+        portal.cells[i].lightValue = 2
+        portal.cells[i].moveValue = 1
+        portal.cells[i].coverValue = 1
+    end
+    portal.cells[3].moveValue = 3
+    portal.cells[6].moveValue = 3
+
+    --portal.cells[1].accessDown = false
+    portal.cells[2].accessDown = false
+    portal.cells[3].accessDown = false
+    portal.cells[3].accessRight = false
+    portal.cells[4].accessRight = false
+    portal.cells[6].accessDown = false
+    portal.cells[6].accessRight = false
+    portal.cells[7].accessRight = false
+    portal.cells[9].accessDown = false
+    portal.cells[9].accessRight = false
+       
+
+    portal.cells[4].object1 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+
+    portal.cells[6].object1 = {
+        name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    }
+
+    portal.cells[5].object1 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    -- portal.cells[9].object1 = {
+    --     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+    --     offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    -- }
+
+    library["portal"] = portal
     
     return library
 end

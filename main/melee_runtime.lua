@@ -86,11 +86,21 @@ function M.create(ctx)
         return cell and cell.has_barricade == true and (cell.barricade_hp or 0) > 0
     end
 
-    local function kill_alien(alien)
+    local function record_alien_kill(self, alien)
+        if not self or not alien then
+            return
+        end
+        if ctx and ctx.record_alien_kill then
+            ctx.record_alien_kill(self, alien.type)
+        end
+    end
+
+    local function kill_alien(self, alien)
         alien.is_dead = true
         alien.is_moving = false
         alien.move_path = nil
         alien.move_path_index = 0
+        record_alien_kill(self, alien)
     end
 
     local function mark_human_hit(unit)
@@ -309,7 +319,7 @@ function M.create(ctx)
                     human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current
                 ))
                 if target_alien.hp_current <= 0 then
-                    kill_alien(target_alien)
+                    kill_alien(self, target_alien)
                     print(string.format("Alien #%d (BRUTE) is dead.", target_alien.id))
                 end
             else
@@ -317,7 +327,7 @@ function M.create(ctx)
                     "%s melee %s on alien #%d and HIT (alien eliminated) [chance=%d%% roll=%d]",
                     human.display_name, source_tag, target_alien.id, hit_chance, roll
                 ))
-                kill_alien(target_alien)
+                kill_alien(self, target_alien)
             end
         else
             print(string.format(

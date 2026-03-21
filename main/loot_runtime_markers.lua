@@ -367,7 +367,7 @@ function M.extend(runtime, ctx)
                 end
             end
             local nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
-            if nav_obj then
+            if nav_obj and cell.isPowered == true then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local wx = x + (nav_obj.offsetX or 0)
                 local wy = y + (nav_obj.offsetY or 0)
@@ -383,7 +383,7 @@ function M.extend(runtime, ctx)
                 end
             end
             local supply_obj = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
-            if supply_obj then
+            if supply_obj and cell.isPowered == true then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local wx = x + (supply_obj.offsetX or 0)
                 local wy = y + (supply_obj.offsetY or 0)
@@ -468,7 +468,7 @@ function M.extend(runtime, ctx)
                 end
             end
             local socket = runtime.get_escape_pod_power_socket_object and runtime.get_escape_pod_power_socket_object(cell) or nil
-            if socket and cell.tileID ~= hash("empty") then
+            if socket and cell.tileID ~= hash("empty") and cell.isPowered == true then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local cx = x + (socket.offsetX or 0)
                 local cy = y + (socket.offsetY or 0)

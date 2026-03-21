@@ -224,6 +224,9 @@ images {
   image: "/assets/images/tile_medbay_embryo.png"
 }
 images {
+  image: "/assets/images/tile_medbay_blade.png"
+}
+images {
   image: "/assets/images/sweep_shadow.png"
 }
 images {

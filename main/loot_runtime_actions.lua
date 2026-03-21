@@ -93,6 +93,12 @@ function M.extend(runtime, ctx)
     local MEDBAY_EMBRYO_DESCENT_PX = 100
     local MEDBAY_EMBRYO_SWAY_X = 10
     local MEDBAY_EMBRYO_SWAY_CYCLES = 2.5
+    local MEDBAY_BLADE_LOCAL_CELL = 7
+    local MEDBAY_BLADE_OFFSET_X = -55
+    local MEDBAY_BLADE_OFFSET_Y = -10
+    local MEDBAY_BLADE_Z = MEDBAY_RIPPLE_Z
+    local MEDBAY_BLADE_SCALE = 1.026
+    local MEDBAY_BLADE_SPIN_SPEED = 8.0
     local MEDBAY_REVIVE_LOCAL_CELL = 1
     local MEDBAY_REVIVE_OFFSET_X = 20
     local MEDBAY_REVIVE_OFFSET_Y = -14
@@ -1220,15 +1226,18 @@ function M.extend(runtime, ctx)
         for _, entry in pairs(self.medbay_underlay_visuals or {}) do
             if entry and entry.ripple_id then pcall(go.delete, entry.ripple_id) end
             if entry and entry.embryo_id then pcall(go.delete, entry.embryo_id) end
+            if entry and entry.blade_id then pcall(go.delete, entry.blade_id) end
         end
         self.medbay_underlay_visuals = {}
         local instances = get_medbay_instances(self)
         for tile_instance_id, instance in pairs(instances) do
             local ripple_cell = instance.cell_by_local[MEDBAY_RIPPLE_LOCAL_CELL]
             local embryo_cell = instance.cell_by_local[MEDBAY_EMBRYO_LOCAL_CELL]
-            if ripple_cell and embryo_cell then
+            local blade_cell = instance.cell_by_local[MEDBAY_BLADE_LOCAL_CELL]
+            if ripple_cell and embryo_cell and blade_cell then
                 local rx, ry = ctx.coords_to_world_pos(ripple_cell.xCell, ripple_cell.yCell)
                 local ex, ey = ctx.coords_to_world_pos(embryo_cell.xCell, embryo_cell.yCell)
+                local bx, by = ctx.coords_to_world_pos(blade_cell.xCell, blade_cell.yCell)
                 local ripple_id = factory.create(
                     "/tile_factory#tile_factory",
                     vmath.vector3(rx + MEDBAY_RIPPLE_OFFSET_X, ry + MEDBAY_RIPPLE_OFFSET_Y, MEDBAY_RIPPLE_Z)
@@ -1246,14 +1255,27 @@ function M.extend(runtime, ctx)
                     pcall(go.set_scale, vmath.vector3(MEDBAY_EMBRYO_MIN_SCALE, MEDBAY_EMBRYO_MIN_SCALE, 1), embryo_id)
                     pcall(go.set, msg.url(nil, embryo_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
                 end
+                local blade_id = factory.create(
+                    "/loot_marker_factory#loot_marker_factory",
+                    vmath.vector3(bx + MEDBAY_BLADE_OFFSET_X, by + MEDBAY_BLADE_OFFSET_Y, MEDBAY_BLADE_Z)
+                )
+                if blade_id then
+                    msg.post(msg.url(nil, blade_id, "sprite"), "play_animation", { id = hash("tile_medbay_blade") })
+                    pcall(go.set_scale, vmath.vector3(MEDBAY_BLADE_SCALE, MEDBAY_BLADE_SCALE, 1), blade_id)
+                    pcall(go.set, msg.url(nil, blade_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+                end
                 self.medbay_underlay_visuals[tile_instance_id] = {
                     tile_instance_id = tile_instance_id,
                     ripple_id = ripple_id,
                     embryo_id = embryo_id,
+                    blade_id = blade_id,
                     ripple_base_x = rx + MEDBAY_RIPPLE_OFFSET_X,
                     ripple_base_y = ry + MEDBAY_RIPPLE_OFFSET_Y,
                     embryo_base_x = ex + MEDBAY_EMBRYO_OFFSET_X,
                     embryo_base_y = ey + MEDBAY_EMBRYO_OFFSET_Y,
+                    blade_base_x = bx + MEDBAY_BLADE_OFFSET_X,
+                    blade_base_y = by + MEDBAY_BLADE_OFFSET_Y,
+                    blade_angle = 0,
                     ripple_phase = math.random()
                 }
             end
@@ -1270,6 +1292,7 @@ function M.extend(runtime, ctx)
             local instance = instances[tile_instance_id]
             local state = get_medbay_state(self, tile_instance_id)
             local functional = instance and instance.functional == true
+            local powered = instance and instance.powered == true
             if entry.ripple_id then
                 local speed_mul = functional and 1.0 or 0.35
                 entry.ripple_phase = ((entry.ripple_phase or 0) + ((dt or 0) * MEDBAY_RIPPLE_PAN_RATE * speed_mul)) % 1
@@ -1286,6 +1309,18 @@ function M.extend(runtime, ctx)
             if state.busy and state.corpse_unit_id then
                 if functional then
                     state.progress = math.min(1, (state.progress or 0) + ((dt or 0) / MEDBAY_REVIVE_DURATION))
+                end
+                if entry.blade_id then
+                    if functional then
+                        local t = state.progress or 0
+                        local spin_mul = 1
+                        if t > 0.5 then
+                            spin_mul = math.max(0, 1 - ((t - 0.5) / 0.5))
+                        end
+                        entry.blade_angle = (entry.blade_angle or 0) - ((dt or 0) * MEDBAY_BLADE_SPIN_SPEED * spin_mul)
+                    end
+                    pcall(go.set_rotation, vmath.quat_rotation_z(entry.blade_angle or 0), entry.blade_id)
+                    pcall(go.set, msg.url(nil, entry.blade_id, "sprite"), "tint", powered and vmath.vector4(1, 1, 1, 1) or vmath.vector4(1, 1, 1, 0))
                 end
                 local t = state.progress or 0
                 local scale = MEDBAY_EMBRYO_MIN_SCALE + ((MEDBAY_EMBRYO_MAX_SCALE - MEDBAY_EMBRYO_MIN_SCALE) * t)
@@ -1332,6 +1367,11 @@ function M.extend(runtime, ctx)
                 end
             else
                 state.progress = 0
+                if entry.blade_id then
+                    entry.blade_angle = 0
+                    pcall(go.set_rotation, vmath.quat_rotation_z(0), entry.blade_id)
+                    pcall(go.set, msg.url(nil, entry.blade_id, "sprite"), "tint", powered and vmath.vector4(1, 1, 1, 1) or vmath.vector4(1, 1, 1, 0))
+                end
                 if entry.embryo_id then
                     pcall(go.set_scale, vmath.vector3(MEDBAY_EMBRYO_MIN_SCALE, MEDBAY_EMBRYO_MIN_SCALE, 1), entry.embryo_id)
                     pcall(

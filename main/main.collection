@@ -410,3 +410,13 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "medbay_bubbles_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"medbay_bubbles_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/medbay_bubbles_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

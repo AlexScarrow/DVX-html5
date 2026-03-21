@@ -99,6 +99,14 @@ function M.extend(runtime, ctx)
     local MEDBAY_BLADE_Z = MEDBAY_RIPPLE_Z
     local MEDBAY_BLADE_SCALE = 1.026
     local MEDBAY_BLADE_SPIN_SPEED = 8.0
+    local MEDBAY_BLADE_BLOOD_FX_OFFSET_X = 10
+    local MEDBAY_BLADE_BLOOD_FX_OFFSET_Y = 0
+    local MEDBAY_BLADE_BLOOD_FX_Z = 0.74
+    local MEDBAY_BLADE_BLOOD_FX_DURATION = 5.0
+    local MEDBAY_BUBBLES_LOCAL_CELL = 1
+    local MEDBAY_BUBBLES_OFFSET_X = -50
+    local MEDBAY_BUBBLES_OFFSET_Y = -42
+    local MEDBAY_BUBBLES_Z = 0.35
     local MEDBAY_REVIVE_LOCAL_CELL = 1
     local MEDBAY_REVIVE_OFFSET_X = 20
     local MEDBAY_REVIVE_OFFSET_Y = -14
@@ -827,9 +835,31 @@ function M.extend(runtime, ctx)
             busy = false,
             corpse_unit_id = nil,
             progress = 0,
-            bob_phase = 0
+            bob_phase = 0,
+            blade_blood_fx_played = false
         }
         return self.medbay_states[tile_instance_id]
+    end
+
+    local function spawn_medbay_blade_blood_fx(self, tile_instance_id, world_x, world_y)
+        local fx_id = factory.create(
+            "/human_blood_splatter1_fx_factory#human_blood_splatter1_fx_factory",
+            vmath.vector3(world_x, world_y, MEDBAY_BLADE_BLOOD_FX_Z)
+        )
+        if not fx_id then
+            return
+        end
+        pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+        timer.delay(MEDBAY_BLADE_BLOOD_FX_DURATION, false, function()
+            pcall(particlefx.stop, msg.url(nil, fx_id, "particlefx"), { clear = false })
+            pcall(go.delete, fx_id)
+            local state = get_medbay_state(self, tile_instance_id)
+            if state and state.blade_blood_fx_id == fx_id then
+                state.blade_blood_fx_id = nil
+            end
+        end)
+        local state = get_medbay_state(self, tile_instance_id)
+        state.blade_blood_fx_id = fx_id
     end
 
     local function get_workshop_product_for_slot(slot_idx)
@@ -1227,6 +1257,10 @@ function M.extend(runtime, ctx)
             if entry and entry.ripple_id then pcall(go.delete, entry.ripple_id) end
             if entry and entry.embryo_id then pcall(go.delete, entry.embryo_id) end
             if entry and entry.blade_id then pcall(go.delete, entry.blade_id) end
+            if entry and entry.bubbles_fx_id then
+                pcall(particlefx.stop, msg.url(nil, entry.bubbles_fx_id, "particlefx"), { clear = true })
+                pcall(go.delete, entry.bubbles_fx_id)
+            end
         end
         self.medbay_underlay_visuals = {}
         local instances = get_medbay_instances(self)
@@ -1234,10 +1268,12 @@ function M.extend(runtime, ctx)
             local ripple_cell = instance.cell_by_local[MEDBAY_RIPPLE_LOCAL_CELL]
             local embryo_cell = instance.cell_by_local[MEDBAY_EMBRYO_LOCAL_CELL]
             local blade_cell = instance.cell_by_local[MEDBAY_BLADE_LOCAL_CELL]
-            if ripple_cell and embryo_cell and blade_cell then
+            local bubbles_cell = instance.cell_by_local[MEDBAY_BUBBLES_LOCAL_CELL]
+            if ripple_cell and embryo_cell and blade_cell and bubbles_cell then
                 local rx, ry = ctx.coords_to_world_pos(ripple_cell.xCell, ripple_cell.yCell)
                 local ex, ey = ctx.coords_to_world_pos(embryo_cell.xCell, embryo_cell.yCell)
                 local bx, by = ctx.coords_to_world_pos(blade_cell.xCell, blade_cell.yCell)
+                local ux, uy = ctx.coords_to_world_pos(bubbles_cell.xCell, bubbles_cell.yCell)
                 local ripple_id = factory.create(
                     "/tile_factory#tile_factory",
                     vmath.vector3(rx + MEDBAY_RIPPLE_OFFSET_X, ry + MEDBAY_RIPPLE_OFFSET_Y, MEDBAY_RIPPLE_Z)
@@ -1275,6 +1311,8 @@ function M.extend(runtime, ctx)
                     embryo_base_y = ey + MEDBAY_EMBRYO_OFFSET_Y,
                     blade_base_x = bx + MEDBAY_BLADE_OFFSET_X,
                     blade_base_y = by + MEDBAY_BLADE_OFFSET_Y,
+                    bubbles_base_x = ux + MEDBAY_BUBBLES_OFFSET_X,
+                    bubbles_base_y = uy + MEDBAY_BUBBLES_OFFSET_Y,
                     blade_angle = 0,
                     ripple_phase = math.random()
                 }
@@ -1293,6 +1331,20 @@ function M.extend(runtime, ctx)
             local state = get_medbay_state(self, tile_instance_id)
             local functional = instance and instance.functional == true
             local powered = instance and instance.powered == true
+            if powered and (not entry.bubbles_fx_id) then
+                local fx_id = factory.create(
+                    "/medbay_bubbles_fx_factory#medbay_bubbles_fx_factory",
+                    vmath.vector3(entry.bubbles_base_x or 0, entry.bubbles_base_y or 0, MEDBAY_BUBBLES_Z)
+                )
+                if fx_id then
+                    pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+                    entry.bubbles_fx_id = fx_id
+                end
+            elseif (not powered) and entry.bubbles_fx_id then
+                pcall(particlefx.stop, msg.url(nil, entry.bubbles_fx_id, "particlefx"), { clear = true })
+                pcall(go.delete, entry.bubbles_fx_id)
+                entry.bubbles_fx_id = nil
+            end
             if entry.ripple_id then
                 local speed_mul = functional and 1.0 or 0.35
                 entry.ripple_phase = ((entry.ripple_phase or 0) + ((dt or 0) * MEDBAY_RIPPLE_PAN_RATE * speed_mul)) % 1
@@ -1321,6 +1373,15 @@ function M.extend(runtime, ctx)
                     end
                     pcall(go.set_rotation, vmath.quat_rotation_z(entry.blade_angle or 0), entry.blade_id)
                     pcall(go.set, msg.url(nil, entry.blade_id, "sprite"), "tint", powered and vmath.vector4(1, 1, 1, 1) or vmath.vector4(1, 1, 1, 0))
+                    if functional and state.blade_blood_fx_played ~= true then
+                        spawn_medbay_blade_blood_fx(
+                            self,
+                            tile_instance_id,
+                            (entry.blade_base_x or 0) + MEDBAY_BLADE_BLOOD_FX_OFFSET_X,
+                            (entry.blade_base_y or 0) + MEDBAY_BLADE_BLOOD_FX_OFFSET_Y
+                        )
+                        state.blade_blood_fx_played = true
+                    end
                 end
                 local t = state.progress or 0
                 local scale = MEDBAY_EMBRYO_MIN_SCALE + ((MEDBAY_EMBRYO_MAX_SCALE - MEDBAY_EMBRYO_MIN_SCALE) * t)
@@ -1367,6 +1428,7 @@ function M.extend(runtime, ctx)
                 end
             else
                 state.progress = 0
+                state.blade_blood_fx_played = false
                 if entry.blade_id then
                     entry.blade_angle = 0
                     pcall(go.set_rotation, vmath.quat_rotation_z(0), entry.blade_id)

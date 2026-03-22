@@ -139,6 +139,12 @@ MULTIPLAYER_READY_BUTTON_Y = NEW_TURN_BUTTON_Y
 MULTIPLAYER_READY_BUTTON_Z = NEW_TURN_BUTTON_Z
 MULTIPLAYER_READY_ICON_DRAW_SIZE = 11
 MULTIPLAYER_REQUIRED_READY_PLAYER_IDS = { "p2", "p3", "p4" }
+MULTIPLAYER_DEBUG_BUTTON_X = SCREEN_WIDTH - 32
+MULTIPLAYER_DEBUG_BUTTON_START_Y = SCREEN_HEIGHT * 0.62
+MULTIPLAYER_DEBUG_BUTTON_Y_GAP = 44
+MULTIPLAYER_DEBUG_BUTTON_Z = NEW_TURN_BUTTON_Z
+MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE = 24
+MULTIPLAYER_DEBUG_BUTTON_HIT_SIZE = 30
 LAUNCH_BUTTON_X = SCREEN_WIDTH - 140
 LAUNCH_BUTTON_Y = 64
 LAUNCH_BUTTON_W = 180
@@ -5168,7 +5174,8 @@ local function initialize_unit_ui(self)
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
         flow_score_rows = {},
-        ready_buttons = {}
+        ready_buttons = {},
+        mp_debug_player_buttons = {}
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
@@ -5220,6 +5227,10 @@ local function initialize_unit_ui(self)
         if self.ui.ready_buttons[i] then
             msg.post(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "play_animation", { id = MULTIPLAYER_READY_SLOT_ANIMS[i] or hash("human_medic") })
             go.set(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "tint", vmath.vector4(0.75, 0.2, 0.2, 0.95))
+        end
+        self.ui.mp_debug_player_buttons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z))
+        if self.ui.mp_debug_player_buttons[i] then
+            msg.post(msg.url(nil, self.ui.mp_debug_player_buttons[i], "sprite"), "play_animation", { id = hash("score_" .. tostring(i + 1)) })
         end
     end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
@@ -5296,6 +5307,11 @@ local function set_ui_hidden(self)
     if self.ui.ready_buttons then
         for _, btn in ipairs(self.ui.ready_buttons) do
             set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_READY_BUTTON_Z, hidden, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
+        end
+    end
+    if self.ui.mp_debug_player_buttons then
+        for _, btn in ipairs(self.ui.mp_debug_player_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z, hidden, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
         end
     end
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
@@ -5518,6 +5534,7 @@ function start_solo_game_flow(self)
     if self.mp_state then
         self.mp_state.enabled = false
     end
+    self.controlled_unit_id = "sarge"
     local level_index = self.current_level_index or 1
     reset_and_load_level(self, level_index)
     reset_derple_feedback_runtime(self)
@@ -5532,8 +5549,12 @@ function start_multiplayer_game_flow(self)
         self.mp_state.enabled = true
     end
     multiplayer_reset_ready_gate(self)
+    if self.mp_state then
+        self.mp_state.debug_active_player_id = self.mp_state.host_player_id
+    end
     local level_index = self.current_level_index or 1
     reset_and_load_level(self, level_index)
+    multiplayer_enforce_controlled_unit(self, true)
     reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
@@ -5908,6 +5929,9 @@ function reset_and_load_level(self, level_index)
     LOOT_RUNTIME.refresh_exit_objective_state(self)
     update_human_visual_state(self)
     update_selected_unit_ui(self)
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_enforce_controlled_unit(self, true)
+    end
     log_runtime_reference_audit(self, "post_load")
     print("Loaded level " .. tostring(level_index))
     return true
@@ -5924,6 +5948,11 @@ function update_global_ui_buttons(self)
         if self.ui.ready_buttons then
             for _, btn in ipairs(self.ui.ready_buttons) do
                 set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_READY_BUTTON_Z, hidden, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
+            end
+        end
+        if self.ui.mp_debug_player_buttons then
+            for _, btn in ipairs(self.ui.mp_debug_player_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z, hidden, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
             end
         end
         set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
@@ -5977,6 +6006,22 @@ function update_global_ui_buttons(self)
         else
             for _, btn in ipairs(self.ui.ready_buttons) do
                 set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_READY_BUTTON_Z, hidden, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
+            end
+        end
+    end
+    if self.ui.mp_debug_player_buttons then
+        local hidden = vmath.vector4(0, 0, 0, 0)
+        if self.mp_state and self.mp_state.enabled and self.mp_state.required_ready_player_ids then
+            for i, btn in ipairs(self.ui.mp_debug_player_buttons) do
+                local by = MULTIPLAYER_DEBUG_BUTTON_START_Y - ((i - 1) * MULTIPLAYER_DEBUG_BUTTON_Y_GAP)
+                local player_id = self.mp_state.required_ready_player_ids[i]
+                local active = player_id and (self.mp_state.debug_active_player_id == player_id)
+                local tint = active and vmath.vector4(0.2, 0.95, 1, 0.95) or vmath.vector4(1, 1, 1, 0.9)
+                set_ui_square_transform(self, btn, MULTIPLAYER_DEBUG_BUTTON_X, by, MULTIPLAYER_DEBUG_BUTTON_Z, tint, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
+            end
+        else
+            for _, btn in ipairs(self.ui.mp_debug_player_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z, hidden, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
             end
         end
     end
@@ -7035,6 +7080,55 @@ multiplayer_reset_ready_gate = function(self)
     end
 end
 
+multiplayer_get_owned_unit_id_for_player = function(player_id)
+    if player_id == "p1" then
+        return "sarge"
+    elseif player_id == "p2" then
+        return "techie"
+    elseif player_id == "p3" then
+        return "medic"
+    elseif player_id == "p4" then
+        return "gunner"
+    end
+    return "sarge"
+end
+
+multiplayer_get_active_player_id_for_commands = function(self)
+    if not (self.mp_state and self.mp_state.enabled) then
+        return "p1"
+    end
+    return self.mp_state.debug_active_player_id or self.mp_state.host_player_id or "p1"
+end
+
+multiplayer_get_owned_unit_id_for_active_player = function(self)
+    return multiplayer_get_owned_unit_id_for_player(multiplayer_get_active_player_id_for_commands(self))
+end
+
+multiplayer_can_control_unit = function(self, unit_id)
+    if not (self.mp_state and self.mp_state.enabled) then
+        return true
+    end
+    return unit_id == multiplayer_get_owned_unit_id_for_active_player(self)
+end
+
+multiplayer_enforce_controlled_unit = function(self, force_select)
+    if not self.squad_units then
+        return
+    end
+    local owned_unit_id = multiplayer_get_owned_unit_id_for_active_player(self)
+    local owned_unit = self.squad_units[owned_unit_id]
+    if not owned_unit then
+        return
+    end
+    self.controlled_unit_id = owned_unit_id
+    if force_select == true then
+        deselect_all_units(self)
+        if (owned_unit.current_health or 0) > 0 then
+            owned_unit.is_selected = true
+        end
+    end
+end
+
 init_multiplayer_runtime = function(self)
     self.mp_state = {
         enabled = (MULTIPLAYER_ENABLED == true) and (self.multiplayer_mode_active == true),
@@ -7042,11 +7136,13 @@ init_multiplayer_runtime = function(self)
         local_player_id = MULTIPLAYER_LOCAL_PLAYER_ID,
         turn_id = 1,
         required_ready_player_ids = {},
-        ready_by_player_id = {}
+        ready_by_player_id = {},
+        debug_active_player_id = nil
     }
     for _, player_id in ipairs(MULTIPLAYER_REQUIRED_READY_PLAYER_IDS) do
         table.insert(self.mp_state.required_ready_player_ids, player_id)
     end
+    self.mp_state.debug_active_player_id = self.mp_state.host_player_id
     multiplayer_reset_ready_gate(self)
 end
 
@@ -7087,6 +7183,11 @@ try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
     for i, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
         local bx = get_multiplayer_ready_button_x(i)
         if is_point_in_screen_rect(screen_x, screen_y, bx, MULTIPLAYER_READY_BUTTON_Y, MULTIPLAYER_READY_BUTTON_W, MULTIPLAYER_READY_BUTTON_H) then
+            local active_player = self.mp_state.debug_active_player_id
+            if active_player and player_id ~= active_player then
+                print(string.format("MP READY | blocked | acting_as=%s clicked=%s", tostring(active_player), tostring(player_id)))
+                return true
+            end
             local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
             self.mp_state.ready_by_player_id[player_id] = ready_on
             print(string.format(
@@ -7095,6 +7196,29 @@ try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
                 tostring(player_id),
                 self.mp_state.turn_id or 1
             ))
+            return true
+        end
+    end
+    return false
+end
+
+try_multiplayer_debug_player_buttons = function(self, screen_x, screen_y)
+    if not (self.mp_state and self.mp_state.enabled and self.ui and self.ui.mp_debug_player_buttons) then
+        return false
+    end
+    for i, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
+        local by = MULTIPLAYER_DEBUG_BUTTON_START_Y - ((i - 1) * MULTIPLAYER_DEBUG_BUTTON_Y_GAP)
+        if is_point_in_screen_rect(
+            screen_x,
+            screen_y,
+            MULTIPLAYER_DEBUG_BUTTON_X,
+            by,
+            MULTIPLAYER_DEBUG_BUTTON_HIT_SIZE,
+            MULTIPLAYER_DEBUG_BUTTON_HIT_SIZE
+        ) then
+            self.mp_state.debug_active_player_id = player_id
+            multiplayer_enforce_controlled_unit(self, true)
+            print(string.format("MP DEBUG | acting_as=%s", tostring(player_id)))
             return true
         end
     end
@@ -7249,6 +7373,11 @@ local function next_turn_reset_human_ap(self)
 
     tick_turret_arming_timers(self)
     multiplayer_on_turn_advanced(self)
+    if self.mp_state and self.mp_state.enabled then
+        self.mp_state.debug_active_player_id = self.mp_state.host_player_id
+        multiplayer_enforce_controlled_unit(self, true)
+        print("MP DEBUG | acting_as=p1")
+    end
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
     print("Next turn: squad AP restored")
@@ -7937,6 +8066,14 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
     local clicked_unit = get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y)
     if clicked_unit then
+        if not multiplayer_can_control_unit(self, clicked_unit.id) then
+            print(string.format(
+                "MP CONTROL | blocked | acting_as=%s unit=%s",
+                tostring(multiplayer_get_active_player_id_for_commands(self)),
+                tostring(clicked_unit.id)
+            ))
+            return true
+        end
         if not (clicked_unit and (clicked_unit.current_health or 0) > 0) then
             print(clicked_unit.display_name .. " is dead.")
             return true
@@ -7996,6 +8133,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     end
 
     unit = get_controlled_unit(self)
+    if unit and not multiplayer_can_control_unit(self, unit.id) then
+        multiplayer_enforce_controlled_unit(self, true)
+        unit = get_controlled_unit(self)
+    end
     if not (unit and (unit.current_health or 0) > 0) then
         if unit.is_selected then
             unit.is_selected = false
@@ -9187,6 +9328,9 @@ function on_input(self, action_id, action)
                 return true
             end
             if not self.did_drag then
+                if try_multiplayer_debug_player_buttons(self, input_x, input_y) then
+                    return true
+                end
                 if try_multiplayer_ready_buttons(self, input_x, input_y) then
                     return true
                 end

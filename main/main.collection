@@ -221,6 +221,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "ui_ready_icon_factory"
+  data: "embedded_components {\n"
+  "  id: \"ui_ready_icon_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/ui_ready_icon.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "loot_marker_factory"
   data: "embedded_components {\n"
   "  id: \"loot_marker_factory\"\n"

@@ -132,6 +132,9 @@ NEW_TURN_BUTTON_VISUAL_SCALE = 1.0
 MULTIPLAYER_ENABLED = true
 MULTIPLAYER_HOST_PLAYER_ID = "p1"
 MULTIPLAYER_LOCAL_PLAYER_ID = "p1"
+MULTIPLAYER_TRANSPORT_MODE = "websocket"--loopback" -- "loopback" (default) or "websocket"
+MULTIPLAYER_TRANSPORT_WS_URL = "ws://127.0.0.1:8080/ws"
+MULTIPLAYER_TRANSPORT_ROOM_ID = "dvx_local_room"
 MULTIPLAYER_READY_BUTTON_W = 28
 MULTIPLAYER_READY_BUTTON_H = 28
 MULTIPLAYER_READY_BUTTON_GAP = 22
@@ -241,6 +244,8 @@ local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
 end)()
 SCORE_RUNTIME = require("main.score_runtime")
+MP_TRANSPORT = require("main.multiplayer_transport")
+MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
 local LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
 local HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
@@ -5790,6 +5795,7 @@ function start_multiplayer_game_flow(self, session_config)
     self.multiplayer_mode_active = true
     if self.mp_state then
         self.mp_state.enabled = true
+        self.mp_state.session_id = "local_session_" .. tostring(os.time())
         local session_player_count = session_config and session_config.player_count or self.mp_state.player_count or 4
         self.mp_state.player_count = math.max(2, math.min(4, session_player_count))
         if session_config and session_config.seat_assignments then
@@ -7723,10 +7729,200 @@ function try_next_turn_button(self, screen_x, screen_y)
         if not can_advance_next_turn(self, true) then
             return true
         end
-        msg.post(".", "next_turn")
+        multiplayer_transport_send_command(self, "new_turn_request", {
+            turn_id = self.mp_state and self.mp_state.turn_id or 1
+        }, self.mp_state and self.mp_state.host_player_id or "p1")
         return true
     end
     return false
+end
+
+multiplayer_transport_emit_event = function(self, event_type, payload)
+    local sender_id = self.mp_state and self.mp_state.host_player_id or "p1"
+    return {
+        version = 1,
+        session_id = (self.mp_state and self.mp_state.session_id) or "local_session",
+        sender_player_id = sender_id,
+        type = event_type,
+        payload = payload or {}
+    }
+end
+
+multiplayer_transport_handle_command = function(self, command)
+    local events = {}
+    if not (self.mp_state and self.mp_state.enabled) then
+        return events
+    end
+    if not command or type(command) ~= "table" then
+        return events
+    end
+    local cmd_type = command.type
+    local sender = command.sender_player_id
+    local payload = command.payload or {}
+
+    if cmd_type == "set_ready" then
+        local target_player_id = payload.player_id
+        local ready_on = payload.ready == true
+        local is_required = false
+        for _, required_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
+            if required_id == target_player_id then
+                is_required = true
+                break
+            end
+        end
+        if (not is_required) or sender ~= target_player_id then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_ready",
+                reason = "invalid_ready_sender_or_target"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "ready_state_changed", {
+            player_id = target_player_id,
+            ready = ready_on,
+            turn_id = self.mp_state.turn_id or 1
+        }))
+        return events
+    end
+
+    if cmd_type == "new_turn_request" then
+        if sender ~= self.mp_state.host_player_id then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "new_turn_request",
+                reason = "not_host"
+            }))
+            return events
+        end
+        if not can_advance_next_turn(self, true) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "new_turn_request",
+                reason = "ready_gate_not_satisfied"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "turn_advanced", {
+            turn_id = (self.mp_state.turn_id or 1) + 1
+        }))
+        return events
+    end
+
+    table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+        command_type = tostring(cmd_type or "unknown"),
+        reason = "unsupported_command"
+    }))
+    return events
+end
+
+multiplayer_transport_on_event = function(self, event)
+    if not (self.mp_state and self.mp_state.enabled and event and type(event) == "table") then
+        return
+    end
+    if event.type == "ready_state_changed" then
+        local player_id = event.payload and event.payload.player_id or nil
+        if player_id then
+            local ready_on = event.payload.ready == true
+            self.mp_state.ready_by_player_id[player_id] = ready_on
+            print(string.format(
+                "MP READY | %s | player_id=%s | turn_id=%d",
+                ready_on and "ready_on" or "ready_off",
+                tostring(player_id),
+                self.mp_state.turn_id or 1
+            ))
+        end
+        return
+    end
+    if event.type == "turn_advanced" then
+        print(string.format("MP TURN | request_accepted | next_turn_id=%d", (event.payload and event.payload.turn_id) or 0))
+        msg.post(".", "next_turn")
+        return
+    end
+    if event.type == "command_rejected" then
+        local reason = event.payload and event.payload.reason or "unknown"
+        local cmd = event.payload and event.payload.command_type or "unknown"
+        print(string.format("MP COMMAND | rejected | type=%s reason=%s", tostring(cmd), tostring(reason)))
+        return
+    end
+    if event.type == "joined_room" then
+        self.mp_state.connected_players = {}
+        local players = event.payload and event.payload.players or {}
+        for _, player_id in ipairs(players) do
+            self.mp_state.connected_players[player_id] = true
+        end
+        self.mp_state.connected_players[self.mp_state.local_player_id or "p1"] = true
+        local count = 0
+        for _, _ in pairs(self.mp_state.connected_players) do
+            count = count + 1
+        end
+        print(string.format("MP NET | joined_room | room_id=%s connected_players=%d", tostring(event.payload and event.payload.room_id or "unknown"), count))
+        return
+    end
+    if event.type == "player_joined" then
+        local player_id = event.payload and event.payload.player_id or nil
+        if player_id then
+            self.mp_state.connected_players = self.mp_state.connected_players or {}
+            self.mp_state.connected_players[player_id] = true
+            print(string.format("MP NET | player_joined | player_id=%s", tostring(player_id)))
+        end
+        return
+    end
+    if event.type == "player_left" then
+        local player_id = event.payload and event.payload.player_id or nil
+        if player_id and self.mp_state.connected_players then
+            self.mp_state.connected_players[player_id] = nil
+            print(string.format("MP NET | player_left | player_id=%s", tostring(player_id)))
+        end
+        return
+    end
+    if event.type == "hello" then
+        print("MP NET | relay_hello received.")
+        return
+    end
+    if event.type == "pong" then
+        print("MP NET | relay_pong.")
+        return
+    end
+    if event.type == "error" then
+        local code = event.payload and event.payload.code or "unknown"
+        local message = event.payload and event.payload.message or "unknown"
+        print(string.format("MP NET | relay_error | code=%s message=%s", tostring(code), tostring(message)))
+        return
+    end
+end
+
+multiplayer_transport_send_command = function(self, cmd_type, payload, sender_player_id)
+    if not (self.mp_state and self.mp_state.enabled and self.mp_transport) then
+        return
+    end
+    local sender = sender_player_id
+    if not sender then
+        sender = self.mp_state.local_player_id or "p1"
+    end
+    self.mp_transport.send_command({
+        version = 1,
+        session_id = self.mp_state.session_id or "local_session",
+        sender_player_id = sender,
+        type = cmd_type,
+        payload = payload or {}
+    })
+end
+
+multiplayer_transport_init = function(self)
+    self.mp_transport = MP_TRANSPORT.create({
+        mode = MULTIPLAYER_TRANSPORT_MODE,
+        ws_url = MULTIPLAYER_TRANSPORT_WS_URL,
+        ws_room_id = MULTIPLAYER_TRANSPORT_ROOM_ID,
+        ws_player_id = (self.mp_state and self.mp_state.local_player_id) or "p1",
+        ws_adapter = MP_WS_ADAPTER,
+        on_command = function(command)
+            return multiplayer_transport_handle_command(self, command)
+        end,
+        on_event = function(event)
+            multiplayer_transport_on_event(self, event)
+        end
+    })
+    if self.mp_transport and self.mp_transport.connect then
+        self.mp_transport.connect()
+    end
 end
 
 multiplayer_reset_ready_gate = function(self)
@@ -7817,6 +8013,7 @@ init_multiplayer_runtime = function(self)
     local default_player_count = 4
     self.mp_state = {
         enabled = (MULTIPLAYER_ENABLED == true) and (self.multiplayer_mode_active == true),
+        session_id = "local_session",
         host_player_id = MULTIPLAYER_HOST_PLAYER_ID,
         local_player_id = MULTIPLAYER_LOCAL_PLAYER_ID,
         turn_id = 1,
@@ -7824,10 +8021,12 @@ init_multiplayer_runtime = function(self)
         required_ready_player_ids = multiplayer_get_required_ready_player_ids_for_count(default_player_count),
         seat_assignments = multiplayer_get_default_seat_assignments(default_player_count),
         ready_by_player_id = {},
+        connected_players = {},
         debug_active_player_id = nil
     }
     self.mp_state.debug_active_player_id = self.mp_state.host_player_id
     multiplayer_reset_ready_gate(self)
+    multiplayer_transport_init(self)
 end
 
 multiplayer_on_turn_advanced = function(self)
@@ -7873,13 +8072,11 @@ try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
                 return true
             end
             local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
-            self.mp_state.ready_by_player_id[player_id] = ready_on
-            print(string.format(
-                "MP READY | %s | player_id=%s | turn_id=%d",
-                ready_on and "ready_on" or "ready_off",
-                tostring(player_id),
-                self.mp_state.turn_id or 1
-            ))
+            multiplayer_transport_send_command(self, "set_ready", {
+                player_id = player_id,
+                ready = ready_on,
+                turn_id = self.mp_state.turn_id or 1
+            }, active_player or self.mp_state.local_player_id)
             return true
         end
     end
@@ -10155,11 +10352,9 @@ function on_input(self, action_id, action)
         if not can_advance_next_turn(self, true) then
             return true
         end
-        next_turn_reset_human_ap(self)
-        if LOOT_RUNTIME.process_factory_turn then
-            LOOT_RUNTIME.process_factory_turn(self)
-        end
-        process_alien_turn(self)
+        multiplayer_transport_send_command(self, "new_turn_request", {
+            turn_id = self.mp_state and self.mp_state.turn_id or 1
+        }, self.mp_state and self.mp_state.host_player_id or "p1")
     end
 end
 

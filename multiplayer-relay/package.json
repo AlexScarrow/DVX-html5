@@ -1,0 +1,12 @@
+{
+  "name": "dvx-multiplayer-relay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tiny WebSocket relay for DVX multiplayer testing.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}

@@ -1,7 +1,7 @@
 [project]
 title = Derples vs Xenos
 version = 1.0
-dependencies = 
+dependencies = https://github.com/defold/extension-websocket/archive/master.zip
 
 [bootstrap]
 main_collection = /main/main.collectionc

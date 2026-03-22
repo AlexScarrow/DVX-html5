@@ -18,7 +18,7 @@
 -- luacheck: globals NEW_TURN_BUTTON_X NEW_TURN_BUTTON_Y NEW_TURN_BUTTON_W NEW_TURN_BUTTON_H NEW_TURN_BUTTON_Z
 -- luacheck: globals LAUNCH_BUTTON_X LAUNCH_BUTTON_Y LAUNCH_BUTTON_W LAUNCH_BUTTON_H LAUNCH_BUTTON_Z
 -- luacheck: globals FLOW_UI_OVERLAY_Z FLOW_UI_PANEL_Z FLOW_UI_BUTTON_Z FLOW_UI_SCREEN_W FLOW_UI_SCREEN_H
--- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE EXIT_TEST_STASH_ENABLED
+-- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE FLOW_STATE_MP_SETUP EXIT_TEST_STASH_ENABLED
 -- luacheck: globals AESTHETIC_BUTTON_X AESTHETIC_BUTTON_Y AESTHETIC_BUTTON_W AESTHETIC_BUTTON_H AESTHETIC_BUTTON_Z
 -- luacheck: globals ZOOM_IN_BUTTON_X ZOOM_IN_BUTTON_Y ZOOM_IN_BUTTON_W ZOOM_IN_BUTTON_H ZOOM_IN_BUTTON_Z
 -- luacheck: globals ZOOM_OUT_BUTTON_X ZOOM_OUT_BUTTON_Y ZOOM_OUT_BUTTON_W ZOOM_OUT_BUTTON_H ZOOM_OUT_BUTTON_Z
@@ -166,7 +166,54 @@ FLOW_STATE_TITLE = "title"
 FLOW_STATE_GAME = "game"
 FLOW_STATE_OUTRO = "outro"
 FLOW_STATE_SCORE = "score"
+FLOW_STATE_MP_SETUP = "mp_setup"
 EXIT_TEST_STASH_ENABLED = true
+MP_SETUP_PANEL_X = 640
+MP_SETUP_PANEL_Y = 360
+MP_SETUP_PANEL_W = 1180
+MP_SETUP_PANEL_H = 640
+MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z
+MP_SETUP_UI_Z = FLOW_UI_BUTTON_Z
+MP_SETUP_BTN_2P_X = 490
+MP_SETUP_BTN_3P_X = 640
+MP_SETUP_BTN_4P_X = 790
+MP_SETUP_COUNT_BTN_Y = 600
+MP_SETUP_COUNT_BTN_W = 120
+MP_SETUP_COUNT_BTN_H = 64
+MP_SETUP_COUNT_ACTIVE_RING_W = 138
+MP_SETUP_COUNT_ACTIVE_RING_H = 82
+MP_SETUP_BACK_BTN_X = 145
+MP_SETUP_START_BTN_X = 1055
+MP_SETUP_ACTION_BTN_Y = 134
+MP_SETUP_ACTION_BTN_W = 171
+MP_SETUP_ACTION_BTN_H = 72
+MP_SETUP_START_GLOW_W = 171
+MP_SETUP_START_GLOW_H = 72
+MP_SETUP_SEAT_X = { 250, 510, 770, 1030 }
+MP_SETUP_SLOT_X_OFFSET = 52
+MP_SETUP_SLOT_Y = { 390, 300 }
+MP_SETUP_SLOT_W = 82
+MP_SETUP_SLOT_H = 82
+MP_SETUP_UNIT_POOL_X = { 430, 570, 710, 850 }
+MP_SETUP_UNIT_POOL_Y = 150
+MP_SETUP_UNIT_POOL_W = 84
+MP_SETUP_UNIT_POOL_H = 84
+MP_SETUP_UNIT_IDS = { "sarge", "techie", "medic", "gunner" }
+MP_SETUP_PLAYER_IDS = { "p1", "p2", "p3", "p4" }
+MP_SETUP_PANEL_SCALE_X = 1
+MP_SETUP_PANEL_SCALE_Y = 1
+MP_SETUP_COUNT_BTN_SCALE_X = 1
+MP_SETUP_COUNT_BTN_SCALE_Y = 1
+MP_SETUP_COUNT_RING_SCALE_X = 1
+MP_SETUP_COUNT_RING_SCALE_Y = 1
+MP_SETUP_ACTION_BTN_SCALE_X = 1
+MP_SETUP_ACTION_BTN_SCALE_Y = 1
+MP_SETUP_START_GLOW_SCALE_X = 1
+MP_SETUP_START_GLOW_SCALE_Y = 1
+MP_SETUP_UNIT_SCALE_X = 1
+MP_SETUP_UNIT_SCALE_Y = 1
+MP_SETUP_SLOT_ICON_SCALE_X = MP_SETUP_SLOT_W / MP_SETUP_UNIT_POOL_W
+MP_SETUP_SLOT_ICON_SCALE_Y = MP_SETUP_SLOT_H / MP_SETUP_UNIT_POOL_H
 AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
 AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
@@ -4970,9 +5017,60 @@ local function create_ui_panel_sprite(screen_x, screen_y, z, scale_x, scale_y)
     return id
 end
 
+create_ui_marker_sprite = function(anim_id, z)
+    local id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, z or FLOW_UI_BUTTON_Z))
+    if id and anim_id then
+        msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = anim_id })
+    end
+    return id
+end
+
 local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color, scale_x, scale_y)
     if not go_id then
         return
+    end
+    if self and self.ui and scale_x and scale_y and scale_x > 1.2 and scale_y > 1.2 then
+        local function scale_div(div_x, div_y)
+            if div_x > 0 and div_y > 0 then
+                scale_x = scale_x / div_x
+                scale_y = scale_y / div_y
+            end
+        end
+        if go_id == self.ui.flow_mp_setup_panel then
+            scale_div(MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        elseif go_id == self.ui.flow_mp_count_active_ring then
+            scale_div(MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        elseif go_id == self.ui.flow_mp_back_button
+            or go_id == self.ui.flow_mp_start_button
+            or go_id == self.ui.flow_mp_start_disabled_overlay
+            or go_id == self.ui.flow_mp_start_enabled_glow then
+            scale_div(171 * 0.021, 72 * 0.021)
+        elseif self.ui.flow_mp_count_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                if go_id == btn then
+                    scale_div(120 * 0.021, 64 * 0.021)
+                    break
+                end
+            end
+        end
+        if self.ui.flow_mp_unit_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+                if go_id == btn then
+                    scale_div(84 * 0.021, 84 * 0.021)
+                    break
+                end
+            end
+        end
+        if self.ui.flow_mp_slot_icons then
+            for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+                for _, slot_icon in ipairs(slot_icons) do
+                    if go_id == slot_icon then
+                        scale_div(84 * 0.021, 84 * 0.021)
+                        break
+                    end
+                end
+            end
+        end
     end
     local wx, wy = screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
     go.set_position(vmath.vector3(wx, wy, z), go_id)
@@ -4995,6 +5093,101 @@ end
 get_multiplayer_ready_button_x = function(slot_index)
     local start_x = NEW_TURN_BUTTON_X + (NEW_TURN_BUTTON_W * 0.5) + 26
     return start_x + ((slot_index - 1) * (MULTIPLAYER_READY_BUTTON_W + MULTIPLAYER_READY_BUTTON_GAP))
+end
+
+multiplayer_get_unit_anim_id = function(unit_id)
+    if unit_id == "sarge" then
+        return hash("mp_unit_sarge")
+    elseif unit_id == "techie" then
+        return hash("mp_unit_techie")
+    elseif unit_id == "medic" then
+        return hash("mp_unit_medic")
+    elseif unit_id == "gunner" then
+        return hash("mp_unit_gunner")
+    end
+    return hash("mp_unit_sarge")
+end
+
+multiplayer_get_slot_count_for_player = function(player_count, player_id)
+    if player_count == 2 then
+        if player_id == "p1" or player_id == "p2" then
+            return 2
+        end
+        return 0
+    elseif player_count == 3 then
+        if player_id == "p1" or player_id == "p2" or player_id == "p3" then
+            return 2
+        end
+        return 0
+    end
+    if player_id == "p1" or player_id == "p2" or player_id == "p3" or player_id == "p4" then
+        return 1
+    end
+    return 0
+end
+
+multiplayer_get_required_ready_player_ids_for_count = function(player_count)
+    local ids = {}
+    local max_players = math.max(2, math.min(4, player_count or 4))
+    for i = 2, max_players do
+        table.insert(ids, "p" .. tostring(i))
+    end
+    return ids
+end
+
+multiplayer_get_default_seat_assignments = function(player_count)
+    local count = math.max(2, math.min(4, player_count or 4))
+    if count == 2 then
+        return {
+            p1 = { "sarge", "techie" },
+            p2 = { "medic", "gunner" }
+        }
+    elseif count == 3 then
+        return {
+            p1 = { "sarge", "techie" },
+            p2 = { "medic" },
+            p3 = { "gunner" }
+        }
+    end
+    return {
+        p1 = { "sarge" },
+        p2 = { "techie" },
+        p3 = { "medic" },
+        p4 = { "gunner" }
+    }
+end
+
+multiplayer_clone_seat_assignments = function(src_assignments, player_count)
+    local out = {}
+    local count = math.max(2, math.min(4, player_count or 4))
+    for i = 1, count do
+        local player_id = "p" .. tostring(i)
+        out[player_id] = {}
+        local src = src_assignments and src_assignments[player_id] or nil
+        if src then
+            for _, unit_id in ipairs(src) do
+                table.insert(out[player_id], unit_id)
+            end
+        end
+    end
+    return out
+end
+
+multiplayer_get_player_for_unit = function(assignments, player_count, unit_id)
+    if not assignments then
+        return nil
+    end
+    local count = math.max(2, math.min(4, player_count or 4))
+    for i = 1, count do
+        local player_id = "p" .. tostring(i)
+        local units = assignments[player_id] or {}
+        for _, owned_id in ipairs(units) do
+            if owned_id == unit_id then
+                return player_id
+            end
+        end
+    end
+    return nil
 end
 
 PANEL_ART_ANIM_BY_CLASS_ID = {
@@ -5173,6 +5366,15 @@ local function initialize_unit_ui(self)
         flow_score_title_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
+        flow_mp_setup_panel = nil,
+        flow_mp_count_buttons = {},
+        flow_mp_count_active_ring = nil,
+        flow_mp_back_button = nil,
+        flow_mp_start_button = nil,
+        flow_mp_start_disabled_overlay = nil,
+        flow_mp_start_enabled_glow = nil,
+        flow_mp_unit_buttons = {},
+        flow_mp_slot_icons = {},
         flow_score_rows = {},
         ready_buttons = {},
         mp_debug_player_buttons = {}
@@ -5252,6 +5454,24 @@ local function initialize_unit_ui(self)
     self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+    self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
+    self.ui.flow_mp_count_active_ring = create_ui_marker_sprite(hash("mp_btn_count_active_ring"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_count_buttons[1] = create_ui_marker_sprite(hash("mp_btn_2p"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_count_buttons[2] = create_ui_marker_sprite(hash("mp_btn_3p"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_count_buttons[3] = create_ui_marker_sprite(hash("mp_btn_4p"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_back_button = create_ui_marker_sprite(hash("mp_btn_back"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_start_button = create_ui_marker_sprite(hash("mp_btn_start"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_start_disabled_overlay = create_ui_marker_sprite(hash("mp_btn_start_disabled_overlay"), MP_SETUP_UI_Z + 0.001)
+    self.ui.flow_mp_start_enabled_glow = create_ui_marker_sprite(hash("mp_btn_start_enabled_glow"), MP_SETUP_UI_Z - 0.001)
+    for i, unit_id in ipairs(MP_SETUP_UNIT_IDS) do
+        self.ui.flow_mp_unit_buttons[i] = create_ui_marker_sprite(multiplayer_get_unit_anim_id(unit_id), MP_SETUP_UI_Z)
+    end
+    for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+        self.ui.flow_mp_slot_icons[player_id] = {}
+        for slot_index = 1, 2 do
+            self.ui.flow_mp_slot_icons[player_id][slot_index] = create_ui_marker_sprite(multiplayer_get_unit_anim_id("sarge"), MP_SETUP_UI_Z + 0.002)
+        end
+    end
     for i = 1, 4 do
         self.ui.flow_score_rows[i] = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 300, 28)
     end
@@ -5330,6 +5550,29 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_SCALE_X, MP_SETUP_PANEL_SCALE_Y)
+    if self.ui.flow_mp_count_buttons then
+        for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_SCALE_X, MP_SETUP_COUNT_BTN_SCALE_Y)
+        end
+    end
+    set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_RING_SCALE_X, MP_SETUP_COUNT_RING_SCALE_Y)
+    set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
+    set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
+    set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
+    set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_SCALE_X, MP_SETUP_START_GLOW_SCALE_Y)
+    if self.ui.flow_mp_unit_buttons then
+        for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_SCALE_X, MP_SETUP_UNIT_SCALE_Y)
+        end
+    end
+    if self.ui.flow_mp_slot_icons then
+        for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+            for _, slot_icon in ipairs(slot_icons) do
+                set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_ICON_SCALE_X, MP_SETUP_SLOT_ICON_SCALE_Y)
+            end
+        end
+    end
     if self.ui.flow_score_rows then
         for _, row_id in ipairs(self.ui.flow_score_rows) do
             set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
@@ -5543,10 +5786,18 @@ function start_solo_game_flow(self)
     self.game_won = false
 end
 
-function start_multiplayer_game_flow(self)
+function start_multiplayer_game_flow(self, session_config)
     self.multiplayer_mode_active = true
     if self.mp_state then
         self.mp_state.enabled = true
+        local session_player_count = session_config and session_config.player_count or self.mp_state.player_count or 4
+        self.mp_state.player_count = math.max(2, math.min(4, session_player_count))
+        if session_config and session_config.seat_assignments then
+            self.mp_state.seat_assignments = multiplayer_clone_seat_assignments(session_config.seat_assignments, self.mp_state.player_count)
+        elseif not self.mp_state.seat_assignments then
+            self.mp_state.seat_assignments = multiplayer_get_default_seat_assignments(self.mp_state.player_count)
+        end
+        self.mp_state.required_ready_player_ids = multiplayer_get_required_ready_player_ids_for_count(self.mp_state.player_count)
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -5559,6 +5810,167 @@ function start_multiplayer_game_flow(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
     self.game_won = false
+end
+
+multiplayer_setup_init_runtime = function(self)
+    self.mp_setup = self.mp_setup or {}
+    self.mp_setup.player_count = self.mp_setup.player_count or 2
+    self.mp_setup.selected_unit_id = self.mp_setup.selected_unit_id or "techie"
+    self.mp_setup.seat_slots = self.mp_setup.seat_slots or {}
+    local defaults = multiplayer_get_default_seat_assignments(self.mp_setup.player_count)
+    for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+        local slot_count = multiplayer_get_slot_count_for_player(self.mp_setup.player_count, player_id)
+        self.mp_setup.seat_slots[player_id] = {}
+        for slot_index = 1, slot_count do
+            self.mp_setup.seat_slots[player_id][slot_index] = false
+        end
+    end
+    for player_id, units in pairs(defaults) do
+        if self.mp_setup.seat_slots[player_id] then
+            for slot_index, unit_id in ipairs(units) do
+                if self.mp_setup.seat_slots[player_id][slot_index] ~= nil then
+                    self.mp_setup.seat_slots[player_id][slot_index] = unit_id
+                end
+            end
+        end
+    end
+end
+
+multiplayer_setup_set_player_count = function(self, player_count)
+    self.mp_setup = self.mp_setup or {}
+    self.mp_setup.player_count = math.max(2, math.min(4, player_count or 2))
+    self.mp_setup.selected_unit_id = "techie"
+    self.mp_setup.seat_slots = {}
+    local defaults = multiplayer_get_default_seat_assignments(self.mp_setup.player_count)
+    for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+        local slot_count = multiplayer_get_slot_count_for_player(self.mp_setup.player_count, player_id)
+        self.mp_setup.seat_slots[player_id] = {}
+        for slot_index = 1, slot_count do
+            self.mp_setup.seat_slots[player_id][slot_index] = false
+        end
+    end
+    for player_id, units in pairs(defaults) do
+        for slot_index, unit_id in ipairs(units) do
+            if self.mp_setup.seat_slots[player_id] and self.mp_setup.seat_slots[player_id][slot_index] ~= nil then
+                self.mp_setup.seat_slots[player_id][slot_index] = unit_id
+            end
+        end
+    end
+end
+
+multiplayer_setup_remove_unit_from_slots = function(self, unit_id)
+    if not (self.mp_setup and self.mp_setup.seat_slots) then
+        return
+    end
+    for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+        local slots = self.mp_setup.seat_slots[player_id]
+        if slots then
+            for slot_index = 1, #slots do
+                if slots[slot_index] == unit_id then
+                    slots[slot_index] = false
+                end
+            end
+        end
+    end
+end
+
+multiplayer_setup_unit_assigned = function(self, unit_id)
+    if not (self.mp_setup and self.mp_setup.seat_slots) then
+        return false
+    end
+    for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+        local slots = self.mp_setup.seat_slots[player_id]
+        if slots then
+            for slot_index = 1, #slots do
+                if slots[slot_index] == unit_id then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+multiplayer_setup_is_valid = function(self)
+    if not (self.mp_setup and self.mp_setup.seat_slots) then
+        return false
+    end
+    local used = {}
+    local total_assigned = 0
+    local assigned_per_player = {}
+    local count = self.mp_setup.player_count or 2
+    for i = 1, count do
+        local player_id = "p" .. tostring(i)
+        local slot_count = multiplayer_get_slot_count_for_player(count, player_id)
+        local slots = self.mp_setup.seat_slots[player_id] or {}
+        local player_assigned = 0
+        for slot_index = 1, slot_count do
+            local unit_id = slots[slot_index]
+            if unit_id and unit_id ~= false then
+                if used[unit_id] then
+                    return false
+                end
+                used[unit_id] = true
+                total_assigned = total_assigned + 1
+                player_assigned = player_assigned + 1
+            end
+        end
+        assigned_per_player[player_id] = player_assigned
+    end
+    if total_assigned ~= #MP_SETUP_UNIT_IDS then
+        return false
+    end
+    if multiplayer_get_player_for_unit(self.mp_setup.seat_slots, count, "sarge") ~= "p1" then
+        return false
+    end
+    if count == 2 then
+        if assigned_per_player.p1 ~= 2 or assigned_per_player.p2 ~= 2 then
+            return false
+        end
+    elseif count == 3 then
+        local p1 = assigned_per_player.p1 or 0
+        local p2 = assigned_per_player.p2 or 0
+        local p3 = assigned_per_player.p3 or 0
+        if p1 < 1 or p1 > 2 or p2 < 1 or p2 > 2 or p3 < 1 or p3 > 2 then
+            return false
+        end
+        local two_count = 0
+        if p1 == 2 then two_count = two_count + 1 end
+        if p2 == 2 then two_count = two_count + 1 end
+        if p3 == 2 then two_count = two_count + 1 end
+        if two_count ~= 1 then
+            return false
+        end
+    elseif count == 4 then
+        if (assigned_per_player.p1 or 0) ~= 1
+            or (assigned_per_player.p2 or 0) ~= 1
+            or (assigned_per_player.p3 or 0) ~= 1
+            or (assigned_per_player.p4 or 0) ~= 1 then
+            return false
+        end
+    end
+    return true
+end
+
+multiplayer_setup_build_session_config = function(self)
+    local count = self.mp_setup and self.mp_setup.player_count or 2
+    local compact = {}
+    for i = 1, count do
+        local player_id = "p" .. tostring(i)
+        compact[player_id] = {}
+        local slots = self.mp_setup and self.mp_setup.seat_slots and self.mp_setup.seat_slots[player_id] or {}
+        local slot_count = multiplayer_get_slot_count_for_player(count, player_id)
+        for slot_index = 1, slot_count do
+            local unit_id = slots and slots[slot_index] or nil
+            if unit_id and unit_id ~= false then
+                table.insert(compact[player_id], unit_id)
+            end
+        end
+    end
+    return {
+        player_count = count,
+        seat_assignments = compact
+    }
 end
 
 function enter_outro_flow_from_launch(self)
@@ -5605,6 +6017,29 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_count_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+            end
+        end
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        if self.ui.flow_mp_unit_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
+            end
+        end
+        if self.ui.flow_mp_slot_icons then
+            for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+                for _, slot_icon in ipairs(slot_icons) do
+                    set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                end
+            end
+        end
         if self.ui.flow_score_rows then
             for _, row_id in ipairs(self.ui.flow_score_rows) do
                 set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
@@ -5617,10 +6052,99 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.96), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.96), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_count_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+            end
+        end
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        if self.ui.flow_mp_unit_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
+            end
+        end
+        if self.ui.flow_mp_slot_icons then
+            for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+                for _, slot_icon in ipairs(slot_icons) do
+                    set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                end
+            end
+        end
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        if self.ui.flow_score_rows then
+            for _, row_id in ipairs(self.ui.flow_score_rows) do
+                set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
+            end
+        end
+        return
+    end
+    if state == FLOW_STATE_MP_SETUP then
+        local valid = multiplayer_setup_is_valid(self)
+        set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_mp_setup_panel, MP_SETUP_PANEL_X, MP_SETUP_PANEL_Y, MP_SETUP_PANEL_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        local count_x = { MP_SETUP_BTN_2P_X, MP_SETUP_BTN_3P_X, MP_SETUP_BTN_4P_X }
+        if self.ui.flow_mp_count_buttons then
+            for i, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                local is_active = (i + 1) == (self.mp_setup and self.mp_setup.player_count or 2)
+                local tint = is_active and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1)
+                set_ui_square_transform(self, btn, count_x[i], MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, tint, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+            end
+        end
+        local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx], MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z, valid and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z - 0.001, valid and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z + 0.001, valid and hidden or vmath.vector4(1, 1, 1, 0.92), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        if self.ui.flow_mp_unit_buttons then
+            local pulse = 1 + (0.06 * math.sin((self.flow_overlay_phase or 0) * 8))
+            for i, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+                local unit_id = MP_SETUP_UNIT_IDS[i]
+                local selected = self.mp_setup and self.mp_setup.selected_unit_id == unit_id
+                local assigned = multiplayer_setup_unit_assigned(self, unit_id)
+                local tint = nil
+                if unit_id == "sarge" then
+                    tint = vmath.vector4(0.45, 0.45, 0.45, 1)
+                else
+                    tint = selected and vmath.vector4(0.2, 1, 1, 1) or (assigned and vmath.vector4(0.75, 0.75, 0.75, 1) or vmath.vector4(1, 1, 1, 1))
+                end
+                local chip_scale = selected and pulse or 1
+                set_ui_square_transform(self, btn, MP_SETUP_UNIT_POOL_X[i], MP_SETUP_UNIT_POOL_Y, MP_SETUP_UI_Z, tint, (MP_SETUP_UNIT_POOL_W * 0.021) * chip_scale, (MP_SETUP_UNIT_POOL_H * 0.021) * chip_scale)
+            end
+        end
+        if self.ui.flow_mp_slot_icons then
+            for seat_index, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+                local slot_count = multiplayer_get_slot_count_for_player(self.mp_setup and self.mp_setup.player_count or 2, player_id)
+                local slot_x = MP_SETUP_SEAT_X[seat_index] + MP_SETUP_SLOT_X_OFFSET
+                for slot_index, slot_icon in ipairs(self.ui.flow_mp_slot_icons[player_id] or {}) do
+                    if slot_index <= slot_count then
+                        local unit_id = self.mp_setup and self.mp_setup.seat_slots and self.mp_setup.seat_slots[player_id] and self.mp_setup.seat_slots[player_id][slot_index] or false
+                        if unit_id and unit_id ~= false then
+                            msg.post(msg.url(nil, slot_icon, "sprite"), "play_animation", { id = multiplayer_get_unit_anim_id(unit_id) })
+                            set_ui_square_transform(self, slot_icon, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_UI_Z + 0.002, vmath.vector4(1, 1, 1, 1), MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                        else
+                            set_ui_square_transform(self, slot_icon, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                        end
+                    else
+                        set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                    end
+                end
+            end
+        end
         if self.ui.flow_score_rows then
             for _, row_id in ipairs(self.ui.flow_score_rows) do
                 set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
@@ -5635,6 +6159,29 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0.98), 170, 52)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_count_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+            end
+        end
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        if self.ui.flow_mp_unit_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
+            end
+        end
+        if self.ui.flow_mp_slot_icons then
+            for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+                for _, slot_icon in ipairs(slot_icons) do
+                    set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                end
+            end
+        end
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         if self.ui.flow_score_rows then
@@ -5650,6 +6197,29 @@ function update_flow_ui(self, dt)
     set_ui_square_transform(self, self.ui.flow_score_title_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, FLOW_UI_BUTTON_Z, vmath.vector4(0.72, 0.24, 0.24, 0.95), 250, 56)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+    if self.ui.flow_mp_count_buttons then
+        for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+        end
+    end
+    set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+    set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+    set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+    set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+    set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+    if self.ui.flow_mp_unit_buttons then
+        for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
+        end
+    end
+    if self.ui.flow_mp_slot_icons then
+        for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+            for _, slot_icon in ipairs(slot_icons) do
+                set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+            end
+        end
+    end
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     if self.ui.flow_score_rows then
@@ -5673,6 +6243,86 @@ function update_flow_ui(self, dt)
     end
 end
 
+multiplayer_setup_handle_touch = function(self, input_x, input_y)
+    if self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        print("MP SETUP | only host may edit setup.")
+        return true
+    end
+    local count_buttons = {
+        { x = MP_SETUP_BTN_2P_X, count = 2 },
+        { x = MP_SETUP_BTN_3P_X, count = 3 },
+        { x = MP_SETUP_BTN_4P_X, count = 4 }
+    }
+    for _, btn in ipairs(count_buttons) do
+        if is_point_in_screen_rect(input_x, input_y, btn.x, MP_SETUP_COUNT_BTN_Y, MP_SETUP_COUNT_BTN_W, MP_SETUP_COUNT_BTN_H) then
+            multiplayer_setup_set_player_count(self, btn.count)
+            return true
+        end
+    end
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+        enter_flow_state(self, FLOW_STATE_TITLE)
+        return true
+    end
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+        if multiplayer_setup_is_valid(self) then
+            start_multiplayer_game_flow(self, multiplayer_setup_build_session_config(self))
+        else
+            print("MP SETUP | invalid assignment: each active seat must be filled, unique units, and Sarge must stay on p1.")
+        end
+        return true
+    end
+    for i, unit_id in ipairs(MP_SETUP_UNIT_IDS) do
+        if is_point_in_screen_rect(input_x, input_y, MP_SETUP_UNIT_POOL_X[i], MP_SETUP_UNIT_POOL_Y, MP_SETUP_UNIT_POOL_W, MP_SETUP_UNIT_POOL_H) then
+            if unit_id == "sarge" then
+                print("MP SETUP | Sarge is host-locked to p1.")
+                return true
+            end
+            self.mp_setup.selected_unit_id = unit_id
+            return true
+        end
+    end
+    local player_count = self.mp_setup and self.mp_setup.player_count or 2
+    for seat_index, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+        local slot_count = multiplayer_get_slot_count_for_player(player_count, player_id)
+        local slot_x = MP_SETUP_SEAT_X[seat_index] + MP_SETUP_SLOT_X_OFFSET
+        for slot_index = 1, slot_count do
+            if is_point_in_screen_rect(input_x, input_y, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_SLOT_W, MP_SETUP_SLOT_H) then
+                local selected_unit_id = self.mp_setup and self.mp_setup.selected_unit_id or nil
+                local current_unit_id = self.mp_setup and self.mp_setup.seat_slots and self.mp_setup.seat_slots[player_id] and self.mp_setup.seat_slots[player_id][slot_index] or false
+                if selected_unit_id and selected_unit_id ~= false then
+                    if selected_unit_id == "sarge" and player_id ~= "p1" then
+                        print("MP SETUP | blocked: Sarge must stay on p1.")
+                        return true
+                    end
+                    if current_unit_id == "sarge" then
+                        print("MP SETUP | blocked: Sarge must stay on p1.")
+                        return true
+                    end
+                    if current_unit_id == selected_unit_id then
+                        return true
+                    end
+                    multiplayer_setup_remove_unit_from_slots(self, selected_unit_id)
+                    if current_unit_id and current_unit_id ~= false then
+                        if current_unit_id ~= "sarge" then
+                            self.mp_setup.selected_unit_id = current_unit_id
+                        end
+                    end
+                    self.mp_setup.seat_slots[player_id][slot_index] = selected_unit_id
+                elseif current_unit_id and current_unit_id ~= false then
+                    if current_unit_id == "sarge" and player_id == "p1" then
+                        print("MP SETUP | blocked: Sarge must stay on p1.")
+                        return true
+                    end
+                    self.mp_setup.seat_slots[player_id][slot_index] = false
+                    self.mp_setup.selected_unit_id = current_unit_id
+                end
+                return true
+            end
+        end
+    end
+    return true
+end
+
 function handle_flow_touch(self, input_x, input_y)
     local state = self.game_flow_state or FLOW_STATE_GAME
     if state == FLOW_STATE_TITLE then
@@ -5681,10 +6331,14 @@ function handle_flow_touch(self, input_x, input_y)
             return true
         end
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, 280, 70) then
-            start_multiplayer_game_flow(self)
+            multiplayer_setup_init_runtime(self)
+            enter_flow_state(self, FLOW_STATE_MP_SETUP)
             return true
         end
         return true
+    end
+    if state == FLOW_STATE_MP_SETUP then
+        return multiplayer_setup_handle_touch(self, input_x, input_y)
     end
     if state == FLOW_STATE_OUTRO then
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH - 110, 54, 170, 52) then
@@ -6015,9 +6669,14 @@ function update_global_ui_buttons(self)
             for i, btn in ipairs(self.ui.mp_debug_player_buttons) do
                 local by = MULTIPLAYER_DEBUG_BUTTON_START_Y - ((i - 1) * MULTIPLAYER_DEBUG_BUTTON_Y_GAP)
                 local player_id = self.mp_state.required_ready_player_ids[i]
-                local active = player_id and (self.mp_state.debug_active_player_id == player_id)
-                local tint = active and vmath.vector4(0.2, 0.95, 1, 0.95) or vmath.vector4(1, 1, 1, 0.9)
-                set_ui_square_transform(self, btn, MULTIPLAYER_DEBUG_BUTTON_X, by, MULTIPLAYER_DEBUG_BUTTON_Z, tint, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
+                if player_id then
+                    local active = self.mp_state.debug_active_player_id == player_id
+                    local tint = active and vmath.vector4(0.2, 0.95, 1, 0.95) or vmath.vector4(1, 1, 1, 0.9)
+                    set_ui_square_transform(self, btn, MULTIPLAYER_DEBUG_BUTTON_X, by, MULTIPLAYER_DEBUG_BUTTON_Z, tint, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
+                    msg.post(msg.url(nil, btn, "sprite"), "play_animation", { id = hash("score_" .. tostring(i + 1)) })
+                else
+                    set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z, hidden, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
+                end
             end
         else
             for _, btn in ipairs(self.ui.mp_debug_player_buttons) do
@@ -7081,16 +7740,9 @@ multiplayer_reset_ready_gate = function(self)
 end
 
 multiplayer_get_owned_unit_id_for_player = function(player_id)
-    if player_id == "p1" then
-        return "sarge"
-    elseif player_id == "p2" then
-        return "techie"
-    elseif player_id == "p3" then
-        return "medic"
-    elseif player_id == "p4" then
-        return "gunner"
-    end
-    return "sarge"
+    local defaults = multiplayer_get_default_seat_assignments(4)
+    local units = defaults[player_id] or { "sarge" }
+    return units[1] or "sarge"
 end
 
 multiplayer_get_active_player_id_for_commands = function(self)
@@ -7101,26 +7753,58 @@ multiplayer_get_active_player_id_for_commands = function(self)
 end
 
 multiplayer_get_owned_unit_id_for_active_player = function(self)
-    return multiplayer_get_owned_unit_id_for_player(multiplayer_get_active_player_id_for_commands(self))
+    local player_id = multiplayer_get_active_player_id_for_commands(self)
+    if self.mp_state and self.mp_state.seat_assignments and self.mp_state.seat_assignments[player_id] then
+        local owned = self.mp_state.seat_assignments[player_id]
+        return owned[1] or multiplayer_get_owned_unit_id_for_player(player_id)
+    end
+    return multiplayer_get_owned_unit_id_for_player(player_id)
 end
 
 multiplayer_can_control_unit = function(self, unit_id)
     if not (self.mp_state and self.mp_state.enabled) then
         return true
     end
-    return unit_id == multiplayer_get_owned_unit_id_for_active_player(self)
+    local active_player = multiplayer_get_active_player_id_for_commands(self)
+    local owner = multiplayer_get_player_for_unit(self.mp_state.seat_assignments, self.mp_state.player_count or 4, unit_id)
+    if not owner then
+        return unit_id == multiplayer_get_owned_unit_id_for_active_player(self)
+    end
+    return owner == active_player
 end
 
 multiplayer_enforce_controlled_unit = function(self, force_select)
     if not self.squad_units then
         return
     end
-    local owned_unit_id = multiplayer_get_owned_unit_id_for_active_player(self)
-    local owned_unit = self.squad_units[owned_unit_id]
-    if not owned_unit then
+    local active_player = multiplayer_get_active_player_id_for_commands(self)
+    local owned_units = (self.mp_state and self.mp_state.seat_assignments and self.mp_state.seat_assignments[active_player]) or { multiplayer_get_owned_unit_id_for_active_player(self) }
+    local chosen_unit_id = nil
+    if self.controlled_unit_id then
+        for _, unit_id in ipairs(owned_units) do
+            if unit_id == self.controlled_unit_id then
+                chosen_unit_id = unit_id
+                break
+            end
+        end
+    end
+    if not chosen_unit_id then
+        for _, unit_id in ipairs(owned_units) do
+            local unit = self.squad_units[unit_id]
+            if unit and (unit.current_health or 0) > 0 then
+                chosen_unit_id = unit_id
+                break
+            end
+        end
+    end
+    if not chosen_unit_id then
+        chosen_unit_id = owned_units[1]
+    end
+    local owned_unit = chosen_unit_id and self.squad_units[chosen_unit_id] or nil
+    if not (chosen_unit_id and owned_unit) then
         return
     end
-    self.controlled_unit_id = owned_unit_id
+    self.controlled_unit_id = chosen_unit_id
     if force_select == true then
         deselect_all_units(self)
         if (owned_unit.current_health or 0) > 0 then
@@ -7130,18 +7814,18 @@ multiplayer_enforce_controlled_unit = function(self, force_select)
 end
 
 init_multiplayer_runtime = function(self)
+    local default_player_count = 4
     self.mp_state = {
         enabled = (MULTIPLAYER_ENABLED == true) and (self.multiplayer_mode_active == true),
         host_player_id = MULTIPLAYER_HOST_PLAYER_ID,
         local_player_id = MULTIPLAYER_LOCAL_PLAYER_ID,
         turn_id = 1,
-        required_ready_player_ids = {},
+        player_count = default_player_count,
+        required_ready_player_ids = multiplayer_get_required_ready_player_ids_for_count(default_player_count),
+        seat_assignments = multiplayer_get_default_seat_assignments(default_player_count),
         ready_by_player_id = {},
         debug_active_player_id = nil
     }
-    for _, player_id in ipairs(MULTIPLAYER_REQUIRED_READY_PLAYER_IDS) do
-        table.insert(self.mp_state.required_ready_player_ids, player_id)
-    end
     self.mp_state.debug_active_player_id = self.mp_state.host_player_id
     multiplayer_reset_ready_gate(self)
 end
@@ -8761,6 +9445,7 @@ function init(self)
     self.melee_ap_left_by_alien_id = {}
     self.reactive_combat_enabled = true
     init_multiplayer_runtime(self)
+    multiplayer_setup_set_player_count(self, 2)
     self.alien_turn_active = false
     self.alien_turn_waiting_for_advance = false
     self.alien_turn_manual_pause = false

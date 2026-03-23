@@ -6,3 +6,4 @@ Thumbs.db
 /.editor_settings
 /.internal
 /build
+/multiplayer-relay/node_modules/

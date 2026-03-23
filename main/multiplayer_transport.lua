@@ -39,6 +39,7 @@ function M.create(opts)
         mode = (opts and opts.mode) or "loopback",
         on_command = opts and opts.on_command or nil,
         on_event = opts and opts.on_event or nil,
+        on_status = opts and opts.on_status or nil,
         message_seq = 0,
         ws_url = opts and opts.ws_url or "",
         ws_room_id = opts and opts.ws_room_id or "default_room",
@@ -47,10 +48,47 @@ function M.create(opts)
         ws_client = nil,
         ws_connected = false,
         ws_queue = {},
-        warned_ws_unavailable = false
+        warned_ws_unavailable = false,
+        ws_reconnect_attempt = 0,
+        ws_reconnect_timer = 0,
+        ws_reconnect_pending = false,
+        ws_reconnect_base_seconds = 1.0,
+        ws_reconnect_max_seconds = 8.0,
+        ws_status = "idle"
     }
 
     local transport = {}
+
+    local function dispatch_status(status, detail)
+        state.ws_status = status or state.ws_status
+        if state.on_status then
+            local ok_status, err_status = pcall(state.on_status, status, detail or {})
+            if not ok_status then
+                print("MP TRANSPORT | on_status callback failed: " .. tostring(err_status))
+            end
+        end
+    end
+
+    local function schedule_reconnect(reason)
+        if state.mode ~= "websocket" then
+            return
+        end
+        state.ws_connected = false
+        state.ws_client = nil
+        local attempt = state.ws_reconnect_attempt or 0
+        local delay = state.ws_reconnect_base_seconds * (2 ^ attempt)
+        if delay > state.ws_reconnect_max_seconds then
+            delay = state.ws_reconnect_max_seconds
+        end
+        state.ws_reconnect_attempt = attempt + 1
+        state.ws_reconnect_timer = delay
+        state.ws_reconnect_pending = true
+        dispatch_status("reconnecting", {
+            reason = reason or "unknown",
+            attempt = state.ws_reconnect_attempt,
+            retry_in_seconds = delay
+        })
+    end
 
     local function dispatch_events(events)
         if state.on_event and type(events) == "table" then
@@ -110,8 +148,15 @@ function M.create(opts)
                 state.warned_ws_unavailable = true
             end
             state.mode = "loopback"
+            dispatch_status("fallback_loopback", {
+                reason = "adapter_unavailable"
+            })
             return
         end
+        dispatch_status("connecting", {
+            url = state.ws_url,
+            room_id = state.ws_room_id
+        })
         state.ws_client = state.ws_adapter.connect(state.ws_url, {
             room_id = state.ws_room_id,
             player_id = state.ws_player_id
@@ -119,6 +164,12 @@ function M.create(opts)
             on_open = function()
                 print("MP TRANSPORT | websocket connected.")
                 state.ws_connected = true
+                state.ws_reconnect_attempt = 0
+                state.ws_reconnect_timer = 0
+                state.ws_reconnect_pending = false
+                dispatch_status("connected", {
+                    room_id = state.ws_room_id
+                })
                 websocket_flush_queue()
             end,
             on_message = function(raw_text)
@@ -166,17 +217,15 @@ function M.create(opts)
             end,
             on_error = function(err)
                 print("MP TRANSPORT | websocket error: " .. tostring(err))
+                schedule_reconnect("error")
             end,
             on_close = function()
-                state.ws_connected = false
+                schedule_reconnect("closed")
             end
         })
         if state.ws_client == nil then
-            if state.warned_ws_unavailable ~= true then
-                print("MP TRANSPORT | websocket connect returned nil; falling back to loopback.")
-                state.warned_ws_unavailable = true
-            end
-            state.mode = "loopback"
+            print("MP TRANSPORT | websocket connect returned nil; scheduling reconnect.")
+            schedule_reconnect("connect_nil")
         end
     end
 
@@ -224,8 +273,31 @@ function M.create(opts)
         end
         state.ws_client = nil
         state.ws_connected = false
+        state.ws_reconnect_pending = false
+        state.ws_reconnect_timer = 0
+        dispatch_status("shutdown", {})
         state.on_command = nil
         state.on_event = nil
+    end
+
+    function transport.update(dt)
+        if state.mode ~= "websocket" then
+            return
+        end
+        if state.ws_connected then
+            return
+        end
+        if state.ws_reconnect_pending then
+            state.ws_reconnect_timer = math.max(0, (state.ws_reconnect_timer or 0) - (dt or 0))
+            if state.ws_reconnect_timer <= 0 then
+                state.ws_reconnect_pending = false
+                websocket_connect_if_needed()
+            end
+            return
+        end
+        if state.ws_client == nil then
+            websocket_connect_if_needed()
+        end
     end
 
     transport.connect = websocket_connect_if_needed

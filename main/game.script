@@ -7864,6 +7864,189 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "move_unit" then
+        local unit_id = payload.unit_id
+        local destination_cell_id = tonumber(payload.destination_cell_id)
+        local requested_slot = tonumber(payload.destination_slot_index)
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "move_unit",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "move_unit",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or (unit.current_health or 0) <= 0 or unit.is_moving then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "move_unit",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        if not destination_cell_id or unit.cell_id == destination_cell_id or not is_walkable_cell(self.world_grid, destination_cell_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "move_unit",
+                reason = "invalid_destination"
+            }))
+            return events
+        end
+        local path = find_path(self.world_grid, unit.cell_id, destination_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        if not path then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "move_unit",
+                reason = "no_path"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "move_unit_applied", {
+            unit_id = unit_id,
+            destination_cell_id = destination_cell_id,
+            destination_slot_index = multiplayer_resolve_destination_slot(self, unit, destination_cell_id, requested_slot)
+        }))
+        return events
+    end
+
+    if cmd_type == "manual_shot" then
+        local unit_id = payload.unit_id
+        local alien_id = tonumber(payload.alien_id)
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "manual_shot",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "manual_shot",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local alien = find_alien_by_id(self, alien_id)
+        if not unit or (unit.current_health or 0) <= 0 or unit.is_moving or unit.current_ap <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "manual_shot",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        if not alien or alien.is_dead then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "manual_shot",
+                reason = "invalid_target"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "manual_shot_applied", {
+            unit_id = unit_id,
+            alien_id = alien_id
+        }))
+        return events
+    end
+
+    if cmd_type == "resource_drag_end" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "resource_drag_end",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local drag = payload.drag or {}
+        local source_unit_id = drag.source_unit_id
+        if not multiplayer_player_owns_unit(self, sender, source_unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "resource_drag_end",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "resource_drag_applied", {
+            screen_x = tonumber(payload.screen_x),
+            screen_y = tonumber(payload.screen_y),
+            drag = multiplayer_clone_flat_table(drag)
+        }))
+        return events
+    end
+
+    if cmd_type == "retrieve_power" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_power",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_power",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_power",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "retrieve_power_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id
+        }))
+        return events
+    end
+
+    if cmd_type == "retrieve_world_item" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_world_item",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local world_item_id = tonumber(payload.world_item_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_world_item",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        if not world_item_id then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_world_item",
+                reason = "invalid_world_item_id"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "retrieve_world_item_applied", {
+            unit_id = unit_id,
+            world_item_id = world_item_id
+        }))
+        return events
+    end
+
     table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
         command_type = tostring(cmd_type or "unknown"),
         reason = "unsupported_command"
@@ -7892,6 +8075,39 @@ multiplayer_transport_on_event = function(self, event)
     if event.type == "turn_advanced" then
         print(string.format("MP TURN | request_accepted | next_turn_id=%d", (event.payload and event.payload.turn_id) or 0))
         msg.post(".", "next_turn")
+        return
+    end
+    if event.type == "move_unit_applied" then
+        if not multiplayer_apply_move_unit_event(self, event.payload or {}) then
+            print("MP COMMAND | move_unit_applied ignored.")
+        end
+        return
+    end
+    if event.type == "manual_shot_applied" then
+        if not multiplayer_apply_manual_shot_event(self, event.payload or {}) then
+            print("MP COMMAND | manual_shot_applied ignored.")
+        end
+        return
+    end
+    if event.type == "resource_drag_applied" then
+        self.mp_state.applying_remote_event = true
+        local ok = multiplayer_apply_resource_drag_event(self, event.payload or {})
+        self.mp_state.applying_remote_event = false
+        if not ok then
+            print("MP COMMAND | resource_drag_applied ignored.")
+        end
+        return
+    end
+    if event.type == "retrieve_power_applied" then
+        if not multiplayer_apply_retrieve_power_event(self, event.payload or {}) then
+            print("MP COMMAND | retrieve_power_applied ignored.")
+        end
+        return
+    end
+    if event.type == "retrieve_world_item_applied" then
+        if not multiplayer_apply_retrieve_world_item_event(self, event.payload or {}) then
+            print("MP COMMAND | retrieve_world_item_applied ignored.")
+        end
         return
     end
     if event.type == "command_rejected" then
@@ -8032,6 +8248,14 @@ multiplayer_can_control_unit = function(self, unit_id)
         return unit_id == multiplayer_get_owned_unit_id_for_active_player(self)
     end
     return owner == active_player
+end
+
+multiplayer_player_owns_unit = function(self, player_id, unit_id)
+    if not (self and self.mp_state and self.mp_state.seat_assignments) then
+        return false
+    end
+    local owner = multiplayer_get_player_for_unit(self.mp_state.seat_assignments, self.mp_state.player_count or 4, unit_id)
+    return owner == player_id
 end
 
 multiplayer_enforce_controlled_unit = function(self, force_select)
@@ -8271,7 +8495,22 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     set_ui_square_transform = set_ui_square_transform,
     update_human_visual_state = update_human_visual_state,
     record_tile_powered_first_time = score_record_tile_powered_first_time,
-    record_launch_success = score_record_launch_success
+    record_launch_success = score_record_launch_success,
+    mp_is_enabled = function(self_ref)
+        return self_ref and self_ref.mp_state and self_ref.mp_state.enabled == true
+    end,
+    mp_is_applying_event = function(self_ref)
+        return self_ref and self_ref.mp_state and self_ref.mp_state.applying_remote_event == true
+    end,
+    mp_send_command = function(self_ref, cmd_type, payload, sender_player_id)
+        multiplayer_transport_send_command(self_ref, cmd_type, payload or {}, sender_player_id)
+    end,
+    mp_get_turn_id = function(self_ref)
+        return (self_ref and self_ref.mp_state and self_ref.mp_state.turn_id) or 1
+    end,
+    mp_get_active_player_id = function(self_ref)
+        return multiplayer_get_active_player_id_for_commands(self_ref)
+    end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
@@ -8915,17 +9154,15 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
     return nil
 end
 
-local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
-    if not unit or not unit.is_selected then
+multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
+    if not unit then
         return false
     end
     if not (unit and (unit.current_health or 0) > 0) then
         print("Unable to fire: selected unit is dead.")
         return true
     end
-
-    local alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
-    if not alien then
+    if not alien or alien.is_dead then
         return false
     end
 
@@ -9004,6 +9241,198 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
     return true
+end
+
+multiplayer_resolve_destination_slot = function(self, unit, destination_cell_id, requested_slot_index)
+    local destination_cell = self.world_grid and self.world_grid[destination_cell_id] or nil
+    if not destination_cell then
+        return nil
+    end
+    local assignment = self.cell_slot_assignments and self.cell_slot_assignments[destination_cell_id] or nil
+    local used = {}
+    if assignment then
+        for unit_id, slot_index in pairs(assignment) do
+            if unit_id ~= unit.id then
+                used[slot_index] = true
+            end
+        end
+    end
+    local slot_count = #CELL_SLOT_OFFSETS_X
+    local requested_slot = math.max(1, math.min(slot_count, math.floor(tonumber(requested_slot_index) or 1)))
+    if not used[requested_slot] then
+        return requested_slot
+    end
+    local desired_offset = CELL_SLOT_OFFSETS_X[requested_slot] or 0
+    local best_slot = nil
+    local best_dist = math.huge
+    for i = 1, slot_count do
+        if not used[i] then
+            local dist = math.abs((CELL_SLOT_OFFSETS_X[i] or 0) - desired_offset)
+            if dist < best_dist then
+                best_dist = dist
+                best_slot = i
+            end
+        end
+    end
+    return best_slot or requested_slot
+end
+
+multiplayer_apply_move_unit_event = function(self, payload)
+    if not payload then
+        return false
+    end
+    local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
+    if not unit or unit.is_moving then
+        return false
+    end
+    if (unit.current_health or 0) <= 0 then
+        return false
+    end
+    local destination_cell_id = tonumber(payload.destination_cell_id)
+    if not destination_cell_id then
+        return false
+    end
+    if unit.cell_id == destination_cell_id then
+        return false
+    end
+    if not is_walkable_cell(self.world_grid, destination_cell_id) then
+        return false
+    end
+    local path, total_cost = find_path(self.world_grid, unit.cell_id, destination_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+    if not path then
+        return false
+    end
+    local resolved_slot = multiplayer_resolve_destination_slot(self, unit, destination_cell_id, payload.destination_slot_index)
+    print(unit.display_name .. " route selected (network event):")
+    print_path_debug(path, total_cost)
+    highlight_path(self, path)
+    begin_human_path_move(self, path, destination_cell_id, resolved_slot)
+    return true
+end
+
+multiplayer_apply_manual_shot_event = function(self, payload)
+    if not payload then
+        return false
+    end
+    local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
+    local alien = find_alien_by_id(self, tonumber(payload.alien_id))
+    if not unit or not alien then
+        return false
+    end
+    return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+end
+
+multiplayer_clone_flat_table = function(src)
+    local out = {}
+    if type(src) ~= "table" then
+        return out
+    end
+    for k, v in pairs(src) do
+        if type(v) ~= "table" then
+            out[k] = v
+        else
+            local nested = {}
+            for nk, nv in pairs(v) do
+                if type(nv) ~= "table" then
+                    nested[nk] = nv
+                end
+            end
+            out[k] = nested
+        end
+    end
+    return out
+end
+
+multiplayer_force_select_unit = function(self, unit_id)
+    if not (self and self.squad_units and unit_id) then
+        return false
+    end
+    local unit = self.squad_units[unit_id]
+    if not unit then
+        return false
+    end
+    self.controlled_unit_id = unit_id
+    deselect_all_units(self)
+    unit.is_selected = true
+    return true
+end
+
+multiplayer_apply_resource_drag_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    if not (payload.drag and type(payload.drag) == "table") then
+        return false
+    end
+    local source_unit_id = payload.drag.source_unit_id
+    if not (source_unit_id and self.squad_units and self.squad_units[source_unit_id]) then
+        return false
+    end
+    local drag = multiplayer_clone_flat_table(payload.drag)
+    drag.active = true
+    self.drag_resource = drag
+    local screen_x = tonumber(payload.screen_x)
+    local screen_y = tonumber(payload.screen_y)
+    if not (screen_x and screen_y) then
+        self.drag_resource = { active = false }
+        return false
+    end
+    return LOOT_RUNTIME.end_resource_drag(self, screen_x, screen_y) == true
+end
+
+multiplayer_apply_retrieve_power_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
+    local cell_id = tonumber(payload.cell_id)
+    local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+    if not (unit and cell) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_retrieve_power_selected_unit_on_cell(self, unit, cell) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_retrieve_world_item_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local world_item_id = tonumber(payload.world_item_id)
+    if not (unit_id and world_item_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_pickup_world_item_by_id_for_unit(self, unit_id, world_item_id) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
+    if not unit or not unit.is_selected then
+        return false
+    end
+    if not (unit and (unit.current_health or 0) > 0) then
+        print("Unable to fire: selected unit is dead.")
+        return true
+    end
+
+    local alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
+    if not alien then
+        return false
+    end
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_transport_send_command(self, "manual_shot", {
+            turn_id = self.mp_state.turn_id or 1,
+            unit_id = unit.id,
+            alien_id = alien.id
+        }, multiplayer_get_active_player_id_for_commands(self))
+        return true
+    end
+    return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
 end
 
 local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
@@ -9228,7 +9657,16 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             end
             print_path_debug(path, total_cost)
             highlight_path(self, path)
-            begin_human_path_move(self, path, clicked_cell_id, destination_slot_index or destination_slot_requested)
+            if self.mp_state and self.mp_state.enabled then
+                multiplayer_transport_send_command(self, "move_unit", {
+                    turn_id = self.mp_state.turn_id or 1,
+                    unit_id = unit.id,
+                    destination_cell_id = clicked_cell_id,
+                    destination_slot_index = destination_slot_index or destination_slot_requested
+                }, multiplayer_get_active_player_id_for_commands(self))
+            else
+                begin_human_path_move(self, path, clicked_cell_id, destination_slot_index or destination_slot_requested)
+            end
         else
             print("No path found for " .. unit.display_name .. " to cell: " .. clicked_cell_id)
         end
@@ -10240,7 +10678,17 @@ function on_input(self, action_id, action)
                 LOOT_RUNTIME.update_resource_drag(self, input_x, input_y)
             end
             if action.released then
-                LOOT_RUNTIME.end_resource_drag(self, input_x, input_y)
+                if self.mp_state and self.mp_state.enabled then
+                    multiplayer_transport_send_command(self, "resource_drag_end", {
+                        turn_id = self.mp_state.turn_id or 1,
+                        screen_x = input_x,
+                        screen_y = input_y,
+                        drag = multiplayer_clone_flat_table(self.drag_resource)
+                    }, multiplayer_get_active_player_id_for_commands(self))
+                    self.drag_resource = { active = false }
+                else
+                    LOOT_RUNTIME.end_resource_drag(self, input_x, input_y)
+                end
             end
             return true
         end
@@ -10321,7 +10769,7 @@ function on_input(self, action_id, action)
                 local clicked_cell_id = handle_cell_click(mapped_action, self.camera_pos, self.camera_zoom)
                 if clicked_cell_id then
                     if LOOT_RUNTIME.handle_world_click_selected_unit(self, input_x, input_y, clicked_cell_id) then
-                        return
+                        return true
                     end
                     local handled_by_human = handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     if not handled_by_human then

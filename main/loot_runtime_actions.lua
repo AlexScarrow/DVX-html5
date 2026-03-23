@@ -178,6 +178,32 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    local function should_send_mp_resource_command(self)
+        if not (ctx.mp_is_enabled and ctx.mp_is_enabled(self)) then
+            return false
+        end
+        if ctx.mp_is_applying_event and ctx.mp_is_applying_event(self) then
+            return false
+        end
+        return ctx.mp_send_command ~= nil
+    end
+
+    local function send_mp_resource_command(self, cmd_type, payload)
+        if not should_send_mp_resource_command(self) then
+            return false
+        end
+        local body = payload or {}
+        if ctx.mp_get_turn_id then
+            body.turn_id = ctx.mp_get_turn_id(self)
+        end
+        if ctx.mp_get_active_player_id then
+            ctx.mp_send_command(self, cmd_type, body, ctx.mp_get_active_player_id(self))
+        else
+            ctx.mp_send_command(self, cmd_type, body, nil)
+        end
+        return true
+    end
+
     local function get_world_item_animation(item_type)
         if item_type == "material" then
             return hash("material_unit")
@@ -1914,6 +1940,20 @@ function M.extend(runtime, ctx)
         end
     end
 
+    runtime.find_world_item_instance_by_id = function(self, world_item_id)
+        runtime.ensure_item_runtime_state(self)
+        local target_id = tonumber(world_item_id)
+        if not target_id then
+            return nil
+        end
+        for _, item in ipairs(self.world_item_instances) do
+            if item and item.id == target_id then
+                return item
+            end
+        end
+        return nil
+    end
+
     runtime.get_world_items_on_cell = function(self, cell_id)
         runtime.ensure_item_runtime_state(self)
         local out = {}
@@ -2878,6 +2918,12 @@ function M.extend(runtime, ctx)
             print("Backpack full. Cannot retrieve power.")
             return true
         end
+        if send_mp_resource_command(self, "retrieve_power", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber
+        }) then
+            return true
+        end
 
         unit.current_ap = unit.current_ap - (ctx.LOOT_UI.retrieve_ap_cost or 1)
         table.insert(unit.backpack_items, "power")
@@ -3036,17 +3082,14 @@ function M.extend(runtime, ctx)
         return best
     end
 
-    runtime.try_pickup_world_item_selected_unit = function(self, screen_x, screen_y)
+    runtime.try_pickup_world_item_by_id_for_unit = function(self, unit_id, world_item_id)
         runtime.ensure_item_runtime_state(self)
-        local unit = ctx.get_selected_unit(self)
-        if not unit or not unit.cell_id then
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local item = runtime.find_world_item_instance_by_id(self, world_item_id)
+        if not unit or not unit.cell_id or not item then
             return false
         end
-        local item, item_cell_id = runtime.find_world_item_at_screen_point(self, screen_x, screen_y)
-        if not item then
-            return false
-        end
-        if item_cell_id ~= unit.cell_id then
+        if item.cell_id ~= unit.cell_id then
             return false
         end
         unit.backpack_items = unit.backpack_items or {}
@@ -3092,6 +3135,28 @@ function M.extend(runtime, ctx)
         runtime.refresh_world_item_visuals(self)
         print(string.format("%s picked up 1 %s from world. (AP -%d)", unit.display_name, item.item_type, get_drag_ap_cost()))
         return true
+    end
+
+    runtime.try_pickup_world_item_selected_unit = function(self, screen_x, screen_y)
+        runtime.ensure_item_runtime_state(self)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local item, item_cell_id = runtime.find_world_item_at_screen_point(self, screen_x, screen_y)
+        if not item then
+            return false
+        end
+        if item_cell_id ~= unit.cell_id then
+            return false
+        end
+        if send_mp_resource_command(self, "retrieve_world_item", {
+            unit_id = unit.id,
+            world_item_id = item.id
+        }) then
+            return true
+        end
+        return runtime.try_pickup_world_item_by_id_for_unit(self, unit.id, item.id)
     end
 
     runtime.try_pickup_world_turret_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)

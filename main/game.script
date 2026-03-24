@@ -8438,6 +8438,76 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "supply_loader_interact" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "supply_loader_interact",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "supply_loader_interact",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        local loader_obj = cell and LOOT_RUNTIME and LOOT_RUNTIME.get_supply_loader_object and LOOT_RUNTIME.get_supply_loader_object(cell) or nil
+        if not unit or not cell or not loader_obj then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "supply_loader_interact",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "supply_loader_interact_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id
+        }))
+        return events
+    end
+
+    if cmd_type == "nav_computer_interact" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "nav_computer_interact",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "nav_computer_interact",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        local nav_obj = cell and LOOT_RUNTIME and LOOT_RUNTIME.get_nav_computer_object and LOOT_RUNTIME.get_nav_computer_object(cell) or nil
+        if not unit or not cell or not nav_obj then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "nav_computer_interact",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "nav_computer_interact_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id
+        }))
+        return events
+    end
+
     if cmd_type == "retrieve_power" then
         local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
         if expected_turn_id ~= (self.mp_state.turn_id or 1) then
@@ -8879,6 +8949,26 @@ multiplayer_transport_on_event = function(self, event)
         end
         if not multiplayer_apply_workshop_select_event(self, event.payload or {}) then
             print("MP COMMAND | workshop_select_applied ignored.")
+        end
+        return
+    end
+    if event.type == "supply_loader_interact_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_supply_loader_interact_event(self, event.payload or {}) then
+            print("MP COMMAND | supply_loader_interact_applied ignored.")
+        end
+        return
+    end
+    if event.type == "nav_computer_interact_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_nav_computer_interact_event(self, event.payload or {}) then
+            print("MP COMMAND | nav_computer_interact_applied ignored.")
         end
         return
     end
@@ -10696,6 +10786,36 @@ multiplayer_apply_workshop_select_event = function(self, payload)
     end
     self.mp_state.applying_remote_event = true
     local ok = LOOT_RUNTIME.try_interact_workshop_menu_by_ids(self, unit_id, cell_id, slot_idx) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_supply_loader_interact_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    if not (unit_id and cell_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_interact_supply_loader_by_ids(self, unit_id, cell_id) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_nav_computer_interact_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    if not (unit_id and cell_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_interact_nav_computer_by_ids(self, unit_id, cell_id) == true
     self.mp_state.applying_remote_event = false
     return ok
 end

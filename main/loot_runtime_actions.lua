@@ -3427,7 +3427,10 @@ function M.extend(runtime, ctx)
             and world_y <= (y + half_h)
     end
 
-    runtime.try_interact_nav_computer_selected_unit_on_cell = function(self, unit, cell, nav_obj)
+    runtime.try_interact_nav_computer_by_ids = function(self, unit_id, cell_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        local nav_obj = cell and runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
         if not unit or not cell or not nav_obj then
             return false
         end
@@ -3477,7 +3480,23 @@ function M.extend(runtime, ctx)
         return true
     end
 
-    runtime.try_interact_supply_loader_selected_unit_on_cell = function(self, unit, cell, loader_obj)
+    runtime.try_interact_nav_computer_selected_unit_on_cell = function(self, unit, cell, nav_obj)
+        if not unit or not cell or not nav_obj then
+            return false
+        end
+        if send_mp_resource_command(self, "nav_computer_interact", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber
+        }) then
+            return true
+        end
+        return runtime.try_interact_nav_computer_by_ids(self, unit.id, cell.idNumber)
+    end
+
+    runtime.try_interact_supply_loader_by_ids = function(self, unit_id, cell_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        local loader_obj = cell and runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
         if not unit or not cell or not loader_obj then
             return false
         end
@@ -3525,6 +3544,19 @@ function M.extend(runtime, ctx)
         runtime.refresh_world_item_visuals(self)
         print(string.format("%s inserted food supplies into machine.", unit.display_name))
         return true
+    end
+
+    runtime.try_interact_supply_loader_selected_unit_on_cell = function(self, unit, cell, loader_obj)
+        if not unit or not cell or not loader_obj then
+            return false
+        end
+        if send_mp_resource_command(self, "supply_loader_interact", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber
+        }) then
+            return true
+        end
+        return runtime.try_interact_supply_loader_by_ids(self, unit.id, cell.idNumber)
     end
 
     runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)

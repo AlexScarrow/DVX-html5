@@ -204,6 +204,12 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    local function maybe_broadcast_mp_turn_state_snapshot(self, reason)
+        if ctx.mp_broadcast_turn_state_snapshot then
+            ctx.mp_broadcast_turn_state_snapshot(self, reason)
+        end
+    end
+
     local function get_world_item_animation(item_type)
         if item_type == "material" then
             return hash("material_unit")
@@ -2669,6 +2675,13 @@ function M.extend(runtime, ctx)
             print("Unable to scavenge: no AP")
             return true
         end
+        if send_mp_resource_command(self, "scavenge_crate", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber,
+            crate_object_id = crate_obj and crate_obj.objectId or 0
+        }) then
+            return true
+        end
 
         unit.current_ap = unit.current_ap - ctx.LOOT_UI.ap_cost
 
@@ -2749,6 +2762,23 @@ function M.extend(runtime, ctx)
         ))
         ctx.update_human_visual_state(self)
         return true
+    end
+
+    runtime.try_scavenge_crate_by_ids = function(self, unit_id, cell_id, crate_object_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = self.world_grid and self.world_grid[tonumber(cell_id)] or nil
+        if not unit or not cell then
+            return false
+        end
+        local crate_obj = runtime.get_loot_crate_object(cell)
+        if not crate_obj then
+            return false
+        end
+        local expected_id = tonumber(crate_object_id or 0) or 0
+        if expected_id > 0 and (crate_obj.objectId or 0) ~= expected_id then
+            return false
+        end
+        return runtime.try_scavenge_selected_unit_on_cell(self, unit, cell) == true
     end
 
     runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
@@ -3230,6 +3260,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_turret_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
+        maybe_broadcast_mp_turn_state_snapshot(self, "pickup_turret")
         print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, get_drag_ap_cost()))
         return true
     end
@@ -3303,6 +3334,7 @@ function M.extend(runtime, ctx)
         unit.backpack_used = #unit.backpack_items
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
+        maybe_broadcast_mp_turn_state_snapshot(self, "pickup_obstacle")
         print(string.format("%s retrieved 1 obstacle. (AP -%d)", unit.display_name, get_drag_ap_cost()))
         return true
     end
@@ -3579,8 +3611,16 @@ function M.extend(runtime, ctx)
 
         local consumed = false
         local suppress_generic_world_drop = false
+        local drag_world_x = tonumber(drag.world_x)
+        local drag_world_y = tonumber(drag.world_y)
+        local function get_drop_world_point()
+            if drag_world_x and drag_world_y then
+                return drag_world_x, drag_world_y
+            end
+            return ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        end
         if drag.drag_type == "command" then
-            local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+            local world_x, world_y = get_drop_world_point()
             local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
             if target_unit then
                 if runtime.can_transfer_between_units(self, source_unit, target_unit) then
@@ -3620,7 +3660,7 @@ function M.extend(runtime, ctx)
                     ))
                 end
             else
-                local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+                local world_x, world_y = get_drop_world_point()
                 local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
                 local vending_attempted = false
                 local force_barricade_drop = false
@@ -4346,6 +4386,13 @@ function M.extend(runtime, ctx)
                         end
                     end
                 end
+            end
+        end
+
+        if consumed and drag.drag_type ~= "command" then
+            local should_sync_snapshot = (source_item == TURRET_PACKED_ITEM) or is_obstacle_backpack_item(source_item)
+            if should_sync_snapshot then
+                maybe_broadcast_mp_turn_state_snapshot(self, "resource_drag_" .. tostring(source_item))
             end
         end
 

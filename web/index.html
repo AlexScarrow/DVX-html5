@@ -98,6 +98,18 @@
             }
 
             CUSTOM_PARAMETERS["disable_context_menu"] = true;
+            var playerOverride = null;
+            try {
+                var params = new URLSearchParams(window.location.search || "");
+                var qp = params.get("player");
+                if (qp && /^(p1|p2|p3|p4)$/i.test(qp)) {
+                    playerOverride = qp.toLowerCase();
+                }
+            } catch (e) {}
+            if (playerOverride) {
+                CUSTOM_PARAMETERS["engine_arguments"] = CUSTOM_PARAMETERS["engine_arguments"] || [];
+                CUSTOM_PARAMETERS["engine_arguments"].push("--config=multiplayer.local_player_id=" + playerOverride);
+            }
             CUSTOM_PARAMETERS["resize_window_callback"] = function () {
                 fitFixedCanvas();
                 keepCanvasFocused();

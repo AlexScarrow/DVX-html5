@@ -9182,6 +9182,10 @@ end
 
 multiplayer_get_runtime_local_player_id = function()
     local configured = MULTIPLAYER_LOCAL_PLAYER_ID or "p1"
+    local config_override = sys.get_config and sys.get_config("multiplayer.local_player_id") or nil
+    if config_override == "p1" or config_override == "p2" or config_override == "p3" or config_override == "p4" then
+        configured = config_override
+    end
     local info = sys.get_sys_info and sys.get_sys_info() or nil
     local system_name = info and info.system_name or ""
     local is_html5_runtime = (system_name == "HTML5")

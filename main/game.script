@@ -8219,21 +8219,42 @@ multiplayer_transport_handle_command = function(self, command)
                 total_cost = total_cost + (get_step_move_cost(self.world_grid, path[i - 1], path[i]) or 0)
             end
         end
-        if total_cost <= 0 or total_cost > (unit.current_ap or 0) then
+        local ap_before = tonumber(unit.current_ap or 0) or 0
+        if total_cost <= 0 or ap_before <= 0 then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "move_unit",
                 reason = "insufficient_ap"
             }))
             return events
         end
-        local ap_before = tonumber(unit.current_ap or 0) or 0
-        local ap_after = math.max(0, ap_before - total_cost)
+        local approved_path = { path[1] }
+        local approved_cost = 0
+        for i = 2, #path do
+            local step_cost = tonumber(get_step_move_cost(self.world_grid, path[i - 1], path[i]) or 0) or 0
+            if step_cost <= 0 then
+                break
+            end
+            if (approved_cost + step_cost) > ap_before then
+                break
+            end
+            approved_cost = approved_cost + step_cost
+            table.insert(approved_path, path[i])
+        end
+        if #approved_path <= 1 or approved_cost <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "move_unit",
+                reason = "insufficient_ap"
+            }))
+            return events
+        end
+        local approved_destination_cell_id = approved_path[#approved_path]
+        local ap_after = math.max(0, ap_before - approved_cost)
         table.insert(events, multiplayer_transport_emit_event(self, "move_unit_applied", {
             unit_id = unit_id,
-            destination_cell_id = destination_cell_id,
-            destination_slot_index = multiplayer_resolve_destination_slot(self, unit, destination_cell_id, requested_slot),
-            path = multiplayer_clone_simple_table(path),
-            ap_cost = total_cost,
+            destination_cell_id = approved_destination_cell_id,
+            destination_slot_index = multiplayer_resolve_destination_slot(self, unit, approved_destination_cell_id, requested_slot),
+            path = multiplayer_clone_simple_table(approved_path),
+            ap_cost = approved_cost,
             ap_before = ap_before,
             ap_after = ap_after
         }))
@@ -8305,6 +8326,114 @@ multiplayer_transport_handle_command = function(self, command)
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y),
             drag = multiplayer_clone_flat_table(drag)
+        }))
+        return events
+    end
+
+    if cmd_type == "pickup_obstacle" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_obstacle",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_obstacle",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_obstacle",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_obstacle_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            world_x = tonumber(payload.world_x),
+            world_y = tonumber(payload.world_y)
+        }))
+        return events
+    end
+
+    if cmd_type == "pickup_turret" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_turret",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_turret",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_turret",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_turret_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            world_x = tonumber(payload.world_x),
+            world_y = tonumber(payload.world_y)
+        }))
+        return events
+    end
+
+    if cmd_type == "workshop_select" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_select",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        local slot_idx = tonumber(payload.slot_idx)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_select",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell or not slot_idx then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_select",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "workshop_select_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            slot_idx = slot_idx
         }))
         return events
     end
@@ -8723,6 +8852,36 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "pickup_obstacle_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_pickup_obstacle_event(self, event.payload or {}) then
+            print("MP COMMAND | pickup_obstacle_applied ignored.")
+        end
+        return
+    end
+    if event.type == "pickup_turret_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_pickup_turret_event(self, event.payload or {}) then
+            print("MP COMMAND | pickup_turret_applied ignored.")
+        end
+        return
+    end
+    if event.type == "workshop_select_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_workshop_select_event(self, event.payload or {}) then
+            print("MP COMMAND | workshop_select_applied ignored.")
+        end
+        return
+    end
     if event.type == "retrieve_power_applied" then
         if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
             multiplayer_queue_pending_event(self, event)
@@ -8767,6 +8926,23 @@ multiplayer_transport_on_event = function(self, event)
         local reason = event.payload and event.payload.reason or "unknown"
         local cmd = event.payload and event.payload.command_type or "unknown"
         print(string.format("MP COMMAND | rejected | type=%s reason=%s", tostring(cmd), tostring(reason)))
+        if cmd == "manual_shot"
+            and reason == "invalid_target"
+            and self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        then
+            local current_turn_id = tonumber(self.mp_state.turn_id or 1) or 1
+            if self.mp_state.last_invalid_target_snapshot_turn_id ~= current_turn_id then
+                self.mp_state.last_invalid_target_snapshot_turn_id = current_turn_id
+                multiplayer_transport_send_command(self, "request_snapshot", {
+                    turn_id = current_turn_id,
+                    reason = "manual_shot_invalid_target",
+                    expected_turn_id = current_turn_id
+                }, self.mp_state.local_player_id)
+                print(string.format("MP SNAPSHOT | requested_manual_shot_invalid_target | turn_id=%d", current_turn_id))
+            end
+        end
         return
     end
     if event.type == "joined_room" then
@@ -8869,24 +9045,6 @@ multiplayer_transport_broadcast_event = function(self, event_type, payload)
     end
     local evt = multiplayer_transport_emit_event(self, event_type, payload or {})
     multiplayer_transport_broadcast_events(self, { evt })
-end
-
-multiplayer_broadcast_turn_state_snapshot_now = function(self, reason)
-    if not (self.mp_state and self.mp_state.enabled) then
-        return false
-    end
-    if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
-        return false
-    end
-    local snapshot_turn_id = tonumber(self.mp_state.turn_id or 1) or 1
-    multiplayer_transport_broadcast_event(self, "turn_state_snapshot", {
-        turn_id = snapshot_turn_id,
-        reason = reason or "host_runtime_action",
-        snapshot = multiplayer_build_snapshot_state(self)
-    })
-    self.mp_state.last_turn_state_snapshot_broadcast_turn_id = snapshot_turn_id
-    print(string.format("MP TURNSTATE | host_broadcast_immediate | turn_id=%d reason=%s", snapshot_turn_id, tostring(reason or "host_runtime_action")))
-    return true
 end
 
 multiplayer_transport_init = function(self)
@@ -9045,6 +9203,7 @@ init_multiplayer_runtime = function(self)
         awaiting_snapshot_timeout_s = 0,
         expected_snapshot_turn_id = 0,
         last_snapshot_retry_turn_id = 0,
+        last_invalid_target_snapshot_turn_id = 0,
         pending_turn_state_snapshot_turn_id = 0,
         last_turn_state_snapshot_broadcast_turn_id = 0,
         pending_events = {},
@@ -9290,9 +9449,6 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     end,
     mp_get_active_player_id = function(self_ref)
         return multiplayer_get_active_player_id_for_commands(self_ref)
-    end,
-    mp_broadcast_turn_state_snapshot = function(self_ref, reason)
-        return multiplayer_broadcast_turn_state_snapshot_now(self_ref, reason)
     end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
@@ -10492,6 +10648,56 @@ multiplayer_apply_resource_drag_event = function(self, payload)
         return false
     end
     return LOOT_RUNTIME.end_resource_drag(self, screen_x, screen_y) == true
+end
+
+multiplayer_apply_pickup_obstacle_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    local world_x = tonumber(payload.world_x)
+    local world_y = tonumber(payload.world_y)
+    if not (unit_id and cell_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_pickup_obstacle_by_ids(self, unit_id, cell_id, world_x, world_y) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_pickup_turret_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    local world_x = tonumber(payload.world_x)
+    local world_y = tonumber(payload.world_y)
+    if not (unit_id and cell_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_pickup_world_turret_by_ids(self, unit_id, cell_id, world_x, world_y) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_workshop_select_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    local slot_idx = tonumber(payload.slot_idx)
+    if not (unit_id and cell_id and slot_idx) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_interact_workshop_menu_by_ids(self, unit_id, cell_id, slot_idx) == true
+    self.mp_state.applying_remote_event = false
+    return ok
 end
 
 multiplayer_apply_retrieve_power_event = function(self, payload)

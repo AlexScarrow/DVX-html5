@@ -177,17 +177,24 @@ MP_SETUP_PANEL_W = 1180
 MP_SETUP_PANEL_H = 640
 MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z
 MP_SETUP_UI_Z = FLOW_UI_BUTTON_Z
-MP_SETUP_BTN_2P_X = 490
-MP_SETUP_BTN_3P_X = 640
-MP_SETUP_BTN_4P_X = 790
-MP_SETUP_COUNT_BTN_Y = 600
+MP_SETUP_MISSION_BTN_X = { 169, 297, 425, 553 }
+MP_SETUP_MISSION_BTN_Y = 528
+MP_SETUP_MISSION_BTN_W = 48
+MP_SETUP_MISSION_BTN_H = 40
+MP_SETUP_MISSION_TYPES = { "escape", "rescue", "purge", "dna_sample" }
+MP_SETUP_BTN_2P_X = 820
+MP_SETUP_BTN_3P_X = 980
+MP_SETUP_BTN_4P_X = 1130
+MP_SETUP_COUNT_BTN_Y = 528
 MP_SETUP_COUNT_BTN_W = 120
 MP_SETUP_COUNT_BTN_H = 64
 MP_SETUP_COUNT_ACTIVE_RING_W = 138
 MP_SETUP_COUNT_ACTIVE_RING_H = 82
-MP_SETUP_BACK_BTN_X = 145
-MP_SETUP_START_BTN_X = 1055
-MP_SETUP_ACTION_BTN_Y = 134
+MP_SETUP_BACK_BTN_X = 189
+MP_SETUP_BACK_BTN_Y = 97
+MP_SETUP_START_BTN_X = 1105
+MP_SETUP_START_BTN_Y = 97
+MP_SETUP_ACTION_BTN_Y = 96
 MP_SETUP_ACTION_BTN_W = 171
 MP_SETUP_ACTION_BTN_H = 72
 MP_SETUP_START_GLOW_W = 171
@@ -197,8 +204,8 @@ MP_SETUP_SLOT_X_OFFSET = 52
 MP_SETUP_SLOT_Y = { 390, 300 }
 MP_SETUP_SLOT_W = 82
 MP_SETUP_SLOT_H = 82
-MP_SETUP_UNIT_POOL_X = { 430, 570, 710, 850 }
-MP_SETUP_UNIT_POOL_Y = 150
+MP_SETUP_UNIT_POOL_X = { 460, 614, 749, 889 }
+MP_SETUP_UNIT_POOL_Y_BY_INDEX = { 114, 116, 116, 116 }
 MP_SETUP_UNIT_POOL_W = 84
 MP_SETUP_UNIT_POOL_H = 84
 MP_SETUP_UNIT_IDS = { "sarge", "techie", "medic", "gunner" }
@@ -217,6 +224,10 @@ MP_SETUP_UNIT_SCALE_X = 1
 MP_SETUP_UNIT_SCALE_Y = 1
 MP_SETUP_SLOT_ICON_SCALE_X = MP_SETUP_SLOT_W / MP_SETUP_UNIT_POOL_W
 MP_SETUP_SLOT_ICON_SCALE_Y = MP_SETUP_SLOT_H / MP_SETUP_UNIT_POOL_H
+MISSION_TYPE_ESCAPE = "escape"
+MISSION_TYPE_RESCUE = "rescue"
+MISSION_TYPE_PURGE = "purge"
+MISSION_TYPE_DNA_SAMPLE = "dna_sample"
 AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
 AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
@@ -5189,6 +5200,30 @@ multiplayer_get_unit_anim_id = function(unit_id)
     return hash("mp_unit_sarge")
 end
 
+multiplayer_normalize_mission_type = function(mission_type)
+    local value = tostring(mission_type or MISSION_TYPE_ESCAPE)
+    if value == MISSION_TYPE_ESCAPE
+        or value == MISSION_TYPE_RESCUE
+        or value == MISSION_TYPE_PURGE
+        or value == MISSION_TYPE_DNA_SAMPLE
+    then
+        return value
+    end
+    return MISSION_TYPE_ESCAPE
+end
+
+multiplayer_get_mission_anim_id = function(mission_type)
+    local m = multiplayer_normalize_mission_type(mission_type)
+    if m == MISSION_TYPE_RESCUE then
+        return hash("mp_btn_mission_rescue")
+    elseif m == MISSION_TYPE_PURGE then
+        return hash("mp_btn_mission_purge")
+    elseif m == MISSION_TYPE_DNA_SAMPLE then
+        return hash("mp_btn_mission_dna")
+    end
+    return hash("mp_btn_mission_escape")
+end
+
 multiplayer_get_slot_count_for_player = function(player_count, player_id)
     if player_count == 2 then
         if player_id == "p1" or player_id == "p2" then
@@ -5449,6 +5484,7 @@ local function initialize_unit_ui(self)
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
         flow_mp_setup_panel = nil,
+        flow_mp_mission_buttons = {},
         flow_mp_count_buttons = {},
         flow_mp_count_active_ring = nil,
         flow_mp_back_button = nil,
@@ -5538,6 +5574,9 @@ local function initialize_unit_ui(self)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
+    for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
+        self.ui.flow_mp_mission_buttons[i] = create_ui_marker_sprite(multiplayer_get_mission_anim_id(mission_type), MP_SETUP_UI_Z)
+    end
     self.ui.flow_mp_count_active_ring = create_ui_marker_sprite(hash("mp_btn_count_active_ring"), MP_SETUP_UI_Z)
     self.ui.flow_mp_count_buttons[1] = create_ui_marker_sprite(hash("mp_btn_2p"), MP_SETUP_UI_Z)
     self.ui.flow_mp_count_buttons[2] = create_ui_marker_sprite(hash("mp_btn_3p"), MP_SETUP_UI_Z)
@@ -5635,6 +5674,11 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_SCALE_X, MP_SETUP_PANEL_SCALE_Y)
+    if self.ui.flow_mp_mission_buttons then
+        for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_W * 0.021, MP_SETUP_MISSION_BTN_H * 0.021)
+        end
+    end
     if self.ui.flow_mp_count_buttons then
         for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
             set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_SCALE_X, MP_SETUP_COUNT_BTN_SCALE_Y)
@@ -5872,9 +5916,11 @@ end
 
 function start_multiplayer_game_flow(self, session_config)
     self.multiplayer_mode_active = true
+    self.selected_mission_type = multiplayer_normalize_mission_type(session_config and session_config.mission_type or self.selected_mission_type or MISSION_TYPE_ESCAPE)
     if self.mp_state then
         self.mp_state.enabled = true
         self.mp_state.session_id = "local_session_" .. tostring(os.time())
+        self.mp_state.mission_type = self.selected_mission_type
         local session_player_count = session_config and session_config.player_count or self.mp_state.player_count or 4
         self.mp_state.player_count = math.max(2, math.min(4, session_player_count))
         if session_config and session_config.seat_assignments then
@@ -5900,6 +5946,7 @@ end
 multiplayer_setup_init_runtime = function(self)
     self.mp_setup = self.mp_setup or {}
     self.mp_setup.player_count = self.mp_setup.player_count or 2
+    self.mp_setup.mission_type = multiplayer_normalize_mission_type(self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     self.mp_setup.selected_unit_id = self.mp_setup.selected_unit_id or "techie"
     self.mp_setup.seat_slots = self.mp_setup.seat_slots or {}
     local defaults = multiplayer_get_default_seat_assignments(self.mp_setup.player_count)
@@ -5924,6 +5971,7 @@ end
 multiplayer_setup_set_player_count = function(self, player_count)
     self.mp_setup = self.mp_setup or {}
     self.mp_setup.player_count = math.max(2, math.min(4, player_count or 2))
+    self.mp_setup.mission_type = multiplayer_normalize_mission_type(self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     self.mp_setup.selected_unit_id = "techie"
     self.mp_setup.seat_slots = {}
     local defaults = multiplayer_get_default_seat_assignments(self.mp_setup.player_count)
@@ -6039,6 +6087,7 @@ end
 
 multiplayer_setup_build_session_config = function(self)
     local count = self.mp_setup and self.mp_setup.player_count or 2
+    local mission_type = multiplayer_normalize_mission_type(self.mp_setup and self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     local compact = {}
     for i = 1, count do
         local player_id = "p" .. tostring(i)
@@ -6054,7 +6103,8 @@ multiplayer_setup_build_session_config = function(self)
     end
     return {
         player_count = count,
-        seat_assignments = compact
+        seat_assignments = compact,
+        mission_type = mission_type
     }
 end
 
@@ -6064,6 +6114,7 @@ multiplayer_setup_apply_session_config = function(self, session_config)
     end
     local player_count = math.max(2, math.min(4, tonumber(session_config.player_count or 2) or 2))
     multiplayer_setup_set_player_count(self, player_count)
+    self.mp_setup.mission_type = multiplayer_normalize_mission_type(session_config.mission_type or self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     local assignments = multiplayer_clone_seat_assignments(session_config.seat_assignments or {}, player_count)
     for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
         local slot_count = multiplayer_get_slot_count_for_player(player_count, player_id)
@@ -6138,6 +6189,11 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_mission_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_W * 0.021, MP_SETUP_MISSION_BTN_H * 0.021)
+            end
+        end
         if self.ui.flow_mp_count_buttons then
             for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
                 set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
@@ -6228,6 +6284,24 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, MP_SETUP_PANEL_X, MP_SETUP_PANEL_Y, MP_SETUP_PANEL_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_mission_buttons then
+            local selected_mission = multiplayer_normalize_mission_type(self.mp_setup and self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
+            for i, btn in ipairs(self.ui.flow_mp_mission_buttons) do
+                local mission_type = MP_SETUP_MISSION_TYPES[i] or MISSION_TYPE_ESCAPE
+                local is_active = (mission_type == selected_mission)
+                local tint = is_active and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.72, 0.72, 0.72, 1)
+                set_ui_square_transform(
+                    self,
+                    btn,
+                    MP_SETUP_MISSION_BTN_X[i],
+                    MP_SETUP_MISSION_BTN_Y,
+                    MP_SETUP_UI_Z,
+                    tint,
+                    MP_SETUP_MISSION_BTN_W * 0.021,
+                    MP_SETUP_MISSION_BTN_H * 0.021
+                )
+            end
+        end
         local count_x = { MP_SETUP_BTN_2P_X, MP_SETUP_BTN_3P_X, MP_SETUP_BTN_4P_X }
         if self.ui.flow_mp_count_buttons then
             for i, btn in ipairs(self.ui.flow_mp_count_buttons) do
@@ -6237,11 +6311,11 @@ function update_flow_ui(self, dt)
             end
         end
         local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
-        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx], MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z, valid and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z - 0.001, valid and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_UI_Z + 0.001, valid and hidden or vmath.vector4(1, 1, 1, 0.92), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] + 4, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z, valid and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z - 0.001, valid and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z + 0.001, valid and hidden or vmath.vector4(1, 1, 1, 0.92), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         if self.ui.flow_mp_unit_buttons then
             local pulse = 1 + (0.06 * math.sin((self.flow_overlay_phase or 0) * 8))
             for i, btn in ipairs(self.ui.flow_mp_unit_buttons) do
@@ -6255,7 +6329,8 @@ function update_flow_ui(self, dt)
                     tint = selected and vmath.vector4(0.2, 1, 1, 1) or (assigned and vmath.vector4(0.75, 0.75, 0.75, 1) or vmath.vector4(1, 1, 1, 1))
                 end
                 local chip_scale = selected and pulse or 1
-                set_ui_square_transform(self, btn, MP_SETUP_UNIT_POOL_X[i], MP_SETUP_UNIT_POOL_Y, MP_SETUP_UI_Z, tint, (MP_SETUP_UNIT_POOL_W * 0.021) * chip_scale, (MP_SETUP_UNIT_POOL_H * 0.021) * chip_scale)
+                local unit_pool_y = MP_SETUP_UNIT_POOL_Y_BY_INDEX[i] or MP_SETUP_UNIT_POOL_Y_BY_INDEX[1] or 114
+                set_ui_square_transform(self, btn, MP_SETUP_UNIT_POOL_X[i], unit_pool_y, MP_SETUP_UI_Z, tint, (MP_SETUP_UNIT_POOL_W * 0.021) * chip_scale, (MP_SETUP_UNIT_POOL_H * 0.021) * chip_scale)
             end
         end
         if self.ui.flow_mp_slot_icons then
@@ -6292,6 +6367,11 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_mission_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_W * 0.021, MP_SETUP_MISSION_BTN_H * 0.021)
+            end
+        end
         if self.ui.flow_mp_count_buttons then
             for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
                 set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
@@ -6330,6 +6410,11 @@ function update_flow_ui(self, dt)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+    if self.ui.flow_mp_mission_buttons then
+        for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_W * 0.021, MP_SETUP_MISSION_BTN_H * 0.021)
+        end
+    end
     if self.ui.flow_mp_count_buttons then
         for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
             set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
@@ -6380,6 +6465,20 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         print("MP SETUP | only host may edit setup.")
         return true
     end
+    for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
+        if is_point_in_screen_rect(
+            input_x,
+            input_y,
+            MP_SETUP_MISSION_BTN_X[i],
+            MP_SETUP_MISSION_BTN_Y,
+            MP_SETUP_MISSION_BTN_W,
+            MP_SETUP_MISSION_BTN_H
+        ) then
+            self.mp_setup.mission_type = multiplayer_normalize_mission_type(mission_type)
+            multiplayer_setup_push_state(self)
+            return true
+        end
+    end
     local count_buttons = {
         { x = MP_SETUP_BTN_2P_X, count = 2 },
         { x = MP_SETUP_BTN_3P_X, count = 3 },
@@ -6392,7 +6491,7 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
             return true
         end
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
         if self.mp_state then
             self.mp_state.enabled = false
         end
@@ -6400,7 +6499,7 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         enter_flow_state(self, FLOW_STATE_TITLE)
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_ACTION_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
         if multiplayer_setup_is_valid(self) then
             multiplayer_transport_send_command(self, "start_match_request", {
                 session_config = multiplayer_setup_build_session_config(self)
@@ -6411,7 +6510,8 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         return true
     end
     for i, unit_id in ipairs(MP_SETUP_UNIT_IDS) do
-        if is_point_in_screen_rect(input_x, input_y, MP_SETUP_UNIT_POOL_X[i], MP_SETUP_UNIT_POOL_Y, MP_SETUP_UNIT_POOL_W, MP_SETUP_UNIT_POOL_H) then
+        local unit_pool_y = MP_SETUP_UNIT_POOL_Y_BY_INDEX[i] or MP_SETUP_UNIT_POOL_Y_BY_INDEX[1] or 114
+        if is_point_in_screen_rect(input_x, input_y, MP_SETUP_UNIT_POOL_X[i], unit_pool_y, MP_SETUP_UNIT_POOL_W, MP_SETUP_UNIT_POOL_H) then
             if unit_id == "sarge" then
                 print("MP SETUP | Sarge is host-locked to p1.")
                 return true
@@ -9287,6 +9387,7 @@ init_multiplayer_runtime = function(self)
         session_id = "local_session",
         host_player_id = MULTIPLAYER_HOST_PLAYER_ID,
         local_player_id = multiplayer_get_runtime_local_player_id(),
+        mission_type = MISSION_TYPE_ESCAPE,
         turn_id = 1,
         player_count = default_player_count,
         required_ready_player_ids = multiplayer_get_required_ready_player_ids_for_count(default_player_count),

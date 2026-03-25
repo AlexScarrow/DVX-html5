@@ -9267,11 +9267,14 @@ multiplayer_enforce_controlled_unit = function(self, force_select)
         return
     end
     self.controlled_unit_id = chosen_unit_id
-    if force_select == true then
-        deselect_all_units(self)
-        if (owned_unit.current_health or 0) > 0 then
-            owned_unit.is_selected = true
-        end
+
+    -- Keep selection deterministic when switching active multiplayer player:
+    -- exactly one selected unit, and it must be the controlled owned unit.
+    for _, unit in pairs(self.squad_units) do
+        unit.is_selected = (unit.id == chosen_unit_id) and ((unit.current_health or 0) > 0) or false
+    end
+    if force_select == true and (owned_unit.current_health or 0) <= 0 then
+        owned_unit.is_selected = false
     end
 end
 
@@ -9423,6 +9426,8 @@ try_multiplayer_debug_player_buttons = function(self, screen_x, screen_y)
             end
             self.mp_state.debug_active_player_id = player_id
             multiplayer_enforce_controlled_unit(self, true)
+            update_human_visual_state(self)
+            update_selected_unit_ui(self)
             print(string.format("MP DEBUG | acting_as=%s", tostring(player_id)))
             return true
         end

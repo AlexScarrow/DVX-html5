@@ -1431,9 +1431,14 @@ function M.extend(runtime, ctx)
                     local corpse_unit = self.squad_units and self.squad_units[state.corpse_unit_id] or nil
                     if corpse_unit and revive_cell then
                         corpse_unit.current_health = math.max(1, corpse_unit.max_health or 1)
+                        corpse_unit.current_ap = tonumber(corpse_unit.max_ap or corpse_unit.current_ap or 0) or 0
                         corpse_unit.cell_id = revive_cell.idNumber
                         corpse_unit.is_corpse_stowed = false
                         corpse_unit.in_shuttle = false
+                        corpse_unit.is_moving = false
+                        corpse_unit.move_path = nil
+                        corpse_unit.move_path_index = 0
+                        corpse_unit.hit_flash_timer = 0
                         local revived_anim = get_alive_human_anim_for_aesthetic(self, corpse_unit)
                         corpse_unit.occupancy_hash = revived_anim
                         if corpse_unit.go_path then
@@ -1446,6 +1451,9 @@ function M.extend(runtime, ctx)
                             if corpse_unit.sprite_path and revived_anim then
                                 pcall(msg.post, corpse_unit.sprite_path, "play_animation", { id = revived_anim })
                             end
+                        end
+                        if ctx.update_human_visual_state then
+                            ctx.update_human_visual_state(self)
                         end
                         print(string.format("%s revived in medbay.", tostring(corpse_unit.display_name or "Human")))
                     else

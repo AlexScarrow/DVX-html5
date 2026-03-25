@@ -267,6 +267,36 @@ function M.create(opts)
         dispatch_loopback(envelope)
     end
 
+    function transport.send_events(events)
+        if type(events) ~= "table" then
+            return
+        end
+        if state.mode == "loopback" then
+            dispatch_events(events)
+            return
+        end
+        if state.mode == "websocket" then
+            websocket_connect_if_needed()
+            if state.mode == "loopback" then
+                dispatch_events(events)
+                return
+            end
+            local raw_text = encode_json({
+                version = 1,
+                type = "events",
+                payload = events
+            })
+            if not raw_text then
+                return
+            end
+            if not websocket_send_text(raw_text) then
+                table.insert(state.ws_queue, raw_text)
+            end
+            return
+        end
+        dispatch_events(events)
+    end
+
     function transport.shutdown()
         if state.ws_adapter and state.ws_client and state.ws_adapter.close then
             state.ws_adapter.close(state.ws_client)

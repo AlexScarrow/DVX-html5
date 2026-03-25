@@ -9126,6 +9126,8 @@ multiplayer_transport_broadcast_events = function(self, events)
     end
     if self.mp_transport.send_events then
         self.mp_transport.send_events(events)
+    else
+        print("MP NET | transport_missing_send_events | events_dropped")
     end
 end
 
@@ -9423,6 +9425,8 @@ try_multiplayer_debug_player_buttons = function(self, screen_x, screen_y)
             end
             self.mp_state.debug_active_player_id = player_id
             multiplayer_enforce_controlled_unit(self, true)
+            update_human_visual_state(self)
+            update_selected_unit_ui(self)
             print(string.format("MP DEBUG | acting_as=%s", tostring(player_id)))
             return true
         end
@@ -10679,7 +10683,16 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
         self.mp_state.ready_by_player_id = multiplayer_clone_simple_table(snapshot.ready_by_player_id or self.mp_state.ready_by_player_id or {}) or {}
     end
 
-    self.controlled_unit_id = snapshot.controlled_unit_id or self.controlled_unit_id
+    local snapshot_controlled_unit_id = snapshot.controlled_unit_id
+    if self.mp_state and self.mp_state.enabled then
+        if snapshot_controlled_unit_id and multiplayer_can_control_unit(self, snapshot_controlled_unit_id) then
+            self.controlled_unit_id = snapshot_controlled_unit_id
+        else
+            self.controlled_unit_id = nil
+        end
+    else
+        self.controlled_unit_id = snapshot_controlled_unit_id or self.controlled_unit_id
+    end
     deselect_all_units(self)
     if self.controlled_unit_id and self.squad_units[self.controlled_unit_id] and (self.squad_units[self.controlled_unit_id].current_health or 0) > 0 then
         self.squad_units[self.controlled_unit_id].is_selected = true

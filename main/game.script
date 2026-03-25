@@ -170,6 +170,7 @@ FLOW_STATE_GAME = "game"
 FLOW_STATE_OUTRO = "outro"
 FLOW_STATE_SCORE = "score"
 FLOW_STATE_MP_SETUP = "mp_setup"
+FLOW_STATE_SOLO_SETUP = "solo_setup"
 EXIT_TEST_STASH_ENABLED = true
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
@@ -228,6 +229,21 @@ MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
+SOLO_SETUP_PANEL_X = MP_SETUP_PANEL_X
+SOLO_SETUP_PANEL_Y = MP_SETUP_PANEL_Y
+SOLO_SETUP_PANEL_W = 1024
+SOLO_SETUP_PANEL_H = 555
+SOLO_SETUP_PANEL_Z = FLOW_UI_PANEL_Z
+SOLO_SETUP_UI_Z = FLOW_UI_BUTTON_Z
+SOLO_SETUP_PANEL_SCALE = 1.15
+SOLO_SETUP_EXPLAINER_X = { 250, 510, 770, 1030 }
+SOLO_SETUP_EXPLAINER_Y = 390
+SOLO_SETUP_EXPLAINER_W = 220
+SOLO_SETUP_EXPLAINER_H = 300
+SOLO_SETUP_SELECT_W = 220
+SOLO_SETUP_SELECT_H = 300
+SOLO_SETUP_SELECT_OFFSET_X = 50
+SOLO_SETUP_SELECT_OFFSET_Y = -63
 AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
 AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
@@ -5483,6 +5499,8 @@ local function initialize_unit_ui(self)
         flow_score_title_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
+        flow_solo_setup_panel = nil,
+        flow_solo_mission_select = nil,
         flow_mp_setup_panel = nil,
         flow_mp_mission_buttons = {},
         flow_mp_count_buttons = {},
@@ -5573,6 +5591,8 @@ local function initialize_unit_ui(self)
     self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+    self.ui.flow_solo_setup_panel = create_ui_marker_sprite(hash("solo_setup_panel"), SOLO_SETUP_PANEL_Z)
+    self.ui.flow_solo_mission_select = create_ui_marker_sprite(hash("solo_mission_select"), SOLO_SETUP_UI_Z + 0.001)
     self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
     for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
         self.ui.flow_mp_mission_buttons[i] = create_ui_marker_sprite(multiplayer_get_mission_anim_id(mission_type), MP_SETUP_UI_Z)
@@ -5673,6 +5693,8 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
+    set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_SCALE_X, MP_SETUP_PANEL_SCALE_Y)
     if self.ui.flow_mp_mission_buttons then
         for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
@@ -5905,6 +5927,8 @@ function start_solo_game_flow(self)
     if self.mp_state then
         self.mp_state.enabled = false
     end
+    local selected = self.solo_setup and self.solo_setup.mission_type or self.selected_mission_type or MISSION_TYPE_ESCAPE
+    self.selected_mission_type = multiplayer_normalize_mission_type(selected)
     self.controlled_unit_id = "sarge"
     local level_index = self.current_level_index or 1
     reset_and_load_level(self, level_index)
@@ -5912,6 +5936,11 @@ function start_solo_game_flow(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
     self.game_won = false
+end
+
+solo_setup_init_runtime = function(self)
+    self.solo_setup = self.solo_setup or {}
+    self.solo_setup.mission_type = multiplayer_normalize_mission_type(self.solo_setup.mission_type or MISSION_TYPE_ESCAPE)
 end
 
 function start_multiplayer_game_flow(self, session_config)
@@ -6228,6 +6257,8 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.96), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.96), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
+        set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
         if self.ui.flow_mp_count_buttons then
             for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
@@ -6255,6 +6286,68 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        if self.ui.flow_score_rows then
+            for _, row_id in ipairs(self.ui.flow_score_rows) do
+                set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
+            end
+        end
+        return
+    end
+    if state == FLOW_STATE_SOLO_SETUP then
+        local mission_type = multiplayer_normalize_mission_type(self.solo_setup and self.solo_setup.mission_type or MISSION_TYPE_ESCAPE)
+        local selected_idx = 1
+        for i, m in ipairs(MP_SETUP_MISSION_TYPES) do
+            if m == mission_type then
+                selected_idx = i
+                break
+            end
+        end
+        set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_solo_setup_panel, SOLO_SETUP_PANEL_X, SOLO_SETUP_PANEL_Y, SOLO_SETUP_PANEL_Z, vmath.vector4(1, 1, 1, 1), SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
+        set_ui_square_transform(
+            self,
+            self.ui.flow_solo_mission_select,
+            SOLO_SETUP_EXPLAINER_X[selected_idx] + SOLO_SETUP_SELECT_OFFSET_X,
+            SOLO_SETUP_EXPLAINER_Y + SOLO_SETUP_SELECT_OFFSET_Y,
+            SOLO_SETUP_UI_Z + 0.001,
+            vmath.vector4(1, 1, 1, 0.95),
+            1,
+            1
+        )
+        set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if self.ui.flow_mp_mission_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_W * 0.021, MP_SETUP_MISSION_BTN_H * 0.021)
+            end
+        end
+        if self.ui.flow_mp_count_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+            end
+        end
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z - 0.001, vmath.vector4(1, 1, 1, 0.95), MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        if self.ui.flow_mp_unit_buttons then
+            for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
+            end
+        end
+        if self.ui.flow_mp_slot_icons then
+            for _, slot_icons in pairs(self.ui.flow_mp_slot_icons) do
+                for _, slot_icon in ipairs(slot_icons) do
+                    set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                end
+            end
+        end
         if self.ui.flow_score_rows then
             for _, row_id in ipairs(self.ui.flow_score_rows) do
                 set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
@@ -6564,11 +6657,38 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
     return true
 end
 
+solo_setup_handle_touch = function(self, input_x, input_y)
+    for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
+        if is_point_in_screen_rect(
+            input_x,
+            input_y,
+            SOLO_SETUP_EXPLAINER_X[i],
+            SOLO_SETUP_EXPLAINER_Y,
+            SOLO_SETUP_EXPLAINER_W,
+            SOLO_SETUP_EXPLAINER_H
+        ) then
+            solo_setup_init_runtime(self)
+            self.solo_setup.mission_type = multiplayer_normalize_mission_type(mission_type)
+            return true
+        end
+    end
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+        enter_flow_state(self, FLOW_STATE_TITLE)
+        return true
+    end
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+        start_solo_game_flow(self)
+        return true
+    end
+    return true
+end
+
 function handle_flow_touch(self, input_x, input_y)
     local state = self.game_flow_state or FLOW_STATE_GAME
     if state == FLOW_STATE_TITLE then
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, 280, 70) then
-            start_solo_game_flow(self)
+            solo_setup_init_runtime(self)
+            enter_flow_state(self, FLOW_STATE_SOLO_SETUP)
             return true
         end
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, 280, 70) then
@@ -6590,6 +6710,9 @@ function handle_flow_touch(self, input_x, input_y)
     end
     if state == FLOW_STATE_MP_SETUP then
         return multiplayer_setup_handle_touch(self, input_x, input_y)
+    end
+    if state == FLOW_STATE_SOLO_SETUP then
+        return solo_setup_handle_touch(self, input_x, input_y)
     end
     if state == FLOW_STATE_OUTRO then
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH - 110, 54, 170, 52) then

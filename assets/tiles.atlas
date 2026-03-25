@@ -356,6 +356,12 @@ images {
   image: "/assets/images/mp_setup_panel.png"
 }
 images {
+  image: "/assets/images/solo_setup_panel.png"
+}
+images {
+  image: "/assets/images/solo_mission_select.png"
+}
+images {
   image: "/assets/images/mp_btn_2p.png"
 }
 images {

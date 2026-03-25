@@ -365,6 +365,18 @@ images {
   image: "/assets/images/mp_btn_4p.png"
 }
 images {
+  image: "/assets/images/mp_btn_mission_escape.png"
+}
+images {
+  image: "/assets/images/mp_btn_mission_rescue.png"
+}
+images {
+  image: "/assets/images/mp_btn_mission_purge.png"
+}
+images {
+  image: "/assets/images/mp_btn_mission_dna.png"
+}
+images {
   image: "/assets/images/mp_btn_count_active_ring.png"
 }
 images {

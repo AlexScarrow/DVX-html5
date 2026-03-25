@@ -2669,6 +2669,13 @@ function M.extend(runtime, ctx)
             print("Unable to scavenge: no AP")
             return true
         end
+        if send_mp_resource_command(self, "scavenge_crate", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber,
+            crate_object_id = crate_obj and crate_obj.objectId or 0
+        }) then
+            return true
+        end
 
         unit.current_ap = unit.current_ap - ctx.LOOT_UI.ap_cost
 
@@ -2749,6 +2756,23 @@ function M.extend(runtime, ctx)
         ))
         ctx.update_human_visual_state(self)
         return true
+    end
+
+    runtime.try_scavenge_crate_by_ids = function(self, unit_id, cell_id, crate_object_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = self.world_grid and self.world_grid[tonumber(cell_id)] or nil
+        if not unit or not cell then
+            return false
+        end
+        local crate_obj = runtime.get_loot_crate_object(cell)
+        if not crate_obj then
+            return false
+        end
+        local expected_id = tonumber(crate_object_id or 0) or 0
+        if expected_id > 0 and (crate_obj.objectId or 0) ~= expected_id then
+            return false
+        end
+        return runtime.try_scavenge_selected_unit_on_cell(self, unit, cell) == true
     end
 
     runtime.try_scavenge_selected_unit = function(self, screen_x, screen_y)
@@ -3159,6 +3183,74 @@ function M.extend(runtime, ctx)
         return runtime.try_pickup_world_item_by_id_for_unit(self, unit.id, item.id)
     end
 
+    runtime.try_pickup_world_turret_by_ids = function(self, unit_id, cell_id, world_x, world_y)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not unit.cell_id or not cell then
+            return false
+        end
+        local wx = tonumber(world_x)
+        local wy = tonumber(world_y)
+        local turret_obj = nil
+        if wx and wy then
+            local resolved_cell, resolved_obj = find_turret_pickup_target(self, wx, wy, unit.cell_id)
+            if resolved_cell and resolved_obj and resolved_cell.idNumber == cell_id then
+                turret_obj = resolved_obj
+            end
+        end
+        if not turret_obj then
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objects) do
+                if obj and obj.name == hash("gun_turret") and obj.isFixed == true then
+                    turret_obj = obj
+                    break
+                end
+            end
+        end
+        if not turret_obj then
+            return false
+        end
+        if cell.idNumber ~= unit.cell_id then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+        if #unit.backpack_items > 0 then
+            print("Backpack must be emptied before carrying a turret.")
+            runtime.emit_derple_feedback(self, unit.id, "TURRET_BACKPACK_NOT_EMPTY")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        if not try_consume_drag_ap(unit, nil) then
+            return true
+        end
+        turret_obj.name = hash("empty")
+        turret_obj.isFixed = false
+        turret_obj.isWelded = false
+        turret_obj.isOpen = false
+        turret_obj.dependsOn = 0
+        turret_obj.isDependentOn = {}
+        turret_obj.objectId = 0
+        turret_obj.offsetX = 0
+        turret_obj.offsetY = 0
+        turret_obj.fxOffsetX = 0
+        turret_obj.fxOffsetY = 0
+        turret_obj.fxRotation = 0
+        turret_obj.fxFactory = nil
+        turret_obj.hitW = 32
+        turret_obj.hitH = 32
+        turret_obj.requiredComponent = nil
+        turret_obj.turretArmingTurns = nil
+        fill_backpack_with_packed_turret(unit, cap)
+        runtime.refresh_turret_markers(self)
+        runtime.refresh_fix_markers(self)
+        runtime.refresh_world_item_visuals(self)
+        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, get_drag_ap_cost()))
+        return true
+    end
+
     runtime.try_pickup_world_turret_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
         local unit = ctx.get_selected_unit(self)
         if not unit or not unit.cell_id then
@@ -3184,7 +3276,6 @@ function M.extend(runtime, ctx)
                 end
             end
             if nearest_human_dist <= human_click_priority_radius then
-                -- Let main human selection flow handle this click first.
                 return false
             end
         end
@@ -3192,45 +3283,74 @@ function M.extend(runtime, ctx)
         if not cell or not turret_obj then
             return false
         end
-        if cell.idNumber ~= unit.cell_id then
-            print("too far away")
-            flash_invalid_drag_units(unit, nil)
+        if send_mp_resource_command(self, "pickup_turret", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber,
+            world_x = world_x,
+            world_y = world_y
+        }) then
             return true
         end
+        return runtime.try_pickup_world_turret_by_ids(self, unit.id, cell.idNumber, world_x, world_y)
+    end
+
+    runtime.try_pickup_obstacle_by_ids = function(self, unit_id, cell_id, world_x, world_y)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell then
+            return false
+        end
+        if not unit.cell_id then
+            return false
+        end
+        local ux, uy = ctx.id_to_coords(unit.cell_id)
+        local tx, ty = ctx.id_to_coords(cell_id)
+        if ux ~= tx or uy ~= ty then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return false
+        end
+        if cell.tileID == hash("empty") then
+            return false
+        end
+        if (cell.has_barricade == true) and ((cell.barricade_hp or 0) > 0) then
+            return false
+        end
+        local wx = tonumber(world_x)
+        local wy = tonumber(world_y)
+        local obstacle_slot = nil
+        if wx and wy then
+            obstacle_slot = find_clicked_obstacle_slot(cell, wx, wy)
+        end
+        if not obstacle_slot then
+            obstacle_slot = find_any_obstacle_slot(cell)
+            if not obstacle_slot then
+                return false
+            end
+        end
+
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
-        if #unit.backpack_items > 0 then
-            print("Backpack must be emptied before carrying a turret.")
-            runtime.emit_derple_feedback(self, unit.id, "TURRET_BACKPACK_NOT_EMPTY")
+        if #unit.backpack_items >= cap then
+            print("Backpack full.")
             flash_invalid_drag_units(unit, nil)
             return true
         end
         if not try_consume_drag_ap(unit, nil) then
             return true
         end
-        -- Disable immediately on pickup action, then store as packed turret.
-        turret_obj.name = hash("empty")
-        turret_obj.isFixed = false
-        turret_obj.isWelded = false
-        turret_obj.isOpen = false
-        turret_obj.dependsOn = 0
-        turret_obj.isDependentOn = {}
-        turret_obj.objectId = 0
-        turret_obj.offsetX = 0
-        turret_obj.offsetY = 0
-        turret_obj.fxOffsetX = 0
-        turret_obj.fxOffsetY = 0
-        turret_obj.fxRotation = 0
-        turret_obj.fxFactory = nil
-        turret_obj.hitW = 32
-        turret_obj.hitH = 32
-        turret_obj.requiredComponent = nil
-        turret_obj.turretArmingTurns = nil
-        fill_backpack_with_packed_turret(unit, cap)
-        runtime.refresh_turret_markers(self)
+
+        local current_count = get_obstacle_count(obstacle_slot)
+        if current_count <= 1 then
+            reset_object_slot_to_empty(obstacle_slot)
+        else
+            set_obstacle_count(obstacle_slot, current_count - 1)
+        end
+        table.insert(unit.backpack_items, OBSTACLE_ITEM)
+        unit.backpack_used = #unit.backpack_items
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, get_drag_ap_cost()))
+        print(string.format("%s retrieved 1 obstacle. (AP -%d)", unit.display_name, get_drag_ap_cost()))
         return true
     end
 
@@ -3281,30 +3401,15 @@ function M.extend(runtime, ctx)
                 return false
             end
         end
-
-        unit.backpack_items = unit.backpack_items or {}
-        local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
-        if #unit.backpack_items >= cap then
-            print("Backpack full.")
-            flash_invalid_drag_units(unit, nil)
+        if send_mp_resource_command(self, "pickup_obstacle", {
+            unit_id = unit.id,
+            cell_id = clicked_cell_id,
+            world_x = world_x,
+            world_y = world_y
+        }) then
             return true
         end
-        if not try_consume_drag_ap(unit, nil) then
-            return true
-        end
-
-        local current_count = get_obstacle_count(obstacle_slot)
-        if current_count <= 1 then
-            reset_object_slot_to_empty(obstacle_slot)
-        else
-            set_obstacle_count(obstacle_slot, current_count - 1)
-        end
-        table.insert(unit.backpack_items, OBSTACLE_ITEM)
-        unit.backpack_used = #unit.backpack_items
-        runtime.refresh_fix_markers(self)
-        runtime.refresh_world_item_visuals(self)
-        print(string.format("%s retrieved 1 obstacle. (AP -%d)", unit.display_name, get_drag_ap_cost()))
-        return true
+        return runtime.try_pickup_obstacle_by_ids(self, unit.id, clicked_cell_id, world_x, world_y)
     end
 
     local function is_point_in_object_hitbox(cell, obj, world_x, world_y)
@@ -3322,7 +3427,10 @@ function M.extend(runtime, ctx)
             and world_y <= (y + half_h)
     end
 
-    runtime.try_interact_nav_computer_selected_unit_on_cell = function(self, unit, cell, nav_obj)
+    runtime.try_interact_nav_computer_by_ids = function(self, unit_id, cell_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        local nav_obj = cell and runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
         if not unit or not cell or not nav_obj then
             return false
         end
@@ -3372,7 +3480,23 @@ function M.extend(runtime, ctx)
         return true
     end
 
-    runtime.try_interact_supply_loader_selected_unit_on_cell = function(self, unit, cell, loader_obj)
+    runtime.try_interact_nav_computer_selected_unit_on_cell = function(self, unit, cell, nav_obj)
+        if not unit or not cell or not nav_obj then
+            return false
+        end
+        if send_mp_resource_command(self, "nav_computer_interact", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber
+        }) then
+            return true
+        end
+        return runtime.try_interact_nav_computer_by_ids(self, unit.id, cell.idNumber)
+    end
+
+    runtime.try_interact_supply_loader_by_ids = function(self, unit_id, cell_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        local loader_obj = cell and runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
         if not unit or not cell or not loader_obj then
             return false
         end
@@ -3422,6 +3546,19 @@ function M.extend(runtime, ctx)
         return true
     end
 
+    runtime.try_interact_supply_loader_selected_unit_on_cell = function(self, unit, cell, loader_obj)
+        if not unit or not cell or not loader_obj then
+            return false
+        end
+        if send_mp_resource_command(self, "supply_loader_interact", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber
+        }) then
+            return true
+        end
+        return runtime.try_interact_supply_loader_by_ids(self, unit.id, cell.idNumber)
+    end
+
     runtime.get_clicked_interactive_object = function(self, world_x, world_y, clicked_cell_id)
         if not self.world_grid or not clicked_cell_id then
             return nil, nil, nil
@@ -3453,6 +3590,50 @@ function M.extend(runtime, ctx)
         return nil, nil, nil
     end
 
+    runtime.try_interact_workshop_menu_by_ids = function(self, unit_id, cell_id, slot_idx)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell or not cell.tileInstanceId then
+            return false
+        end
+        if unit.cell_id ~= cell.idNumber then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local instances = get_workshop_instances(self)
+        local instance = instances[cell.tileInstanceId]
+        if not instance then
+            return true
+        end
+        if not instance.functional then
+            print("Workshop is offline or not yet repaired.")
+            return true
+        end
+        slot_idx = tonumber(slot_idx)
+        if not slot_idx then
+            return true
+        end
+        if slot_idx == 9 then
+            return true
+        end
+        local product = get_workshop_product_for_slot(slot_idx)
+        if not product then
+            return true
+        end
+        local state = get_workshop_state(self, cell.tileInstanceId)
+        if (state.production_time_left or 0) > 0 then
+            print("Workshop is currently producing. Wait for output.")
+            return true
+        end
+        state.selected_slot = slot_idx
+        state.paid_units = 0
+        state.payment_locked = false
+        state.payment_confirm_flash = 0
+        print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
+        return true
+    end
+
     runtime.try_interact_workshop_menu_selected_unit_on_cell = function(self, unit, cell, workshop_menu_obj, world_x, world_y)
         if not unit or not cell or not workshop_menu_obj or not cell.tileInstanceId then
             return false
@@ -3478,21 +3659,14 @@ function M.extend(runtime, ctx)
         if slot_idx == 9 then
             return true
         end
-        local product = get_workshop_product_for_slot(slot_idx)
-        if not product then
+        if send_mp_resource_command(self, "workshop_select", {
+            unit_id = unit.id,
+            cell_id = cell.idNumber,
+            slot_idx = slot_idx
+        }) then
             return true
         end
-        local state = get_workshop_state(self, cell.tileInstanceId)
-        if (state.production_time_left or 0) > 0 then
-            print("Workshop is currently producing. Wait for output.")
-            return true
-        end
-        state.selected_slot = slot_idx
-        state.paid_units = 0
-        state.payment_locked = false
-        state.payment_confirm_flash = 0
-        print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
-        return true
+        return runtime.try_interact_workshop_menu_by_ids(self, unit.id, cell.idNumber, slot_idx)
     end
 
     runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
@@ -3579,8 +3753,16 @@ function M.extend(runtime, ctx)
 
         local consumed = false
         local suppress_generic_world_drop = false
+        local drag_world_x = tonumber(drag.world_x)
+        local drag_world_y = tonumber(drag.world_y)
+        local function get_drop_world_point()
+            if drag_world_x and drag_world_y then
+                return drag_world_x, drag_world_y
+            end
+            return ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+        end
         if drag.drag_type == "command" then
-            local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+            local world_x, world_y = get_drop_world_point()
             local target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
             if target_unit then
                 if runtime.can_transfer_between_units(self, source_unit, target_unit) then
@@ -3620,7 +3802,7 @@ function M.extend(runtime, ctx)
                     ))
                 end
             else
-                local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
+                local world_x, world_y = get_drop_world_point()
                 local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
                 local vending_attempted = false
                 local force_barricade_drop = false

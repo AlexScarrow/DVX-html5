@@ -30,6 +30,7 @@ function M.create_level_library()
         { x = 11, y = 2, tile = "exit" },
         { x = 9, y = 5, tile = "passage1" },
     }
+    levels[1].mission_type = "escape"
 
     -- levels[1] = {
     --     --{ x = 8, y = 11, tile = "coms" },
@@ -54,6 +55,7 @@ function M.create_level_library()
         { x = 5, y = 11, tile = "armoury" },
         { x = 11, y = 11, tile = "armoury" }
     }
+    levels[2].mission_type = "escape"
 
     return levels
 end

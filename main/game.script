@@ -5240,6 +5240,45 @@ multiplayer_get_mission_anim_id = function(mission_type)
     return hash("mp_btn_mission_escape")
 end
 
+get_level_mission_type = function(level_def)
+    if type(level_def) ~= "table" then
+        return MISSION_TYPE_ESCAPE
+    end
+    local tagged = rawget(level_def, "mission_type")
+    return multiplayer_normalize_mission_type(tagged or MISSION_TYPE_ESCAPE)
+end
+
+select_level_index_for_mission = function(self, mission_type)
+    local requested = multiplayer_normalize_mission_type(mission_type)
+    local levels = self and self.level_library or nil
+    local candidates = {}
+    if type(levels) == "table" then
+        for level_index, level_def in ipairs(levels) do
+            if type(level_def) == "table" and get_level_mission_type(level_def) == requested then
+                table.insert(candidates, level_index)
+            end
+        end
+    end
+    if #candidates == 0 and requested ~= MISSION_TYPE_ESCAPE and type(levels) == "table" then
+        for level_index, level_def in ipairs(levels) do
+            if type(level_def) == "table" and get_level_mission_type(level_def) == MISSION_TYPE_ESCAPE then
+                table.insert(candidates, level_index)
+            end
+        end
+    end
+    if #candidates == 0 and type(levels) == "table" then
+        for level_index, level_def in ipairs(levels) do
+            if type(level_def) == "table" then
+                table.insert(candidates, level_index)
+            end
+        end
+    end
+    if #candidates == 0 then
+        return 1
+    end
+    return candidates[math.random(1, #candidates)]
+end
+
 multiplayer_get_slot_count_for_player = function(player_count, player_id)
     if player_count == 2 then
         if player_id == "p1" or player_id == "p2" then
@@ -5930,7 +5969,7 @@ function start_solo_game_flow(self)
     local selected = self.solo_setup and self.solo_setup.mission_type or self.selected_mission_type or MISSION_TYPE_ESCAPE
     self.selected_mission_type = multiplayer_normalize_mission_type(selected)
     self.controlled_unit_id = "sarge"
-    local level_index = self.current_level_index or 1
+    local level_index = select_level_index_for_mission(self, self.selected_mission_type)
     reset_and_load_level(self, level_index)
     reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
@@ -5963,7 +6002,10 @@ function start_multiplayer_game_flow(self, session_config)
     if self.mp_state then
         self.mp_state.debug_active_player_id = self.mp_state.local_player_id or self.mp_state.host_player_id
     end
-    local level_index = self.current_level_index or 1
+    local level_index = tonumber(session_config and session_config.level_index or 0) or 0
+    if level_index < 1 or not (self.level_library and self.level_library[level_index]) then
+        level_index = select_level_index_for_mission(self, self.selected_mission_type)
+    end
     reset_and_load_level(self, level_index)
     multiplayer_enforce_controlled_unit(self, true)
     reset_derple_feedback_runtime(self)
@@ -8387,6 +8429,7 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        config.level_index = select_level_index_for_mission(self, config.mission_type or MISSION_TYPE_ESCAPE)
         table.insert(events, multiplayer_transport_emit_event(self, "match_started", {
             session_config = config
         }))

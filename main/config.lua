@@ -126,12 +126,12 @@ M.AP_COSTS = {
     fix_object = 1,
     pickup_turret = 1,
     deploy_turret = 1,
-    barricade_build = 0,
-    barricade_reinforce = 0,
-    nav_computer_interact = 0,
-    supply_loader_interact = 0,
+    barricade_build = 2,
+    barricade_reinforce = 1,
+    nav_computer_interact = 1,
+    supply_loader_interact = 1,
     workshop_pay_material = 0,
-    med_heal_transfer = 0,
+    med_heal_transfer = 1,
 
     -- Utility (currently free in balance test)
     drag_transfer = 0,

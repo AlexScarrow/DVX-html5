@@ -404,16 +404,16 @@ AESTHETIC_PROFILES = {
 }
 local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy testing
 local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
-local ALIEN_REVEAL_WEIGHT_SPITTER = 2
-local ALIEN_REVEAL_WEIGHT_BRUTE = 8 -- temporary higher brute chance for barricade-phase testing
+local ALIEN_REVEAL_WEIGHT_SPITTER = 8
+local ALIEN_REVEAL_WEIGHT_BRUTE = 4 -- temporary higher brute chance for barricade-phase testing
 local TILE_OPACITY = 1
 local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 local ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = false, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
     [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
     [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
-    [ALIEN_TYPE_SPITTER] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
-    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 5, hp = 3, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
+    [ALIEN_TYPE_SPITTER] = { ap_per_turn = 3, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
+    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 3, hp = 5, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
 }
 
 

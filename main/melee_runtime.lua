@@ -21,6 +21,18 @@ function M.create(ctx)
         return v
     end
 
+    local function get_melee_ap_cost()
+        local costs = ctx and ctx.AP_COSTS or nil
+        local value = costs and tonumber(costs.melee_attack) or nil
+        if value == nil then
+            value = 1
+        end
+        if value < 0 then
+            return 0
+        end
+        return value
+    end
+
     local function get_human_by_id(self, unit_id)
         if not self.squad_units or not unit_id then
             return nil
@@ -291,7 +303,8 @@ function M.create(ctx)
         if not human or not target_alien then
             return
         end
-        if (human.current_health or 0) <= 0 or human.current_ap <= 0 then
+        local melee_ap_cost = get_melee_ap_cost()
+        if (human.current_health or 0) <= 0 or human.current_ap < melee_ap_cost then
             return
         end
         if target_alien.is_dead or target_alien.cell_id ~= human.cell_id then
@@ -304,7 +317,7 @@ function M.create(ctx)
 
         play_human_melee_lurch(human, target_alien)
         play_target_red_flash(target_alien)
-        human.current_ap = human.current_ap - 1
+        human.current_ap = human.current_ap - melee_ap_cost
         local hit_chance = clamp(ctx.MELEE_MODEL.human_base_hit_chance, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)
         if roll <= hit_chance then
@@ -527,7 +540,8 @@ function M.create(ctx)
         if unit.cell_id ~= alien.cell_id then
             return false
         end
-        if unit.current_ap <= 0 then
+        local melee_ap_cost = get_melee_ap_cost()
+        if unit.current_ap < melee_ap_cost then
             print("Unable melee strike: no AP")
             return true
         end

@@ -229,6 +229,7 @@ MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
+AP_COSTS = require("main.config").AP_COSTS or {}
 SOLO_SETUP_PANEL_X = MP_SETUP_PANEL_X
 SOLO_SETUP_PANEL_Y = MP_SETUP_PANEL_Y
 SOLO_SETUP_PANEL_W = 1024
@@ -1385,6 +1386,20 @@ get_door_by_object_id = function(world_grid, object_id)
     return nil, nil
 end
 
+get_ap_cost_value = function(action_key, default_cost)
+    local value = nil
+    if type(AP_COSTS) == "table" then
+        value = tonumber(AP_COSTS[action_key])
+    end
+    if value == nil then
+        value = tonumber(default_cost or 1) or 1
+    end
+    if value < 0 then
+        return 0
+    end
+    return value
+end
+
 multiplayer_apply_toggle_door_event = function(self, payload)
     if type(payload) ~= "table" then
         return false
@@ -1398,7 +1413,8 @@ multiplayer_apply_toggle_door_event = function(self, payload)
     if not can_unit_reach_door_toggle(unit, owner_cell.idNumber) then
         return false
     end
-    if unit.current_ap <= 0 then
+    local ap_cost = get_ap_cost_value("door_toggle", 1)
+    if unit.current_ap < ap_cost then
         return false
     end
     if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
@@ -1406,11 +1422,11 @@ multiplayer_apply_toggle_door_event = function(self, payload)
     end
     local desired_open = (payload.is_open == true)
     door_obj.isOpen = desired_open
-    unit.current_ap = unit.current_ap - 1
+    unit.current_ap = unit.current_ap - ap_cost
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
-    print(string.format("%s %s door object #%d. (AP -1)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0))
+    print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
     return true
 end
 
@@ -1426,7 +1442,8 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
         print("too far away")
         return true
     end
-    if unit.current_ap <= 0 then
+    local ap_cost = get_ap_cost_value("door_toggle", 1)
+    if unit.current_ap < ap_cost then
         print("Unable to toggle door: no AP")
         return true
     end
@@ -1444,11 +1461,11 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
         return true
     end
     door_obj.isOpen = not (door_obj.isOpen == true)
-    unit.current_ap = unit.current_ap - 1
+    unit.current_ap = unit.current_ap - ap_cost
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
-    print(string.format("%s %s door object #%d. (AP -1)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0))
+    print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
     return true
 end
 
@@ -2669,14 +2686,15 @@ local function resolve_human_reaction_fire(self, alien)
                 chosen_target = tied_targets[math.random(1, #tied_targets)]
             end
             if chosen_target then
-                if unit.current_ap <= 0 and unit.current_ammo <= 0 then
+                local reactive_shot_ap_cost = get_ap_cost_value("reactive_ranged_shot", 1)
+                if unit.current_ap < reactive_shot_ap_cost and unit.current_ammo <= 0 then
                     print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, chosen_target.id))
-                elseif unit.current_ap <= 0 then
+                elseif unit.current_ap < reactive_shot_ap_cost then
                     print(string.format("%s cannot fire at alien #%d (no AP)", unit.display_name, chosen_target.id))
                 elseif unit.current_ammo <= 0 then
                     print(string.format("%s cannot fire at alien #%d (no ammo)", unit.display_name, chosen_target.id))
                 else
-                    unit.current_ap = unit.current_ap - 1
+                    unit.current_ap = unit.current_ap - reactive_shot_ap_cost
                     unit.current_ammo = unit.current_ammo - 1
                     local target_cell = self.world_grid[chosen_target.cell_id]
                     local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
@@ -4160,8 +4178,10 @@ function can_any_human_reactively_attack(self)
     end
     for _, unit in pairs(self.squad_units) do
         if (unit.current_health or 0) > 0 and unit.cell_id and unit.reactive_fire_enabled ~= false then
-            local can_melee = unit.current_ap > 0
-            local can_ranged = unit.current_ap > 0 and unit.current_ammo > 0
+            local melee_ap_cost = get_ap_cost_value("melee_attack", 1)
+            local reactive_shot_ap_cost = get_ap_cost_value("reactive_ranged_shot", 1)
+            local can_melee = unit.current_ap >= melee_ap_cost
+            local can_ranged = unit.current_ap >= reactive_shot_ap_cost and unit.current_ammo > 0
             if can_melee or can_ranged then
                 for _, alien in ipairs(self.aliens) do
                     if (not alien.is_dead) and alien.cell_id then
@@ -8547,7 +8567,8 @@ multiplayer_transport_handle_command = function(self, command)
         end
         local unit = self.squad_units and self.squad_units[unit_id] or nil
         local alien = find_alien_by_id(self, alien_id)
-        if not unit or (unit.current_health or 0) <= 0 or unit.is_moving or unit.current_ap <= 0 then
+        local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+        if not unit or (unit.current_health or 0) <= 0 or unit.is_moving or unit.current_ap < shot_ap_cost then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "manual_shot",
                 reason = "unit_not_actionable"
@@ -8874,7 +8895,8 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        if unit.current_ap <= 0 then
+        local door_ap_cost = get_ap_cost_value("door_toggle", 1)
+        if unit.current_ap < door_ap_cost then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "toggle_door",
                 reason = "no_ap"
@@ -9815,12 +9837,14 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     mp_get_turn_id = function(self_ref)
         return (self_ref and self_ref.mp_state and self_ref.mp_state.turn_id) or 1
     end,
+    AP_COSTS = AP_COSTS,
     mp_get_active_player_id = function(self_ref)
         return multiplayer_get_active_player_id_for_commands(self_ref)
     end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
+    AP_COSTS = AP_COSTS,
     ALIEN_TYPE_BRUTE = ALIEN_TYPE_BRUTE,
     any_alien_is_moving = any_alien_is_moving,
     record_alien_kill = score_record_alien_kill
@@ -10527,12 +10551,13 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
         end
     end
 
-    if unit.current_ap <= 0 or unit.current_ammo <= 0 then
+    local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+    if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
         print("unable to fire no ammo/ap")
         return false
     end
 
-    unit.current_ap = unit.current_ap - 1
+    unit.current_ap = unit.current_ap - shot_ap_cost
     unit.current_ammo = unit.current_ammo - 1
     local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
     local ranged_model = require("main.config").RANGED_HIT_MODEL

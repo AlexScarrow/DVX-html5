@@ -110,4 +110,37 @@ M.MELEE_MODEL = {
     human_hit_flash_duration = 0.18
 }
 
+-- Central AP tuning table for balance experiments.
+M.AP_COSTS = {
+    -- Core combat/movement
+    manual_ranged_shot = 1,
+    reactive_ranged_shot = 1,
+    melee_attack = 1,
+    -- Movement path step costs are computed elsewhere from board/path rules.
+    -- Keep these keys for visibility/future tuning hooks.
+    move_step_floor = 1,
+    move_step_vertical = 2,
+
+    -- Interactions
+    door_toggle = 1,
+    fix_object = 1,
+    pickup_turret = 1,
+    deploy_turret = 1,
+    barricade_build = 0,
+    barricade_reinforce = 0,
+    nav_computer_interact = 0,
+    supply_loader_interact = 0,
+    workshop_pay_material = 0,
+    med_heal_transfer = 0,
+
+    -- Utility (currently free in balance test)
+    drag_transfer = 0,
+    scavenge_crate = 0,
+    retrieve_power = 0,
+    pickup_world_item = 0,
+    pickup_obstacle = 0,
+    medbay_corpse_store = 0,
+    medbay_corpse_insert = 0
+}
+
 return M

@@ -118,8 +118,83 @@ function M.extend(runtime, ctx)
         TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 }
     }
 
+    local function get_ap_cost(action_key, fallback_cost)
+        local costs = ctx.AP_COSTS
+        local value = nil
+        if type(costs) == "table" then
+            value = tonumber(costs[action_key])
+        end
+        if value == nil then
+            value = tonumber(fallback_cost or 1) or 1
+        end
+        if value < 0 then
+            return 0
+        end
+        return value
+    end
+
     local function get_drag_ap_cost()
-        return (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1
+        return get_ap_cost("drag_transfer", (ctx.LOOT_UI and ctx.LOOT_UI.drag_ap_cost) or 1)
+    end
+
+    local function get_scavenge_ap_cost()
+        return get_ap_cost("scavenge_crate", (ctx.LOOT_UI and ctx.LOOT_UI.ap_cost) or 1)
+    end
+
+    local function get_fix_ap_cost()
+        return get_ap_cost("fix_object", (ctx.COMPONENT_UI and ctx.COMPONENT_UI.fix_ap_cost) or 1)
+    end
+
+    local function get_retrieve_ap_cost()
+        return get_ap_cost("retrieve_power", (ctx.LOOT_UI and ctx.LOOT_UI.retrieve_ap_cost) or 1)
+    end
+
+    local function get_turret_pickup_ap_cost()
+        return get_ap_cost("pickup_turret", get_drag_ap_cost())
+    end
+
+    local function get_turret_deploy_ap_cost()
+        return get_ap_cost("deploy_turret", get_drag_ap_cost())
+    end
+
+    local function get_barricade_build_ap_cost()
+        return get_ap_cost("barricade_build", get_drag_ap_cost())
+    end
+
+    local function get_barricade_reinforce_ap_cost()
+        return get_ap_cost("barricade_reinforce", get_drag_ap_cost())
+    end
+
+    local function get_pickup_world_item_ap_cost()
+        return get_ap_cost("pickup_world_item", get_drag_ap_cost())
+    end
+
+    local function get_pickup_obstacle_ap_cost()
+        return get_ap_cost("pickup_obstacle", get_drag_ap_cost())
+    end
+
+    local function get_medbay_corpse_store_ap_cost()
+        return get_ap_cost("medbay_corpse_store", get_drag_ap_cost())
+    end
+
+    local function get_medbay_corpse_insert_ap_cost()
+        return get_ap_cost("medbay_corpse_insert", get_drag_ap_cost())
+    end
+
+    local function get_nav_computer_interact_ap_cost()
+        return get_ap_cost("nav_computer_interact", get_drag_ap_cost())
+    end
+
+    local function get_supply_loader_interact_ap_cost()
+        return get_ap_cost("supply_loader_interact", get_drag_ap_cost())
+    end
+
+    local function get_workshop_pay_material_ap_cost()
+        return get_ap_cost("workshop_pay_material", get_drag_ap_cost())
+    end
+
+    local function get_med_heal_transfer_ap_cost()
+        return get_ap_cost("med_heal_transfer", get_drag_ap_cost())
     end
 
     local function flash_invalid_drag_units(source_unit, target_unit)
@@ -164,11 +239,14 @@ function M.extend(runtime, ctx)
         end
     end
 
-    local function try_consume_drag_ap(source_unit, target_unit)
+    local function try_consume_drag_ap(source_unit, target_unit, ap_cost_override)
         if not source_unit then
             return false
         end
-        local ap_cost = get_drag_ap_cost()
+        local ap_cost = tonumber(ap_cost_override)
+        if ap_cost == nil then
+            ap_cost = get_drag_ap_cost()
+        end
         if (source_unit.current_ap or 0) < ap_cost then
             print(string.format("Unable action: no AP (need %d).", ap_cost))
             flash_invalid_drag_units(source_unit, target_unit)
@@ -2044,7 +2122,8 @@ function M.extend(runtime, ctx)
             flash_invalid_drag_units(source_unit, nil)
             return true, false, false
         end
-        if not try_consume_drag_ap(source_unit, nil) then
+        local medbay_insert_ap_cost = get_medbay_corpse_insert_ap_cost()
+        if not try_consume_drag_ap(source_unit, nil, medbay_insert_ap_cost) then
             return true, false, true
         end
         source_unit.backpack_items = {}
@@ -2060,7 +2139,7 @@ function M.extend(runtime, ctx)
         state.corpse_unit_id = corpse_id
         state.progress = 0
         state.bob_phase = 0
-        print(string.format("%s placed %s into medbay revival chamber. (AP -%d)", source_unit.display_name, corpse_unit.display_name, get_drag_ap_cost()))
+        print(string.format("%s placed %s into medbay revival chamber. (AP -%d)", source_unit.display_name, corpse_unit.display_name, medbay_insert_ap_cost))
         return true, true, false
     end
 
@@ -2261,7 +2340,8 @@ function M.extend(runtime, ctx)
             flash_invalid_drag_units(unit, dead_unit)
             return true
         end
-        if not try_consume_drag_ap(unit, dead_unit) then
+        local medbay_store_ap_cost = get_medbay_corpse_store_ap_cost()
+        if not try_consume_drag_ap(unit, dead_unit, medbay_store_ap_cost) then
             return true
         end
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
@@ -2276,7 +2356,7 @@ function M.extend(runtime, ctx)
         if dead_unit.go_path then
             go.set_position(vmath.vector3(-9999, -9999, 0.5), dead_unit.go_path)
         end
-        print(string.format("%s moved %s corpse into backpack. (AP -%d)", unit.display_name, dead_unit.display_name, get_drag_ap_cost()))
+        print(string.format("%s moved %s corpse into backpack. (AP -%d)", unit.display_name, dead_unit.display_name, medbay_store_ap_cost))
         return true
     end
 
@@ -2673,7 +2753,8 @@ function M.extend(runtime, ctx)
             print("Loot crate is hidden (tile has no power).")
             return true
         end
-        if unit.current_ap < ctx.LOOT_UI.ap_cost then
+        local scavenge_ap_cost = get_scavenge_ap_cost()
+        if unit.current_ap < scavenge_ap_cost then
             print("Unable to scavenge: no AP")
             return true
         end
@@ -2685,7 +2766,7 @@ function M.extend(runtime, ctx)
             return true
         end
 
-        unit.current_ap = unit.current_ap - ctx.LOOT_UI.ap_cost
+        unit.current_ap = unit.current_ap - scavenge_ap_cost
 
         local capacity = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         unit.backpack_items = unit.backpack_items or {}
@@ -2760,7 +2841,7 @@ function M.extend(runtime, ctx)
             #loot_results,
             added,
             dropped,
-            ctx.LOOT_UI.ap_cost
+            scavenge_ap_cost
         ))
         ctx.update_human_visual_state(self)
         return true
@@ -2856,7 +2937,8 @@ function M.extend(runtime, ctx)
         local dependency_id = fixable.dependsOn or 0
         local dependency_met_pre_fix = runtime.is_object_dependency_met(self.world_grid, fixable)
 
-        if unit.current_ap < ctx.COMPONENT_UI.fix_ap_cost then
+        local fix_ap_cost = get_fix_ap_cost()
+        if unit.current_ap < fix_ap_cost then
             print("Unable to fix: no AP")
             return true
         end
@@ -2868,7 +2950,7 @@ function M.extend(runtime, ctx)
 
         table.remove(unit.backpack_items, component_slot)
         unit.backpack_used = #unit.backpack_items
-        unit.current_ap = unit.current_ap - ctx.COMPONENT_UI.fix_ap_cost
+        unit.current_ap = unit.current_ap - fix_ap_cost
         fixable.isFixed = true
         if dependency_id > 0 then
             if dependency_met_pre_fix then
@@ -2939,7 +3021,8 @@ function M.extend(runtime, ctx)
             return true
         end
 
-        if unit.current_ap < (ctx.LOOT_UI.retrieve_ap_cost or 1) then
+        local retrieve_ap_cost = get_retrieve_ap_cost()
+        if unit.current_ap < retrieve_ap_cost then
             print("Unable to retrieve power: no AP")
             return true
         end
@@ -2957,7 +3040,7 @@ function M.extend(runtime, ctx)
             return true
         end
 
-        unit.current_ap = unit.current_ap - (ctx.LOOT_UI.retrieve_ap_cost or 1)
+        unit.current_ap = unit.current_ap - retrieve_ap_cost
         table.insert(unit.backpack_items, "power")
         unit.backpack_used = #unit.backpack_items
 
@@ -3131,7 +3214,8 @@ function M.extend(runtime, ctx)
             flash_invalid_drag_units(unit, nil)
             return true
         end
-        if not try_consume_drag_ap(unit, nil) then
+        local pickup_world_item_ap_cost = get_pickup_world_item_ap_cost()
+        if not try_consume_drag_ap(unit, nil, pickup_world_item_ap_cost) then
             return true
         end
         if item.item_type == "corpse" then
@@ -3165,7 +3249,7 @@ function M.extend(runtime, ctx)
         end
         runtime.remove_world_item_instance(self, item.id)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s picked up 1 %s from world. (AP -%d)", unit.display_name, item.item_type, get_drag_ap_cost()))
+        print(string.format("%s picked up 1 %s from world. (AP -%d)", unit.display_name, item.item_type, pickup_world_item_ap_cost))
         return true
     end
 
@@ -3231,7 +3315,8 @@ function M.extend(runtime, ctx)
             flash_invalid_drag_units(unit, nil)
             return true
         end
-        if not try_consume_drag_ap(unit, nil) then
+        local pickup_obstacle_ap_cost = get_pickup_obstacle_ap_cost()
+        if not try_consume_drag_ap(unit, nil, pickup_obstacle_ap_cost) then
             return true
         end
         turret_obj.name = hash("empty")
@@ -3255,7 +3340,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_turret_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, get_drag_ap_cost()))
+        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, turret_pickup_ap_cost))
         return true
     end
 
@@ -3358,7 +3443,7 @@ function M.extend(runtime, ctx)
         unit.backpack_used = #unit.backpack_items
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s retrieved 1 obstacle. (AP -%d)", unit.display_name, get_drag_ap_cost()))
+        print(string.format("%s retrieved 1 obstacle. (AP -%d)", unit.display_name, pickup_obstacle_ap_cost))
         return true
     end
 
@@ -3442,6 +3527,12 @@ function M.extend(runtime, ctx)
         if not unit or not cell or not nav_obj then
             return false
         end
+        local ap_cost = get_nav_computer_interact_ap_cost()
+        if (unit.current_ap or 0) < ap_cost then
+            print(string.format("Unable nav interaction: no AP (need %d).", ap_cost))
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if not runtime.is_object_dependency_met(self.world_grid, nav_obj) then
@@ -3461,12 +3552,13 @@ function M.extend(runtime, ctx)
             end
             table.insert(unit.backpack_items, ctx.COMPONENT_UI.component_nav_data)
             unit.backpack_used = #unit.backpack_items
+            unit.current_ap = (unit.current_ap or 0) - ap_cost
             nav_obj.hasNavData = false
             nav_obj.isFixed = false
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
             runtime.refresh_world_item_visuals(self)
-            print(string.format("%s retrieved nav-data from machine.", unit.display_name))
+            print(string.format("%s retrieved nav-data from machine. (AP -%d)", unit.display_name, ap_cost))
             return true
         end
 
@@ -3479,12 +3571,13 @@ function M.extend(runtime, ctx)
 
         table.remove(unit.backpack_items, nav_slot)
         unit.backpack_used = #unit.backpack_items
+        unit.current_ap = (unit.current_ap or 0) - ap_cost
         nav_obj.hasNavData = true
         nav_obj.isFixed = true
         runtime.refresh_exit_objective_state(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s inserted nav-data into machine.", unit.display_name))
+        print(string.format("%s inserted nav-data into machine. (AP -%d)", unit.display_name, ap_cost))
         return true
     end
 
@@ -3508,6 +3601,12 @@ function M.extend(runtime, ctx)
         if not unit or not cell or not loader_obj then
             return false
         end
+        local ap_cost = get_supply_loader_interact_ap_cost()
+        if (unit.current_ap or 0) < ap_cost then
+            print(string.format("Unable supply-loader interaction: no AP (need %d).", ap_cost))
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if not runtime.is_object_dependency_met(self.world_grid, loader_obj) then
@@ -3527,12 +3626,13 @@ function M.extend(runtime, ctx)
             end
             table.insert(unit.backpack_items, ctx.COMPONENT_UI.component_food_supplies)
             unit.backpack_used = #unit.backpack_items
+            unit.current_ap = (unit.current_ap or 0) - ap_cost
             loader_obj.hasFood = false
             loader_obj.isFixed = false
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
             runtime.refresh_world_item_visuals(self)
-            print(string.format("%s retrieved food supplies from machine.", unit.display_name))
+            print(string.format("%s retrieved food supplies from machine. (AP -%d)", unit.display_name, ap_cost))
             return true
         end
 
@@ -3545,12 +3645,13 @@ function M.extend(runtime, ctx)
 
         table.remove(unit.backpack_items, food_slot)
         unit.backpack_used = #unit.backpack_items
+        unit.current_ap = (unit.current_ap or 0) - ap_cost
         loader_obj.hasFood = true
         loader_obj.isFixed = true
         runtime.refresh_exit_objective_state(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s inserted food supplies into machine.", unit.display_name))
+        print(string.format("%s inserted food supplies into machine. (AP -%d)", unit.display_name, ap_cost))
         return true
     end
 
@@ -3746,6 +3847,13 @@ function M.extend(runtime, ctx)
             self.drag_resource = { active = false }
             return true
         end
+        local drag_ap_override = nil
+        if source_item == TURRET_PACKED_ITEM then
+            drag_ap_override = get_turret_deploy_ap_cost()
+        end
+        local function try_consume_current_drag_ap(target_unit)
+            return try_consume_drag_ap(source_unit, target_unit, drag_ap_override)
+        end
         if drag.drag_type ~= "command" and source_item == TURRET_PACKED_ITEM then
             local start_x = drag.start_screen_x or drag.screen_x or screen_x
             local start_y = drag.start_screen_y or drag.screen_y or screen_y
@@ -3794,7 +3902,7 @@ function M.extend(runtime, ctx)
             if bar_target then
                 consumed = runtime.try_apply_to_own_bar(source_unit, source_item, bar_target)
                 if consumed then
-                    if not try_consume_drag_ap(source_unit, nil) then
+                    if not try_consume_current_drag_ap(nil) then
                         consumed = false
                         self.drag_resource = { active = false }
                         return true
@@ -3884,7 +3992,8 @@ function M.extend(runtime, ctx)
                                 print(target_unit.display_name .. " already has full HP.")
                                 flash_invalid_drag_units(source_unit, target_unit)
                             else
-                                if not try_consume_drag_ap(source_unit, target_unit) then
+                                local heal_ap_cost = get_med_heal_transfer_ap_cost()
+                                if not try_consume_drag_ap(source_unit, target_unit, heal_ap_cost) then
                                     self.drag_resource = { active = false }
                                     return true
                                 end
@@ -3897,7 +4006,7 @@ function M.extend(runtime, ctx)
                                     "%s used 1 meds on %s (full heal). (AP -%d)",
                                     source_unit.display_name,
                                     target_unit.display_name,
-                                    get_drag_ap_cost()
+                                    heal_ap_cost
                                 ))
                                 -- FUTURE HOOK: play heal particle effect on target_unit.
                             end
@@ -3905,7 +4014,7 @@ function M.extend(runtime, ctx)
                             target_unit.backpack_items = target_unit.backpack_items or {}
                             local target_cap = target_unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
                             if #target_unit.backpack_items < target_cap then
-                                if not try_consume_drag_ap(source_unit, target_unit) then
+                                if not try_consume_current_drag_ap(target_unit) then
                                     self.drag_resource = { active = false }
                                     return true
                                 end
@@ -3987,7 +4096,8 @@ function M.extend(runtime, ctx)
                                     elseif state.payment_locked == true then
                                         print("Workshop payment is locked. Select an item again to start a new order.")
                                     else
-                                        if not try_consume_drag_ap(source_unit, nil) then
+                                        local workshop_pay_ap_cost = get_workshop_pay_material_ap_cost()
+                                        if not try_consume_drag_ap(source_unit, nil, workshop_pay_ap_cost) then
                                             self.drag_resource = { active = false }
                                             return true
                                         end
@@ -3995,10 +4105,11 @@ function M.extend(runtime, ctx)
                                         source_unit.backpack_used = #source_unit.backpack_items
                                         state.paid_units = (state.paid_units or 0) + 1
                                         print(string.format(
-                                            "%s paid 1 material to workshop: %d/%d.",
+                                            "%s paid 1 material to workshop: %d/%d. (AP -%d)",
                                             source_unit.display_name,
                                             state.paid_units,
-                                            selected.price
+                                            selected.price,
+                                            workshop_pay_ap_cost
                                         ))
                                         if state.paid_units >= selected.price then
                                             state.payment_locked = true
@@ -4037,7 +4148,7 @@ function M.extend(runtime, ctx)
                                 elseif not runtime.is_object_dependency_met(self.world_grid, vending_machine) then
                                     print("Vending machine dependency is not met.")
                                 else
-                                    if not try_consume_drag_ap(source_unit, nil) then
+                                    if not try_consume_current_drag_ap(nil) then
                                         self.drag_resource = { active = false }
                                         return true
                                     end
@@ -4092,7 +4203,7 @@ function M.extend(runtime, ctx)
                                 print("Escape pod power socket already full.")
                                 flash_invalid_drag_units(source_unit, nil)
                             else
-                                if not try_consume_drag_ap(source_unit, nil) then
+                                if not try_consume_current_drag_ap(nil) then
                                     self.drag_resource = { active = false }
                                     return true
                                 end
@@ -4128,7 +4239,7 @@ function M.extend(runtime, ctx)
                             if target_power_cell.isPowered then
                                 print("Power node already active.")
                             else
-                                if not try_consume_drag_ap(source_unit, nil) then
+                                if not try_consume_current_drag_ap(nil) then
                                     self.drag_resource = { active = false }
                                     return true
                                 end
@@ -4191,7 +4302,7 @@ function M.extend(runtime, ctx)
                                             print("No object slot available on this cell for turret deploy.")
                                             flash_invalid_drag_units(source_unit, nil)
                                         else
-                                            if not try_consume_drag_ap(source_unit, nil) then
+                                            if not try_consume_current_drag_ap(nil) then
                                                 self.drag_resource = { active = false }
                                                 return true
                                             end
@@ -4226,7 +4337,7 @@ function M.extend(runtime, ctx)
                                                 "%s deployed a turret (arming %d turns). (AP -%d)",
                                                 source_unit.display_name,
                                                 TURRET_ARMING_TURNS_ON_DEPLOY,
-                                                get_drag_ap_cost()
+                                                drag_ap_override or get_drag_ap_cost()
                                             ))
                                         end
                                     end
@@ -4246,7 +4357,8 @@ function M.extend(runtime, ctx)
                                     flash_invalid_drag_units(source_unit, nil)
                                 else
                                     if (drop_cell.has_barricade == true) and ((drop_cell.barricade_hp or 0) > 0) then
-                                        if not try_consume_drag_ap(source_unit, nil) then
+                                        local barricade_reinforce_ap_cost = get_barricade_reinforce_ap_cost()
+                                        if not try_consume_drag_ap(source_unit, nil, barricade_reinforce_ap_cost) then
                                             self.drag_resource = { active = false }
                                             return true
                                         end
@@ -4263,7 +4375,7 @@ function M.extend(runtime, ctx)
                                             "%s reinforced barricade (hp %d/10). (AP -%d)",
                                             source_unit.display_name,
                                             drop_cell.barricade_hp,
-                                            get_drag_ap_cost()
+                                            barricade_reinforce_ap_cost
                                         ))
                                     else
                                         local target_slot = find_clicked_drop_slot(drop_cell, world_x, world_y)
@@ -4279,7 +4391,12 @@ function M.extend(runtime, ctx)
                                                 print(string.format("Obstacle stack cap reached (%d).", OBSTACLE_STACK_CAP))
                                                 flash_invalid_drag_units(source_unit, nil)
                                             else
-                                                if not try_consume_drag_ap(source_unit, nil) then
+                                                local projected_stack = current_count + 1
+                                                local obstacle_drop_ap_cost = get_drag_ap_cost()
+                                                if projected_stack >= 3 then
+                                                    obstacle_drop_ap_cost = get_barricade_build_ap_cost()
+                                                end
+                                                if not try_consume_drag_ap(source_unit, nil, obstacle_drop_ap_cost) then
                                                     self.drag_resource = { active = false }
                                                     return true
                                                 end
@@ -4315,7 +4432,7 @@ function M.extend(runtime, ctx)
                                                         "%s built a barricade (hp %d/10). (AP -%d)",
                                                         source_unit.display_name,
                                                         drop_cell.barricade_hp,
-                                                        get_drag_ap_cost()
+                                                        obstacle_drop_ap_cost
                                                     ))
                                                 else
                                                     print(string.format(
@@ -4323,7 +4440,7 @@ function M.extend(runtime, ctx)
                                                         source_unit.display_name,
                                                         new_stack,
                                                         OBSTACLE_STACK_CAP,
-                                                        get_drag_ap_cost()
+                                                        obstacle_drop_ap_cost
                                                     ))
                                                 end
                                                 consumed = true
@@ -4363,7 +4480,7 @@ function M.extend(runtime, ctx)
                                 local tx, ty = ctx.id_to_coords(drop_cell_id)
                                 local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
                                 if manhattan == 0 then
-                                    if not try_consume_drag_ap(source_unit, nil) then
+                                    if not try_consume_current_drag_ap(nil) then
                                         self.drag_resource = { active = false }
                                         return true
                                     end
@@ -4448,7 +4565,7 @@ function M.extend(runtime, ctx)
                                 local tx, ty = ctx.id_to_coords(drop_cell_id)
                                 local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
                                 if manhattan == 0 then
-                                    if not try_consume_drag_ap(source_unit, nil) then
+                                    if not try_consume_current_drag_ap(nil) then
                                         self.drag_resource = { active = false }
                                         return true
                                     end
@@ -4490,7 +4607,7 @@ function M.extend(runtime, ctx)
                             local tx, ty = ctx.id_to_coords(drop_cell_id)
                             local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
                             if manhattan == 0 then
-                                if not try_consume_drag_ap(source_unit, nil) then
+                                if not try_consume_current_drag_ap(nil) then
                                     self.drag_resource = { active = false }
                                     return true
                                 end

@@ -301,6 +301,12 @@ CANNON_FODDER_MOVE_SPEED_MULTIPLIER = 0.5
 CANNON_FODDER_MOVE_PULSE_SPEED_MULTIPLIER = 0.5
 CANNON_FODDER_MOVE_SQUEEZE_X = 0.5
 CANNON_FODDER_MOVE_STRETCH_Y = 0.2
+SPITTER_SCALE_MULTIPLIER = 1.5
+SPITTER_IDLE_PULSE_AMPLITUDE = 0.1
+SPITTER_IDLE_PULSE_SPEED = 0.8
+SPITTER_IDLE_BOB_AMPLITUDE = 8
+SPITTER_IDLE_BOB_SPEED = 0.6
+SPITTER_MOVE_SPEED_MULTIPLIER = 0.5
 local ALIEN_VERTICAL_MOVE_AP_COST = 2
 local ALIEN_VENT_TRANSIT_AP_COST = 1
 local INITIAL_BLIP_COUNT = 3
@@ -2312,7 +2318,9 @@ local function ensure_alien_visual(self, alien)
                 local scale = 0.33333334
                 if alien.type == ALIEN_TYPE_CANNON then
                     scale = 0.22 * CANNON_FODDER_SCALE_MULTIPLIER
-                elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                elseif alien.type == ALIEN_TYPE_SPITTER then
+                    scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
+                elseif alien.type == ALIEN_TYPE_SPEEDY then
                     scale = scale * 0.75
                 elseif alien.type == ALIEN_TYPE_BRUTE then
                     scale = (0.22 * 1.5 * 1.25 * 1.2 * 1.1) * ((self.aesthetic_mode == AESTHETIC_MODE_COMPUTER) and 1.2 or 1.0)
@@ -2546,6 +2554,30 @@ apply_blip_pulse_scale = function(alien, dt)
     local wave = math.sin(alien.blip_pulse_phase)
     local s = alien.blip_pulse_base_scale * (1 + (wave * alien.blip_pulse_amount)) * scale_mul
     go.set_scale(vmath.vector3(s, s, 1), alien.go_id)
+end
+
+update_spitter_idle_visual = function(alien, dt)
+    if not alien or alien.type ~= ALIEN_TYPE_SPITTER or not alien.go_id then
+        return
+    end
+    alien.spitter_idle_phase = (alien.spitter_idle_phase or 0) + (dt * SPITTER_IDLE_PULSE_SPEED * math.pi * 2)
+    local pulse = math.sin(alien.spitter_idle_phase)
+    local pulse_mul = 1 + (SPITTER_IDLE_PULSE_AMPLITUDE * pulse)
+    local base_scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
+    go.set_scale(vmath.vector3(base_scale * pulse_mul, base_scale * pulse_mul, 1), alien.go_id)
+    if alien.is_moving then
+        alien.spitter_idle_anchor_x = nil
+        alien.spitter_idle_anchor_y = nil
+        return
+    end
+    local pos = go.get_position(alien.go_id)
+    if not alien.spitter_idle_anchor_x or not alien.spitter_idle_anchor_y then
+        alien.spitter_idle_anchor_x = pos.x
+        alien.spitter_idle_anchor_y = pos.y
+    end
+    alien.spitter_bob_phase = (alien.spitter_bob_phase or 0) + (dt * SPITTER_IDLE_BOB_SPEED * math.pi * 2)
+    local bob_offset_y = math.sin(alien.spitter_bob_phase) * SPITTER_IDLE_BOB_AMPLITUDE
+    go.set_position(vmath.vector3(alien.spitter_idle_anchor_x, alien.spitter_idle_anchor_y + bob_offset_y, pos.z), alien.go_id)
 end
 
 local function get_vent_object_on_cell(cell)
@@ -3587,6 +3619,7 @@ local function update_alien_movement(self, dt)
             go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
         end
         apply_blip_pulse_scale(alien, dt)
+        update_spitter_idle_visual(alien, dt)
         if (not alien.is_dead) and alien.is_moving and alien.move_path and alien.go_id then
             local target_cell_id = alien.move_path[alien.move_path_index]
             if not target_cell_id then
@@ -3598,6 +3631,8 @@ local function update_alien_movement(self, dt)
                     local alien_move_speed = ALIEN_MOVE_SPEED
                     if alien.type == ALIEN_TYPE_CANNON then
                         alien_move_speed = ALIEN_MOVE_SPEED * CANNON_FODDER_MOVE_SPEED_MULTIPLIER
+                    elseif alien.type == ALIEN_TYPE_SPITTER then
+                        alien_move_speed = ALIEN_MOVE_SPEED * SPITTER_MOVE_SPEED_MULTIPLIER
                     elseif alien.type == ALIEN_TYPE_BRUTE then
                         alien_move_speed = ALIEN_MOVE_SPEED * 0.5
                     end
@@ -3619,14 +3654,21 @@ local function update_alien_movement(self, dt)
                         local base_scale = 0.33333334
                         if alien.type == ALIEN_TYPE_CANNON then
                             base_scale = 0.22 * CANNON_FODDER_SCALE_MULTIPLIER
-                        elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                        elseif alien.type == ALIEN_TYPE_SPITTER then
+                            base_scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
+                        elseif alien.type == ALIEN_TYPE_SPEEDY then
                             base_scale = base_scale * 0.75
                         elseif alien.type == ALIEN_TYPE_BRUTE then
                             base_scale = (0.22 * 1.5 * 1.25 * 1.2 * 1.1) * ((self.aesthetic_mode == AESTHETIC_MODE_COMPUTER) and 1.2 or 1.0)
                         end
                         local sx = base_scale
                         local sy = base_scale
-                        if alien.type == ALIEN_TYPE_CANNON then
+                        if alien.type == ALIEN_TYPE_SPITTER then
+                            local spitter_pulse = math.sin(alien.spitter_idle_phase or 0)
+                            local spitter_mul = 1 + (SPITTER_IDLE_PULSE_AMPLITUDE * spitter_pulse)
+                            sx = base_scale * spitter_mul
+                            sy = base_scale * spitter_mul
+                        elseif alien.type == ALIEN_TYPE_CANNON then
                             local squeeze = (ping + 1) * 0.5
                             sx = base_scale * (1 - (CANNON_FODDER_MOVE_SQUEEZE_X * squeeze))
                             sy = base_scale * (1 + (CANNON_FODDER_MOVE_STRETCH_Y * squeeze))
@@ -3789,6 +3831,8 @@ local function update_alien_movement(self, dt)
                 local alien_move_speed = ALIEN_MOVE_SPEED
                 if alien.type == ALIEN_TYPE_CANNON then
                     alien_move_speed = ALIEN_MOVE_SPEED * CANNON_FODDER_MOVE_SPEED_MULTIPLIER
+                elseif alien.type == ALIEN_TYPE_SPITTER then
+                    alien_move_speed = ALIEN_MOVE_SPEED * SPITTER_MOVE_SPEED_MULTIPLIER
                 elseif alien.type == ALIEN_TYPE_BRUTE then
                     alien_move_speed = ALIEN_MOVE_SPEED * 0.5
                 end
@@ -3813,14 +3857,21 @@ local function update_alien_movement(self, dt)
                     local base_scale = 0.33333334
                     if alien.type == ALIEN_TYPE_CANNON then
                         base_scale = 0.22 * CANNON_FODDER_SCALE_MULTIPLIER
-                    elseif alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY then
+                    elseif alien.type == ALIEN_TYPE_SPITTER then
+                        base_scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
+                    elseif alien.type == ALIEN_TYPE_SPEEDY then
                         base_scale = base_scale * 0.75
                     elseif alien.type == ALIEN_TYPE_BRUTE then
                         base_scale = (0.22 * 1.5 * 1.25 * 1.2 * 1.1) * ((self.aesthetic_mode == AESTHETIC_MODE_COMPUTER) and 1.2 or 1.0)
                     end
                     local sx = base_scale
                     local sy = base_scale
-                    if alien.type == ALIEN_TYPE_CANNON then
+                    if alien.type == ALIEN_TYPE_SPITTER then
+                        local spitter_pulse = math.sin(alien.spitter_idle_phase or 0)
+                        local spitter_mul = 1 + (SPITTER_IDLE_PULSE_AMPLITUDE * spitter_pulse)
+                        sx = base_scale * spitter_mul
+                        sy = base_scale * spitter_mul
+                    elseif alien.type == ALIEN_TYPE_CANNON then
                         local squeeze = (ping + 1) * 0.5
                         sx = base_scale * (1 - (CANNON_FODDER_MOVE_SQUEEZE_X * squeeze))
                         sy = base_scale * (1 + (CANNON_FODDER_MOVE_STRETCH_Y * squeeze))
@@ -12282,7 +12333,7 @@ function update(self, dt)
             end
             if alien
                 and (not alien.is_dead)
-                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)
+                and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)
                 and (not alien.is_moving)
                 and alien.go_id then
                 alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + (dt * 2.2 * math.pi * 2)

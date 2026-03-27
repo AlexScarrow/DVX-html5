@@ -7,3 +7,4 @@ Thumbs.db
 /.internal
 /build
 /multiplayer-relay/node_modules/
+/guestPlayer/

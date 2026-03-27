@@ -43,75 +43,75 @@
 -- luacheck: globals apply_brute_alpha_pulse
 -- luacheck: globals get_obstacle_move_speed_multiplier
 
-local CELL_WIDTH = 250          -- Width of each cell in pixels
-local CELL_HEIGHT = 150         -- Height of each cell in pixels
-local GRID_COLS = 15            -- Number of columns in worldGrid
-local GRID_ROWS = 15            -- Number of rows in worldGrid
-local TILE_SIZE = 3             -- Tiles are 3x3 cells
-local window = rawget(_G, "window") or {}
+CELL_WIDTH = 250          -- Width of each cell in pixels
+CELL_HEIGHT = 150         -- Width of each cell in pixels
+GRID_COLS = 15            -- Number of columns in worldGrid
+GRID_ROWS = 15            -- Number of rows in worldGrid
+TILE_SIZE = 3             -- Tiles are 3x3 cells
+window = rawget(_G, "window") or {}
 
 -- Screen dimensions
-local SCREEN_WIDTH = 1280
-local SCREEN_HEIGHT = 720
-local IS_HTML5 = (html5 ~= nil)
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+IS_HTML5 = (html5 ~= nil)
 
 
 -- Visual rendering
-local visual_scale = 1 -- Keep visuals in the same unit space as world_grid
-local cell_objects = {}
-local tile_objects = {}
-local loot_objects = {}
-local machine_objects = {}
-local MOVEMENT_PROFILE_HUMAN = "human"
-local MOVEMENT_PROFILE_ALIEN_VENT = "alien_vent"
-local COLOR_DEFAULT = vmath.vector4(1, 1, 1, 0)
-local COLOR_PATH = vmath.vector4(1, 1, 0.35, 0)
-local COLOR_START = vmath.vector4(0.3, 1, 0.3, 0)
-local COLOR_END = vmath.vector4(1, 0.35, 0.35, 0)
-local CAMERA_EDGE_PADDING_X = CELL_WIDTH * 0.5
-local CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
-local HUMAN_MOVE_SPEED = 250
-local HUMAN_VISUAL_SCALE = 0.35
-local HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
-local HUMAN_PINGPONG_AMPLITUDE = 0.18
-local HUMAN_PINGPONG_SPEED = 7
-local HUMAN_MAX_ACTION_POINTS = 5
+visual_scale = 1 -- Keep visuals in the same unit space as world_grid
+cell_objects = {}
+tile_objects = {}
+loot_objects = {}
+machine_objects = {}
+MOVEMENT_PROFILE_HUMAN = "human"
+MOVEMENT_PROFILE_ALIEN_VENT = "alien_vent"
+COLOR_DEFAULT = vmath.vector4(1, 1, 1, 0)
+COLOR_PATH = vmath.vector4(1, 1, 0.35, 0)
+COLOR_START = vmath.vector4(0.3, 1, 0.3, 0)
+COLOR_END = vmath.vector4(1, 0.35, 0.35, 0)
+CAMERA_EDGE_PADDING_X = CELL_WIDTH * 0.5
+CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
+HUMAN_MOVE_SPEED = 250
+HUMAN_VISUAL_SCALE = 0.35
+HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
+HUMAN_PINGPONG_AMPLITUDE = 0.18
+HUMAN_PINGPONG_SPEED = 7
+HUMAN_MAX_ACTION_POINTS = 5
 OBSTACLE_SLOT_LAG_SECONDS = 0.24
-local HUMAN_STACK_SPACING_X = 28
-local UNIT_CLICK_SELECT_RADIUS = 45
-local CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2, -3, 3 }
-local UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
-local UNIT_SELECTED_PULSE_SPEED = 4
+HUMAN_STACK_SPACING_X = 28
+UNIT_CLICK_SELECT_RADIUS = 45
+CELL_SLOT_OFFSETS_X = { 0, -1, 1, -2, 2, -3, 3 }
+UNIT_SELECTED_PULSE_AMPLITUDE = 0.08
+UNIT_SELECTED_PULSE_SPEED = 4
 DERPLE_FEEDBACK_LOW_HP_RATIO = 0.35
 DERPLE_FEEDBACK_LOS_SCAN_INTERVAL = 0.22
-local VERTICAL_MOVE_AP_COST = 2
-local UI_PANEL_X = 170
-local UI_PANEL_Y = 370
-local UI_PANEL_W = 300
-local UI_PANEL_H = 470
-local UI_PANEL_ART_W = 300
-local UI_PANEL_ART_H = 470
-local UI_BAR_PIP_SIZE = 20
-local UI_BAR_PIP_GAP = 6
-local UI_BAR_AP_X = 64
-local UI_BAR_HP_X = 96
-local UI_BAR_AMMO_X = 128
-local UI_BAR_START_Y = 575
-local UI_BACKPACK_COLS = 3
-local UI_BACKPACK_ROWS = 4
-local UI_BACKPACK_SLOT_SIZE = 32
-local UI_BACKPACK_SLOT_GAP = 6
-local UI_BACKPACK_START_X = 57
-local UI_BACKPACK_START_Y = 287
-local UI_MAX_PIPS = 10
-local UI_PORTRAIT_X = 244
-local UI_PORTRAIT_Y = 443
-local UI_PORTRAIT_W = 118
-local UI_PORTRAIT_H = 254
-local UI_FOOTER_X = 244
-local UI_FOOTER_Y = 220
-local UI_FOOTER_W = 118
-local UI_FOOTER_H = 146
+VERTICAL_MOVE_AP_COST = 2
+UI_PANEL_X = 170
+UI_PANEL_Y = 370
+UI_PANEL_W = 300
+UI_PANEL_H = 470
+UI_PANEL_ART_W = 300
+UI_PANEL_ART_H = 470
+UI_BAR_PIP_SIZE = 20
+UI_BAR_PIP_GAP = 6
+UI_BAR_AP_X = 64
+UI_BAR_HP_X = 96
+UI_BAR_AMMO_X = 128
+UI_BAR_START_Y = 575
+UI_BACKPACK_COLS = 3
+UI_BACKPACK_ROWS = 4
+UI_BACKPACK_SLOT_SIZE = 32
+UI_BACKPACK_SLOT_GAP = 6
+UI_BACKPACK_START_X = 57
+UI_BACKPACK_START_Y = 287
+UI_MAX_PIPS = 10
+UI_PORTRAIT_X = 244
+UI_PORTRAIT_Y = 443
+UI_PORTRAIT_W = 118
+UI_PORTRAIT_H = 254
+UI_FOOTER_X = 244
+UI_FOOTER_Y = 220
+UI_FOOTER_W = 118
+UI_FOOTER_H = 146
 LEVEL_BUTTON_Y = SCREEN_HEIGHT - 18
 LEVEL_BUTTON_W = 84
 LEVEL_BUTTON_H = 24
@@ -230,6 +230,9 @@ MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
 AP_COSTS = require("main.config").AP_COSTS or {}
+ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
+ALIEN_REVEAL_WEIGHTS = ALIEN_BALANCE.REVEAL_WEIGHTS or {}
+ALIEN_ACTION_COSTS = ALIEN_BALANCE.ACTION_COSTS or {}
 SOLO_SETUP_PANEL_X = MP_SETUP_PANEL_X
 SOLO_SETUP_PANEL_Y = MP_SETUP_PANEL_Y
 SOLO_SETUP_PANEL_W = 1024
@@ -272,30 +275,30 @@ ENTRY_FIRE_ROTATION_DEG = -20
 EXIT_GREEN_SMOKE_Z = 0.56
 EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_X = 0
 EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_Y = -(CELL_HEIGHT * 0.5) + 15
-local LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
+LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     local cfg = require("main.config").create_ui_config(UI_PANEL_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H)
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
 end)()
 SCORE_RUNTIME = require("main.score_runtime")
 MP_TRANSPORT = require("main.multiplayer_transport")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
-local LOOT_RUNTIME = {}
+LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
-local HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
-local HUMAN_TINT_TECHIE = vmath.vector4(1, 1, 1, 1)
-local HUMAN_TINT_MEDIC = vmath.vector4(1, 1, 1, 1)
-local HUMAN_TINT_GUNNER = vmath.vector4(1, 1, 1, 1)
-local HUMAN_TINT_NO_AP = vmath.vector4(0.7, 0.1, 0.1, 1)
-local UNIT_CLASS_SARGE = "sarge"
-local UNIT_CLASS_TECHIE = "techie"
-local UNIT_CLASS_MEDIC = "medic"
-local UNIT_CLASS_GUNNER = "gunner"
+HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
+HUMAN_TINT_TECHIE = vmath.vector4(1, 1, 1, 1)
+HUMAN_TINT_MEDIC = vmath.vector4(1, 1, 1, 1)
+HUMAN_TINT_GUNNER = vmath.vector4(1, 1, 1, 1)
+HUMAN_TINT_NO_AP = vmath.vector4(0.7, 0.1, 0.1, 1)
+UNIT_CLASS_SARGE = "sarge"
+UNIT_CLASS_TECHIE = "techie"
+UNIT_CLASS_MEDIC = "medic"
+UNIT_CLASS_GUNNER = "gunner"
 MULTIPLAYER_READY_SLOT_ANIMS = { hash("human_techie"), hash("human_medic"), hash("human_gunner") }
-local ALIEN_TYPE_BLIP = "blip"
-local ALIEN_TYPE_CANNON = "cannon_fodder"
-local ALIEN_TYPE_SPEEDY = "speedy"
-local ALIEN_TYPE_SPITTER = "spitter"
-local ALIEN_TYPE_BRUTE = "brute"
+ALIEN_TYPE_BLIP = "blip"
+ALIEN_TYPE_CANNON = "cannon_fodder"
+ALIEN_TYPE_SPEEDY = "speedy"
+ALIEN_TYPE_SPITTER = "spitter"
+ALIEN_TYPE_BRUTE = "brute"
 CANNON_FODDER_SCALE_MULTIPLIER = 1.3
 CANNON_FODDER_MOVE_SPEED_MULTIPLIER = 0.5
 CANNON_FODDER_MOVE_PULSE_SPEED_MULTIPLIER = 0.5
@@ -307,17 +310,17 @@ SPITTER_IDLE_PULSE_SPEED = 0.8
 SPITTER_IDLE_BOB_AMPLITUDE = 8
 SPITTER_IDLE_BOB_SPEED = 0.6
 SPITTER_MOVE_SPEED_MULTIPLIER = 0.5
-local ALIEN_VERTICAL_MOVE_AP_COST = 2
-local ALIEN_VENT_TRANSIT_AP_COST = 1
-local INITIAL_BLIP_COUNT = 3
-local ALIEN_MARKER_SIZE = 20
-local ALIEN_MOVE_SPEED = 320
+ALIEN_VERTICAL_MOVE_AP_COST = tonumber(ALIEN_ACTION_COSTS.vertical_move or 2) or 2
+ALIEN_VENT_TRANSIT_AP_COST = tonumber(ALIEN_ACTION_COSTS.vent_transit or 1) or 1
+INITIAL_BLIP_COUNT = 3
+ALIEN_MARKER_SIZE = 20
+ALIEN_MOVE_SPEED = 320
 HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS = 0.4
-local SPITTER_MAX_RANGE_CELLS = 4
-local SPITTER_SHOT_AP_COST = 1
-local SPITTER_SHOT_INTERVAL_SECONDS = 0.5
-local SPITTER_PROJECTILE_SPEED = 900
-local SPITTER_PROJECTILE_SIZE = 8
+SPITTER_MAX_RANGE_CELLS = tonumber((ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter and ALIEN_BALANCE.TYPES.spitter.ranged_cells) or 4) or 4
+SPITTER_SHOT_AP_COST = tonumber(ALIEN_ACTION_COSTS.ranged_attack or 1) or 1
+SPITTER_SHOT_INTERVAL_SECONDS = 0.5
+SPITTER_PROJECTILE_SPEED = 900
+SPITTER_PROJECTILE_SIZE = 8
 TURRET_REACTIVE_FIRE_INTERVAL_SECONDS = 0.72
 TURRET_PROJECTILE_SPEED = 1200
 TURRET_BURST_PROJECTILE_COUNT = 6
@@ -402,18 +405,18 @@ AESTHETIC_PROFILES = {
         computer_emissive_enabled = false
     }
 }
-local ALIEN_REVEAL_WEIGHT_CANNON = 10 -- temp weighting for cannon-fodder-heavy testing
-local ALIEN_REVEAL_WEIGHT_SPEEDY = 2
-local ALIEN_REVEAL_WEIGHT_SPITTER = 8
-local ALIEN_REVEAL_WEIGHT_BRUTE = 4 -- temporary higher brute chance for barricade-phase testing
-local TILE_OPACITY = 1
-local CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
-local ALIEN_TYPE_CONFIG = {
-    [ALIEN_TYPE_BLIP] = { ap_per_turn = 1, hp = 1, can_traverse_void = false, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
-    [ALIEN_TYPE_CANNON] = { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
-    [ALIEN_TYPE_SPEEDY] = { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
-    [ALIEN_TYPE_SPITTER] = { ap_per_turn = 3, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = SPITTER_MAX_RANGE_CELLS, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
-    [ALIEN_TYPE_BRUTE] = { ap_per_turn = 3, hp = 5, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
+ALIEN_REVEAL_WEIGHT_CANNON = tonumber(ALIEN_REVEAL_WEIGHTS.cannon_fodder or 10) or 10
+ALIEN_REVEAL_WEIGHT_SPEEDY = tonumber(ALIEN_REVEAL_WEIGHTS.speedy or 2) or 2
+ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
+ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
+TILE_OPACITY = 1
+CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
+ALIEN_TYPE_CONFIG = {
+    [ALIEN_TYPE_BLIP] = (ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.blip) or { ap_per_turn = 1, hp = 1, can_traverse_void = false, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
+    [ALIEN_TYPE_CANNON] = (ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.cannon_fodder) or { ap_per_turn = 5, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0) },
+    [ALIEN_TYPE_SPEEDY] = (ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.speedy) or { ap_per_turn = 10, hp = 1, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0) },
+    [ALIEN_TYPE_SPITTER] = (ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter) or { ap_per_turn = 3, hp = 1, can_traverse_void = false, has_ranged = true, ranged_cells = 4, marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0) },
+    [ALIEN_TYPE_BRUTE] = (ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.brute) or { ap_per_turn = 3, hp = 5, can_traverse_void = false, has_ranged = false, marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0) }
 }
 
 
@@ -721,7 +724,7 @@ local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id, al
     end
 
     if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
-        return ALIEN_VERTICAL_MOVE_AP_COST
+        return get_alien_action_cost_value("vertical_move", ALIEN_VERTICAL_MOVE_AP_COST)
     end
 
     return 1
@@ -1411,6 +1414,20 @@ get_ap_cost_value = function(action_key, default_cost)
     return value
 end
 
+get_alien_action_cost_value = function(action_key, default_cost)
+    local value = nil
+    if type(ALIEN_ACTION_COSTS) == "table" then
+        value = tonumber(ALIEN_ACTION_COSTS[action_key])
+    end
+    if value == nil then
+        value = tonumber(default_cost or 1) or 1
+    end
+    if value < 0 then
+        return 0
+    end
+    return value
+end
+
 multiplayer_apply_toggle_door_event = function(self, payload)
     if type(payload) ~= "table" then
         return false
@@ -1620,7 +1637,7 @@ get_vent_neighbors_for_path = function(cell_id, world_grid, path_context)
         end
     end
     if best_vent then
-        return { { id = best_vent, cost = 1 } }
+        return { { id = best_vent, cost = ALIEN_VENT_TRANSIT_AP_COST } }
     end
     return {}
 end
@@ -2211,6 +2228,52 @@ local function has_unobstructed_los(world_grid, from_id, to_id)
     return true
 end
 
+local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
+    local from_cell = world_grid[from_id]
+    local to_cell = world_grid[to_id]
+    if not from_cell or not to_cell then
+        return false
+    end
+
+    if from_cell.xCell ~= to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
+        return false
+    end
+
+    if from_cell.xCell == to_cell.xCell then
+        local step = (to_cell.yCell > from_cell.yCell) and 1 or -1
+        local current_id = from_id
+        while current_id ~= to_id do
+            local next_id = current_id + (GRID_COLS * step)
+            if not can_cross_between_cells(world_grid, current_id, next_id) then
+                return false
+            end
+            local _, _, door_closed = get_edge_door_context(world_grid, current_id, next_id)
+            if door_closed then
+                return false
+            end
+            -- Barricades do not block human ranged LOS by design.
+            current_id = next_id
+        end
+        return true
+    end
+
+    local step = (to_cell.xCell > from_cell.xCell) and 1 or -1
+    local current_id = from_id
+    while current_id ~= to_id do
+        local next_id = current_id + step
+        if not can_cross_between_cells(world_grid, current_id, next_id) then
+            return false
+        end
+        local _, _, door_closed = get_edge_door_context(world_grid, current_id, next_id)
+        if door_closed then
+            return false
+        end
+        -- Barricades do not block human ranged LOS by design.
+        current_id = next_id
+    end
+    return true
+end
+
 local function get_edge_spawn_cell_ids(world_grid)
     local ids = {}
     for cell_id, cell in ipairs(world_grid) do
@@ -2686,7 +2749,7 @@ local function resolve_human_reaction_fire(self, alien)
             local tied_targets = {}
             if self.aliens then
                 for _, candidate in ipairs(self.aliens) do
-                    if candidate and (not candidate.is_dead) and candidate.cell_id and has_unobstructed_los(self.world_grid, unit.cell_id, candidate.cell_id) then
+                    if candidate and (not candidate.is_dead) and candidate.cell_id and has_unobstructed_human_ranged_los(self.world_grid, unit.cell_id, candidate.cell_id) then
                         local d = manhattan_distance_by_id(unit.cell_id, candidate.cell_id)
                         local is_vertical_lane = false
                         local vertical_lane_allowed = true
@@ -2980,10 +3043,9 @@ local function start_spitter_attack_queue(self)
     end
 
     for _, alien in ipairs(self.aliens) do
-        if (not alien.is_dead) and alien.type == ALIEN_TYPE_SPITTER then
+        if (not alien.is_dead) and alien.type == ALIEN_TYPE_SPITTER and (alien.turn_ap_remaining or 0) >= SPITTER_SHOT_AP_COST then
             table.insert(self.spitter_attack_queue, {
-                alien_id = alien.id,
-                ap_left = alien.ap_max or 0
+                alien_id = alien.id
             })
         end
     end
@@ -3451,6 +3513,44 @@ local function find_alien_by_id(self, alien_id)
     return nil
 end
 
+local function record_alien_turn_ap_spend(self, alien_id, field_key, amount)
+    if not self.alien_turn_ap_debug or alien_id == nil then
+        return
+    end
+    local row = self.alien_turn_ap_debug[alien_id]
+    if not row then
+        return
+    end
+    local delta = tonumber(amount or 0) or 0
+    if delta <= 0 then
+        return
+    end
+    row[field_key] = (tonumber(row[field_key] or 0) or 0) + delta
+end
+
+local function flush_alien_turn_ap_debug(self)
+    if not self.alien_turn_ap_debug or self.alien_turn_ap_debug_flushed then
+        return
+    end
+    for _, alien in ipairs(self.aliens or {}) do
+        local row = self.alien_turn_ap_debug[alien.id]
+        if row then
+            row.end_ap = tonumber(alien.turn_ap_remaining or 0) or 0
+            print(string.format(
+                "ALIEN AP TRACE | id=%d type=%s start=%d move=%d ranged=%d melee=%d end=%d",
+                alien.id,
+                tostring(alien.type),
+                tonumber(row.start_ap or 0) or 0,
+                tonumber(row.move_spent or 0) or 0,
+                tonumber(row.ranged_spent or 0) or 0,
+                tonumber(row.melee_spent or 0) or 0,
+                tonumber(row.end_ap or 0) or 0
+            ))
+        end
+    end
+    self.alien_turn_ap_debug_flushed = true
+end
+
 local function update_spitter_attack_phase(self, dt)
     if not self.pending_spitter_attack_phase then
         return
@@ -3485,12 +3585,12 @@ local function update_spitter_attack_phase(self, dt)
     end
 
     local attacker = table.remove(self.spitter_attack_queue, 1)
-    if not attacker or attacker.ap_left < SPITTER_SHOT_AP_COST then
+    if not attacker then
         return
     end
 
     local spitter = find_alien_by_id(self, attacker.alien_id)
-    if not spitter or spitter.is_dead then
+    if not spitter or spitter.is_dead or (spitter.turn_ap_remaining or 0) < SPITTER_SHOT_AP_COST then
         return
     end
 
@@ -3540,8 +3640,9 @@ local function update_spitter_attack_phase(self, dt)
         end
     end
 
-    attacker.ap_left = attacker.ap_left - SPITTER_SHOT_AP_COST
+    spitter.turn_ap_remaining = math.max(0, (spitter.turn_ap_remaining or 0) - SPITTER_SHOT_AP_COST)
     spawn_spitter_projectile(self, spitter, target)
+    record_alien_turn_ap_spend(self, spitter.id, "ranged_spent", SPITTER_SHOT_AP_COST)
 
     local target_cell = self.world_grid and self.world_grid[target.cell_id] or nil
     local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
@@ -3570,7 +3671,7 @@ local function update_spitter_attack_phase(self, dt)
         ))
     end
 
-    if attacker.ap_left >= SPITTER_SHOT_AP_COST then
+    if (spitter.turn_ap_remaining or 0) >= SPITTER_SHOT_AP_COST then
         table.insert(self.spitter_attack_queue, attacker)
     end
     self.spitter_attack_timer = SPITTER_SHOT_INTERVAL_SECONDS
@@ -4127,6 +4228,8 @@ local function process_alien_turn(self)
         self.barricade_damage_cells_this_turn = {}
         self.door_damage_cells_this_turn = {}
         self.turret_fired_this_alien_turn_by_object_id = {}
+        self.alien_turn_ap_debug = {}
+        self.alien_turn_ap_debug_flushed = false
         print("=== Alien Turn Start ===")
         for _, alien in ipairs(self.aliens) do
             if not alien.is_dead then
@@ -4142,6 +4245,13 @@ local function process_alien_turn(self)
                     ap_budget = 0
                 end
                 alien.turn_ap_remaining = ap_budget
+                self.alien_turn_ap_debug[alien.id] = {
+                    start_ap = ap_budget,
+                    move_spent = 0,
+                    ranged_spent = 0,
+                    melee_spent = 0,
+                    end_ap = ap_budget
+                }
             end
         end
     end
@@ -4187,6 +4297,7 @@ local function process_alien_turn(self)
                     end
                 else
                     alien.turn_ap_remaining = math.max(0, ap_budget - spent)
+                    record_alien_turn_ap_spend(self, alien.id, "move_spent", spent)
                     any_step = true
                 end
                 if segment_path then
@@ -4263,7 +4374,7 @@ function can_any_human_reactively_attack(self)
                         if can_melee and alien.cell_id == unit.cell_id then
                             return true
                         end
-                        if can_ranged and has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
+                        if can_ranged and has_unobstructed_human_ranged_los(self.world_grid, unit.cell_id, alien.cell_id) then
                             return true
                         end
                     end
@@ -9920,9 +10031,13 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
     AP_COSTS = AP_COSTS,
+    ALIEN_ACTION_COSTS = ALIEN_ACTION_COSTS,
     ALIEN_TYPE_BRUTE = ALIEN_TYPE_BRUTE,
     any_alien_is_moving = any_alien_is_moving,
-    record_alien_kill = score_record_alien_kill
+    record_alien_kill = score_record_alien_kill,
+    record_alien_melee_spend = function(self_ref, alien_id, amount)
+        record_alien_turn_ap_spend(self_ref, alien_id, "melee_spent", amount)
+    end
 })
 
 local function update_human_ap_debug_label(self)
@@ -10600,7 +10715,7 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
         return false
     end
 
-    if not has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id) then
+    if not has_unobstructed_human_ranged_los(self.world_grid, unit.cell_id, alien.cell_id) then
         print("Unable to fire: no line of sight.")
         return false
     end
@@ -10884,7 +10999,13 @@ multiplayer_build_snapshot_state = function(self)
                 id = alien.id,
                 type = alien.type,
                 cell_id = alien.cell_id,
+                ap_max = alien.ap_max,
+                turn_ap_remaining = alien.turn_ap_remaining,
+                hp_max = alien.hp_max,
                 hp_current = alien.hp_current,
+                can_traverse_void = alien.can_traverse_void == true,
+                has_ranged = alien.has_ranged == true,
+                ranged_cells = alien.ranged_cells or 0,
                 hidden_reveal_type = alien.hidden_reveal_type
             })
         end
@@ -11003,16 +11124,20 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     for _, alien_snapshot in ipairs(aliens_snapshot) do
         local alien_type = alien_snapshot.type or ALIEN_TYPE_BLIP
         local cfg = ALIEN_TYPE_CONFIG[alien_type] or ALIEN_TYPE_CONFIG[ALIEN_TYPE_BLIP]
+        local ap_max = tonumber(alien_snapshot.ap_max or cfg.ap_per_turn) or (cfg.ap_per_turn or 1)
+        local hp_max = tonumber(alien_snapshot.hp_max or cfg.hp) or (cfg.hp or 1)
+        local ranged_cells = tonumber(alien_snapshot.ranged_cells or cfg.ranged_cells or 0) or 0
         local alien = {
             id = tonumber(alien_snapshot.id or 0) or 0,
             type = alien_type,
             cell_id = tonumber(alien_snapshot.cell_id),
-            ap_max = cfg.ap_per_turn,
-            hp_max = cfg.hp,
-            hp_current = tonumber(alien_snapshot.hp_current or cfg.hp) or cfg.hp,
-            can_traverse_void = cfg.can_traverse_void == true,
-            has_ranged = cfg.has_ranged == true,
-            ranged_cells = cfg.ranged_cells or 0,
+            ap_max = ap_max,
+            turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or ap_max) or ap_max,
+            hp_max = hp_max,
+            hp_current = tonumber(alien_snapshot.hp_current or hp_max) or hp_max,
+            can_traverse_void = (alien_snapshot.can_traverse_void == true) or (cfg.can_traverse_void == true),
+            has_ranged = (alien_snapshot.has_ranged == true) or (cfg.has_ranged == true),
+            ranged_cells = ranged_cells,
             go_id = nil,
             is_moving = false,
             move_path = nil,
@@ -12368,6 +12493,15 @@ function update(self, dt)
     update_spitter_projectiles(self, dt)
     update_turret_projectiles(self, dt)
     update_spitter_attack_phase(self, dt)
+    if self.alien_turn_ap_debug
+        and (not self.alien_turn_ap_debug_flushed)
+        and (not self.alien_turn_active)
+        and (not self.pending_spitter_attack_phase)
+        and (not self.pending_melee_attack_phase)
+        and (not any_alien_is_moving(self))
+    then
+        flush_alien_turn_ap_debug(self)
+    end
     tick_human_reactive_fire_cooldowns(self, dt)
     process_turret_reactive_fire(self, dt)
     if self.alien_turn_active and (not self.alien_turn_waiting_for_advance) and (not any_alien_is_moving(self)) and (not self.pending_spitter_attack_phase) and (not self.pending_melee_attack_phase) then

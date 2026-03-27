@@ -33,6 +33,18 @@ function M.create(ctx)
         return value
     end
 
+    local function get_alien_melee_ap_cost()
+        local costs = ctx and ctx.ALIEN_ACTION_COSTS or nil
+        local value = costs and tonumber(costs.melee_attack) or nil
+        if value == nil then
+            value = 1
+        end
+        if value < 0 then
+            return 0
+        end
+        return value
+    end
+
     local function get_human_by_id(self, unit_id)
         if not self.squad_units or not unit_id then
             return nil
@@ -351,8 +363,9 @@ function M.create(ctx)
     end
 
     local function resolve_alien_melee_strike(self, alien)
-        local ap_left = self.melee_ap_left_by_alien_id and (self.melee_ap_left_by_alien_id[alien.id] or 0) or 0
-        if ap_left <= 0 then
+        local melee_ap_cost = get_alien_melee_ap_cost()
+        local ap_left = tonumber(alien and alien.turn_ap_remaining or 0) or 0
+        if ap_left < melee_ap_cost then
             return
         end
 
@@ -368,7 +381,10 @@ function M.create(ctx)
         local armor_bonus = target.melee_armor_bonus or target.equipped_armor_bonus or 0
         local hit_chance = clamp(ctx.MELEE_MODEL.alien_base_hit_chance - armor_bonus, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)
-        self.melee_ap_left_by_alien_id[alien.id] = ap_left - 1
+        alien.turn_ap_remaining = math.max(0, ap_left - melee_ap_cost)
+        if ctx and ctx.record_alien_melee_spend then
+            ctx.record_alien_melee_spend(self, alien.id, melee_ap_cost)
+        end
         spawn_alien_melee_swipe_fx(self, target)
         play_alien_melee_lurch(self, alien, target)
 
@@ -405,7 +421,7 @@ function M.create(ctx)
         end
 
         local still_has_humans = #get_living_humans_on_cell(self, alien.cell_id) > 0
-        local remaining = self.melee_ap_left_by_alien_id[alien.id] or 0
+        local remaining = tonumber(alien.turn_ap_remaining or 0) or 0
         if (not alien.is_dead) and remaining > 0 and still_has_humans then
             table.insert(self.melee_action_queue, { kind = "alien", alien_id = alien.id })
         end
@@ -416,7 +432,6 @@ function M.create(ctx)
         self.melee_attack_started = false
         self.melee_attack_timer = 0
         self.melee_action_queue = {}
-        self.melee_ap_left_by_alien_id = {}
     end
 
     runtime.is_busy = function(self)
@@ -474,12 +489,10 @@ function M.create(ctx)
             end
             self.melee_attack_started = true
             self.melee_action_queue = {}
-            self.melee_ap_left_by_alien_id = {}
 
             for _, alien in ipairs(self.aliens or {}) do
                 if not alien.is_dead then
                     local ap_budget = alien.turn_ap_remaining or alien.ap_max or 0
-                    self.melee_ap_left_by_alien_id[alien.id] = ap_budget
                     if ap_budget > 0 and #get_living_humans_on_cell(self, alien.cell_id) > 0 then
                         table.insert(self.melee_action_queue, { kind = "alien", alien_id = alien.id })
                     end

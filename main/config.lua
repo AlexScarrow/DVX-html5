@@ -126,12 +126,12 @@ M.AP_COSTS = {
     fix_object = 1,
     pickup_turret = 1,
     deploy_turret = 1,
-    barricade_build = 2,
-    barricade_reinforce = 1,
-    nav_computer_interact = 1,
-    supply_loader_interact = 1,
+    barricade_build = 0,
+    barricade_reinforce = 0,
+    nav_computer_interact = 0,
+    supply_loader_interact = 0,
     workshop_pay_material = 0,
-    med_heal_transfer = 1,
+    med_heal_transfer = 0,
 
     -- Utility (currently free in balance test)
     drag_transfer = 0,
@@ -141,6 +141,60 @@ M.AP_COSTS = {
     pickup_obstacle = 0,
     medbay_corpse_store = 0,
     medbay_corpse_insert = 0
+}
+
+-- Central alien tuning table for AI pacing and spawn composition.
+M.ALIEN_BALANCE = {
+    REVEAL_WEIGHTS = {
+        cannon_fodder = 10,
+        speedy = 2,
+        spitter = 8,
+        brute = 4
+    },
+    TYPES = {
+        blip = {
+            ap_per_turn = 1,
+            hp = 1,
+            can_traverse_void = false,
+            revealable = true,
+            marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0)
+        },
+        cannon_fodder = {
+            ap_per_turn = 5,
+            hp = 1,
+            can_traverse_void = false,
+            has_ranged = false,
+            marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0)
+        },
+        speedy = {
+            ap_per_turn = 10,
+            hp = 1,
+            can_traverse_void = false,
+            has_ranged = false,
+            marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0)
+        },
+        spitter = {
+            ap_per_turn = 3,
+            hp = 1,
+            can_traverse_void = false,
+            has_ranged = true,
+            ranged_cells = 4,
+            marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0)
+        },
+        brute = {
+            ap_per_turn = 3,
+            hp = 5,
+            can_traverse_void = false,
+            has_ranged = false,
+            marker_tint = vmath.vector4(0.8, 0.2, 0.2, 1.0)
+        }
+    },
+    ACTION_COSTS = {
+        melee_attack = 1,
+        ranged_attack = 1,
+        vertical_move = 2,
+        vent_transit = 1
+    }
 }
 
 return M

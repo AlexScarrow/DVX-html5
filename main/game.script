@@ -310,6 +310,10 @@ SPITTER_IDLE_PULSE_SPEED = 0.8
 SPITTER_IDLE_BOB_AMPLITUDE = 8
 SPITTER_IDLE_BOB_SPEED = 0.6
 SPITTER_MOVE_SPEED_MULTIPLIER = 0.5
+SPITTER_BOTTOM_OFFSET_Y = -32
+SPITTER_BOTTOM_OFFSET_Z = -0.02
+SPITTER_BOTTOM_SWAY_MAX_DEG = 15
+SPITTER_BOTTOM_SWAY_SPEED = 0.55
 ALIEN_VERTICAL_MOVE_AP_COST = tonumber(ALIEN_ACTION_COSTS.vertical_move or 2) or 2
 ALIEN_VENT_TRANSIT_AP_COST = tonumber(ALIEN_ACTION_COSTS.vent_transit or 1) or 1
 INITIAL_BLIP_COUNT = 3
@@ -2294,6 +2298,45 @@ local function get_edge_spawn_cell_ids(world_grid)
     return ids
 end
 
+local function ensure_spitter_bottom_visual(self, alien)
+    if not self or not alien or alien.type ~= ALIEN_TYPE_SPITTER or not alien.go_id then
+        return
+    end
+    if self.aesthetic_mode ~= AESTHETIC_MODE_COMPUTER then
+        if alien.spitter_bottom_go_id then
+            pcall(go.delete, alien.spitter_bottom_go_id)
+            alien.spitter_bottom_go_id = nil
+        end
+        return
+    end
+    if alien.spitter_bottom_go_id then
+        local ok = pcall(go.get_position, alien.spitter_bottom_go_id)
+        if ok then
+            return
+        end
+        alien.spitter_bottom_go_id = nil
+    end
+    local base_pos = go.get_position(alien.go_id)
+    local bottom_id = factory.create("/alien_spitter_bottom_factory#alien_spitter_bottom_factory", base_pos)
+    if not bottom_id then
+        return
+    end
+    go.set_parent(bottom_id, alien.go_id, false)
+    go.set_position(vmath.vector3(0, SPITTER_BOTTOM_OFFSET_Y, SPITTER_BOTTOM_OFFSET_Z), bottom_id)
+    sprite.set_hflip(msg.url(nil, bottom_id, "sprite"), alien.spitter_flip == true)
+    alien.spitter_bottom_go_id = bottom_id
+    alien.spitter_bottom_sway_phase = alien.spitter_bottom_sway_phase or (math.random() * math.pi * 2)
+end
+
+local function update_spitter_bottom_sway(alien, dt)
+    if not alien or alien.type ~= ALIEN_TYPE_SPITTER or not alien.spitter_bottom_go_id then
+        return
+    end
+    alien.spitter_bottom_sway_phase = (alien.spitter_bottom_sway_phase or 0) + (dt * SPITTER_BOTTOM_SWAY_SPEED * math.pi * 2)
+    local angle = math.sin(alien.spitter_bottom_sway_phase) * math.rad(SPITTER_BOTTOM_SWAY_MAX_DEG)
+    pcall(go.set_rotation, vmath.quat_rotation_z(angle), alien.spitter_bottom_go_id)
+end
+
 local function ensure_alien_visual(self, alien)
     if alien.go_id then
         return
@@ -2393,6 +2436,9 @@ local function ensure_alien_visual(self, alien)
                 go.set(msg.url(nil, alien.go_id, "shadow"), "tint", vmath.vector4(1, 1, 1, get_world_shadow_alpha(self)))
                 alien.spitter_flip = false
                 go.set_scale(vmath.vector3(scale, scale, 1), alien.go_id)
+                if alien.type == ALIEN_TYPE_SPITTER then
+                    ensure_spitter_bottom_visual(self, alien)
+                end
             else
                 go.set_scale(vmath.vector3(1, 1, 1), alien.go_id)
             end
@@ -2431,6 +2477,11 @@ local function refresh_alien_visual(self, alien)
         alien.current_aesthetic_anim = alien_anim
     elseif not alien_anim then
         alien.current_aesthetic_anim = nil
+    end
+    if alien.type == ALIEN_TYPE_SPITTER then
+        ensure_spitter_bottom_visual(self, alien)
+    else
+        alien.spitter_bottom_go_id = nil
     end
 
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
@@ -2619,10 +2670,11 @@ apply_blip_pulse_scale = function(alien, dt)
     go.set_scale(vmath.vector3(s, s, 1), alien.go_id)
 end
 
-update_spitter_idle_visual = function(alien, dt)
+update_spitter_idle_visual = function(self, alien, dt)
     if not alien or alien.type ~= ALIEN_TYPE_SPITTER or not alien.go_id then
         return
     end
+    ensure_spitter_bottom_visual(self, alien)
     alien.spitter_idle_phase = (alien.spitter_idle_phase or 0) + (dt * SPITTER_IDLE_PULSE_SPEED * math.pi * 2)
     local pulse = math.sin(alien.spitter_idle_phase)
     local pulse_mul = 1 + (SPITTER_IDLE_PULSE_AMPLITUDE * pulse)
@@ -2641,6 +2693,7 @@ update_spitter_idle_visual = function(alien, dt)
     alien.spitter_bob_phase = (alien.spitter_bob_phase or 0) + (dt * SPITTER_IDLE_BOB_SPEED * math.pi * 2)
     local bob_offset_y = math.sin(alien.spitter_bob_phase) * SPITTER_IDLE_BOB_AMPLITUDE
     go.set_position(vmath.vector3(alien.spitter_idle_anchor_x, alien.spitter_idle_anchor_y + bob_offset_y, pos.z), alien.go_id)
+    update_spitter_bottom_sway(alien, dt)
 end
 
 local function get_vent_object_on_cell(cell)
@@ -2684,6 +2737,10 @@ local function remove_dead_aliens(self)
         if self.aliens[i].is_dead then
             local alien = self.aliens[i]
             clear_counter_shadow_proxy(alien)
+            if alien.spitter_bottom_go_id then
+                pcall(go.delete, alien.spitter_bottom_go_id)
+                alien.spitter_bottom_go_id = nil
+            end
             if alien.go_id then
                 go.delete(alien.go_id)
                 alien.go_id = nil
@@ -3637,6 +3694,9 @@ local function update_spitter_attack_phase(self, dt)
             spitter.spitter_flip = dx > 0
             sprite.set_hflip(msg.url(nil, spitter.go_id, "sprite"), spitter.spitter_flip)
             sprite.set_hflip(msg.url(nil, spitter.go_id, "shadow"), spitter.spitter_flip)
+            if spitter.spitter_bottom_go_id then
+                sprite.set_hflip(msg.url(nil, spitter.spitter_bottom_go_id, "sprite"), spitter.spitter_flip)
+            end
         end
     end
 
@@ -3720,7 +3780,7 @@ local function update_alien_movement(self, dt)
             go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
         end
         apply_blip_pulse_scale(alien, dt)
-        update_spitter_idle_visual(alien, dt)
+        update_spitter_idle_visual(self, alien, dt)
         if (not alien.is_dead) and alien.is_moving and alien.move_path and alien.go_id then
             local target_cell_id = alien.move_path[alien.move_path_index]
             if not target_cell_id then

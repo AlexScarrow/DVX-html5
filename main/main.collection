@@ -321,6 +321,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "alien_spitter_bottom_factory"
+  data: "embedded_components {\n"
+  "  id: \"alien_spitter_bottom_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/alien_spitter_bottom.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "alien_speedy_factory"
   data: "embedded_components {\n"
   "  id: \"alien_speedy_factory\"\n"

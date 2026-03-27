@@ -41,6 +41,9 @@ images {
   image: "/assets/images/alien_spitter.png"
 }
 images {
+  image: "/assets/images/alien_spitter_bottom.png"
+}
+images {
   image: "/assets/images/alien_spitter_boardgame.png"
 }
 images {

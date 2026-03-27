@@ -146,10 +146,10 @@ M.AP_COSTS = {
 -- Central alien tuning table for AI pacing and spawn composition.
 M.ALIEN_BALANCE = {
     REVEAL_WEIGHTS = {
-        cannon_fodder = 10,
+        cannon_fodder = 4,
         speedy = 2,
-        spitter = 8,
-        brute = 4
+        spitter = 4,
+        brute = 14
     },
     TYPES = {
         blip = {

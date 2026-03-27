@@ -314,6 +314,8 @@ SPITTER_BOTTOM_OFFSET_Y = -32
 SPITTER_BOTTOM_OFFSET_Z = -0.02
 SPITTER_BOTTOM_SWAY_MAX_DEG = 15
 SPITTER_BOTTOM_SWAY_SPEED = 0.55
+SPITTER_BOTTOM_TRAIL_MOVE_DEG = 32
+SPITTER_BOTTOM_TRAIL_BLEND_SPEED = 8.0
 ALIEN_VERTICAL_MOVE_AP_COST = tonumber(ALIEN_ACTION_COSTS.vertical_move or 2) or 2
 ALIEN_VENT_TRANSIT_AP_COST = tonumber(ALIEN_ACTION_COSTS.vent_transit or 1) or 1
 INITIAL_BLIP_COUNT = 3
@@ -2333,7 +2335,35 @@ local function update_spitter_bottom_sway(alien, dt)
         return
     end
     alien.spitter_bottom_sway_phase = (alien.spitter_bottom_sway_phase or 0) + (dt * SPITTER_BOTTOM_SWAY_SPEED * math.pi * 2)
-    local angle = math.sin(alien.spitter_bottom_sway_phase) * math.rad(SPITTER_BOTTOM_SWAY_MAX_DEG)
+    local sway_angle = math.sin(alien.spitter_bottom_sway_phase) * math.rad(SPITTER_BOTTOM_SWAY_MAX_DEG)
+    local trail_base_target = 0
+    if alien.is_moving and alien.go_id then
+        local pos = go.get_position(alien.go_id)
+        local prev_x = alien.spitter_last_x or pos.x
+        local dx = pos.x - prev_x
+        if dx < -0.1 then
+            alien.spitter_bottom_trail_dir = -1
+        elseif dx > 0.1 then
+            alien.spitter_bottom_trail_dir = 1
+        end
+        trail_base_target = (alien.spitter_bottom_trail_dir or 0) * math.rad(SPITTER_BOTTOM_TRAIL_MOVE_DEG)
+        alien.spitter_last_x = pos.x
+    elseif alien.go_id then
+        local pos = go.get_position(alien.go_id)
+        alien.spitter_last_x = pos.x
+        alien.spitter_bottom_trail_dir = nil
+    end
+
+    local base_next = trail_base_target
+    if not alien.is_moving then
+        -- Smoothly blend back to neutral when movement stops.
+        local base_current = alien.spitter_bottom_trail_base_angle or 0
+        local blend_t = math.min(1, (dt or 0) * SPITTER_BOTTOM_TRAIL_BLEND_SPEED)
+        base_next = base_current + ((trail_base_target - base_current) * blend_t)
+    end
+    alien.spitter_bottom_trail_base_angle = base_next
+
+    local angle = base_next + sway_angle
     pcall(go.set_rotation, vmath.quat_rotation_z(angle), alien.spitter_bottom_go_id)
 end
 

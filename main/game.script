@@ -4348,6 +4348,7 @@ local function process_alien_turn(self)
 
     local any_step = false
     local any_melee_ready_without_move = false
+    local any_spitter_ready_to_fire = false
     local step_mode = self.alien_turn_manual_pause
     for _, alien in ipairs(self.aliens) do
         if (not alien.is_dead) and (alien.turn_ap_remaining or 0) > 0 then
@@ -4361,51 +4362,67 @@ local function process_alien_turn(self)
                     end
                 end
             end
-            local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id, alien.hidden_reveal_type)
-            local used_fallback_staging = false
-            if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
-                target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type, alien.hidden_reveal_type)
-                used_fallback_staging = target_cell_id ~= nil
-            end
-            if not target_cell_id and alien.type == ALIEN_TYPE_BRUTE then
-                target_cell_id, path = get_brute_barricade_staging_target(self, alien.cell_id)
-                used_fallback_staging = target_cell_id ~= nil
-            end
-            if target_cell_id then
-                local step_budget = ap_budget
-                if step_mode then
-                    step_budget = 1
+            local spitter_holding_for_shot = false
+            if alien.type == ALIEN_TYPE_SPITTER and ap_budget >= SPITTER_SHOT_AP_COST then
+                local immediate_shot_target = choose_spitter_target(self, alien)
+                if immediate_shot_target then
+                    spitter_holding_for_shot = true
+                    any_spitter_ready_to_fire = true
+                    alien.turn_ap_remaining = ap_budget
+                    print(string.format(
+                        "Alien #%d (%s) holding position to prioritize ranged attack",
+                        alien.id, alien.type
+                    ))
                 end
-                local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, step_budget)
-                spent = spent or 0
-                if spent <= 0 then
-                    -- If already engaged in melee range, preserve AP for melee phase.
+            end
+
+            if not spitter_holding_for_shot then
+                local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id, alien.hidden_reveal_type)
+                local used_fallback_staging = false
+                if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
+                    target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type, alien.hidden_reveal_type)
+                    used_fallback_staging = target_cell_id ~= nil
+                end
+                if not target_cell_id and alien.type == ALIEN_TYPE_BRUTE then
+                    target_cell_id, path = get_brute_barricade_staging_target(self, alien.cell_id)
+                    used_fallback_staging = target_cell_id ~= nil
+                end
+                if target_cell_id then
+                    local step_budget = ap_budget
+                    if step_mode then
+                        step_budget = 1
+                    end
+                    local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, step_budget)
+                    spent = spent or 0
+                    if spent <= 0 then
+                        -- If already engaged in melee range, preserve AP for melee phase.
+                        if shares_cell_with_living_human then
+                            alien.turn_ap_remaining = ap_budget
+                        else
+                            alien.turn_ap_remaining = 0
+                        end
+                    else
+                        alien.turn_ap_remaining = math.max(0, ap_budget - spent)
+                        record_alien_turn_ap_spend(self, alien.id, "move_spent", spent)
+                        any_step = true
+                    end
+                    if segment_path then
+                        begin_alien_path_animation(alien, segment_path)
+                    end
+                    print(string.format(
+                        "Alien #%d (%s) target=%d moved=%s spent=%d rem=%d%s",
+                        alien.id, alien.type, target_cell_id, tostring(segment_path ~= nil), spent, alien.turn_ap_remaining or 0,
+                        used_fallback_staging and " [fallback-staging]" or ""
+                    ))
+                else
+                    -- No path found: still allow melee when already sharing a cell with a human.
                     if shares_cell_with_living_human then
                         alien.turn_ap_remaining = ap_budget
                     else
                         alien.turn_ap_remaining = 0
                     end
-                else
-                    alien.turn_ap_remaining = math.max(0, ap_budget - spent)
-                    record_alien_turn_ap_spend(self, alien.id, "move_spent", spent)
-                    any_step = true
+                    print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
                 end
-                if segment_path then
-                    begin_alien_path_animation(alien, segment_path)
-                end
-                print(string.format(
-                    "Alien #%d (%s) target=%d moved=%s spent=%d rem=%d%s",
-                    alien.id, alien.type, target_cell_id, tostring(segment_path ~= nil), spent, alien.turn_ap_remaining or 0,
-                    used_fallback_staging and " [fallback-staging]" or ""
-                ))
-            else
-                -- No path found: still allow melee when already sharing a cell with a human.
-                if shares_cell_with_living_human then
-                    alien.turn_ap_remaining = ap_budget
-                else
-                    alien.turn_ap_remaining = 0
-                end
-                print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
             end
             if (alien.turn_ap_remaining or 0) > 0 and shares_cell_with_living_human then
                 any_melee_ready_without_move = true
@@ -4413,7 +4430,7 @@ local function process_alien_turn(self)
         end
     end
 
-    if any_step or any_melee_ready_without_move then
+    if any_step or any_melee_ready_without_move or any_spitter_ready_to_fire then
         MELEE_RUNTIME.begin_phase(self)
         begin_spitter_attack_phase(self)
         if step_mode and self.alien_turn_manual_pause then

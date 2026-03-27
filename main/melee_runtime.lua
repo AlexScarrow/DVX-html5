@@ -45,6 +45,18 @@ function M.create(ctx)
         return value
     end
 
+    local function get_alien_melee_damage(alien_type)
+        local cfg = ctx and ctx.ALIEN_TYPE_CONFIG and alien_type and ctx.ALIEN_TYPE_CONFIG[alien_type] or nil
+        local value = cfg and tonumber(cfg.melee_damage) or nil
+        if value == nil then
+            value = 1
+        end
+        if value < 0 then
+            return 0
+        end
+        return value
+    end
+
     local function get_human_by_id(self, unit_id)
         if not self.squad_units or not unit_id then
             return nil
@@ -389,12 +401,13 @@ function M.create(ctx)
         play_alien_melee_lurch(self, alien, target)
 
         if roll <= hit_chance then
-            target.current_health = math.max(0, (target.current_health or 0) - 1)
+            local damage = get_alien_melee_damage(alien and alien.type)
+            target.current_health = math.max(0, (target.current_health or 0) - damage)
             mark_human_hit(target)
             spawn_human_blood_splatter_fx(target)
             print(string.format(
-                "Alien #%d melee on %s and HIT [chance=%d%% roll=%d hp=%d armor=%d]",
-                alien.id, target.display_name, hit_chance, roll, target.current_health, armor_bonus
+                "Alien #%d melee on %s and HIT [chance=%d%% roll=%d dmg=%d hp=%d armor=%d]",
+                alien.id, target.display_name, hit_chance, roll, damage, target.current_health, armor_bonus
             ))
             if target.current_health <= 0 then
                 print(target.display_name .. " is dead")

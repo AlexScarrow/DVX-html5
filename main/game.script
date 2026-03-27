@@ -10139,6 +10139,7 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
     AP_COSTS = AP_COSTS,
     ALIEN_ACTION_COSTS = ALIEN_ACTION_COSTS,
+    ALIEN_TYPE_CONFIG = ALIEN_TYPE_CONFIG,
     ALIEN_TYPE_BRUTE = ALIEN_TYPE_BRUTE,
     any_alien_is_moving = any_alien_is_moving,
     record_alien_kill = score_record_alien_kill,

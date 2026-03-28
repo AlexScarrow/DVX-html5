@@ -80,8 +80,16 @@ CIVILIAN_MAX_ACTION_POINTS = 3
 CIVILIAN_MAX_HEALTH = 10
 CIVILIAN_OBJECT_NAME = hash("civilian_spawn")
 CIVILIAN_SPRITE_ANIM = hash("human_civilian")
+CIVILIAN_DEAD_SPRITE_ANIM = hash("human_civilian_dead")
 CIVILIAN_VISUAL_SCALE = 0.35
 CIVILIAN_VISUAL_Z = 0.5
+CIVILIAN_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
+CIVILIAN_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
+CIVILIAN_HP_BAR_ART_W = 197
+CIVILIAN_HP_BAR_SCALE_X = 0.22
+CIVILIAN_HP_BAR_SCALE_Y = 0.22
+CIVILIAN_HP_BAR_FULL_W = CIVILIAN_HP_BAR_ART_W * CIVILIAN_HP_BAR_SCALE_X
+CIVILIAN_HP_BAR_OFFSET_Y = -38
 OBSTACLE_SLOT_LAG_SECONDS = 0.24
 HUMAN_STACK_SPACING_X = 28
 UNIT_CLICK_SELECT_RADIUS = 45
@@ -2053,14 +2061,13 @@ local function pick_weighted_blip_reveal_type()
     return ALIEN_TYPE_CANNON
 end
 
+local get_living_alien_targets
+
 local function get_human_cell_ids(self)
     local ids = {}
-    if not self.squad_units then
-        return ids
-    end
-    for _, unit in pairs(self.squad_units) do
-        if unit.cell_id and (unit.current_health or 0) > 0 then
-            table.insert(ids, unit.cell_id)
+    for _, target in ipairs(get_living_alien_targets(self)) do
+        if target and target.cell_id then
+            table.insert(ids, target.cell_id)
         end
     end
     return ids
@@ -2944,6 +2951,40 @@ local function get_living_humans(self)
     return living
 end
 
+get_living_alien_targets = function(self)
+    local living = {}
+    if self and self.squad_units then
+        for _, unit in pairs(self.squad_units) do
+            if unit and unit.cell_id and (unit.current_health or 0) > 0 then
+                unit.target_kind = "human"
+                table.insert(living, unit)
+            end
+        end
+    end
+    if self and self.civilians then
+        for _, civilian in ipairs(self.civilians) do
+            if civilian and civilian.cell_id and (civilian.current_health or 0) > 0 and civilian.is_dead ~= true then
+                civilian.target_kind = "civilian"
+                civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
+                table.insert(living, civilian)
+            end
+        end
+    end
+    return living
+end
+
+local function has_living_alien_target_on_cell(self, cell_id)
+    if not (self and cell_id) then
+        return false
+    end
+    for _, target in ipairs(get_living_alien_targets(self)) do
+        if target and target.cell_id == cell_id then
+            return true
+        end
+    end
+    return false
+end
+
 get_barricade_anchor_x_for_cell = function(cell)
     if not cell then
         return 0
@@ -2960,12 +3001,12 @@ get_barricade_anchor_x_for_cell = function(cell)
     return 0
 end
 
-spitter_shot_blocked_by_barricade = function(self, alien, human)
-    if not self or not self.world_grid or not alien or not human then
+spitter_shot_blocked_by_barricade = function(self, alien, target)
+    if not self or not self.world_grid or not alien or not target then
         return false
     end
     local from_id = alien.cell_id
-    local to_id = human.cell_id
+    local to_id = target.cell_id
     if not from_id or not to_id or from_id == to_id then
         return false
     end
@@ -3011,7 +3052,8 @@ spitter_shot_blocked_by_barricade = function(self, alien, human)
     -- Rule 6: barricade in target cell can shield by target-side against horizontal shots.
     if is_cell_barricaded(self.world_grid, to_id) and from_cell.xCell ~= to_cell.xCell then
         local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
-        local target_pos = human.go_path and go.get_position(human.go_path) or nil
+        local target_go_id = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
+        local target_pos = target_go_id and go.get_position(target_go_id) or nil
         local target_x = target_pos and target_pos.x or to_center_x
         local barricade_x = to_center_x + get_barricade_anchor_x_for_cell(to_cell)
         local target_side = (target_x >= barricade_x) and 1 or -1
@@ -3027,19 +3069,20 @@ end
 local function choose_spitter_target(self, alien)
     local candidates = {}
     local range_cells = alien.ranged_cells or SPITTER_MAX_RANGE_CELLS
-    for _, human in ipairs(get_living_humans(self)) do
-        local dist = heuristic(alien.cell_id, human.cell_id)
-        if dist <= range_cells and has_unobstructed_los(self.world_grid, alien.cell_id, human.cell_id) then
+    for _, target in ipairs(get_living_alien_targets(self)) do
+        local dist = heuristic(alien.cell_id, target.cell_id)
+        if dist <= range_cells and has_unobstructed_los(self.world_grid, alien.cell_id, target.cell_id) then
             local vertical_lane_allowed = true
             local from_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
-            local to_cell = self.world_grid and self.world_grid[human.cell_id] or nil
+            local to_cell = self.world_grid and self.world_grid[target.cell_id] or nil
             if from_cell and to_cell then
                 local is_vertical_lane = (from_cell.xCell == to_cell.xCell) and (from_cell.yCell ~= to_cell.yCell)
                 if is_vertical_lane then
                     local from_center_x = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
                     local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
                     local shooter_pos = alien.go_id and go.get_position(alien.go_id) or nil
-                    local target_pos = human.go_path and go.get_position(human.go_path) or nil
+                    local target_go_id = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
+                    local target_pos = target_go_id and go.get_position(target_go_id) or nil
                     local shooter_x = shooter_pos and shooter_pos.x or from_center_x
                     local target_x = target_pos and target_pos.x or to_center_x
                     local right_threshold = CELL_WIDTH * 0.15
@@ -3048,9 +3091,9 @@ local function choose_spitter_target(self, alien)
                     vertical_lane_allowed = shooter_in_right_lane and target_in_right_lane
                 end
             end
-            local blocked_by_barricade = spitter_shot_blocked_by_barricade(self, alien, human)
+            local blocked_by_barricade = spitter_shot_blocked_by_barricade(self, alien, target)
             if vertical_lane_allowed and (not blocked_by_barricade) then
-                table.insert(candidates, { unit = human, dist = dist, hp = human.current_health })
+                table.insert(candidates, { unit = target, dist = dist, hp = target.current_health })
             end
         end
     end
@@ -3094,12 +3137,13 @@ local function choose_spitter_target(self, alien)
 end
 
 local function spawn_spitter_projectile(self, alien, target_human)
-    if not alien.go_id or not target_human.go_path then
+    local target_go_id = target_human and (target_human.go_path or (self.civilian_visuals and target_human.id and self.civilian_visuals[target_human.id])) or nil
+    if not alien.go_id or not target_go_id then
         return
     end
 
     local from = go.get_position(alien.go_id)
-    local to = go.get_position(target_human.go_path)
+    local to = go.get_position(target_go_id)
     local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from.x, from.y, 0.75))
     if not projectile_id then
         return
@@ -3709,7 +3753,8 @@ local function update_spitter_attack_phase(self, dt)
             local spitter_center_x = coords_to_world_pos(spitter_cell.xCell, spitter_cell.yCell)
             local target_center_x = coords_to_world_pos(target_cell_for_lane.xCell, target_cell_for_lane.yCell)
             local spitter_pos_for_lane = spitter.go_id and go.get_position(spitter.go_id) or nil
-            local target_pos_for_lane = target.go_path and go.get_position(target.go_path) or nil
+            local target_go_id_for_lane = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
+            local target_pos_for_lane = target_go_id_for_lane and go.get_position(target_go_id_for_lane) or nil
             local spitter_x = spitter_pos_for_lane and spitter_pos_for_lane.x or spitter_center_x
             local target_x = target_pos_for_lane and target_pos_for_lane.x or target_center_x
             local right_threshold = CELL_WIDTH * 0.15
@@ -3722,9 +3767,10 @@ local function update_spitter_attack_phase(self, dt)
         end
     end
 
-    if spitter.go_id and target.go_path then
+    local target_go_id = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
+    if spitter.go_id and target_go_id then
         local spitter_pos = go.get_position(spitter.go_id)
-        local target_pos = go.get_position(target.go_path)
+        local target_pos = go.get_position(target_go_id)
         local dx = target_pos.x - spitter_pos.x
         if math.abs(dx) > 2 then
             spitter.spitter_flip = dx > 0
@@ -3758,6 +3804,14 @@ local function update_spitter_attack_phase(self, dt)
             spitter.id, target.display_name, target.current_health, active_light, hit_chance, roll
         ))
         if target.current_health <= 0 then
+            if target.target_kind == "civilian" then
+                target.is_dead = true
+                target.current_ap = 0
+                target.is_awake = false
+                target.is_moving = false
+                target.move_path = nil
+                target.move_path_index = 0
+            end
             print(target.display_name .. " is dead")
         end
     else
@@ -4202,15 +4256,13 @@ local function update_alien_movement(self, dt)
                     if not killed then
                         if alien.move_path and alien.move_path_index > #alien.move_path then
                             local weakest_human = nil
-                            if self.squad_units then
-                                for _, unit in pairs(self.squad_units) do
-                                    if unit.cell_id == alien.cell_id and (unit.current_health or 0) > 0 then
-                                        if (not weakest_human)
-                                            or ((unit.current_health or 0) < (weakest_human.current_health or 0))
-                                            or (((unit.current_health or 0) == (weakest_human.current_health or 0)) and tostring(unit.id) < tostring(weakest_human.id))
-                                        then
-                                            weakest_human = unit
-                                        end
+                            for _, unit in ipairs(get_living_alien_targets(self)) do
+                                if unit and unit.cell_id == alien.cell_id and unit.go_path then
+                                    if (not weakest_human)
+                                        or ((unit.current_health or 0) < (weakest_human.current_health or 0))
+                                        or (((unit.current_health or 0) == (weakest_human.current_health or 0)) and tostring(unit.id) < tostring(weakest_human.id))
+                                    then
+                                        weakest_human = unit
                                     end
                                 end
                             end
@@ -4361,15 +4413,7 @@ local function process_alien_turn(self)
     for _, alien in ipairs(self.aliens) do
         if (not alien.is_dead) and (alien.turn_ap_remaining or 0) > 0 then
             local ap_budget = alien.turn_ap_remaining or 0
-            local shares_cell_with_living_human = false
-            if self.squad_units then
-                for _, unit in pairs(self.squad_units) do
-                    if unit and (unit.current_health or 0) > 0 and unit.cell_id == alien.cell_id then
-                        shares_cell_with_living_human = true
-                        break
-                    end
-                end
-            end
+            local shares_cell_with_living_human = has_living_alien_target_on_cell(self, alien.cell_id)
             local spitter_holding_for_shot = false
             if alien.type == ALIEN_TYPE_SPITTER and ap_budget >= SPITTER_SHOT_AP_COST then
                 local immediate_shot_target = choose_spitter_target(self, alien)
@@ -4423,13 +4467,13 @@ local function process_alien_turn(self)
                         used_fallback_staging and " [fallback-staging]" or ""
                     ))
                 else
-                    -- No path found: still allow melee when already sharing a cell with a human.
+                    -- No path found: still allow melee when already sharing a cell with a valid target.
                     if shares_cell_with_living_human then
                         alien.turn_ap_remaining = ap_budget
                     else
                         alien.turn_ap_remaining = 0
                     end
-                    print(string.format("Alien #%d (%s) has no reachable human target", alien.id, alien.type))
+                    print(string.format("Alien #%d (%s) has no reachable target", alien.id, alien.type))
                 end
             end
             if (alien.turn_ap_remaining or 0) > 0 and shares_cell_with_living_human then
@@ -4488,6 +4532,8 @@ local get_civilian_world_pos_in_cell
 local function clear_civilian_visuals(self)
     self.civilian_visuals = self.civilian_visuals or {}
     self.civilian_shadow_visuals = self.civilian_shadow_visuals or {}
+    self.civilian_hp_bar_bg_visuals = self.civilian_hp_bar_bg_visuals or {}
+    self.civilian_hp_bar_fill_visuals = self.civilian_hp_bar_fill_visuals or {}
     for civilian_id, go_id in pairs(self.civilian_visuals) do
         if go_id then
             pcall(go.delete, go_id)
@@ -4500,11 +4546,25 @@ local function clear_civilian_visuals(self)
         end
         self.civilian_shadow_visuals[civilian_id] = nil
     end
+    for civilian_id, go_id in pairs(self.civilian_hp_bar_bg_visuals) do
+        if go_id then
+            pcall(go.delete, go_id)
+        end
+        self.civilian_hp_bar_bg_visuals[civilian_id] = nil
+    end
+    for civilian_id, go_id in pairs(self.civilian_hp_bar_fill_visuals) do
+        if go_id then
+            pcall(go.delete, go_id)
+        end
+        self.civilian_hp_bar_fill_visuals[civilian_id] = nil
+    end
 end
 
 local function refresh_civilian_visuals(self)
     self.civilian_visuals = self.civilian_visuals or {}
     self.civilian_shadow_visuals = self.civilian_shadow_visuals or {}
+    self.civilian_hp_bar_bg_visuals = self.civilian_hp_bar_bg_visuals or {}
+    self.civilian_hp_bar_fill_visuals = self.civilian_hp_bar_fill_visuals or {}
     local seen = {}
     local shadow_alpha = get_world_shadow_alpha(self)
     local profile = get_aesthetic_profile(self)
@@ -4516,6 +4576,7 @@ local function refresh_civilian_visuals(self)
     for _, civilian in ipairs(self.civilians or {}) do
         if civilian and civilian.id and civilian.cell_id and self.world_grid and self.world_grid[civilian.cell_id] then
             local cell = self.world_grid[civilian.cell_id]
+            local desired_civilian_anim = (civilian.is_dead == true) and CIVILIAN_DEAD_SPRITE_ANIM or CIVILIAN_SPRITE_ANIM
             local x, y = get_civilian_world_pos_in_cell(self, civilian, civilian.cell_id, civilian.entry_slot_index)
             if not (x and y) then
                 local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
@@ -4527,11 +4588,18 @@ local function refresh_civilian_visuals(self)
                 go_id = factory.create("/tile_factory#tile_factory", vmath.vector3(x, y, CIVILIAN_VISUAL_Z))
                 if go_id then
                     self.civilian_visuals[civilian.id] = go_id
-                    pcall(msg.post, msg.url(nil, go_id, "sprite"), "play_animation", { id = CIVILIAN_SPRITE_ANIM })
+                    pcall(msg.post, msg.url(nil, go_id, "sprite"), "play_animation", { id = desired_civilian_anim })
+                    civilian.current_anim_id = desired_civilian_anim
                     pcall(go.set_scale, vmath.vector3(CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE, 1), go_id)
                 end
             end
             if go_id then
+                if civilian.current_anim_id ~= desired_civilian_anim then
+                    pcall(msg.post, msg.url(nil, go_id, "sprite"), "play_animation", { id = desired_civilian_anim })
+                    civilian.current_anim_id = desired_civilian_anim
+                end
+                civilian.go_path = go_id
+                civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
                 local render_x = x
                 local render_y = y
                 if civilian.is_moving ~= true then
@@ -4563,6 +4631,65 @@ local function refresh_civilian_visuals(self)
                     pcall(go.set_position, vmath.vector3(render_x + shadow_pos.x, render_y + shadow_pos.y, CIVILIAN_VISUAL_Z - 0.01), shadow_id)
                     pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", effective_shadow_tint)
                 end
+                local hp_bg_id = self.civilian_hp_bar_bg_visuals[civilian.id]
+                local hp_fill_id = self.civilian_hp_bar_fill_visuals[civilian.id]
+                local hp_max = math.max(0, tonumber(civilian.max_health or CIVILIAN_MAX_HEALTH) or CIVILIAN_MAX_HEALTH)
+                local hp_now = math.max(0, tonumber(civilian.current_health or hp_max) or hp_max)
+                local show_hp_bar = civilian.is_dead ~= true and hp_max > 0
+                if show_hp_bar then
+                    local hp_ratio = math.max(0, math.min(1, hp_now / hp_max))
+                    local unit_pos = go.get_position(go_id)
+                    local hp_bar_x = unit_pos.x
+                    local hp_bar_y = unit_pos.y + CIVILIAN_HP_BAR_OFFSET_Y
+                    local bar_left = hp_bar_x - (CIVILIAN_HP_BAR_FULL_W * 0.5)
+                    if not hp_bg_id then
+                        hp_bg_id = factory.create("/tile_factory#tile_factory", vmath.vector3(hp_bar_x, hp_bar_y, CIVILIAN_VISUAL_Z + 0.2))
+                        if hp_bg_id then
+                            self.civilian_hp_bar_bg_visuals[civilian.id] = hp_bg_id
+                            pcall(msg.post, msg.url(nil, hp_bg_id, "sprite"), "play_animation", { id = CIVILIAN_HP_BAR_BG_ANIM })
+                            pcall(go.set_scale, vmath.vector3(CIVILIAN_HP_BAR_SCALE_X, CIVILIAN_HP_BAR_SCALE_Y, 1), hp_bg_id)
+                            pcall(go.set, msg.url(nil, hp_bg_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        end
+                    elseif hp_bg_id then
+                        pcall(go.set_position, vmath.vector3(hp_bar_x, hp_bar_y, CIVILIAN_VISUAL_Z + 0.2), hp_bg_id)
+                    end
+                    if hp_ratio > 0 then
+                        local fill_scale_x = CIVILIAN_HP_BAR_SCALE_X * hp_ratio
+                        local fill_full_w = CIVILIAN_HP_BAR_ART_W * fill_scale_x
+                        local fill_x = bar_left + (fill_full_w * 0.5)
+                        local fill_color = vmath.vector4(0.28, 1.0, 0.38, 1.0)
+                        if hp_ratio <= 0.3 then
+                            fill_color = vmath.vector4(1.0, 0.36, 0.3, 1.0)
+                        elseif hp_ratio <= 0.6 then
+                            fill_color = vmath.vector4(1.0, 0.9, 0.3, 1.0)
+                        end
+                        if not hp_fill_id then
+                            hp_fill_id = factory.create("/tile_factory#tile_factory", vmath.vector3(fill_x, hp_bar_y, CIVILIAN_VISUAL_Z + 0.2001))
+                            if hp_fill_id then
+                                self.civilian_hp_bar_fill_visuals[civilian.id] = hp_fill_id
+                                pcall(msg.post, msg.url(nil, hp_fill_id, "sprite"), "play_animation", { id = CIVILIAN_HP_BAR_FILL_ANIM })
+                                pcall(go.set, msg.url(nil, hp_fill_id, "sprite"), "tint", fill_color)
+                            end
+                        end
+                        if hp_fill_id then
+                            pcall(go.set_position, vmath.vector3(fill_x, hp_bar_y, CIVILIAN_VISUAL_Z + 0.2001), hp_fill_id)
+                            pcall(go.set_scale, vmath.vector3(fill_scale_x, CIVILIAN_HP_BAR_SCALE_Y, 1), hp_fill_id)
+                            pcall(go.set, msg.url(nil, hp_fill_id, "sprite"), "tint", fill_color)
+                        end
+                    elseif hp_fill_id then
+                        pcall(go.delete, hp_fill_id)
+                        self.civilian_hp_bar_fill_visuals[civilian.id] = nil
+                    end
+                else
+                    if hp_bg_id then
+                        pcall(go.delete, hp_bg_id)
+                        self.civilian_hp_bar_bg_visuals[civilian.id] = nil
+                    end
+                    if hp_fill_id then
+                        pcall(go.delete, hp_fill_id)
+                        self.civilian_hp_bar_fill_visuals[civilian.id] = nil
+                    end
+                end
                 seen[civilian.id] = true
             end
         end
@@ -4581,6 +4708,22 @@ local function refresh_civilian_visuals(self)
                 pcall(go.delete, go_id)
             end
             self.civilian_shadow_visuals[civilian_id] = nil
+        end
+    end
+    for civilian_id, go_id in pairs(self.civilian_hp_bar_bg_visuals) do
+        if not seen[civilian_id] then
+            if go_id then
+                pcall(go.delete, go_id)
+            end
+            self.civilian_hp_bar_bg_visuals[civilian_id] = nil
+        end
+    end
+    for civilian_id, go_id in pairs(self.civilian_hp_bar_fill_visuals) do
+        if not seen[civilian_id] then
+            if go_id then
+                pcall(go.delete, go_id)
+            end
+            self.civilian_hp_bar_fill_visuals[civilian_id] = nil
         end
     end
 end
@@ -4669,6 +4812,7 @@ local function spawn_civilians_for_current_mission(self)
                     self.next_civilian_id = (self.next_civilian_id or 0) + 1
                     table.insert(self.civilians, {
                         id = self.next_civilian_id,
+                        display_name = string.format("Civilian #%d", tonumber(self.next_civilian_id or 0) or 0),
                         cell_id = cell.idNumber,
                         is_awake = false,
                         is_dead = false,
@@ -7778,6 +7922,8 @@ function reset_and_load_level(self, level_index)
     safe_delete_map(self.door_objects)
     safe_delete_map(self.civilian_visuals)
     safe_delete_map(self.civilian_shadow_visuals)
+    safe_delete_map(self.civilian_hp_bar_bg_visuals)
+    safe_delete_map(self.civilian_hp_bar_fill_visuals)
     safe_delete_map(self.machine_shadow_objects)
     safe_delete_map(self.turret_shadow_objects)
     safe_delete_map(self.power_node_shadow_objects)
@@ -7904,6 +8050,10 @@ function reset_and_load_level(self, level_index)
     self.next_civilian_id = 0
     self.civilian_visuals = {}
     self.civilian_shadow_visuals = {}
+    self.civilian_hp_bar_bg_visuals = {}
+    self.civilian_hp_bar_fill_visuals = {}
+    self.civilian_hp_bar_bg_visuals = {}
+    self.civilian_hp_bar_fill_visuals = {}
 
     spawn_visuals(self)
     apply_aesthetic_mode(self)

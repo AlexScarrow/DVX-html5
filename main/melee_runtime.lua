@@ -95,6 +95,69 @@ function M.create(ctx)
         return list
     end
 
+    local function get_target_sort_key(target)
+        if not target then
+            return "z"
+        end
+        local kind = target.target_kind or "human"
+        local id = tostring(target.id or 0)
+        return kind .. "_" .. id
+    end
+
+    local function get_living_defender_targets_on_cell(self, cell_id)
+        local list = {}
+        for _, human in ipairs(get_living_humans_on_cell(self, cell_id)) do
+            if human then
+                human.target_kind = "human"
+                table.insert(list, human)
+            end
+        end
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian
+                and civilian.cell_id == cell_id
+                and (civilian.current_health or 0) > 0
+                and civilian.is_dead ~= true
+            then
+                civilian.target_kind = "civilian"
+                civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
+                table.insert(list, civilian)
+            end
+        end
+        table.sort(list, function(a, b)
+            if (a.current_health or 0) == (b.current_health or 0) then
+                return get_target_sort_key(a) < get_target_sort_key(b)
+            end
+            return (a.current_health or 0) < (b.current_health or 0)
+        end)
+        return list
+    end
+
+    local function get_target_go_id(self, target)
+        if not target then
+            return nil
+        end
+        if target.go_path then
+            return target.go_path
+        end
+        if target.target_kind == "civilian" and self and self.civilian_visuals and target.id then
+            return self.civilian_visuals[target.id]
+        end
+        return nil
+    end
+
+    local function get_target_display_name(target)
+        if not target then
+            return "Unknown"
+        end
+        if target.display_name then
+            return target.display_name
+        end
+        if target.target_kind == "civilian" then
+            return string.format("Civilian #%d", tonumber(target.id or 0) or 0)
+        end
+        return tostring(target.id or "Unknown")
+    end
+
     local function get_living_aliens_on_cell(self, cell_id)
         local list = {}
         if not self.aliens then
@@ -139,18 +202,25 @@ function M.create(ctx)
         record_alien_kill(self, alien)
     end
 
-    local function mark_human_hit(unit)
-        unit.hit_flash_timer = ctx.MELEE_MODEL.human_hit_flash_duration
-        if unit.sprite_path then
-            pcall(go.set, unit.sprite_path, "tint", vmath.vector4(1, 0.15, 0.15, 1))
+    local function mark_target_hit(self, target)
+        if not target then
+            return
+        end
+        if target.target_kind == "civilian" then
+            return
+        end
+        target.hit_flash_timer = ctx.MELEE_MODEL.human_hit_flash_duration
+        if target.sprite_path then
+            pcall(go.set, target.sprite_path, "tint", vmath.vector4(1, 0.15, 0.15, 1))
         end
     end
 
     local function spawn_alien_melee_swipe_fx(self, target)
-        if not target or not target.go_path then
+        local go_id = get_target_go_id(self, target)
+        if not go_id then
             return
         end
-        local pos = go.get_position(target.go_path)
+        local pos = go.get_position(go_id)
         local fx_id = factory.create("/tile_factory#tile_factory", vmath.vector3(pos.x, pos.y + 10, 0.9))
         if not fx_id then
             return
@@ -190,11 +260,12 @@ function M.create(ctx)
         end)
     end
 
-    local function spawn_human_blood_splatter_fx(target_human)
-        if not target_human or not target_human.go_path then
+    local function spawn_human_blood_splatter_fx(self, target_human)
+        local go_id = get_target_go_id(self, target_human)
+        if not go_id then
             return
         end
-        local pos = go.get_position(target_human.go_path)
+        local pos = go.get_position(go_id)
         local fx_id = factory.create("/human_blood_splatter1_fx_factory#human_blood_splatter1_fx_factory", vmath.vector3(pos.x, pos.y + 6, 0.61))
         if not fx_id then
             return
@@ -267,11 +338,12 @@ function M.create(ctx)
         if not alien or not alien.go_id or alien.is_moving then
             return
         end
-        if not target_human or not target_human.go_path then
+        local target_go_id = get_target_go_id(self, target_human)
+        if not target_human or not target_go_id then
             return
         end
         local attacker_pos = go.get_position(alien.go_id)
-        local target_pos = go.get_position(target_human.go_path)
+        local target_pos = go.get_position(target_go_id)
         local dx = target_pos.x - attacker_pos.x
         local dy = target_pos.y - attacker_pos.y
 
@@ -381,16 +453,19 @@ function M.create(ctx)
             return
         end
 
-        local humans = get_living_humans_on_cell(self, alien.cell_id)
-        if #humans == 0 then
+        local targets = get_living_defender_targets_on_cell(self, alien.cell_id)
+        if #targets == 0 then
             return
         end
         if cell_has_active_barricade(self, alien.cell_id) then
             return
         end
 
-        local target = humans[1] -- weakest-first
-        local armor_bonus = target.melee_armor_bonus or target.equipped_armor_bonus or 0
+        local target = targets[1] -- weakest-first across humans+civilians
+        local armor_bonus = 0
+        if target.target_kind ~= "civilian" then
+            armor_bonus = target.melee_armor_bonus or target.equipped_armor_bonus or 0
+        end
         local hit_chance = clamp(ctx.MELEE_MODEL.alien_base_hit_chance - armor_bonus, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)
         alien.turn_ap_remaining = math.max(0, ap_left - melee_ap_cost)
@@ -403,19 +478,27 @@ function M.create(ctx)
         if roll <= hit_chance then
             local damage = get_alien_melee_damage(alien and alien.type)
             target.current_health = math.max(0, (target.current_health or 0) - damage)
-            mark_human_hit(target)
-            spawn_human_blood_splatter_fx(target)
+            mark_target_hit(self, target)
+            spawn_human_blood_splatter_fx(self, target)
             print(string.format(
                 "Alien #%d melee on %s and HIT [chance=%d%% roll=%d dmg=%d hp=%d armor=%d]",
-                alien.id, target.display_name, hit_chance, roll, damage, target.current_health, armor_bonus
+                alien.id, get_target_display_name(target), hit_chance, roll, damage, target.current_health, armor_bonus
             ))
             if target.current_health <= 0 then
-                print(target.display_name .. " is dead")
+                if target.target_kind == "civilian" then
+                    target.is_dead = true
+                    target.current_ap = 0
+                    target.is_awake = false
+                    target.is_moving = false
+                    target.move_path = nil
+                    target.move_path_index = 0
+                end
+                print(get_target_display_name(target) .. " is dead")
             end
         else
             print(string.format(
                 "Alien #%d melee on %s and MISSED [chance=%d%% roll=%d armor=%d]",
-                alien.id, target.display_name, hit_chance, roll, armor_bonus
+                alien.id, get_target_display_name(target), hit_chance, roll, armor_bonus
             ))
         end
 
@@ -433,7 +516,7 @@ function M.create(ctx)
             end
         end
 
-        local still_has_humans = #get_living_humans_on_cell(self, alien.cell_id) > 0
+        local still_has_humans = #get_living_defender_targets_on_cell(self, alien.cell_id) > 0
         local remaining = tonumber(alien.turn_ap_remaining or 0) or 0
         if (not alien.is_dead) and remaining > 0 and still_has_humans then
             table.insert(self.melee_action_queue, { kind = "alien", alien_id = alien.id })
@@ -488,7 +571,7 @@ function M.create(ctx)
     end
 
     runtime.spawn_human_blood_splatter_fx = function(self, human)
-        spawn_human_blood_splatter_fx(human)
+        spawn_human_blood_splatter_fx(self, human)
     end
 
     runtime.update_phase = function(self, dt)
@@ -506,7 +589,7 @@ function M.create(ctx)
             for _, alien in ipairs(self.aliens or {}) do
                 if not alien.is_dead then
                     local ap_budget = alien.turn_ap_remaining or alien.ap_max or 0
-                    if ap_budget > 0 and #get_living_humans_on_cell(self, alien.cell_id) > 0 then
+                    if ap_budget > 0 and #get_living_defender_targets_on_cell(self, alien.cell_id) > 0 then
                         table.insert(self.melee_action_queue, { kind = "alien", alien_id = alien.id })
                     end
                 end

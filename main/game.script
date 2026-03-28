@@ -368,7 +368,7 @@ AESTHETIC_PROFILES = {
         backdrop_emissive_speed_variation_max_seconds = 8.0,
         backdrop_pan_speed_x = 0,
         backdrop_pan_speed_y = 0,
-        backdrop_parallax_factor = 0.20,
+        backdrop_parallax_factor = 0.10,
         backdrop_follow_camera = true,
         backdrop_clouds_enabled = true,
         world_drop_shadows_enabled = false,
@@ -12898,7 +12898,7 @@ end
                 end
             end
 
-            if placement.tile ~= "entry" then
+            if placement.tile ~= "entry" and (not is_rescue_entry_tile_name(placement.tile)) then
                 -- Exterior details are only for truly exposed silhouettes:
                 -- roof: no overlapping tile anywhere above; left wall: no overlapping tile anywhere to the left.
                 local has_tile_above = false

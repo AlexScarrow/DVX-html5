@@ -90,6 +90,32 @@ function M.create_tile_library(COMPONENT_UI)
     
     library["entry"] = entry
 
+    local rescue_entry = create_tile_prototype("rescue_entry")
+    rescue_entry.visualTile = "entry_computerGame"
+    rescue_entry.visualTileComputer = "entry_computerGame"
+    rescue_entry.visualTileBoardgame = "entry_boardGame"
+    for i = 1, 9 do
+        rescue_entry.cells[i].lightValue = 2
+        rescue_entry.cells[i].moveValue = 1
+        rescue_entry.cells[i].coverValue = 1
+    end
+    rescue_entry.cells[3].moveValue = 3
+    rescue_entry.cells[6].moveValue = 3
+    rescue_entry.cells[1].accessDown = false
+    rescue_entry.cells[2].accessDown = false
+    rescue_entry.cells[3].accessRight = false
+    rescue_entry.cells[3].accessDown = false
+    rescue_entry.cells[4].accessRight = true
+    rescue_entry.cells[4].accessDown = true
+    rescue_entry.cells[5].accessDown = false
+    rescue_entry.cells[5].accessRight = false
+    rescue_entry.cells[6].accessRight = false
+    rescue_entry.cells[9].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    library["rescue_entry"] = rescue_entry
+
 -- =====================================================================
 -- COMS (acquire Nav data)
 -- =====================================================================

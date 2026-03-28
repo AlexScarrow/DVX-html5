@@ -110,6 +110,9 @@ function M.extend(runtime, ctx)
     local MEDBAY_REVIVE_LOCAL_CELL = 1
     local MEDBAY_REVIVE_OFFSET_X = 20
     local MEDBAY_REVIVE_OFFSET_Y = -14
+    local RESCUE_ENTRY_TILE_NAME = "rescue_entry"
+    local RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
+    local RESCUE_ENTRY_VICTORY_LOCAL_CELL = tonumber(ctx.RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
     local DERPLE_FEEDBACK_EVENT_DEFS = {
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
@@ -674,6 +677,49 @@ function M.extend(runtime, ctx)
         if ctx and ctx.record_launch_success then
             ctx.record_launch_success(self, escaped_humans_alive_count)
         end
+    end
+
+    local function record_civilian_escorted(self, civilian_id)
+        if ctx and ctx.record_civilian_escorted then
+            ctx.record_civilian_escorted(self, civilian_id)
+        end
+    end
+
+    local function is_rescue_entry_tile_name(tile_name)
+        local name = tostring(tile_name or "")
+        return name == RESCUE_ENTRY_TILE_NAME or name == RESCUE_ENTRY_TILE_NAME_ALT
+    end
+
+    local function is_rescue_mission(self)
+        if not (ctx and ctx.get_current_mission_type) then
+            return false
+        end
+        return tostring(ctx.get_current_mission_type(self) or "") == "rescue"
+    end
+
+    local function get_rescue_victory_cell_ids(self)
+        local out = {}
+        if not (self and self.level_library and ctx and ctx.coords_to_id) then
+            return out
+        end
+        local level = self.level_library[self.current_level_index or 1]
+        if type(level) ~= "table" then
+            return out
+        end
+        for _, placement in ipairs(level) do
+            if placement and is_rescue_entry_tile_name(placement.tile) then
+                local local_idx = tonumber(RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
+                local local_x = (local_idx - 1) % 3
+                local local_y = math.floor((local_idx - 1) / 3)
+                local cell_x = (placement.x or 0) - 1 + local_x
+                local cell_y = (placement.y or 0) - 1 + local_y
+                local cell_id = ctx.coords_to_id(cell_x, cell_y)
+                if cell_id and self.world_grid and self.world_grid[cell_id] and self.world_grid[cell_id].tileID ~= hash("empty") then
+                    out[#out + 1] = cell_id
+                end
+            end
+        end
+        return out
     end
 
     local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
@@ -2692,6 +2738,7 @@ function M.extend(runtime, ctx)
         self.exit_objective_state = self.exit_objective_state or {}
         local state = self.exit_objective_state
         state.seated_humans = 0
+        state.rescued_civilians = 0
         state.power_loaded = 0
         state.nav_ready = false
         state.supplies_ready = false
@@ -2702,6 +2749,16 @@ function M.extend(runtime, ctx)
                     state.seated_humans = state.seated_humans + 1
                 end
             end
+        end
+        if self.civilians then
+            for _, civilian in ipairs(self.civilians) do
+                if civilian and civilian.is_rescued == true then
+                    state.rescued_civilians = state.rescued_civilians + 1
+                end
+            end
+        end
+        if is_rescue_mission(self) then
+            return state
         end
         if self.world_grid then
             for _, cell in ipairs(self.world_grid) do
@@ -2747,6 +2804,17 @@ function M.extend(runtime, ctx)
 
     runtime.get_launch_status = function(self)
         local state = runtime.refresh_exit_objective_state(self)
+        if is_rescue_mission(self) then
+            return {
+                can_launch = (state.rescued_civilians or 0) >= 1,
+                seated_humans = state.seated_humans or 0,
+                rescued_civilians = state.rescued_civilians or 0,
+                power_loaded = 0,
+                nav_ready = true,
+                supplies_ready = true,
+                exit_tile_powered = true
+            }
+        end
         return {
             can_launch = state.seated_humans >= 1
                 and state.power_loaded >= 9
@@ -2764,15 +2832,22 @@ function M.extend(runtime, ctx)
     runtime.try_launch_escape_pod = function(self)
         local status = runtime.get_launch_status(self)
         if not status.can_launch then
-            print(string.format(
-                "Launch blocked | seated=%d (need >=1) power=%d/9 nav=%s supplies=%s",
-                status.seated_humans,
-                status.power_loaded,
-                status.nav_ready and "ready" or "missing",
-                status.supplies_ready and "ready" or "missing"
-            ))
-            if status.exit_tile_powered ~= true then
-                print("Launch blocked | exit tile power is OFF.")
+            if is_rescue_mission(self) then
+                print(string.format(
+                    "Launch blocked | rescued_civilians=%d (need >=1)",
+                    tonumber(status.rescued_civilians or 0) or 0
+                ))
+            else
+                print(string.format(
+                    "Launch blocked | seated=%d (need >=1) power=%d/9 nav=%s supplies=%s",
+                    status.seated_humans,
+                    status.power_loaded,
+                    status.nav_ready and "ready" or "missing",
+                    status.supplies_ready and "ready" or "missing"
+                ))
+                if status.exit_tile_powered ~= true then
+                    print("Launch blocked | exit tile power is OFF.")
+                end
             end
             return false
         end
@@ -2785,6 +2860,98 @@ function M.extend(runtime, ctx)
 
     runtime.update_exit_boarding = function(self)
         if not self.squad_units or not self.world_grid then
+            return
+        end
+        if is_rescue_mission(self) then
+            local boarded_any = false
+            local rescued_any = false
+            local victory_lookup = {}
+            for _, cell_id in ipairs(get_rescue_victory_cell_ids(self)) do
+                victory_lookup[cell_id] = true
+            end
+            if next(victory_lookup) == nil then
+                runtime.refresh_exit_objective_state(self)
+                return
+            end
+            for _, unit in pairs(self.squad_units) do
+                if unit
+                    and (unit.current_health or 0) > 0
+                    and unit.in_shuttle ~= true
+                    and unit.cell_id
+                    and victory_lookup[unit.cell_id]
+                then
+                    local old_cell = unit.cell_id
+                    if self.cell_slot_assignments and self.cell_slot_assignments[old_cell] then
+                        self.cell_slot_assignments[old_cell][unit.id] = nil
+                    end
+                    unit.in_shuttle = true
+                    unit.is_selected = false
+                    unit.is_moving = false
+                    unit.move_path = nil
+                    unit.move_path_index = 0
+                    unit.cell_id = nil
+                    if unit.go_path then
+                        go.set_position(SHUTTLE_HIDE_POS, unit.go_path)
+                    end
+                    if unit.shadow_path then
+                        go.set_position(SHUTTLE_HIDE_POS, unit.shadow_path)
+                    end
+                    if self.controlled_unit_id == unit.id then
+                        self.controlled_unit_id = nil
+                    end
+                    boarded_any = true
+                    print(string.format("%s evacuated from rescue zone.", unit.display_name))
+                end
+            end
+            for _, civilian in ipairs(self.civilians or {}) do
+                if civilian
+                    and civilian.is_dead ~= true
+                    and civilian.is_rescued ~= true
+                    and civilian.cell_id
+                    and victory_lookup[civilian.cell_id]
+                then
+                    civilian.is_rescued = true
+                    civilian.is_awake = false
+                    civilian.is_moving = false
+                    civilian.move_path = nil
+                    civilian.move_path_index = 0
+                    civilian.current_ap = 0
+                    civilian.cell_id = nil
+                    if self.civilian_visuals and self.civilian_visuals[civilian.id] then
+                        pcall(go.set_position, SHUTTLE_HIDE_POS, self.civilian_visuals[civilian.id])
+                    end
+                    if self.civilian_shadow_visuals and self.civilian_shadow_visuals[civilian.id] then
+                        pcall(go.set_position, SHUTTLE_HIDE_POS, self.civilian_shadow_visuals[civilian.id])
+                    end
+                    if self.civilian_hp_bar_bg_visuals and self.civilian_hp_bar_bg_visuals[civilian.id] then
+                        pcall(go.set_position, SHUTTLE_HIDE_POS, self.civilian_hp_bar_bg_visuals[civilian.id])
+                    end
+                    if self.civilian_hp_bar_fill_visuals and self.civilian_hp_bar_fill_visuals[civilian.id] then
+                        pcall(go.set_position, SHUTTLE_HIDE_POS, self.civilian_hp_bar_fill_visuals[civilian.id])
+                    end
+                    record_civilian_escorted(self, civilian.id)
+                    rescued_any = true
+                    print(string.format("%s rescued.", tostring(civilian.display_name or "Civilian")))
+                end
+            end
+            if boarded_any and self.squad_units then
+                if not self.controlled_unit_id then
+                    for _, scan in pairs(self.squad_units) do
+                        if scan and (scan.current_health or 0) > 0 and scan.in_shuttle ~= true then
+                            self.controlled_unit_id = scan.id
+                            scan.is_selected = true
+                            break
+                        end
+                    end
+                end
+            end
+            if boarded_any and ctx.update_human_visual_state then
+                ctx.update_human_visual_state(self)
+            end
+            if rescued_any and ctx.update_civilian_visual_state then
+                ctx.update_civilian_visual_state(self)
+            end
+            runtime.refresh_exit_objective_state(self)
             return
         end
         local boarded_any = false

@@ -31,9 +31,11 @@ function M.create_level_library()
         { x = 9, y = 5, tile = "passage1" },
     }
     levels[1].mission_type = "escape"
+    levels[1].spawn_tile = "entry"
+    levels[1].spawn_cell = 2
 
     levels[2] = {
-        { x = 2, y = 8, tile = "entry" },
+        { x = 2, y = 8, tile = "rescue_entry" },
         { x = 5, y = 8, tile = "medbay" },
         { x = 8, y = 9, tile = "canteen" },
         { x = 11, y = 8, tile = "factory" },
@@ -45,6 +47,8 @@ function M.create_level_library()
         { x = 5, y = 2, tile = "exit" },      
     }
     levels[2].mission_type = "rescue"
+    levels[2].spawn_tile = "rescue_entry"
+    levels[2].spawn_cell = 2
 
     -- levels[1] = {
     --     --{ x = 8, y = 11, tile = "coms" },

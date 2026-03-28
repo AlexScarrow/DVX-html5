@@ -243,6 +243,9 @@ MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
+RESCUE_ENTRY_TILE_NAME = "rescue_entry"
+RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
+RESCUE_ENTRY_VICTORY_LOCAL_CELL = 4
 AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
 ALIEN_REVEAL_WEIGHTS = ALIEN_BALANCE.REVEAL_WEIGHTS or {}
@@ -4526,6 +4529,87 @@ local function get_current_mission_type(self)
     return get_level_mission_type(level_def)
 end
 
+local function is_rescue_entry_tile_name(tile_name)
+    local name = tostring(tile_name or "")
+    return name == RESCUE_ENTRY_TILE_NAME or name == RESCUE_ENTRY_TILE_NAME_ALT
+end
+
+local function get_rescue_entry_victory_cell_ids(self)
+    local out = {}
+    local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if type(level) ~= "table" then
+        return out
+    end
+    for _, placement in ipairs(level) do
+        if placement and is_rescue_entry_tile_name(placement.tile) then
+            local local_idx = tonumber(RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
+            local local_x = (local_idx - 1) % 3
+            local local_y = math.floor((local_idx - 1) / 3)
+            local cell_x = (placement.x or 0) - 1 + local_x
+            local cell_y = (placement.y or 0) - 1 + local_y
+            local cell_id = coords_to_id(cell_x, cell_y)
+            if cell_id and self.world_grid and self.world_grid[cell_id] and self.world_grid[cell_id].tileID ~= hash("empty") then
+                out[#out + 1] = cell_id
+            end
+        end
+    end
+    return out
+end
+
+local function is_cell_in_any_rescue_entry_tile(self, cell_id)
+    local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if type(level) ~= "table" then
+        return false
+    end
+    local cid = tonumber(cell_id or 0) or 0
+    if cid <= 0 then
+        return false
+    end
+    for _, placement in ipairs(level) do
+        if placement and is_rescue_entry_tile_name(placement.tile) then
+            for dy = -1, 1 do
+                for dx = -1, 1 do
+                    local check_id = coords_to_id((placement.x or 0) + dx, (placement.y or 0) + dy)
+                    if check_id == cid then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
+    if not (self and civilian and civilian.cell_id) then
+        return nil
+    end
+    local best_path = nil
+    local best_cost = math.huge
+    local best_target = math.huge
+    for _, target_cell_id in ipairs(get_rescue_entry_victory_cell_ids(self)) do
+        if target_cell_id ~= civilian.cell_id then
+            local path, total_cost = find_path(
+                self.world_grid,
+                civilian.cell_id,
+                target_cell_id,
+                nil,
+                MOVEMENT_PROFILE_HUMAN,
+                nil
+            )
+            if path and #path >= 2 then
+                local cost = tonumber(total_cost or 0) or 0
+                if cost < best_cost or (cost == best_cost and target_cell_id < best_target) then
+                    best_path = path
+                    best_cost = cost
+                    best_target = target_cell_id
+                end
+            end
+        end
+    end
+    return best_path
+end
+
 local set_civilian_scale
 local get_civilian_world_pos_in_cell
 
@@ -4816,6 +4900,7 @@ local function spawn_civilians_for_current_mission(self)
                         cell_id = cell.idNumber,
                         is_awake = false,
                         is_dead = false,
+                        is_rescued = false,
                         max_ap = CIVILIAN_MAX_ACTION_POINTS,
                         current_ap = CIVILIAN_MAX_ACTION_POINTS,
                         max_health = CIVILIAN_MAX_HEALTH,
@@ -4970,8 +5055,14 @@ local function process_civilian_turn(self)
                 end
                 if civilian.is_awake == true and civilian.cell_id then
                     local remaining_ap = tonumber(civilian.current_ap or 0) or 0
-                    local nearest, path = get_follow_target_path_for_civilian(self, civilian)
-                    if nearest and path and remaining_ap > 0 then
+                    local nearest = nil
+                    local path = nil
+                    if get_current_mission_type(self) == MISSION_TYPE_RESCUE and is_cell_in_any_rescue_entry_tile(self, civilian.cell_id) then
+                        path = get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
+                    else
+                        nearest, path = get_follow_target_path_for_civilian(self, civilian)
+                    end
+                    if path and remaining_ap > 0 then
                         local segment_path, spent = get_civilian_turn_movement_segment(self, path, remaining_ap)
                         if segment_path then
                             civilian.is_moving = true
@@ -6825,8 +6916,19 @@ function is_point_in_screen_rect(screen_x, screen_y, cx, cy, w, h)
 end
 
 function ensure_score_state(self)
+    local mission_type = get_current_mission_type(self)
+    local score_profile_id = "escape_pod"
+    if mission_type == MISSION_TYPE_RESCUE then
+        score_profile_id = "escort"
+    elseif mission_type == MISSION_TYPE_PURGE then
+        score_profile_id = "purge_and_power"
+    elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
+        score_profile_id = "holdout"
+    end
     if not self.score_state then
-        self.score_state = SCORE_RUNTIME.create_state("escape_pod")
+        self.score_state = SCORE_RUNTIME.create_state(score_profile_id)
+    else
+        self.score_state = SCORE_RUNTIME.set_mission_type(self.score_state, score_profile_id)
     end
     return self.score_state
 end
@@ -6935,6 +7037,12 @@ function score_record_launch_success(self, escaped_humans_alive_count)
     SCORE_RUNTIME.record_humans_alive_at_end(state, alive)
     SCORE_RUNTIME.record_mission_complete(state)
     score_log_snapshot(self, "launch_success")
+end
+
+function score_record_civilian_escorted(self, civilian_id)
+    local state = ensure_score_state(self)
+    SCORE_RUNTIME.record_civilian_escorted(state, civilian_id)
+    score_log_snapshot(self, "civilian_escorted")
 end
 
 function compute_placeholder_score_breakdown(self)
@@ -8032,7 +8140,8 @@ function reset_and_load_level(self, level_index)
     self.launch_fx_timer = 0
     self.game_won = false
     self.score_turn_counter = 0
-    self.score_state = SCORE_RUNTIME.create_state("escape_pod")
+    self.score_state = nil
+    ensure_score_state(self)
     self.score_display_total = 0
     self.power_node_loop_fx = {}
     self.melee_swipe_fx = {}
@@ -9293,7 +9402,8 @@ multiplayer_compute_turn_checksum = function(self)
                 unit.current_ap or 0,
                 unit.current_health or 0,
                 unit.current_ammo or 0,
-                unit.backpack_used or 0
+                unit.backpack_used or 0,
+                unit.in_shuttle == true and 1 or 0
             )
             local backpack = unit.backpack_items or {}
             for i = 1, #backpack do
@@ -9324,12 +9434,13 @@ multiplayer_compute_turn_checksum = function(self)
     local civilian_rows = {}
     for _, civilian in ipairs(self.civilians or {}) do
         civilian_rows[#civilian_rows + 1] = string.format(
-            "%d|%d|%d|%d|%d",
+            "%d|%d|%d|%d|%d|%d",
             tonumber(civilian and civilian.id or 0) or 0,
             tonumber(civilian and civilian.cell_id or 0) or 0,
             tonumber(civilian and civilian.current_health or 0) or 0,
             (civilian and civilian.is_awake == true) and 1 or 0,
-            (civilian and civilian.is_dead == true) and 1 or 0
+            (civilian and civilian.is_dead == true) and 1 or 0,
+            (civilian and civilian.is_rescued == true) and 1 or 0
         )
     end
     table.sort(civilian_rows)
@@ -10889,12 +11000,16 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     get_selected_unit = get_selected_unit,
     screen_to_world = screen_to_world,
     id_to_coords = id_to_coords,
+    coords_to_id = coords_to_id,
     coords_to_world_pos = coords_to_world_pos,
     set_ui_square_transform = set_ui_square_transform,
     update_human_visual_state = update_human_visual_state,
     update_civilian_visual_state = refresh_civilian_visuals,
     record_tile_powered_first_time = score_record_tile_powered_first_time,
+    record_civilian_escorted = score_record_civilian_escorted,
     record_launch_success = score_record_launch_success,
+    get_current_mission_type = get_current_mission_type,
+    RESCUE_ENTRY_VICTORY_LOCAL_CELL = RESCUE_ENTRY_VICTORY_LOCAL_CELL,
     mp_is_enabled = function(self_ref)
         return self_ref and self_ref.mp_state and self_ref.mp_state.enabled == true
     end,
@@ -11040,10 +11155,19 @@ function spawn_human_unit(self)
     local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
     local leftmost_tile = nil
     local entry_tile = nil
+    local configured_spawn_tile = (type(selected_level) == "table") and rawget(selected_level, "spawn_tile") or nil
+    local configured_spawn_cell = tonumber((type(selected_level) == "table") and (rawget(selected_level, "spawn_cell") or rawget(selected_level, "spawn_local_cell")) or nil)
+    local configured_spawn_tile_placement = nil
     if selected_level then
         for _, placement in ipairs(selected_level) do
             if (not entry_tile) and placement.tile == "entry" then
                 entry_tile = placement
+            end
+            if (not configured_spawn_tile_placement)
+                and configured_spawn_tile
+                and placement.tile == configured_spawn_tile
+            then
+                configured_spawn_tile_placement = placement
             end
             if (not leftmost_tile)
                 or placement.x < leftmost_tile.x
@@ -11054,6 +11178,14 @@ function spawn_human_unit(self)
         end
     end
 
+    local configured_spawn_cell_id = nil
+    if configured_spawn_tile_placement and configured_spawn_cell and configured_spawn_cell >= 1 and configured_spawn_cell <= 9 then
+        local local_x = (configured_spawn_cell - 1) % 3
+        local local_y = math.floor((configured_spawn_cell - 1) / 3)
+        local cell_x = configured_spawn_tile_placement.x - 1 + local_x
+        local cell_y = configured_spawn_tile_placement.y - 1 + local_y
+        configured_spawn_cell_id = coords_to_id(cell_x, cell_y)
+    end
     local entry_spawn_cell_id = nil
     if entry_tile then
         entry_spawn_cell_id = coords_to_id(entry_tile.x + 1, entry_tile.y)
@@ -11062,7 +11194,11 @@ function spawn_human_unit(self)
     if leftmost_tile then
         leftmost_spawn_cell_id = coords_to_id(leftmost_tile.x, leftmost_tile.y)
     end
-    if entry_spawn_cell_id and self.world_grid[entry_spawn_cell_id] and self.world_grid[entry_spawn_cell_id].tileID ~= hash("empty") then
+    if configured_spawn_cell_id and self.world_grid[configured_spawn_cell_id] and self.world_grid[configured_spawn_cell_id].tileID ~= hash("empty") then
+        for i = 1, 4 do
+            spawn_cells[i] = configured_spawn_cell_id
+        end
+    elseif entry_spawn_cell_id and self.world_grid[entry_spawn_cell_id] and self.world_grid[entry_spawn_cell_id].tileID ~= hash("empty") then
         for i = 1, 4 do
             spawn_cells[i] = entry_spawn_cell_id
         end
@@ -12056,8 +12192,8 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
         multiplayer_clone_simple_table(snapshot.exit_objective_state or {}) or {}
     )
     self.score_turn_counter = tonumber(snapshot.score_turn_counter or self.score_turn_counter or 0) or 0
-    self.score_state = multiplayer_clone_simple_table(snapshot.score_state or self.score_state or {}) or SCORE_RUNTIME.create_state("escape_pod")
-    self.score_state = SCORE_RUNTIME.set_mission_type(self.score_state, "escape_pod")
+    self.score_state = multiplayer_clone_simple_table(snapshot.score_state or self.score_state or {}) or {}
+    ensure_score_state(self)
 
     if self.mp_state then
         self.mp_state.turn_id = tonumber(snapshot.turn_id or self.mp_state.turn_id or 1) or 1
@@ -13041,7 +13177,8 @@ function init(self)
     spawn_civilians_for_current_mission(self)
     refresh_civilian_visuals(self)
     self.score_turn_counter = 0
-    self.score_state = SCORE_RUNTIME.create_state("escape_pod")
+    self.score_state = nil
+    ensure_score_state(self)
     self.score_display_total = 0
     self.multiplayer_mode_active = false
     print("SCORE TRACE READY | scoring runtime initialized")

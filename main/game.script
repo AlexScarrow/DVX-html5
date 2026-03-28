@@ -10892,6 +10892,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     coords_to_world_pos = coords_to_world_pos,
     set_ui_square_transform = set_ui_square_transform,
     update_human_visual_state = update_human_visual_state,
+    update_civilian_visual_state = refresh_civilian_visuals,
     record_tile_powered_first_time = score_record_tile_powered_first_time,
     record_launch_success = score_record_launch_success,
     mp_is_enabled = function(self_ref)

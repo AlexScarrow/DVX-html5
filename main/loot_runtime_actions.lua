@@ -117,6 +117,9 @@ function M.extend(runtime, ctx)
         NOT_ENOUGH_AP = { anim = hash("derples_comms_notEnough_AP"), duration = 1.05, cooldown = 0.4, scale = 0.54, x_offset = 50, y_offset = 74 },
         TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 }
     }
+    local get_dead_human_by_id
+    local get_dead_civilian_by_id
+    local get_dead_corpse_by_ref
 
     local function get_ap_cost(action_key, fallback_cost)
         local costs = ctx.AP_COSTS
@@ -1506,34 +1509,55 @@ function M.extend(runtime, ctx)
                 end
                 if state.progress >= 1 then
                     local revive_cell = instance and instance.cell_by_local and instance.cell_by_local[MEDBAY_REVIVE_LOCAL_CELL] or nil
-                    local corpse_unit = self.squad_units and self.squad_units[state.corpse_unit_id] or nil
+                    local corpse_unit = get_dead_corpse_by_ref(self, state.corpse_unit_id)
                     if corpse_unit and revive_cell then
-                        corpse_unit.current_health = math.max(1, corpse_unit.max_health or 1)
-                        corpse_unit.current_ap = tonumber(corpse_unit.max_ap or corpse_unit.current_ap or 0) or 0
-                        corpse_unit.cell_id = revive_cell.idNumber
-                        corpse_unit.is_corpse_stowed = false
-                        corpse_unit.in_shuttle = false
-                        corpse_unit.is_moving = false
-                        corpse_unit.move_path = nil
-                        corpse_unit.move_path_index = 0
-                        corpse_unit.hit_flash_timer = 0
-                        local revived_anim = get_alive_human_anim_for_aesthetic(self, corpse_unit)
-                        corpse_unit.occupancy_hash = revived_anim
-                        if corpse_unit.go_path then
-                            local wx, wy = ctx.coords_to_world_pos(revive_cell.xCell, revive_cell.yCell)
-                            pcall(
-                                go.set_position,
-                                vmath.vector3(wx + MEDBAY_REVIVE_OFFSET_X, wy + MEDBAY_REVIVE_OFFSET_Y, 0.5),
-                                corpse_unit.go_path
-                            )
-                            if corpse_unit.sprite_path and revived_anim then
-                                pcall(msg.post, corpse_unit.sprite_path, "play_animation", { id = revived_anim })
+                        if corpse_unit.target_kind == "civilian" then
+                            corpse_unit.max_health = tonumber(corpse_unit.max_health or 10) or 10
+                            corpse_unit.current_health = math.max(1, corpse_unit.max_health)
+                            corpse_unit.max_ap = tonumber(corpse_unit.max_ap or 3) or 3
+                            corpse_unit.current_ap = corpse_unit.max_ap
+                            corpse_unit.cell_id = revive_cell.idNumber
+                            corpse_unit.is_dead = false
+                            corpse_unit.is_corpse_stowed = false
+                            corpse_unit.is_awake = true
+                            corpse_unit.follow_human_id = nil
+                            corpse_unit.is_moving = false
+                            corpse_unit.move_path = nil
+                            corpse_unit.move_path_index = 0
+                            corpse_unit.micro_target_x = nil
+                            corpse_unit.micro_target_y = nil
+                            corpse_unit.micro_move_kind = nil
+                            if ctx.update_civilian_visual_state then
+                                ctx.update_civilian_visual_state(self)
+                            end
+                        else
+                            corpse_unit.current_health = math.max(1, corpse_unit.max_health or 1)
+                            corpse_unit.current_ap = tonumber(corpse_unit.max_ap or corpse_unit.current_ap or 0) or 0
+                            corpse_unit.cell_id = revive_cell.idNumber
+                            corpse_unit.is_corpse_stowed = false
+                            corpse_unit.in_shuttle = false
+                            corpse_unit.is_moving = false
+                            corpse_unit.move_path = nil
+                            corpse_unit.move_path_index = 0
+                            corpse_unit.hit_flash_timer = 0
+                            local revived_anim = get_alive_human_anim_for_aesthetic(self, corpse_unit)
+                            corpse_unit.occupancy_hash = revived_anim
+                            if corpse_unit.go_path then
+                                local wx, wy = ctx.coords_to_world_pos(revive_cell.xCell, revive_cell.yCell)
+                                pcall(
+                                    go.set_position,
+                                    vmath.vector3(wx + MEDBAY_REVIVE_OFFSET_X, wy + MEDBAY_REVIVE_OFFSET_Y, 0.5),
+                                    corpse_unit.go_path
+                                )
+                                if corpse_unit.sprite_path and revived_anim then
+                                    pcall(msg.post, corpse_unit.sprite_path, "play_animation", { id = revived_anim })
+                                end
+                            end
+                            if ctx.update_human_visual_state then
+                                ctx.update_human_visual_state(self)
                             end
                         end
-                        if ctx.update_human_visual_state then
-                            ctx.update_human_visual_state(self)
-                        end
-                        print(string.format("%s revived in medbay.", tostring(corpse_unit.display_name or "Human")))
+                        print(string.format("%s revived in medbay.", tostring(corpse_unit.display_name or "Unit")))
                     else
                         print("Medbay revive failed: source corpse unavailable.")
                     end
@@ -2059,15 +2083,81 @@ function M.extend(runtime, ctx)
         return out
     end
 
-    local function get_dead_human_by_id(self, unit_id)
+    local function make_human_corpse_ref(unit_id)
+        return "human:" .. tostring(unit_id or "")
+    end
+
+    local function make_civilian_corpse_ref(civilian_id)
+        return "civilian:" .. tostring(civilian_id or "")
+    end
+
+    local function parse_corpse_ref(corpse_ref)
+        if corpse_ref == nil then
+            return nil, nil
+        end
+        local raw = tostring(corpse_ref)
+        local human_prefix = "human:"
+        local civilian_prefix = "civilian:"
+        if string.sub(raw, 1, #human_prefix) == human_prefix then
+            return "human", string.sub(raw, #human_prefix + 1)
+        end
+        if string.sub(raw, 1, #civilian_prefix) == civilian_prefix then
+            local num = tonumber(string.sub(raw, #civilian_prefix + 1))
+            return "civilian", num
+        end
+        return nil, raw
+    end
+
+    get_dead_human_by_id = function(self, unit_id)
         if not self.squad_units or not unit_id then
             return nil
         end
         local unit = self.squad_units[unit_id]
         if unit and (unit.current_health or 0) <= 0 then
+            unit.target_kind = "human"
             return unit
         end
         return nil
+    end
+
+    get_dead_civilian_by_id = function(self, civilian_id)
+        local wanted = tonumber(civilian_id)
+        if not (self and self.civilians and wanted) then
+            return nil
+        end
+        for _, civilian in ipairs(self.civilians) do
+            if civilian and tonumber(civilian.id) == wanted and (civilian.current_health or 0) <= 0 then
+                civilian.target_kind = "civilian"
+                civilian.display_name = civilian.display_name or string.format("Civilian #%d", wanted)
+                return civilian
+            end
+        end
+        return nil
+    end
+
+    get_dead_corpse_by_ref = function(self, corpse_ref)
+        local kind, ref_id = parse_corpse_ref(corpse_ref)
+        if kind == "human" then
+            return get_dead_human_by_id(self, ref_id)
+        end
+        if kind == "civilian" then
+            return get_dead_civilian_by_id(self, ref_id)
+        end
+        local human = get_dead_human_by_id(self, ref_id)
+        if human then
+            return human
+        end
+        return get_dead_civilian_by_id(self, tonumber(ref_id))
+    end
+
+    local function get_corpse_ref_for_unit(corpse_unit)
+        if not corpse_unit then
+            return nil
+        end
+        if corpse_unit.target_kind == "civilian" then
+            return make_civilian_corpse_ref(corpse_unit.id)
+        end
+        return make_human_corpse_ref(corpse_unit.id)
     end
 
     local function try_drop_corpse_into_medbay(self, source_unit, drop_cell_id, world_x, world_y)
@@ -2116,9 +2206,9 @@ function M.extend(runtime, ctx)
             return true, false, false
         end
         local corpse_id = source_unit.carrying_corpse_id
-        local corpse_unit = get_dead_human_by_id(self, corpse_id)
+        local corpse_unit = get_dead_corpse_by_ref(self, corpse_id)
         if not corpse_unit then
-            print("No valid dead human found in backpack.")
+            print("No valid dead unit found in backpack.")
             flash_invalid_drag_units(source_unit, nil)
             return true, false, false
         end
@@ -2297,7 +2387,7 @@ function M.extend(runtime, ctx)
     end
 
     runtime.find_dead_human_at_screen_point = function(self, screen_x, screen_y)
-        if not self.squad_units then
+        if not (self.squad_units or self.civilians) then
             return nil
         end
         local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
@@ -2306,12 +2396,27 @@ function M.extend(runtime, ctx)
         local max_dist = (ctx.LOOT_UI and ctx.LOOT_UI.human_drop_radius) or 80
         for _, unit in pairs(self.squad_units) do
             if unit and (unit.current_health or 0) <= 0 and unit.cell_id and unit.go_path then
+                unit.target_kind = "human"
                 local pos = go.get_position(unit.go_path)
                 local dx = pos.x - world_x
                 local dy = pos.y - world_y
                 local dist = math.sqrt(dx * dx + dy * dy)
                 if dist <= max_dist and dist < best_dist then
                     best = unit
+                    best_dist = dist
+                end
+            end
+        end
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian and (civilian.current_health or 0) <= 0 and civilian.cell_id and civilian.go_path then
+                civilian.target_kind = "civilian"
+                civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
+                local pos = go.get_position(civilian.go_path)
+                local dx = pos.x - world_x
+                local dy = pos.y - world_y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist <= max_dist and dist < best_dist then
+                    best = civilian
                     best_dist = dist
                 end
             end
@@ -2350,7 +2455,7 @@ function M.extend(runtime, ctx)
             table.insert(unit.backpack_items, "corpse")
         end
         unit.backpack_used = #unit.backpack_items
-        unit.carrying_corpse_id = dead_unit.id
+        unit.carrying_corpse_id = get_corpse_ref_for_unit(dead_unit)
         dead_unit.cell_id = nil
         dead_unit.is_corpse_stowed = true
         if dead_unit.go_path then
@@ -3228,7 +3333,7 @@ function M.extend(runtime, ctx)
                 table.insert(unit.backpack_items, "corpse")
             end
             unit.carrying_corpse_id = item.meta and item.meta.corpse_unit_id or nil
-            local corpse_unit = get_dead_human_by_id(self, unit.carrying_corpse_id)
+            local corpse_unit = get_dead_corpse_by_ref(self, unit.carrying_corpse_id)
             if corpse_unit then
                 corpse_unit.cell_id = nil
                 corpse_unit.is_corpse_stowed = true
@@ -4616,7 +4721,7 @@ function M.extend(runtime, ctx)
                                     source_unit.backpack_used = 0
                                     local corpse_id = source_unit.carrying_corpse_id
                                     source_unit.carrying_corpse_id = nil
-                                    local corpse_unit = get_dead_human_by_id(self, corpse_id)
+                                    local corpse_unit = get_dead_corpse_by_ref(self, corpse_id)
                                     if corpse_unit then
                                         corpse_unit.cell_id = drop_cell_id
                                         corpse_unit.is_corpse_stowed = false

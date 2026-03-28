@@ -76,6 +76,12 @@ HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
 HUMAN_PINGPONG_AMPLITUDE = 0.18
 HUMAN_PINGPONG_SPEED = 7
 HUMAN_MAX_ACTION_POINTS = 5
+CIVILIAN_MAX_ACTION_POINTS = 3
+CIVILIAN_MAX_HEALTH = 10
+CIVILIAN_OBJECT_NAME = hash("civilian_spawn")
+CIVILIAN_SPRITE_ANIM = hash("human_civilian")
+CIVILIAN_VISUAL_SCALE = 0.35
+CIVILIAN_VISUAL_Z = 0.5
 OBSTACLE_SLOT_LAG_SECONDS = 0.24
 HUMAN_STACK_SPACING_X = 28
 UNIT_CLICK_SELECT_RADIUS = 45
@@ -4292,10 +4298,12 @@ local function update_alien_movement(self, dt)
     remove_dead_aliens(self)
 end
 
+local any_civilian_is_moving
+
 local function process_alien_turn(self)
     self.aliens = self.aliens or {}
 
-    if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase then
+    if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase or any_civilian_is_moving(self) then
         return
     end
 
@@ -4462,6 +4470,577 @@ local function spawn_initial_blips(self, count)
         end
         used[idx] = true
         spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+    end
+end
+
+local function get_current_mission_type(self)
+    local selected = self.selected_mission_type or (self.mp_state and self.mp_state.mission_type)
+    if selected then
+        return multiplayer_normalize_mission_type(selected)
+    end
+    local level_def = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    return get_level_mission_type(level_def)
+end
+
+local set_civilian_scale
+local get_civilian_world_pos_in_cell
+
+local function clear_civilian_visuals(self)
+    self.civilian_visuals = self.civilian_visuals or {}
+    self.civilian_shadow_visuals = self.civilian_shadow_visuals or {}
+    for civilian_id, go_id in pairs(self.civilian_visuals) do
+        if go_id then
+            pcall(go.delete, go_id)
+        end
+        self.civilian_visuals[civilian_id] = nil
+    end
+    for civilian_id, go_id in pairs(self.civilian_shadow_visuals) do
+        if go_id then
+            pcall(go.delete, go_id)
+        end
+        self.civilian_shadow_visuals[civilian_id] = nil
+    end
+end
+
+local function refresh_civilian_visuals(self)
+    self.civilian_visuals = self.civilian_visuals or {}
+    self.civilian_shadow_visuals = self.civilian_shadow_visuals or {}
+    local seen = {}
+    local shadow_alpha = get_world_shadow_alpha(self)
+    local profile = get_aesthetic_profile(self)
+    local counter_move_enabled = profile and profile.counter_token_move_enabled == true
+    local base_shadow_pos = vmath.vector3(30, -30, -0.01)
+    local shadow_anim, shadow_tint = get_counter_shadow_anim_for_human(self, nil)
+    local effective_shadow_tint = shadow_tint or vmath.vector4(1, 1, 1, 0.5)
+    effective_shadow_tint = vmath.vector4(effective_shadow_tint.x, effective_shadow_tint.y, effective_shadow_tint.z, shadow_alpha)
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.id and civilian.cell_id and self.world_grid and self.world_grid[civilian.cell_id] then
+            local cell = self.world_grid[civilian.cell_id]
+            local x, y = get_civilian_world_pos_in_cell(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+            if not (x and y) then
+                local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
+                x = cx
+                y = cy - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+            end
+            local go_id = self.civilian_visuals[civilian.id]
+            if not go_id then
+                go_id = factory.create("/tile_factory#tile_factory", vmath.vector3(x, y, CIVILIAN_VISUAL_Z))
+                if go_id then
+                    self.civilian_visuals[civilian.id] = go_id
+                    pcall(msg.post, msg.url(nil, go_id, "sprite"), "play_animation", { id = CIVILIAN_SPRITE_ANIM })
+                    pcall(go.set_scale, vmath.vector3(CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE, 1), go_id)
+                end
+            end
+            if go_id then
+                local render_x = x
+                local render_y = y
+                if civilian.is_moving ~= true then
+                    pcall(go.set_position, vmath.vector3(x, y, CIVILIAN_VISUAL_Z), go_id)
+                else
+                    local pos = go.get_position(go_id)
+                    render_x = pos.x
+                    render_y = pos.y
+                end
+                if civilian.is_moving ~= true then
+                    pcall(go.set_scale, vmath.vector3(CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE, 1), go_id)
+                end
+                local shadow_id = self.civilian_shadow_visuals[civilian.id]
+                if not shadow_id then
+                    shadow_id = factory.create("/human_shadow_proxy_factory#human_shadow_proxy_factory", vmath.vector3(x, y, CIVILIAN_VISUAL_Z - 0.01))
+                    if shadow_id then
+                        self.civilian_shadow_visuals[civilian.id] = shadow_id
+                        if shadow_anim then
+                            pcall(msg.post, msg.url(nil, shadow_id, "sprite"), "play_animation", { id = shadow_anim })
+                        end
+                        pcall(go.set_scale, vmath.vector3(0.75, 0.75, 1), shadow_id)
+                    end
+                end
+                if shadow_id then
+                    local shadow_pos = base_shadow_pos
+                    if counter_move_enabled then
+                        shadow_pos = civilian.shadow_motion_offset or get_counter_shadow_offset(profile, 0)
+                    end
+                    pcall(go.set_position, vmath.vector3(render_x + shadow_pos.x, render_y + shadow_pos.y, CIVILIAN_VISUAL_Z - 0.01), shadow_id)
+                    pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", effective_shadow_tint)
+                end
+                seen[civilian.id] = true
+            end
+        end
+    end
+    for civilian_id, go_id in pairs(self.civilian_visuals) do
+        if not seen[civilian_id] then
+            if go_id then
+                pcall(go.delete, go_id)
+            end
+            self.civilian_visuals[civilian_id] = nil
+        end
+    end
+    for civilian_id, go_id in pairs(self.civilian_shadow_visuals) do
+        if not seen[civilian_id] then
+            if go_id then
+                pcall(go.delete, go_id)
+            end
+            self.civilian_shadow_visuals[civilian_id] = nil
+        end
+    end
+end
+
+any_civilian_is_moving = function(self)
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true and civilian.is_moving == true then
+            return true
+        end
+    end
+    return false
+end
+
+local function get_civilian_slot_key(civilian)
+    return "civilian_" .. tostring((civilian and civilian.id) or 0)
+end
+
+local function ensure_civilian_cell_slot_assignment(self, civilian, cell_id, preferred_slot)
+    if not (self and civilian and cell_id) then
+        return 1
+    end
+    self.cell_slot_assignments = self.cell_slot_assignments or {}
+    self.cell_slot_assignments[cell_id] = self.cell_slot_assignments[cell_id] or {}
+    local assignment = self.cell_slot_assignments[cell_id]
+    local slot_key = get_civilian_slot_key(civilian)
+    local existing = assignment[slot_key]
+    if existing and existing >= 1 and existing <= #CELL_SLOT_OFFSETS_X then
+        return existing
+    end
+    local used = {}
+    for _, slot_index in pairs(assignment) do
+        used[slot_index] = true
+    end
+    local selected = nil
+    if preferred_slot and preferred_slot >= 1 and preferred_slot <= #CELL_SLOT_OFFSETS_X and not used[preferred_slot] then
+        selected = preferred_slot
+    end
+    if not selected then
+        for i = 1, #CELL_SLOT_OFFSETS_X do
+            if not used[i] then
+                selected = i
+                break
+            end
+        end
+    end
+    selected = selected or 1
+    assignment[slot_key] = selected
+    return selected
+end
+
+local function clear_civilian_cell_slot_assignment(self, civilian, cell_id)
+    if not (self and civilian and cell_id and self.cell_slot_assignments and self.cell_slot_assignments[cell_id]) then
+        return
+    end
+    self.cell_slot_assignments[cell_id][get_civilian_slot_key(civilian)] = nil
+end
+
+get_civilian_world_pos_in_cell = function(self, civilian, cell_id, preferred_slot)
+    if not (self and self.world_grid and cell_id and self.world_grid[cell_id]) then
+        return nil, nil, 1
+    end
+    local cell = self.world_grid[cell_id]
+    local base_x, base_y = coords_to_world_pos(cell.xCell, cell.yCell)
+    base_y = base_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+    local slot_index = ensure_civilian_cell_slot_assignment(self, civilian, cell_id, preferred_slot)
+    local slot_offset = CELL_SLOT_OFFSETS_X[slot_index] or 0
+    local x = base_x + (slot_offset * HUMAN_STACK_SPACING_X)
+    x = clamp_world_x_to_cell(cell, x)
+    return x, base_y, slot_index
+end
+
+local function spawn_civilians_for_current_mission(self)
+    self.civilians = {}
+    self.next_civilian_id = 0
+    if get_current_mission_type(self) ~= MISSION_TYPE_RESCUE then
+        return
+    end
+    if not self.world_grid then
+        return
+    end
+    for _, cell in ipairs(self.world_grid) do
+        if cell and cell.tileID ~= hash("empty") then
+            local slots = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(slots) do
+                if obj and obj.name == CIVILIAN_OBJECT_NAME then
+                    self.next_civilian_id = (self.next_civilian_id or 0) + 1
+                    table.insert(self.civilians, {
+                        id = self.next_civilian_id,
+                        cell_id = cell.idNumber,
+                        is_awake = false,
+                        is_dead = false,
+                        max_ap = CIVILIAN_MAX_ACTION_POINTS,
+                        current_ap = CIVILIAN_MAX_ACTION_POINTS,
+                        max_health = CIVILIAN_MAX_HEALTH,
+                        current_health = CIVILIAN_MAX_HEALTH,
+                        spawn_object_id = tonumber(obj.objectId or 0) or 0,
+                        anim_phase = 0,
+                        shadow_motion_offset = nil,
+                        vertical_prep_done_for_index = nil,
+                        entry_slot_for_index = nil,
+                        entry_slot_index = nil,
+                        micro_target_x = nil,
+                        micro_target_y = nil,
+                        micro_move_kind = nil
+                    })
+                    local civilian_ref = self.civilians[#self.civilians]
+                    ensure_civilian_cell_slot_assignment(self, civilian_ref, cell.idNumber, nil)
+                    obj.name = hash("empty")
+                    obj.objectId = 0
+                end
+            end
+        end
+    end
+    print(string.format("CIVILIANS | spawned=%d | mission=%s", #(self.civilians or {}), tostring(get_current_mission_type(self))))
+end
+
+local function get_nearest_living_human_for_civilian(self, civilian)
+    local best_unit = nil
+    local best_dist = math.huge
+    for _, unit in ipairs(get_living_humans(self)) do
+        if unit and unit.cell_id and civilian and civilian.cell_id then
+            local dist = heuristic(civilian.cell_id, unit.cell_id)
+            if dist < best_dist then
+                best_dist = dist
+                best_unit = unit
+            elseif dist == best_dist and best_unit and tostring(unit.id) < tostring(best_unit.id) then
+                best_unit = unit
+            end
+        end
+    end
+    return best_unit
+end
+
+local function get_nearest_reachable_human_path_for_civilian(self, civilian)
+    if not (self and civilian and civilian.cell_id) then
+        return nil, nil
+    end
+    local best_unit = nil
+    local best_path = nil
+    local best_cost = math.huge
+    local best_dist = math.huge
+    for _, unit in ipairs(get_living_humans(self)) do
+        if unit and unit.cell_id and unit.cell_id ~= civilian.cell_id then
+            local path, total_cost = find_path(
+                self.world_grid,
+                civilian.cell_id,
+                unit.cell_id,
+                nil,
+                MOVEMENT_PROFILE_HUMAN,
+                nil
+            )
+            if path and #path >= 2 then
+                local cost = tonumber(total_cost or 0) or 0
+                local dist = heuristic(civilian.cell_id, unit.cell_id)
+                if cost < best_cost
+                    or (cost == best_cost and dist < best_dist)
+                    or (cost == best_cost and dist == best_dist and best_unit and tostring(unit.id) < tostring(best_unit.id))
+                then
+                    best_unit = unit
+                    best_path = path
+                    best_cost = cost
+                    best_dist = dist
+                end
+            end
+        end
+    end
+    return best_unit, best_path
+end
+
+local function get_follow_target_path_for_civilian(self, civilian)
+    if not (self and civilian and civilian.cell_id) then
+        return nil, nil
+    end
+    if civilian.follow_human_id and self.squad_units then
+        local preferred = self.squad_units[civilian.follow_human_id]
+        if preferred and (preferred.current_health or 0) > 0 and preferred.cell_id and preferred.cell_id ~= civilian.cell_id then
+            local path = find_path(
+                self.world_grid,
+                civilian.cell_id,
+                preferred.cell_id,
+                nil,
+                MOVEMENT_PROFILE_HUMAN,
+                nil
+            )
+            if path and #path >= 2 then
+                return preferred, path
+            end
+        end
+    end
+    return get_nearest_reachable_human_path_for_civilian(self, civilian)
+end
+
+local function get_civilian_turn_movement_segment(self, path, max_ap)
+    if not path or #path < 2 then
+        return nil, 0
+    end
+    local ap_spent = 0
+    local segment = { path[1] }
+    for i = 2, #path do
+        local from_cell = path[i - 1]
+        local to_cell = path[i]
+        local step_cost = get_step_move_cost(self.world_grid, from_cell, to_cell)
+        if ap_spent + step_cost > max_ap then
+            break
+        end
+        ap_spent = ap_spent + step_cost
+        table.insert(segment, to_cell)
+    end
+    if #segment < 2 then
+        return nil, 0
+    end
+    return segment, ap_spent
+end
+
+local function process_civilian_turn(self)
+    if get_current_mission_type(self) ~= MISSION_TYPE_RESCUE then
+        return
+    end
+    if not (self.civilians and self.world_grid) then
+        return
+    end
+    local moved_count = 0
+    local woke_count = 0
+    for _, civilian in ipairs(self.civilians) do
+        if civilian and civilian.is_dead ~= true then
+            civilian.max_ap = tonumber(civilian.max_ap or CIVILIAN_MAX_ACTION_POINTS) or CIVILIAN_MAX_ACTION_POINTS
+            civilian.current_ap = civilian.max_ap
+            civilian.max_health = tonumber(civilian.max_health or CIVILIAN_MAX_HEALTH) or CIVILIAN_MAX_HEALTH
+            civilian.current_health = tonumber(civilian.current_health or civilian.max_health) or civilian.max_health
+            if civilian.current_health <= 0 then
+                civilian.current_ap = 0
+                civilian.is_dead = true
+            else
+                if civilian.is_awake ~= true then
+                    for _, unit in ipairs(get_living_humans(self)) do
+                        if unit and unit.cell_id and civilian.cell_id and unit.cell_id == civilian.cell_id then
+                            civilian.is_awake = true
+                            civilian.follow_human_id = unit.id
+                            woke_count = woke_count + 1
+                            break
+                        end
+                    end
+                end
+                if civilian.is_awake == true and civilian.cell_id then
+                    local remaining_ap = tonumber(civilian.current_ap or 0) or 0
+                    local nearest, path = get_follow_target_path_for_civilian(self, civilian)
+                    if nearest and path and remaining_ap > 0 then
+                        local segment_path, spent = get_civilian_turn_movement_segment(self, path, remaining_ap)
+                        if segment_path then
+                            civilian.is_moving = true
+                            civilian.move_path = segment_path
+                            civilian.move_path_index = 2
+                            civilian.vertical_prep_done_for_index = nil
+                            civilian.entry_slot_for_index = nil
+                            civilian.micro_target_x = nil
+                            civilian.micro_target_y = nil
+                            civilian.micro_move_kind = nil
+                            moved_count = moved_count + math.max(0, (#segment_path - 1))
+                            remaining_ap = math.max(0, remaining_ap - (spent or 0))
+                        end
+                    elseif civilian.is_awake == true then
+                        print(string.format(
+                            "CIVILIANS | no_reachable_path | id=%d cell=%d",
+                            tonumber(civilian.id or 0) or 0,
+                            tonumber(civilian.cell_id or 0) or 0
+                        ))
+                    end
+                    civilian.current_ap = math.max(0, remaining_ap)
+                end
+            end
+        end
+    end
+    refresh_civilian_visuals(self)
+    if moved_count > 0 or woke_count > 0 then
+        print(string.format(
+            "CIVILIANS | turn_update | woke=%d moved_steps=%d",
+            tonumber(woke_count or 0) or 0,
+            tonumber(moved_count or 0) or 0
+        ))
+    end
+end
+
+local function update_civilian_movement(self, dt)
+    if not self or not self.world_grid then
+        return
+    end
+    local move_speed = HUMAN_MOVE_SPEED * 0.9
+    local profile = get_aesthetic_profile(self)
+    local counter_move_enabled = profile and profile.counter_token_move_enabled == true
+    local right_lane_slot = #CELL_SLOT_OFFSETS_X
+    local right_lane_offset = (CELL_SLOT_OFFSETS_X[right_lane_slot] or 0) * HUMAN_STACK_SPACING_X
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true and civilian.is_moving and civilian.move_path then
+            local function stop_civilian_motion()
+                civilian.is_moving = false
+                civilian.move_path = nil
+                civilian.move_path_index = 0
+                civilian.vertical_prep_done_for_index = nil
+                civilian.entry_slot_for_index = nil
+                civilian.entry_slot_index = nil
+                civilian.micro_target_x = nil
+                civilian.micro_target_y = nil
+                civilian.micro_move_kind = nil
+                civilian.shadow_motion_offset = nil
+                civilian.counter_move_total_dist = nil
+                set_civilian_scale(self, civilian, CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE)
+            end
+
+            local go_id = self.civilian_visuals and self.civilian_visuals[civilian.id] or nil
+            local handled_micro_motion = false
+            if civilian.micro_target_x and civilian.micro_target_y and go_id then
+                local pos = go.get_position(go_id)
+                local dx = civilian.micro_target_x - pos.x
+                local dy = civilian.micro_target_y - pos.y
+                local dist = math.sqrt((dx * dx) + (dy * dy))
+                local step = move_speed * (dt or 0)
+                civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                local ping = math.sin(civilian.anim_phase)
+                local scale_x = CIVILIAN_VISUAL_SCALE
+                local scale_y = CIVILIAN_VISUAL_SCALE
+                if counter_move_enabled then
+                    if not civilian.counter_move_total_dist or civilian.counter_move_total_dist <= 0 then
+                        civilian.counter_move_total_dist = math.max(dist, 1)
+                    end
+                    local progress = 1 - math.max(0, math.min(1, dist / civilian.counter_move_total_dist))
+                    local lift = math.sin(progress * math.pi)
+                    local move_arc = 4 * progress * (1 - progress)
+                    local wobble = math.sin((civilian.anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
+                    local lift_scale = profile.counter_lift_scale or 0.16
+                    local wobble_scale = profile.counter_wobble_scale or 0.04
+                    scale_x = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+                    scale_y = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+                    civilian.shadow_motion_offset = get_counter_shadow_offset(profile, move_arc)
+                else
+                    civilian.shadow_motion_offset = nil
+                    if math.abs(dx) >= math.abs(dy) then
+                        scale_x = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                    else
+                        scale_y = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                    end
+                end
+                set_civilian_scale(self, civilian, scale_x, scale_y)
+                if dist <= step or dist <= 0.001 then
+                    pcall(go.set_position, vmath.vector3(civilian.micro_target_x, civilian.micro_target_y, CIVILIAN_VISUAL_Z), go_id)
+                    civilian.micro_target_x = nil
+                    civilian.micro_target_y = nil
+                    civilian.micro_move_kind = nil
+                    civilian.counter_move_total_dist = nil
+                    set_civilian_scale(self, civilian, CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE)
+                else
+                    local nx = pos.x + ((dx / dist) * step)
+                    local ny = pos.y + ((dy / dist) * step)
+                    pcall(go.set_position, vmath.vector3(nx, ny, CIVILIAN_VISUAL_Z), go_id)
+                end
+                handled_micro_motion = true
+            end
+
+            if not handled_micro_motion then
+                local target_cell_id = civilian.move_path[civilian.move_path_index]
+                if not target_cell_id then
+                    stop_civilian_motion()
+                else
+                    local cell = self.world_grid[target_cell_id]
+                    if not (go_id and cell) then
+                        if civilian.cell_id and civilian.cell_id ~= target_cell_id then
+                            clear_civilian_cell_slot_assignment(self, civilian, civilian.cell_id)
+                        end
+                        civilian.cell_id = target_cell_id or civilian.cell_id
+                        ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+                        civilian.move_path_index = (civilian.move_path_index or 0) + 1
+                    else
+                        local target_x, target_y, target_slot = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
+                        local from_x, from_y = id_to_coords(civilian.cell_id)
+                        local to_x, to_y = id_to_coords(target_cell_id)
+                        local is_vertical_step = (from_x == to_x) and (from_y ~= to_y)
+                        local is_prep_vertical_stage = false
+                        if civilian.entry_slot_for_index ~= civilian.move_path_index then
+                            civilian.entry_slot_index = target_slot
+                            civilian.entry_slot_for_index = civilian.move_path_index
+                        end
+                        if (not counter_move_enabled) and is_vertical_step and civilian.vertical_prep_done_for_index ~= civilian.move_path_index then
+                            local current_cell = self.world_grid[civilian.cell_id]
+                            if current_cell then
+                                local prep_x, prep_y = coords_to_world_pos(current_cell.xCell, current_cell.yCell)
+                                prep_y = prep_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                                target_x = clamp_world_x_to_cell(current_cell, prep_x + right_lane_offset)
+                                target_y = prep_y
+                                is_prep_vertical_stage = true
+                            end
+                        elseif (not counter_move_enabled) and is_vertical_step then
+                            local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
+                            target_x = clamp_world_x_to_cell(cell, cx + right_lane_offset)
+                            target_y = cy - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                        end
+                        local pos = go.get_position(go_id)
+                        local dx = target_x - pos.x
+                        local dy = target_y - pos.y
+                        local dist = math.sqrt((dx * dx) + (dy * dy))
+                        local step = move_speed * (dt or 0)
+                        civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                        local ping = math.sin(civilian.anim_phase)
+                        local scale_x = CIVILIAN_VISUAL_SCALE
+                        local scale_y = CIVILIAN_VISUAL_SCALE
+                        if counter_move_enabled then
+                            if not civilian.counter_move_total_dist or civilian.counter_move_total_dist <= 0 then
+                                civilian.counter_move_total_dist = math.max(dist, 1)
+                            end
+                            local progress = 1 - math.max(0, math.min(1, dist / civilian.counter_move_total_dist))
+                            local lift = math.sin(progress * math.pi)
+                            local move_arc = 4 * progress * (1 - progress)
+                            local wobble = math.sin((civilian.anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
+                            local lift_scale = profile.counter_lift_scale or 0.16
+                            local wobble_scale = profile.counter_wobble_scale or 0.04
+                            scale_x = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+                            scale_y = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+                            civilian.shadow_motion_offset = get_counter_shadow_offset(profile, move_arc)
+                        else
+                            civilian.shadow_motion_offset = nil
+                            if math.abs(dx) >= math.abs(dy) then
+                                scale_x = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                            else
+                                scale_y = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                            end
+                    end
+                        set_civilian_scale(self, civilian, scale_x, scale_y)
+                        if dist <= step or dist <= 0.001 then
+                            pcall(go.set_position, vmath.vector3(target_x, target_y, CIVILIAN_VISUAL_Z), go_id)
+                            if is_prep_vertical_stage then
+                                civilian.vertical_prep_done_for_index = civilian.move_path_index
+                                civilian.counter_move_total_dist = nil
+                            else
+                                local old_cell_id = civilian.cell_id
+                                if old_cell_id and old_cell_id ~= target_cell_id then
+                                    clear_civilian_cell_slot_assignment(self, civilian, old_cell_id)
+                                end
+                                civilian.cell_id = target_cell_id
+                                ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                if (not counter_move_enabled) and is_vertical_step then
+                                    local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                    if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
+                                        civilian.micro_target_x = settle_x
+                                        civilian.micro_target_y = settle_y
+                                        civilian.micro_move_kind = "settle_after_vertical"
+                                    end
+                                end
+                                civilian.move_path_index = (civilian.move_path_index or 0) + 1
+                                civilian.counter_move_total_dist = nil
+                            end
+                        else
+                            local nx = pos.x + ((dx / dist) * step)
+                            local ny = pos.y + ((dy / dist) * step)
+                            pcall(go.set_position, vmath.vector3(nx, ny, CIVILIAN_VISUAL_Z), go_id)
+                        end
+                    end
+                    if civilian.move_path and civilian.move_path_index > #civilian.move_path and (not civilian.micro_target_x) then
+                        stop_civilian_motion()
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -5189,6 +5768,16 @@ local function set_unit_scale(unit, scale_x, scale_y)
             unit.go_path = nil
             unit.sprite_path = nil
         end
+    end
+end
+
+set_civilian_scale = function(self, civilian, scale_x, scale_y)
+    if not (self and civilian and civilian.id and self.civilian_visuals) then
+        return
+    end
+    local go_id = self.civilian_visuals[civilian.id]
+    if go_id then
+        pcall(go.set_scale, vmath.vector3(scale_x, scale_y, 1), go_id)
     end
 end
 
@@ -7111,6 +7700,14 @@ function reset_and_load_level(self, level_index)
     end
 
     self.current_level_index = level_index
+    local level_def = self.level_library and self.level_library[level_index] or nil
+    local level_mission = get_level_mission_type(level_def)
+    self.current_mission_type = multiplayer_normalize_mission_type(
+        self.selected_mission_type or (self.mp_state and self.mp_state.mission_type) or level_mission
+    )
+    if self.mp_state and self.mp_state.enabled then
+        self.mp_state.mission_type = self.current_mission_type
+    end
     log_runtime_reference_audit(self, "pre_clear")
     clear_path_visuals(self)
     self.selected_start_cell = nil
@@ -7179,6 +7776,8 @@ function reset_and_load_level(self, level_index)
     safe_delete_map(self.power_node_objects)
     safe_delete_map(self.vent_objects)
     safe_delete_map(self.door_objects)
+    safe_delete_map(self.civilian_visuals)
+    safe_delete_map(self.civilian_shadow_visuals)
     safe_delete_map(self.machine_shadow_objects)
     safe_delete_map(self.turret_shadow_objects)
     safe_delete_map(self.power_node_shadow_objects)
@@ -7282,6 +7881,7 @@ function reset_and_load_level(self, level_index)
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
+    self.civilian_turn_waiting_for_alien = false
     self.exit_objective_state = nil
     self.launch_fx_timer = 0
     self.game_won = false
@@ -7297,6 +7897,13 @@ function reset_and_load_level(self, level_index)
     self.controlled_unit_id = "sarge"
     self.aliens = {}
     self.next_alien_id = 0
+    clear_civilian_visuals(self)
+    self.civilians = {}
+    self.next_civilian_id = 0
+    self.civilians = {}
+    self.next_civilian_id = 0
+    self.civilian_visuals = {}
+    self.civilian_shadow_visuals = {}
 
     spawn_visuals(self)
     apply_aesthetic_mode(self)
@@ -7306,6 +7913,8 @@ function reset_and_load_level(self, level_index)
         spawn_human_unit(self)
     end
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    spawn_civilians_for_current_mission(self)
+    refresh_civilian_visuals(self)
     print("SCORE TRACE READY | scoring runtime initialized")
     score_log_snapshot(self, "level_reset")
     spawn_exit_test_stash(self)
@@ -8466,6 +9075,7 @@ function try_next_turn_button(self, screen_x, screen_y)
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase
         or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
     then
         return false
     end
@@ -8559,6 +9169,22 @@ multiplayer_compute_turn_checksum = function(self)
     table.sort(alien_rows)
     for _, row in ipairs(alien_rows) do
         push("a", row)
+    end
+
+    local civilian_rows = {}
+    for _, civilian in ipairs(self.civilians or {}) do
+        civilian_rows[#civilian_rows + 1] = string.format(
+            "%d|%d|%d|%d|%d",
+            tonumber(civilian and civilian.id or 0) or 0,
+            tonumber(civilian and civilian.cell_id or 0) or 0,
+            tonumber(civilian and civilian.current_health or 0) or 0,
+            (civilian and civilian.is_awake == true) and 1 or 0,
+            (civilian and civilian.is_dead == true) and 1 or 0
+        )
+    end
+    table.sort(civilian_rows)
+    for _, row in ipairs(civilian_rows) do
+        push("cv", row)
     end
 
     for cell_id, cell in ipairs(self.world_grid or {}) do
@@ -11079,6 +11705,8 @@ multiplayer_build_snapshot_state = function(self)
         units = {},
         aliens = {},
         next_alien_id = self.next_alien_id or 0,
+        civilians = multiplayer_clone_simple_table(self.civilians or {}),
+        next_civilian_id = self.next_civilian_id or 0,
         world_cells = {},
         world_item_instances = multiplayer_clone_simple_table(self.world_item_instances or {}),
         next_world_item_id = self.next_world_item_id or 0,
@@ -11262,6 +11890,8 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
         refresh_alien_visual(self, alien)
     end
     self.next_alien_id = math.max(tonumber(snapshot.next_alien_id or 0) or 0, self.next_alien_id or 0)
+    self.civilians = multiplayer_clone_simple_table(snapshot.civilians or {}) or {}
+    self.next_civilian_id = tonumber(snapshot.next_civilian_id or 0) or 0
 
     self.world_item_instances = multiplayer_clone_simple_table(snapshot.world_item_instances or {}) or {}
     self.next_world_item_id = tonumber(snapshot.next_world_item_id or 0) or 0
@@ -11315,6 +11945,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     if LOOT_RUNTIME.refresh_light_value_markers then LOOT_RUNTIME.refresh_light_value_markers(self) end
     if LOOT_RUNTIME.refresh_factory_underlay_visuals then LOOT_RUNTIME.refresh_factory_underlay_visuals(self) end
     if LOOT_RUNTIME.refresh_exit_objective_state then LOOT_RUNTIME.refresh_exit_objective_state(self) end
+    refresh_civilian_visuals(self)
     update_human_visual_state(self)
     update_score_hud(self, true)
     update_selected_unit_ui(self)
@@ -12211,6 +12842,10 @@ function init(self)
     spawn_human_unit(self)
     self.aliens = {}
     self.next_alien_id = 0
+    self.civilians = {}
+    self.next_civilian_id = 0
+    self.civilian_visuals = {}
+    self.civilian_shadow_visuals = {}
     self.pending_spitter_attack_phase = false
     self.spitter_attack_started = false
     self.spitter_attack_timer = 0
@@ -12249,8 +12884,11 @@ function init(self)
     self.wiregap_shadow_objects = {}
     self.next_world_item_id = 0
     self.drag_resource = { active = false }
+    self.civilian_turn_waiting_for_alien = false
     reset_derple_feedback_runtime(self)
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    spawn_civilians_for_current_mission(self)
+    refresh_civilian_visuals(self)
     self.score_turn_counter = 0
     self.score_state = SCORE_RUNTIME.create_state("escape_pod")
     self.score_display_total = 0
@@ -12420,6 +13058,8 @@ function update(self, dt)
     apply_computer_emissive_accents(self, dt)
 
     update_human_movement(self, dt)
+    update_civilian_movement(self, dt)
+    refresh_civilian_visuals(self)
     update_alien_movement(self, dt)
     local obstacle_shudder_active = false
     local door_shudder_active = false
@@ -12612,6 +13252,16 @@ function update(self, dt)
     end
     tick_human_reactive_fire_cooldowns(self, dt)
     process_turret_reactive_fire(self, dt)
+    if self.civilian_turn_waiting_for_alien
+        and (not any_civilian_is_moving(self))
+        and (not self.alien_turn_active)
+        and (not self.pending_spitter_attack_phase)
+        and (not self.pending_melee_attack_phase)
+        and (not any_alien_is_moving(self))
+    then
+        self.civilian_turn_waiting_for_alien = false
+        process_alien_turn(self)
+    end
     if self.alien_turn_active and (not self.alien_turn_waiting_for_advance) and (not any_alien_is_moving(self)) and (not self.pending_spitter_attack_phase) and (not self.pending_melee_attack_phase) then
         process_alien_turn(self)
     end
@@ -13007,6 +13657,7 @@ function on_input(self, action_id, action)
             or self.pending_spitter_attack_phase
             or self.pending_melee_attack_phase
             or any_alien_is_moving(self)
+            or any_civilian_is_moving(self)
         then
             return true
         end
@@ -13022,7 +13673,12 @@ function on_input(self, action_id, action)
             if LOOT_RUNTIME.process_factory_turn then
                 LOOT_RUNTIME.process_factory_turn(self)
             end
-            process_alien_turn(self)
+            process_civilian_turn(self)
+            if any_civilian_is_moving(self) then
+                self.civilian_turn_waiting_for_alien = true
+            else
+                process_alien_turn(self)
+            end
         end
     end
 end
@@ -13040,6 +13696,7 @@ function on_message(self, message_id, message, sender)
             or self.pending_spitter_attack_phase
             or self.pending_melee_attack_phase
             or any_alien_is_moving(self)
+            or any_civilian_is_moving(self)
         then
             return
         end
@@ -13056,6 +13713,11 @@ function on_message(self, message_id, message, sender)
         if LOOT_RUNTIME.process_factory_turn then
             LOOT_RUNTIME.process_factory_turn(self)
         end
-        process_alien_turn(self)
+        process_civilian_turn(self)
+        if any_civilian_is_moving(self) then
+            self.civilian_turn_waiting_for_alien = true
+        else
+            process_alien_turn(self)
+        end
     end
 end

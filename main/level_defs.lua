@@ -44,7 +44,7 @@ function M.create_level_library()
         { x = 2, y = 2, tile = "portal" },  
         { x = 5, y = 2, tile = "exit" },      
     }
-    levels[2].mission_type = "escape"
+    levels[2].mission_type = "rescue"
 
     -- levels[1] = {
     --     --{ x = 8, y = 11, tile = "coms" },

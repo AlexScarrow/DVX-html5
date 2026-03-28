@@ -248,6 +248,9 @@ images {
   image: "/assets/images/human_dead_ui.png"
 }
 images {
+  image: "/assets/images/human_civilian.png"
+}
+images {
   image: "/assets/images/backdrop_boardgame.png"
 }
 images {

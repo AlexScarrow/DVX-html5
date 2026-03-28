@@ -284,6 +284,10 @@ canteen.cells[9].object2 = {
     isWelded = false, isOpen = false, dependsOn = 901, isDependentOn = {}, objectId = 902,
     offsetX = 70, offsetY = 3, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_food_supplies
 }
+canteen.cells[9].object3 = {
+    name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+    offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
+}
 -- 
 library["canteen"] = canteen
 

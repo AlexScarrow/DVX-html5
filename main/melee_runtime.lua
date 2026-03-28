@@ -492,6 +492,8 @@ function M.create(ctx)
                     target.is_moving = false
                     target.move_path = nil
                     target.move_path_index = 0
+                elseif ctx and ctx.handle_human_death_loot_drop then
+                    ctx.handle_human_death_loot_drop(self, target)
                 end
                 print(get_target_display_name(target) .. " is dead")
             end

@@ -3423,6 +3423,8 @@ function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id)
     end
 end
 
+local handle_human_death_loot_drop
+
 local function resolve_turret_pending_shot(self, shot_id)
     if not self.turret_pending_shots or not shot_id then
         return
@@ -3439,6 +3441,9 @@ local function resolve_turret_pending_shot(self, shot_id)
                 unit.current_health = math.max(0, (unit.current_health or 0) - 1)
                 if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
                     MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, unit)
+                end
+                if unit.current_health <= 0 then
+                    handle_human_death_loot_drop(self, unit, "turret_reactive")
                 end
                 print(string.format(
                     "Turret #%d HIT %s (HP now %d) [light=%d chance=%d%% roll=%d]",
@@ -3520,6 +3525,65 @@ function update_turret_projectiles(self, dt)
             end
         end
     end
+end
+
+handle_human_death_loot_drop = function(self, unit, source_tag)
+    if not (self and unit and unit.id and self.squad_units and self.squad_units[unit.id] == unit) then
+        return
+    end
+    if unit.death_drop_done == true then
+        return
+    end
+    local death_cell_id = tonumber(unit.cell_id or 0) or 0
+    if death_cell_id <= 0 or not (self.world_grid and self.world_grid[death_cell_id]) then
+        print(string.format(
+            "DEATH DROP | skipped | unit=%s reason=no_cell source=%s",
+            tostring(unit.display_name or unit.id),
+            tostring(source_tag or "unknown")
+        ))
+        unit.death_drop_done = true
+        unit.backpack_items = {}
+        unit.backpack_used = 0
+        unit.carrying_corpse_id = nil
+        return
+    end
+    if not (LOOT_RUNTIME and LOOT_RUNTIME.create_world_item_instance and LOOT_RUNTIME.refresh_world_item_visuals) then
+        return
+    end
+    local dropped = 0
+    local corpse_dropped = false
+    local backpack_items = unit.backpack_items or {}
+    for _, item_type in ipairs(backpack_items) do
+        if item_type == "corpse" then
+            if (not corpse_dropped) and unit.carrying_corpse_id then
+                LOOT_RUNTIME.create_world_item_instance(self, "corpse", death_cell_id, unit.id, {
+                    corpse_unit_id = unit.carrying_corpse_id,
+                    dropped_from_death = true
+                })
+                dropped = dropped + 1
+                corpse_dropped = true
+            end
+        else
+            LOOT_RUNTIME.create_world_item_instance(self, item_type, death_cell_id, unit.id, {
+                dropped_from_death = true
+            })
+            dropped = dropped + 1
+        end
+    end
+    unit.backpack_items = {}
+    unit.backpack_used = 0
+    unit.carrying_corpse_id = nil
+    unit.death_drop_done = true
+    if dropped > 0 then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    print(string.format(
+        "DEATH DROP | unit=%s cell=%d dropped=%d source=%s",
+        tostring(unit.display_name or unit.id),
+        death_cell_id,
+        dropped,
+        tostring(source_tag or "unknown")
+    ))
 end
 
 function process_turret_reactive_fire(self, dt)
@@ -3814,6 +3878,8 @@ local function update_spitter_attack_phase(self, dt)
                 target.is_moving = false
                 target.move_path = nil
                 target.move_path_index = 0
+            else
+                handle_human_death_loot_drop(self, target, "spitter_ranged")
             end
             print(target.display_name .. " is dead")
         end
@@ -11037,6 +11103,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     record_alien_kill = score_record_alien_kill,
     record_alien_melee_spend = function(self_ref, alien_id, amount)
         record_alien_turn_ap_spend(self_ref, alien_id, "melee_spent", amount)
+    end,
+    handle_human_death_loot_drop = function(self_ref, unit)
+        handle_human_death_loot_drop(self_ref, unit, "alien_melee")
     end
 })
 
@@ -11239,6 +11308,8 @@ function spawn_human_unit(self)
                 unit.backpack_items = {}
                 unit.backpack_used = 0
             end
+            unit.carrying_corpse_id = nil
+            unit.death_drop_done = false
 
             move_human_to_cell(self, unit, spawn_cells[i])
             set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)

@@ -218,6 +218,9 @@ images {
   image: "/assets/images/gun_turret.png"
 }
 images {
+  image: "/assets/images/gun_turret_dropped.png"
+}
+images {
   image: "/assets/images/gun_turret_icon.png"
 }
 images {

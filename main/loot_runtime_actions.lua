@@ -298,7 +298,7 @@ function M.extend(runtime, ctx)
         elseif item_type == "power" then
             return hash("power_unit")
         elseif item_type == TURRET_PACKED_ITEM then
-            return hash("gun_turret")
+            return hash("gun_turret_dropped")
         elseif item_type == OBSTACLE_ITEM then
             return hash("obstacle_icon")
         elseif item_type == "obstacle1" then
@@ -1582,6 +1582,7 @@ function M.extend(runtime, ctx)
                             corpse_unit.cell_id = revive_cell.idNumber
                             corpse_unit.is_corpse_stowed = false
                             corpse_unit.in_shuttle = false
+                            corpse_unit.death_drop_done = false
                             corpse_unit.is_moving = false
                             corpse_unit.move_path = nil
                             corpse_unit.move_path_index = 0

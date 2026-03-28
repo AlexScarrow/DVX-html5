@@ -32,6 +32,20 @@ function M.create_level_library()
     }
     levels[1].mission_type = "escape"
 
+    levels[2] = {
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "medbay" },
+        { x = 8, y = 9, tile = "canteen" },
+        { x = 11, y = 8, tile = "factory" },
+        { x = 5, y = 11, tile = "armoury" },
+        { x = 8, y = 12, tile = "coms" },
+        { x = 8, y = 6, tile = "workshop" },
+        { x = 3, y = 5, tile = "passage1" },
+        { x = 2, y = 2, tile = "portal" },  
+        { x = 5, y = 2, tile = "exit" },      
+    }
+    levels[2].mission_type = "escape"
+
     -- levels[1] = {
     --     --{ x = 8, y = 11, tile = "coms" },
     --     --{ x = 8, y = 8, tile = "canteen" },
@@ -46,16 +60,16 @@ function M.create_level_library()
     
     -- Example Level 2
     -- EXPERIMENTAL layout: temporary playtest board, intended to be easy to replace.
-    levels[2] = {
-        -- { x = 8, y = 8, tile = "lvl2_open" },
-        -- { x = 5, y = 8, tile = "lvl2_choke" },
-        -- { x = 11, y = 8, tile = "lvl2_choke" },
-        -- { x = 8, y = 11, tile = "lvl2_support" },
-        -- { x = 8, y = 5, tile = "lvl2_support" },
-        { x = 5, y = 11, tile = "armoury" },
-        { x = 11, y = 11, tile = "armoury" }
-    }
-    levels[2].mission_type = "escape"
+    -- levels[2] = {
+    --     -- { x = 8, y = 8, tile = "lvl2_open" },
+    --     -- { x = 5, y = 8, tile = "lvl2_choke" },
+    --     -- { x = 11, y = 8, tile = "lvl2_choke" },
+    --     -- { x = 8, y = 11, tile = "lvl2_support" },
+    --     -- { x = 8, y = 5, tile = "lvl2_support" },
+    --     { x = 5, y = 11, tile = "armoury" },
+    --     { x = 11, y = 11, tile = "armoury" }
+    -- }
+    -- levels[2].mission_type = "escape"
 
     return levels
 end

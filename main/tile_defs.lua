@@ -543,6 +543,8 @@ library["canteen"] = canteen
     -- - Vertical shaft only on right column: 3 <-> 6 <-> 9
     -- - Single isolated accessible cell: 4
     -- - Cell 4 remains enterable from left neighbor tile via edge rules.
+    passage1.cells[1].accessDown = false   -- blocks 2 <-> 3
+    passage1.cells[2].accessDown = false   -- blocks 2 <-> 3
     passage1.cells[2].accessRight = false   -- blocks 2 <-> 3
     passage1.cells[3].accessRight = false   -- blocks right boundary from 3
     passage1.cells[4].accessRight = false   -- blocks 4 <-> 5

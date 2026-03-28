@@ -11,6 +11,12 @@ images {
   image: "/assets/images/tile_entry_computerGame.png"
 }
 images {
+  image: "/assets/images/tile_rescue_entry_boardGame.png"
+}
+images {
+  image: "/assets/images/tile_rescue_entry_computerGame.png"
+}
+images {
   image: "/assets/images/tile_armoury.png"
 }
 images {

@@ -91,9 +91,9 @@ function M.create_tile_library(COMPONENT_UI)
     library["entry"] = entry
 
     local rescue_entry = create_tile_prototype("rescue_entry")
-    rescue_entry.visualTile = "entry_computerGame"
-    rescue_entry.visualTileComputer = "entry_computerGame"
-    rescue_entry.visualTileBoardgame = "entry_boardGame"
+    rescue_entry.visualTile = "rescue_entry_computerGame"
+    rescue_entry.visualTileComputer = "rescue_entry_computerGame"
+    rescue_entry.visualTileBoardgame = "rescue_entry_boardGame"
     for i = 1, 9 do
         rescue_entry.cells[i].lightValue = 2
         rescue_entry.cells[i].moveValue = 1
@@ -108,7 +108,8 @@ function M.create_tile_library(COMPONENT_UI)
     rescue_entry.cells[4].accessRight = true
     rescue_entry.cells[4].accessDown = true
     rescue_entry.cells[5].accessDown = false
-    rescue_entry.cells[5].accessRight = false
+    rescue_entry.cells[8].accessDown = false
+    --rescue_entry.cells[5].accessRight = false
     rescue_entry.cells[6].accessRight = false
     rescue_entry.cells[9].object1 = {
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,

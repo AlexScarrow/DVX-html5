@@ -21,6 +21,62 @@ function M.create(ctx)
         return v
     end
 
+    local BUFFS_BY_ITEM_TYPE = {}
+    do
+        local buffs = ctx and ctx.BUFFS or nil
+        if type(buffs) == "table" then
+            for _, buff_def in pairs(buffs) do
+                if type(buff_def) == "table" and type(buff_def.item_type) == "string" then
+                    BUFFS_BY_ITEM_TYPE[buff_def.item_type] = buff_def
+                end
+            end
+        end
+    end
+
+    local function get_human_melee_weapon_count(human)
+        if not human or type(human.equipment) ~= "table" then
+            return 0
+        end
+        local count = 0
+        local slot_order = ctx.BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
+        for _, slot_name in ipairs(slot_order) do
+            local item_type = human.equipment[slot_name]
+            local buff_def = item_type and BUFFS_BY_ITEM_TYPE[item_type] or nil
+            if buff_def and buff_def.buff_kind == "melee_weapon" then
+                count = count + 1
+            end
+        end
+        return count
+    end
+
+    local function get_human_melee_hit_bonus(human)
+        local count = get_human_melee_weapon_count(human)
+        if count <= 0 then
+            return 0
+        end
+        local single_bonus = tonumber(ctx.BUFF_MELEE_HIT_BONUS_SINGLE or 10) or 10
+        local dual_bonus = tonumber(ctx.BUFF_MELEE_HIT_BONUS_DUAL or (single_bonus * 2)) or (single_bonus * 2)
+        if count >= 2 then
+            return dual_bonus
+        end
+        return single_bonus
+    end
+
+    local function get_human_armor_hit_reduction(human)
+        if not human or type(human.equipment) ~= "table" then
+            return 0
+        end
+        local slot_order = ctx.BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
+        for _, slot_name in ipairs(slot_order) do
+            local item_type = human.equipment[slot_name]
+            local buff_def = item_type and BUFFS_BY_ITEM_TYPE[item_type] or nil
+            if buff_def and buff_def.buff_kind == "armor" then
+                return math.max(0, tonumber(ctx.BUFF_ARMOR_HIT_REDUCTION or 15) or 15)
+            end
+        end
+        return 0
+    end
+
     local function get_melee_ap_cost()
         local costs = ctx and ctx.AP_COSTS or nil
         local value = costs and tonumber(costs.melee_attack) or nil
@@ -414,7 +470,10 @@ function M.create(ctx)
         play_human_melee_lurch(human, target_alien)
         play_target_red_flash(target_alien)
         human.current_ap = human.current_ap - melee_ap_cost
-        local hit_chance = clamp(ctx.MELEE_MODEL.human_base_hit_chance, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
+        local melee_bonus = get_human_melee_hit_bonus(human)
+        local min_hit = tonumber(ctx.BUFF_HIT_CHANCE_MIN or ctx.MELEE_MODEL.min_hit_chance) or ctx.MELEE_MODEL.min_hit_chance
+        local max_hit = tonumber(ctx.BUFF_HIT_CHANCE_MAX or ctx.MELEE_MODEL.max_hit_chance) or ctx.MELEE_MODEL.max_hit_chance
+        local hit_chance = clamp((ctx.MELEE_MODEL.human_base_hit_chance or 0) + melee_bonus, min_hit, max_hit)
         local roll = math.random(1, 100)
         if roll <= hit_chance then
             spawn_alien_blood_splatter_fx(target_alien)
@@ -424,8 +483,8 @@ function M.create(ctx)
                     target_alien.brute_damage_flash_timer = 0.24
                 end
                 print(string.format(
-                    "%s melee %s on alien #%d (BRUTE) and HIT [chance=%d%% roll=%d hp=%d]",
-                    human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current
+                    "%s melee %s on alien #%d (BRUTE) and HIT [chance=%d%% roll=%d hp=%d buff=%d]",
+                    human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current, melee_bonus
                 ))
                 if target_alien.hp_current <= 0 then
                     kill_alien(self, target_alien)
@@ -433,15 +492,15 @@ function M.create(ctx)
                 end
             else
                 print(string.format(
-                    "%s melee %s on alien #%d and HIT (alien eliminated) [chance=%d%% roll=%d]",
-                    human.display_name, source_tag, target_alien.id, hit_chance, roll
+                    "%s melee %s on alien #%d and HIT (alien eliminated) [chance=%d%% roll=%d buff=%d]",
+                    human.display_name, source_tag, target_alien.id, hit_chance, roll, melee_bonus
                 ))
                 kill_alien(self, target_alien)
             end
         else
             print(string.format(
-                "%s melee %s on alien #%d and MISSED [chance=%d%% roll=%d]",
-                human.display_name, source_tag, target_alien.id, hit_chance, roll
+                "%s melee %s on alien #%d and MISSED [chance=%d%% roll=%d buff=%d]",
+                human.display_name, source_tag, target_alien.id, hit_chance, roll, melee_bonus
             ))
         end
     end
@@ -464,7 +523,7 @@ function M.create(ctx)
         local target = targets[1] -- weakest-first across humans+civilians
         local armor_bonus = 0
         if target.target_kind ~= "civilian" then
-            armor_bonus = target.melee_armor_bonus or target.equipped_armor_bonus or 0
+            armor_bonus = get_human_armor_hit_reduction(target)
         end
         local hit_chance = clamp(ctx.MELEE_MODEL.alien_base_hit_chance - armor_bonus, ctx.MELEE_MODEL.min_hit_chance, ctx.MELEE_MODEL.max_hit_chance)
         local roll = math.random(1, 100)

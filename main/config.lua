@@ -206,6 +206,15 @@ M.BUFF_SLOT_ORDER = { "top", "center", "left", "right", "bottom" }
 -- Buff hit-chance clamps intentionally avoid 0% and 100%.
 M.BUFF_HIT_CHANCE_MIN = 5
 M.BUFF_HIT_CHANCE_MAX = 95
+M.BUFF_ARMOR_HIT_REDUCTION = 15
+M.BUFF_MELEE_HIT_BONUS_SINGLE = 10
+M.BUFF_MELEE_HIT_BONUS_DUAL = 20
+
+M.HAZARD_DAMAGE = {
+    outside_per_turn = 2,
+    fire_per_turn = 1,
+    gas_per_turn = 1
+}
 
 -- Buff registry (Phase 0 scaffold). Item ids are backpack/world ids.
 M.BUFFS = {

@@ -76,6 +76,9 @@ HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
 HUMAN_PINGPONG_AMPLITUDE = 0.18
 HUMAN_PINGPONG_SPEED = 7
 HUMAN_MAX_ACTION_POINTS = 5
+SPEED_STIM_REFRESH_AP = 6
+NIGHTVISION_UNPOWERED_TINT = vmath.vector4(0.16, 0.36, 0.18, 1)
+NIGHTVISION_POWER_NODE_TINT = vmath.vector4(0.45, 1.0, 0.55, 1)
 CIVILIAN_MAX_ACTION_POINTS = 3
 CIVILIAN_MAX_HEALTH = 10
 CIVILIAN_OBJECT_NAME = hash("civilian_spawn")
@@ -264,6 +267,8 @@ AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
 BUFFS = require("main.config").BUFFS or {}
 BUFF_SLOT_ORDER = require("main.config").BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
+BUFF_ARMOR_HIT_REDUCTION = tonumber(require("main.config").BUFF_ARMOR_HIT_REDUCTION or 15) or 15
+HAZARD_DAMAGE = require("main.config").HAZARD_DAMAGE or {}
 BUFFS_BY_ITEM_TYPE = {}
 do
     for _, buff_def in pairs(BUFFS) do
@@ -3884,9 +3889,10 @@ local function update_spitter_attack_phase(self, dt)
     local target_cell = self.world_grid and self.world_grid[target.cell_id] or nil
     local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
     local ranged_model = require("main.config").RANGED_HIT_MODEL
+    local armor_reduction = (target.target_kind ~= "civilian") and get_human_armor_hit_reduction(target) or 0
     local hit_chance = math.max(
         ranged_model.min_hit_chance,
-        math.min(ranged_model.max_hit_chance, ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus))
+        math.min(ranged_model.max_hit_chance, (ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)) - armor_reduction)
     )
     local roll = math.random(1, 100)
     if roll <= hit_chance then
@@ -3895,8 +3901,8 @@ local function update_spitter_attack_phase(self, dt)
             MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
         end
         print(string.format(
-            "Spitter #%d fired at %s and HIT (HP now %d) [light=%d chance=%d%% roll=%d]",
-            spitter.id, target.display_name, target.current_health, active_light, hit_chance, roll
+            "Spitter #%d fired at %s and HIT (HP now %d) [light=%d chance=%d%% roll=%d armor=%d]",
+            spitter.id, target.display_name, target.current_health, active_light, hit_chance, roll, armor_reduction
         ))
         if target.current_health <= 0 then
             if target.target_kind == "civilian" then
@@ -3913,8 +3919,8 @@ local function update_spitter_attack_phase(self, dt)
         end
     else
         print(string.format(
-            "Spitter #%d fired at %s and MISSED [light=%d chance=%d%% roll=%d]",
-            spitter.id, target.display_name, active_light, hit_chance, roll
+            "Spitter #%d fired at %s and MISSED [light=%d chance=%d%% roll=%d armor=%d]",
+            spitter.id, target.display_name, active_light, hit_chance, roll, armor_reduction
         ))
     end
 
@@ -5774,6 +5780,121 @@ local function create_empty_equipment()
         right = nil,
         bottom = nil
     }
+end
+
+local function unit_has_equipped_buff_kind(unit, buff_kind)
+    if not unit or type(unit.equipment) ~= "table" then
+        return false
+    end
+    for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+        local item_type = unit.equipment[slot_name]
+        local buff_def = item_type and BUFFS_BY_ITEM_TYPE[item_type] or nil
+        if buff_def and buff_def.buff_kind == buff_kind then
+            return true
+        end
+    end
+    return false
+end
+
+local function get_human_ap_refresh_cap(unit)
+    local base_ap = tonumber(unit and unit.max_ap or HUMAN_MAX_ACTION_POINTS) or HUMAN_MAX_ACTION_POINTS
+    if unit_has_equipped_buff_kind(unit, "speed_stim") then
+        return math.max(base_ap, SPEED_STIM_REFRESH_AP)
+    end
+    return base_ap
+end
+
+local function get_human_armor_hit_reduction(unit)
+    if not unit or type(unit.equipment) ~= "table" then
+        return 0
+    end
+    for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+        local item_type = unit.equipment[slot_name]
+        local buff_def = item_type and BUFFS_BY_ITEM_TYPE[item_type] or nil
+        if buff_def and buff_def.buff_kind == "armor" then
+            return math.max(0, BUFF_ARMOR_HIT_REDUCTION)
+        end
+    end
+    return 0
+end
+
+local function get_nightvision_reveal_context(self)
+    local selected_unit = nil
+    if self and self.squad_units and self.controlled_unit_id then
+        selected_unit = self.squad_units[self.controlled_unit_id]
+    end
+    if not selected_unit or (selected_unit.current_health or 0) <= 0 or not selected_unit.cell_id then
+        return false, nil
+    end
+    if not unit_has_equipped_buff_kind(selected_unit, "nightvision_goggles") then
+        return false, nil
+    end
+    local cell = self.world_grid and self.world_grid[selected_unit.cell_id] or nil
+    if not cell or cell.isPowered == true then
+        return false, nil
+    end
+    return true, tonumber(cell.tileInstanceId or 0) or 0
+end
+
+local function get_cell_hazard_flags(cell)
+    if not cell then
+        return false, false
+    end
+    local fire = false
+    local gas = false
+    local t = cell.hazard_type or cell.hazardType or cell.hazard
+    if type(t) == "string" then
+        local hazard = string.lower(t)
+        fire = (hazard == "fire") or (hazard == "fire_gas") or (hazard == "gas_fire")
+        gas = (hazard == "gas") or (hazard == "fire_gas") or (hazard == "gas_fire") or (hazard == "poison")
+    end
+    fire = fire or cell.isFireHazard == true or cell.has_fire_hazard == true or cell.hasFireHazard == true
+    gas = gas or cell.isGasHazard == true or cell.has_gas_hazard == true or cell.hasGasHazard == true
+    return fire, gas
+end
+
+local function apply_start_of_turn_environment_damage(self)
+    if not self or not self.squad_units or not self.world_grid then
+        return
+    end
+    local outside_damage = math.max(0, tonumber(HAZARD_DAMAGE.outside_per_turn or 2) or 2)
+    local fire_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
+    local gas_damage = math.max(0, tonumber(HAZARD_DAMAGE.gas_per_turn or 1) or 1)
+    for _, unit in pairs(self.squad_units) do
+        if unit and (unit.current_health or 0) > 0 and unit.cell_id then
+            local cell = self.world_grid[unit.cell_id]
+            local has_oxygen_mask = unit_has_equipped_buff_kind(unit, "oxygen_mask")
+            local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
+            local damage = 0
+            if cell and cell.isOutside == true and not has_oxygen_mask then
+                damage = damage + outside_damage
+            end
+            local has_fire, has_gas = get_cell_hazard_flags(cell)
+            if has_fire and not has_hazmat then
+                damage = damage + fire_damage
+            end
+            if has_gas and not has_hazmat then
+                damage = damage + gas_damage
+            end
+            if damage > 0 then
+                unit.current_health = math.max(0, (unit.current_health or 0) - damage)
+                print(string.format(
+                    "TURN HAZARD | %s took %d damage (HP=%d) [outside=%s fire=%s gas=%s mask=%s hazmat=%s]",
+                    unit.display_name or tostring(unit.id),
+                    damage,
+                    unit.current_health or 0,
+                    (cell and cell.isOutside == true) and "y" or "n",
+                    has_fire and "y" or "n",
+                    has_gas and "y" or "n",
+                    has_oxygen_mask and "y" or "n",
+                    has_hazmat and "y" or "n"
+                ))
+                if unit.current_health <= 0 then
+                    handle_human_death_loot_drop(self, unit, "environment_hazard")
+                end
+            end
+        end
+    end
 end
 
 local function create_squad_units()
@@ -8608,6 +8729,7 @@ apply_computer_emissive_accents = function(self, dt)
         end
     end
     local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    local nightvision_reveal_enabled, nightvision_tile_instance_id = get_nightvision_reveal_context(self)
     if selected_level and next(human_tile_instances) ~= nil then
         for human_tile_id, _ in pairs(human_tile_instances) do
             local a = selected_level[human_tile_id]
@@ -8636,8 +8758,11 @@ apply_computer_emissive_accents = function(self, dt)
     end
 
     local function get_instance_tint(instance_key, powered, apply_off_human_proximity_rule)
+        local n = tonumber(instance_key) or 0
+        if (not powered) and nightvision_reveal_enabled and n == nightvision_tile_instance_id then
+            return NIGHTVISION_UNPOWERED_TINT
+        end
         if apply_off_human_proximity_rule and not powered then
-            local n = tonumber(instance_key) or 0
             self.tile_off_proximity_mul_state = self.tile_off_proximity_mul_state or {}
             local target_mul
             if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
@@ -8666,7 +8791,6 @@ apply_computer_emissive_accents = function(self, dt)
         if not enabled then
             return white_tint
         end
-        local n = tonumber(instance_key) or 0
         local placement = selected_level and selected_level[n] or nil
         if placement and placement.tile == "workshop" then
             local workshop_wave = 0.5 + (0.5 * math.sin((self.workshop_emissive_phase or 0) + (n * 0.11)))
@@ -8705,9 +8829,26 @@ apply_computer_emissive_accents = function(self, dt)
 
     if self.power_node_objects then
         for cell_id, marker_id in pairs(self.power_node_objects) do
+            local cell = self.world_grid and self.world_grid[cell_id] or nil
             local powered = self.power_node_power_state and self.power_node_power_state[cell_id] == true
-            local tint = get_instance_tint(cell_id, powered)
+            local visible_in_unpowered = nightvision_reveal_enabled
+                and cell
+                and tonumber(cell.tileInstanceId or 0) == nightvision_tile_instance_id
+            local should_show = powered or visible_in_unpowered
+            local tint = vmath.vector4(0, 0, 0, 0)
+            if should_show then
+                if visible_in_unpowered and not powered then
+                        tint = NIGHTVISION_POWER_NODE_TINT
+                else
+                    tint = get_instance_tint(cell_id, powered)
+                end
+            end
             pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", tint)
+            local shadow_id = self.power_node_shadow_objects and self.power_node_shadow_objects[cell_id] or nil
+            if shadow_id then
+                local shadow_alpha = should_show and 0.33 or 0
+                pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, shadow_alpha))
+            end
         end
     end
 
@@ -11192,6 +11333,13 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
+    BUFFS = BUFFS,
+    BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
+    BUFF_ARMOR_HIT_REDUCTION = BUFF_ARMOR_HIT_REDUCTION,
+    BUFF_HIT_CHANCE_MIN = require("main.config").BUFF_HIT_CHANCE_MIN,
+    BUFF_HIT_CHANCE_MAX = require("main.config").BUFF_HIT_CHANCE_MAX,
+    BUFF_MELEE_HIT_BONUS_SINGLE = require("main.config").BUFF_MELEE_HIT_BONUS_SINGLE,
+    BUFF_MELEE_HIT_BONUS_DUAL = require("main.config").BUFF_MELEE_HIT_BONUS_DUAL,
     AP_COSTS = AP_COSTS,
     ALIEN_ACTION_COSTS = ALIEN_ACTION_COSTS,
     ALIEN_TYPE_CONFIG = ALIEN_TYPE_CONFIG,
@@ -11225,9 +11373,11 @@ local function next_turn_reset_human_ap(self)
         return
     end
 
+    apply_start_of_turn_environment_damage(self)
+
     for _, unit in pairs(self.squad_units) do
         if unit and (unit.current_health or 0) > 0 then
-            unit.current_ap = unit.max_ap
+            unit.current_ap = get_human_ap_refresh_cap(unit)
         else
             unit.current_ap = 0
             unit.is_moving = false
@@ -11447,6 +11597,35 @@ function spawn_human_unit(self)
                 go.set(unit.shadow_path, "tint", vmath.vector4(1, 1, 1, 0.5))
             end
             print(unit.display_name .. " spawned on cell: " .. spawn_cells[i])
+        end
+    end
+
+    local function any_unit_has_nightvision_equipped()
+        for _, unit in pairs(self.squad_units or {}) do
+            if unit_has_equipped_buff_kind(unit, "nightvision_goggles") then
+                return true
+            end
+        end
+        return false
+    end
+
+    if not any_unit_has_nightvision_equipped() then
+        local sarge = self.squad_units and self.squad_units.sarge or nil
+        if sarge then
+            sarge.equipment = sarge.equipment or create_empty_equipment()
+            local displaced = sarge.equipment.top
+            sarge.equipment.top = "buff_night_vision"
+            if displaced and displaced ~= "buff_night_vision" then
+                sarge.backpack_items = sarge.backpack_items or {}
+                local cap = tonumber(sarge.backpack_slots or 12) or 12
+                if #sarge.backpack_items < cap then
+                    table.insert(sarge.backpack_items, displaced)
+                else
+                    print(string.format("Nightvision fallback displaced '%s' from Sarge but backpack was full; item dropped.", tostring(displaced)))
+                end
+                sarge.backpack_used = #sarge.backpack_items
+            end
+            print("Nightvision fallback: equipped Sarge with buff_night_vision to avoid unpowered soft-lock.")
         end
     end
 
@@ -12054,7 +12233,7 @@ multiplayer_apply_move_unit_event = function(self, payload)
     end
     local ap_before = tonumber(payload.ap_before)
     if ap_before then
-        local max_ap = tonumber(unit.max_ap or HUMAN_MAX_ACTION_POINTS) or HUMAN_MAX_ACTION_POINTS
+        local max_ap = get_human_ap_refresh_cap(unit)
         unit.current_ap = math.max(0, math.min(max_ap, math.floor(ap_before + 0.5)))
     end
     local path = nil
@@ -13468,7 +13647,9 @@ function update(self, dt)
         enforce_fixed_window_size(self, dt, false)
     end
     update_smooth_zoom(self, dt)
+    local nightvision_reveal_enabled, nightvision_tile_instance_id = get_nightvision_reveal_context(self)
     if self.world_grid and self.tile_light_layers then
+        self.tile_light_display_power_state = self.tile_light_display_power_state or {}
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
             local light_anim_cfg = self.tile_light_anim_ids and self.tile_light_anim_ids[tile_instance_id] or nil
             if light_anim_cfg and light_anim_cfg.on and light_anim_cfg.off then
@@ -13482,11 +13663,19 @@ function update(self, dt)
                     end
                 end
 
-                local was_powered = self.tile_light_power_state[tile_instance_id]
-                if was_powered == nil or was_powered ~= tile_powered then
-                    if tile_powered then
+                local nightvision_reveal_for_tile = nightvision_reveal_enabled
+                    and tonumber(tile_instance_id or 0) == tonumber(nightvision_tile_instance_id or 0)
+                local display_powered = tile_powered or nightvision_reveal_for_tile
+
+                local was_display_powered = self.tile_light_display_power_state[tile_instance_id]
+                if was_display_powered == nil or was_display_powered ~= display_powered then
+                    if display_powered then
                         if self.tile_light_is_workshop and self.tile_light_is_workshop[tile_instance_id] then
                             -- Workshop keeps its own smooth emissive profile without startup stutter.
+                            self.tile_light_flicker_state[tile_instance_id] = nil
+                            msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
+                        elseif nightvision_reveal_for_tile and not tile_powered then
+                            -- Nightvision reveal should show ON art instantly, not OFF flicker.
                             self.tile_light_flicker_state[tile_instance_id] = nil
                             msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
                         else
@@ -13502,8 +13691,9 @@ function update(self, dt)
                         self.tile_light_flicker_state[tile_instance_id] = nil
                         msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_off })
                     end
-                    self.tile_light_power_state[tile_instance_id] = tile_powered
+                    self.tile_light_display_power_state[tile_instance_id] = display_powered
                 end
+                self.tile_light_power_state[tile_instance_id] = tile_powered
 
                 local flicker = self.tile_light_flicker_state[tile_instance_id]
                 if flicker and flicker.active then

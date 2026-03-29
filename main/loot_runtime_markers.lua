@@ -443,7 +443,8 @@ function M.extend(runtime, ctx)
                 local marker_x = x + (power_node.offsetX or 0)
                 local marker_y = y + (power_node.offsetY or 0)
                 if boardgame_shadows_enabled(self) then
-                    self.power_node_shadow_objects[cell_id] = spawn_world_shadow(marker_x + 4, marker_y - 7, 0.5, 0.56, 0.22, 0.33)
+                    local shadow_alpha = (cell.isPowered == true) and 0.33 or 0
+                    self.power_node_shadow_objects[cell_id] = spawn_world_shadow(marker_x + 4, marker_y - 7, 0.5, 0.56, 0.22, shadow_alpha)
                 end
                 local marker_id = factory.create("/power_node_marker_factory#power_node_marker_factory", vmath.vector3(marker_x, marker_y, ctx.LOOT_UI.power_node_marker_z or 0.55))
                 if marker_id then
@@ -461,6 +462,9 @@ function M.extend(runtime, ctx)
                         self.power_node_flicker_state[cell_id] = nil
                         local anim = cell.isPowered and hash("powerNode_on") or hash("powerNode_off")
                         msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
+                    end
+                    if cell.isPowered ~= true then
+                        go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
                     end
                     self.power_node_power_state[cell_id] = cell.isPowered
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.power_node_marker_size, ctx.LOOT_UI.power_node_marker_size, 1), marker_id)

@@ -447,6 +447,58 @@ function M.create(ctx)
         return nil
     end
 
+    runtime.get_buff_slot_screen_pos = function(slot_name)
+        local rel_offsets = ctx.BUFF_SLOT_RELATIVE_OFFSETS or {}
+        local anchor = rel_offsets[slot_name]
+        if not anchor then
+            return nil, nil
+        end
+        local panel_x = ctx.UI_PANEL_X or 0
+        local panel_y = ctx.UI_PANEL_Y or 0
+        local hotspot_x = panel_x + (ctx.BUFF_DROP_ZONE_OFFSET_X or 0)
+        local hotspot_y = panel_y + (ctx.BUFF_DROP_ZONE_OFFSET_Y or 0)
+        return hotspot_x + (anchor.x or 0), hotspot_y + (anchor.y or 0)
+    end
+
+    runtime.get_buff_slot_at = function(screen_x, screen_y)
+        local slot_order = ctx.BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
+        local half = (ctx.BUFF_SLOT_HIT_SIZE or 44) * 0.5
+        for _, slot_name in ipairs(slot_order) do
+            local sx, sy = runtime.get_buff_slot_screen_pos(slot_name)
+            if sx and sy then
+                if screen_x >= (sx - half)
+                    and screen_x <= (sx + half)
+                    and screen_y >= (sy - half)
+                    and screen_y <= (sy + half)
+                then
+                    return slot_name
+                end
+            end
+        end
+        return nil
+    end
+
+    runtime.is_point_in_buff_drop_zone = function(screen_x, screen_y)
+        local panel_x = ctx.UI_PANEL_X or 0
+        local panel_y = ctx.UI_PANEL_Y or 0
+        local cx = panel_x + (ctx.BUFF_DROP_ZONE_OFFSET_X or 0)
+        local cy = panel_y + (ctx.BUFF_DROP_ZONE_OFFSET_Y or 0)
+        local half_w = (ctx.BUFF_DROP_ZONE_W or 114) * 0.5
+        local half_h = (ctx.BUFF_DROP_ZONE_H or 114) * 0.5
+        return screen_x >= (cx - half_w)
+            and screen_x <= (cx + half_w)
+            and screen_y >= (cy - half_h)
+            and screen_y <= (cy + half_h)
+    end
+
+    runtime.can_item_equip_slot = function(item_type, slot_name)
+        local buff_def = get_buff_def_by_item_type(item_type)
+        if not buff_def then
+            return false
+        end
+        return buff_def.slot == slot_name
+    end
+
     runtime.get_command_pip_index_at = function(unit, screen_x, screen_y)
         if not unit or unit.class_id ~= ctx.UNIT_CLASS_SARGE then
             return nil

@@ -219,6 +219,9 @@ M.BUFFS = {
         info_anim = "armor_info",
         ui_pixel_w = 59,
         ui_pixel_h = 52,
+        world_draw_scale = 1.0,
+        backpack_draw_scale = 1.0,
+        equipped_draw_scale = 1.0,
         info_pixel_w = 256,
         info_pixel_h = 256
     },
@@ -232,6 +235,9 @@ M.BUFFS = {
         info_anim = "hazmat_suit_info",
         ui_pixel_w = 100,
         ui_pixel_h = 109,
+        world_draw_scale = 0.75,
+        backpack_draw_scale = 0.5,
+        equipped_draw_scale = 0.5,
         info_pixel_w = 256,
         info_pixel_h = 256
     },
@@ -245,6 +251,9 @@ M.BUFFS = {
         info_anim = "oxygen_mask_info",
         ui_pixel_w = 34,
         ui_pixel_h = 36,
+        world_draw_scale = 1.0,
+        backpack_draw_scale = 1.5,
+        equipped_draw_scale = 1.5,
         info_pixel_w = 256,
         info_pixel_h = 256
     },
@@ -258,6 +267,9 @@ M.BUFFS = {
         info_anim = "speed_stim_info",
         ui_pixel_w = 92,
         ui_pixel_h = 40,
+        world_draw_scale = 0.75,
+        backpack_draw_scale = 0.5,
+        equipped_draw_scale = 0.5,
         info_pixel_w = 256,
         info_pixel_h = 256
     },
@@ -271,6 +283,9 @@ M.BUFFS = {
         info_anim = "night_vision_info",
         ui_pixel_w = 28,
         ui_pixel_h = 22,
+        world_draw_scale = 1.0,
+        backpack_draw_scale = 1.5,
+        equipped_draw_scale = 1.5,
         info_pixel_w = 256,
         info_pixel_h = 256
     },
@@ -284,6 +299,9 @@ M.BUFFS = {
         info_anim = "melee_info",
         ui_pixel_w = 52,
         ui_pixel_h = 88,
+        world_draw_scale = 0.75,
+        backpack_draw_scale = 0.75,
+        equipped_draw_scale = 0.75,
         info_pixel_w = 256,
         info_pixel_h = 256
     },
@@ -297,6 +315,9 @@ M.BUFFS = {
         info_anim = "melee_info",
         ui_pixel_w = 52,
         ui_pixel_h = 88,
+        world_draw_scale = 0.75,
+        backpack_draw_scale = 0.75,
+        equipped_draw_scale = 0.75,
         info_pixel_w = 256,
         info_pixel_h = 256
     }

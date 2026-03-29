@@ -257,7 +257,15 @@ canteen.cells[3].object1 = {
 canteen.cells[4].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-    lootItems = { "ammo", "ammo", "meds", "material","power","wiring_straight", COMPONENT_UI.component_fuse }
+    lootItems = {
+        "buff_armour",
+        "buff_hazmat",
+        "buff_oxygen_mask",
+        "buff_speed_stims",
+        "buff_night_vision",
+        "buff_melee_left",
+        "buff_melee_right"
+    }
 }
 canteen.cells[2].object1 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 551,

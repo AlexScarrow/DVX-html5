@@ -118,7 +118,13 @@ function M.extend(runtime, ctx)
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
         SPOT_ALIEN = { anim = hash("derples_comms_alienSpotted"), duration = 1.05, cooldown = 1.9, scale = 0.54, x_offset = 50, y_offset = 74 },
         NOT_ENOUGH_AP = { anim = hash("derples_comms_notEnough_AP"), duration = 1.05, cooldown = 0.4, scale = 0.54, x_offset = 50, y_offset = 74 },
-        TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 }
+        TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 },
+        BUFF_ARMOR_INFO = { anim = hash("armor_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
+        BUFF_HAZMAT_INFO = { anim = hash("hazmat_suit_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
+        BUFF_OXYGEN_INFO = { anim = hash("oxygen_mask_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
+        BUFF_SPEED_INFO = { anim = hash("speed_stim_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
+        BUFF_NIGHTVISION_INFO = { anim = hash("night_vision_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
+        BUFF_MELEE_INFO = { anim = hash("melee_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 }
     }
     local get_dead_human_by_id
     local get_dead_civilian_by_id
@@ -245,6 +251,33 @@ function M.extend(runtime, ctx)
         end
     end
 
+    local function get_buff_info_event_type(item_type)
+        if item_type == "buff_armour" then
+            return "BUFF_ARMOR_INFO"
+        elseif item_type == "buff_hazmat" then
+            return "BUFF_HAZMAT_INFO"
+        elseif item_type == "buff_oxygen_mask" then
+            return "BUFF_OXYGEN_INFO"
+        elseif item_type == "buff_speed_stims" then
+            return "BUFF_SPEED_INFO"
+        elseif item_type == "buff_night_vision" then
+            return "BUFF_NIGHTVISION_INFO"
+        elseif item_type == "buff_melee_left" or item_type == "buff_melee_right" then
+            return "BUFF_MELEE_INFO"
+        end
+        return nil
+    end
+
+    local function emit_buff_info_feedback(self, unit, item_type)
+        if not (runtime.emit_derple_feedback and unit and unit.id) then
+            return
+        end
+        local event_type = get_buff_info_event_type(item_type)
+        if event_type then
+            runtime.emit_derple_feedback(self, unit.id, event_type)
+        end
+    end
+
     local function try_consume_drag_ap(source_unit, target_unit, ap_cost_override)
         if not source_unit then
             return false
@@ -316,7 +349,21 @@ function M.extend(runtime, ctx)
         elseif is_food_supplies_item(item_type) then
             return hash("food_supplies")
         end
+        local buff_def = runtime and runtime.get_buff_def and runtime.get_buff_def(item_type) or nil
+        if buff_def and buff_def.world_anim then
+            return hash(buff_def.world_anim)
+        end
         return nil
+    end
+
+    local function get_world_item_draw_scale(item_type)
+        local base_scale = 0.85
+        local buff_def = runtime and runtime.get_buff_def and runtime.get_buff_def(item_type) or nil
+        if buff_def then
+            local mul = tonumber(buff_def.world_draw_scale or 1.0) or 1.0
+            return base_scale * mul
+        end
+        return base_scale
     end
 
     local function get_alive_human_anim_for_aesthetic(self, unit)
@@ -1921,7 +1968,8 @@ function M.extend(runtime, ctx)
                                 if anim then
                                     msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = anim })
                                 end
-                                go.set_scale(vmath.vector3(0.85, 0.85, 1), token_id)
+                                local token_scale = get_world_item_draw_scale(selected.item_type)
+                                go.set_scale(vmath.vector3(token_scale, token_scale, 1), token_id)
                                 go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.98))
                                 table.insert(self.workshop_conveyor_tokens, {
                                     go_id = token_id,
@@ -2369,7 +2417,8 @@ function M.extend(runtime, ctx)
                                     msg.post(msg.url(nil, shadow_id, "sprite"), "play_animation", { id = anim })
                                 end
                                 go.set(msg.url(nil, shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0.45))
-                                go.set_scale(vmath.vector3(0.85, 0.85, 1), shadow_id)
+                                local shadow_scale = get_world_item_draw_scale(item.item_type)
+                                go.set_scale(vmath.vector3(shadow_scale, shadow_scale, 1), shadow_id)
                                 self.world_item_shadow_visuals[item.id] = shadow_id
                             end
                         end
@@ -2380,7 +2429,8 @@ function M.extend(runtime, ctx)
                             local color = runtime.get_backpack_item_color(item.item_type)
                             go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
                         end
-                        go.set_scale(vmath.vector3(0.85, 0.85, 1), marker_id)
+                        local marker_scale = get_world_item_draw_scale(item.item_type)
+                        go.set_scale(vmath.vector3(marker_scale, marker_scale, 1), marker_id)
                         self.world_item_visuals[item.id] = marker_id
                         print(string.format(
                             "WORLD ITEM VISUAL | id=%d type=%s cell=%d slot=%d/%d pos=(%.1f, %.1f)",
@@ -3375,10 +3425,30 @@ function M.extend(runtime, ctx)
 
     runtime.begin_resource_drag = function(self, screen_x, screen_y)
         local unit = ctx.get_selected_unit(self)
-        if not unit or not unit.backpack_items then
+        if not unit then
             return false
         end
 
+        local buff_slot = runtime.get_buff_slot_at and runtime.get_buff_slot_at(screen_x, screen_y) or nil
+        if buff_slot and unit.equipment and unit.equipment[buff_slot] then
+            local equipped_item = unit.equipment[buff_slot]
+            self.drag_resource = {
+                active = true,
+                drag_type = "equipped_buff",
+                source_unit_id = unit.id,
+                source_slot_name = buff_slot,
+                item_type = equipped_item,
+                start_screen_x = screen_x,
+                start_screen_y = screen_y,
+                screen_x = screen_x,
+                screen_y = screen_y
+            }
+            return true
+        end
+
+        if not unit.backpack_items then
+            return false
+        end
         local slot_index = runtime.get_backpack_slot_index_at(screen_x, screen_y)
         if not slot_index then
             return false
@@ -4110,15 +4180,38 @@ function M.extend(runtime, ctx)
         end
 
         local source_unit = self.squad_units and self.squad_units[drag.source_unit_id]
-        if not source_unit or not source_unit.backpack_items then
+        if not source_unit then
             self.drag_resource = { active = false }
             return true
         end
 
-        local source_item = source_unit.backpack_items[drag.source_slot_index]
-        if drag.drag_type ~= "command" and not source_item then
+        source_unit.backpack_items = source_unit.backpack_items or {}
+        source_unit.equipment = source_unit.equipment or {}
+        local source_item = nil
+        if drag.drag_type == "equipped_buff" then
+            source_item = source_unit.equipment[drag.source_slot_name]
+        elseif drag.drag_type ~= "command" then
+            source_item = source_unit.backpack_items[drag.source_slot_index]
+        end
+        if drag.drag_type ~= "command" and (not source_item) then
             self.drag_resource = { active = false }
             return true
+        end
+        local function remove_source_item()
+            if drag.drag_type == "equipped_buff" then
+                local slot_name = drag.source_slot_name
+                if slot_name and source_unit.equipment[slot_name] == source_item then
+                    source_unit.equipment[slot_name] = nil
+                    return true
+                end
+                return false
+            end
+            if drag.source_slot_index and source_unit.backpack_items[drag.source_slot_index] == source_item then
+                table.remove(source_unit.backpack_items, drag.source_slot_index)
+                source_unit.backpack_used = #source_unit.backpack_items
+                return true
+            end
+            return false
         end
         local drag_ap_override = nil
         if source_item == TURRET_PACKED_ITEM then
@@ -4171,6 +4264,54 @@ function M.extend(runtime, ctx)
                 end
             end
         else
+            local backpack_slot_target = runtime.get_backpack_slot_index_at and runtime.get_backpack_slot_index_at(screen_x, screen_y) or nil
+            if drag.drag_type == "equipped_buff" and backpack_slot_target then
+                local cap = source_unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
+                if #source_unit.backpack_items >= cap then
+                    print("Backpack full.")
+                    flash_invalid_drag_units(source_unit, nil)
+                else
+                    if not try_consume_current_drag_ap(nil) then
+                        self.drag_resource = { active = false }
+                        return true
+                    end
+                    if remove_source_item() then
+                        table.insert(source_unit.backpack_items, source_item)
+                        source_unit.backpack_used = #source_unit.backpack_items
+                        consumed = true
+                        print(string.format("%s moved %s into backpack. (AP -%d)", source_unit.display_name, source_item, get_drag_ap_cost()))
+                    end
+                end
+            end
+            if consumed then
+                self.drag_resource = { active = false }
+                return true
+            end
+            local in_buff_drop_zone = runtime.is_point_in_buff_drop_zone and runtime.is_point_in_buff_drop_zone(screen_x, screen_y) or false
+            if in_buff_drop_zone and runtime.is_buff_item and runtime.is_buff_item(source_item) then
+                local buff_slot_target = runtime.get_buff_slot_for_item and runtime.get_buff_slot_for_item(source_item) or nil
+                if not buff_slot_target then
+                    print("Invalid buff definition (missing slot).")
+                elseif (source_unit.equipment and source_unit.equipment[buff_slot_target]) ~= nil then
+                    print("Slot already occupied.")
+                else
+                    if not try_consume_current_drag_ap(nil) then
+                        self.drag_resource = { active = false }
+                        return true
+                    end
+                    if remove_source_item() then
+                        source_unit.equipment = source_unit.equipment or {}
+                        source_unit.equipment[buff_slot_target] = source_item
+                        consumed = true
+                        emit_buff_info_feedback(self, source_unit, source_item)
+                        print(string.format("%s equipped %s on %s slot. (AP -%d)", source_unit.display_name, source_item, buff_slot_target, get_drag_ap_cost()))
+                    end
+                end
+            end
+            if consumed then
+                self.drag_resource = { active = false }
+                return true
+            end
             local bar_target = runtime.get_bar_drop_target(screen_x, screen_y)
             if bar_target then
                 consumed = runtime.try_apply_to_own_bar(source_unit, source_item, bar_target)
@@ -4180,8 +4321,7 @@ function M.extend(runtime, ctx)
                         self.drag_resource = { active = false }
                         return true
                     end
-                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                    source_unit.backpack_used = #source_unit.backpack_items
+                    remove_source_item()
                     print(string.format(
                         "%s used 1 %s on own %s bar. (AP -%d)",
                         source_unit.display_name,
@@ -4270,8 +4410,7 @@ function M.extend(runtime, ctx)
                                     self.drag_resource = { active = false }
                                     return true
                                 end
-                                table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                source_unit.backpack_used = #source_unit.backpack_items
+                                remove_source_item()
                                 target_unit.current_health = target_unit.max_health
                                 trigger_receive_pulse(target_unit)
                                 consumed = true
@@ -4291,8 +4430,7 @@ function M.extend(runtime, ctx)
                                     self.drag_resource = { active = false }
                                     return true
                                 end
-                                table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                source_unit.backpack_used = #source_unit.backpack_items
+                                remove_source_item()
                                 table.insert(target_unit.backpack_items, source_item)
                                 target_unit.backpack_used = #target_unit.backpack_items
                                 emit_receive_item_feedback(self, target_unit)
@@ -4374,8 +4512,7 @@ function M.extend(runtime, ctx)
                                             self.drag_resource = { active = false }
                                             return true
                                         end
-                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                        source_unit.backpack_used = #source_unit.backpack_items
+                                        remove_source_item()
                                         state.paid_units = (state.paid_units or 0) + 1
                                         print(string.format(
                                             "%s paid 1 material to workshop: %d/%d. (AP -%d)",
@@ -4425,8 +4562,7 @@ function M.extend(runtime, ctx)
                                         self.drag_resource = { active = false }
                                         return true
                                     end
-                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    remove_source_item()
                                     local produced_item = ctx.COMPONENT_UI.item_type_blue
                                     local produced_label = "component"
                                     if vending_machine.name == hash("ammo_vending_machine") then
@@ -4480,8 +4616,7 @@ function M.extend(runtime, ctx)
                                     self.drag_resource = { active = false }
                                     return true
                                 end
-                                table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                source_unit.backpack_used = #source_unit.backpack_items
+                                remove_source_item()
                                 target_socket_obj.powerLoaded = math.min(required, loaded + 1)
                                 consumed = true
                                 runtime.refresh_power_node_markers(self)
@@ -4516,8 +4651,7 @@ function M.extend(runtime, ctx)
                                     self.drag_resource = { active = false }
                                     return true
                                 end
-                                table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                source_unit.backpack_used = #source_unit.backpack_items
+                                remove_source_item()
                                 consumed = true
 
                                 local power_node = runtime.get_power_node_object(target_power_cell)
@@ -4635,8 +4769,7 @@ function M.extend(runtime, ctx)
                                             self.drag_resource = { active = false }
                                             return true
                                         end
-                                        table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                        source_unit.backpack_used = #source_unit.backpack_items
+                                        remove_source_item()
                                         drop_cell.barricade_hp = math.min(10, (drop_cell.barricade_hp or 0) + 1)
                                         drop_cell.barricade_brightness = math.max(0.25, math.min(1.0, (drop_cell.barricade_brightness or 1.0) * 1.33))
                                         drop_cell.barricade_scale_pulse = 0.1
@@ -4673,8 +4806,7 @@ function M.extend(runtime, ctx)
                                                     self.drag_resource = { active = false }
                                                     return true
                                                 end
-                                                table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                                source_unit.backpack_used = #source_unit.backpack_items
+                                                remove_source_item()
                                                 local anchor_x, anchor_y = get_obstacle_slot_anchor_offset(drop_cell, target_slot)
                                                 if target_slot.name ~= hash("obstacle") then
                                                     init_obstacle_slot(drop_cell, target_slot, self.world_grid, anchor_x, anchor_y)
@@ -4757,8 +4889,7 @@ function M.extend(runtime, ctx)
                                         self.drag_resource = { active = false }
                                         return true
                                     end
-                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    remove_source_item()
                                     vent_target.isWelded = true
                                     consumed = true
                                     runtime.refresh_fix_markers(self)
@@ -4842,8 +4973,7 @@ function M.extend(runtime, ctx)
                                         self.drag_resource = { active = false }
                                         return true
                                     end
-                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    remove_source_item()
                                     component_target.isFixed = true
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data then
@@ -4907,8 +5037,7 @@ function M.extend(runtime, ctx)
                                     consumed = true
                                     print(string.format("%s dropped a corpse from backpack. (AP -%d)", source_unit.display_name, get_drag_ap_cost()))
                                 else
-                                    table.remove(source_unit.backpack_items, drag.source_slot_index)
-                                    source_unit.backpack_used = #source_unit.backpack_items
+                                    remove_source_item()
                                     runtime.create_world_item_instance(self, source_item, drop_cell_id, source_unit.id, {})
                                     runtime.refresh_world_item_visuals(self)
                                     consumed = true
@@ -4952,8 +5081,9 @@ function M.extend(runtime, ctx)
         end
 
         local sprite_url = msg.url(nil, self.ui.drag_pip, "sprite")
-        local item_ui_scale = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021)
-        local command_ui_scale = item_ui_scale * 0.75
+        local item_ui_scale_x = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021)
+        local item_ui_scale_y = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021)
+        local command_ui_scale = ((ctx.UI_BACKPACK_SLOT_SIZE or 58) * 0.021) * 0.75
         if drag.drag_type == "command" then
             if self.ui.drag_command_pip then
                 ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
@@ -4968,12 +5098,22 @@ function M.extend(runtime, ctx)
             if icon_anim then
                 msg.post(sprite_url, "play_animation", { id = icon_anim })
                 go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
+                local buff_def = runtime.get_buff_def and runtime.get_buff_def(drag.item_type) or nil
+                if buff_def then
+                    local draw_w = math.max(1, tonumber(buff_def.ui_pixel_w or (ctx.UI_BACKPACK_SLOT_SIZE or 58)) or (ctx.UI_BACKPACK_SLOT_SIZE or 58))
+                    local draw_h = math.max(1, tonumber(buff_def.ui_pixel_h or (ctx.UI_BACKPACK_SLOT_SIZE or 58)) or (ctx.UI_BACKPACK_SLOT_SIZE or 58))
+                    -- Drag preview intentionally mirrors backpack visual size.
+                    local draw_scale = tonumber(buff_def.backpack_draw_scale or 1.0) or 1.0
+                    item_ui_scale_x = (draw_w * 0.021) * draw_scale
+                    item_ui_scale_y = (draw_h * 0.021) * draw_scale
+                end
             else
                 go.set(sprite_url, "tint", runtime.get_backpack_item_color(drag.item_type))
             end
         end
-        local final_scale = (drag.drag_type == "command") and command_ui_scale or item_ui_scale
-        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, vmath.vector4(1, 1, 1, 1), final_scale, final_scale)
+        local final_scale_x = (drag.drag_type == "command") and command_ui_scale or item_ui_scale_x
+        local final_scale_y = (drag.drag_type == "command") and command_ui_scale or item_ui_scale_y
+        ctx.set_ui_square_transform(self, self.ui.drag_pip, drag.screen_x, drag.screen_y, 0.9, vmath.vector4(1, 1, 1, 1), final_scale_x, final_scale_y)
     end
 
     return runtime

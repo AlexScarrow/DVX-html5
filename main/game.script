@@ -126,6 +126,20 @@ UI_FOOTER_X = 244
 UI_FOOTER_Y = 220
 UI_FOOTER_W = 118
 UI_FOOTER_H = 146
+BUFF_SLOT_FRAME_SIZE = 38
+BUFF_SLOT_HIT_SIZE = 44
+BUFF_DROP_ZONE_OFFSET_X = 74
+BUFF_DROP_ZONE_OFFSET_Y = 31
+BUFF_DROP_ZONE_W = 114
+BUFF_DROP_ZONE_H = 114
+-- Slot offsets are relative to the center of BUFF_DROP_ZONE.
+BUFF_SLOT_RELATIVE_OFFSETS = {
+    top = { x = 0, y = 33 },
+    center = { x = 0, y = 0 },
+    left = { x = -33, y = 0 },
+    right = { x = 33, y = 0 },
+    bottom = { x = 0, y = -33 }
+}
 LEVEL_BUTTON_Y = SCREEN_HEIGHT - 18
 LEVEL_BUTTON_W = 84
 LEVEL_BUTTON_H = 24
@@ -250,6 +264,14 @@ AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
 BUFFS = require("main.config").BUFFS or {}
 BUFF_SLOT_ORDER = require("main.config").BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
+BUFFS_BY_ITEM_TYPE = {}
+do
+    for _, buff_def in pairs(BUFFS) do
+        if type(buff_def) == "table" and type(buff_def.item_type) == "string" then
+            BUFFS_BY_ITEM_TYPE[buff_def.item_type] = buff_def
+        end
+    end
+end
 ALIEN_REVEAL_WEIGHTS = ALIEN_BALANCE.REVEAL_WEIGHTS or {}
 ALIEN_ACTION_COSTS = ALIEN_BALANCE.ACTION_COSTS or {}
 SOLO_SETUP_PANEL_X = MP_SETUP_PANEL_X
@@ -6737,6 +6759,8 @@ local function initialize_unit_ui(self)
         command_pip_icons = {},
         backpack_slots = {},
         backpack_item_icons = {},
+        buff_slots = {},
+        buff_item_icons = {},
         component_button = nil,
         fix_button = nil,
         loot_button = nil,
@@ -6798,6 +6822,10 @@ local function initialize_unit_ui(self)
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
         self.ui.backpack_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.815))
+    end
+    for i = 1, #BUFF_SLOT_ORDER do
+        self.ui.buff_slots[i] = create_ui_square(0, 0, 0.813, vmath.vector4(0.16, 0.2, 0.18, 0.85), BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        self.ui.buff_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.816))
     end
     self.ui.component_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.button_color, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     self.ui.fix_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.fix_button_color, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
@@ -6908,6 +6936,10 @@ local function set_ui_hidden(self)
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
         set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
         set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, hidden, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+    end
+    for i = 1, #BUFF_SLOT_ORDER do
+        set_ui_square_transform(self, self.ui.buff_slots[i], -9999, -9999, 0.813, hidden, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, 0.816, hidden, 1, 1)
     end
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
@@ -9068,6 +9100,15 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
     UI_BAR_PIP_GAP = UI_BAR_PIP_GAP,
     UI_BAR_AMMO_X = UI_BAR_AMMO_X,
     UI_BAR_HP_X = UI_BAR_HP_X,
+    UI_PANEL_X = UI_PANEL_X,
+    UI_PANEL_Y = UI_PANEL_Y,
+    BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
+    BUFF_DROP_ZONE_OFFSET_X = BUFF_DROP_ZONE_OFFSET_X,
+    BUFF_DROP_ZONE_OFFSET_Y = BUFF_DROP_ZONE_OFFSET_Y,
+    BUFF_DROP_ZONE_W = BUFF_DROP_ZONE_W,
+    BUFF_DROP_ZONE_H = BUFF_DROP_ZONE_H,
+    BUFF_SLOT_RELATIVE_OFFSETS = BUFF_SLOT_RELATIVE_OFFSETS,
+    BUFF_SLOT_HIT_SIZE = BUFF_SLOT_HIT_SIZE,
     BUFFS = BUFFS,
     id_to_coords = id_to_coords,
     can_human_cross_between_cells = can_human_cross_between_cells
@@ -9285,6 +9326,36 @@ function update_selected_unit_ui(self)
             grid_w * packed_item_ui_scale_x,
             grid_h * packed_item_ui_scale_y
         )
+    end
+
+    local equipment = unit.equipment or {}
+    local hotspot_cx = UI_PANEL_X + BUFF_DROP_ZONE_OFFSET_X
+    local hotspot_cy = UI_PANEL_Y + BUFF_DROP_ZONE_OFFSET_Y
+    for i, slot_name in ipairs(BUFF_SLOT_ORDER) do
+        local anchor = BUFF_SLOT_RELATIVE_OFFSETS[slot_name] or { x = 0, y = 0 }
+        local slot_x = hotspot_cx + (anchor.x or 0)
+        local slot_y = hotspot_cy + (anchor.y or 0)
+        local slot_tint = vmath.vector4(0.16, 0.2, 0.18, 0.85)
+        if self.drag_resource and self.drag_resource.active and self.drag_resource.drag_type == "equipped_buff" and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_name == slot_name then
+            slot_tint = vmath.vector4(slot_tint.x, slot_tint.y, slot_tint.z, 0.35)
+        end
+        set_ui_square_transform(self, self.ui.buff_slots[i], slot_x, slot_y, 0.813, slot_tint, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        local equipped_item = equipment[slot_name]
+        local buff_def = equipped_item and BUFFS_BY_ITEM_TYPE[equipped_item] or nil
+        if buff_def and buff_def.ui_anim then
+            local icon_go = self.ui.buff_item_icons[i]
+            local icon_color = vmath.vector4(1, 1, 1, 1)
+            if self.drag_resource and self.drag_resource.active and self.drag_resource.drag_type == "equipped_buff" and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_name == slot_name then
+                icon_color = vmath.vector4(1, 1, 1, 0.35)
+            end
+            msg.post(msg.url(nil, icon_go, "sprite"), "play_animation", { id = hash(buff_def.ui_anim) })
+            local draw_w = math.max(1, tonumber(buff_def.ui_pixel_w or BUFF_SLOT_FRAME_SIZE) or BUFF_SLOT_FRAME_SIZE)
+            local draw_h = math.max(1, tonumber(buff_def.ui_pixel_h or BUFF_SLOT_FRAME_SIZE) or BUFF_SLOT_FRAME_SIZE)
+            local draw_scale = tonumber(buff_def.equipped_draw_scale or buff_def.backpack_draw_scale or 1.0) or 1.0
+            set_ui_square_transform(self, icon_go, slot_x, slot_y, 0.816, icon_color, (draw_w * 0.021) * draw_scale, (draw_h * 0.021) * draw_scale)
+        else
+            set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, 0.816, vmath.vector4(0, 0, 0, 0), 1, 1)
+        end
     end
 
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), COMPONENT_UI.button_size, COMPONENT_UI.button_size)
@@ -11085,6 +11156,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     UI_BACKPACK_COLS = UI_BACKPACK_COLS,
     UI_BACKPACK_ROWS = UI_BACKPACK_ROWS,
     UI_BACKPACK_SLOT_SIZE = UI_BACKPACK_SLOT_SIZE,
+    BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
     UNIT_CLICK_SELECT_RADIUS = UNIT_CLICK_SELECT_RADIUS,
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,
     UNIT_CLASS_TECHIE = UNIT_CLASS_TECHIE,

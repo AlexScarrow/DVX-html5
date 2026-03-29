@@ -18,6 +18,7 @@ local function create_tile_prototype(tile_id)
             lightValue = 3,
             moveValue = 1,
             coverValue = 1,
+            isOutside = false,
             accessRight = true,
             accessDown = true,
             isPowered = false,
@@ -70,6 +71,7 @@ function M.create_tile_library(COMPONENT_UI)
         entry.cells[i].lightValue = 2
         entry.cells[i].moveValue = 1
         entry.cells[i].coverValue = 1
+        entry.cells[i].isOutside = false
     end
     entry.cells[3].moveValue = 3
     entry.cells[6].moveValue = 3
@@ -98,6 +100,7 @@ function M.create_tile_library(COMPONENT_UI)
         rescue_entry.cells[i].lightValue = 2
         rescue_entry.cells[i].moveValue = 1
         rescue_entry.cells[i].coverValue = 1
+        rescue_entry.cells[i].isOutside = false
     end
     rescue_entry.cells[3].moveValue = 3
     rescue_entry.cells[6].moveValue = 3

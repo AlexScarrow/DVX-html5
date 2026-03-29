@@ -33,6 +33,26 @@ function M.create_level_library()
     levels[1].mission_type = "escape"
     levels[1].spawn_tile = "entry"
     levels[1].spawn_cell = 2
+    levels[1].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power" },
+            starting_equipped_buffs = {}
+        },
+        medic = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {}
+        }
+    }
 
     levels[2] = {
         { x = 2, y = 8, tile = "rescue_entry" },
@@ -49,6 +69,26 @@ function M.create_level_library()
     levels[2].mission_type = "rescue"
     levels[2].spawn_tile = "rescue_entry"
     levels[2].spawn_cell = 2
+    levels[2].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power" },
+            starting_equipped_buffs = {}
+        },
+        medic = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {}
+        }
+    }
 
     -- levels[1] = {
     --     --{ x = 8, y = 11, tile = "coms" },

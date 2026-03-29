@@ -248,6 +248,8 @@ RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
 RESCUE_ENTRY_VICTORY_LOCAL_CELL = 4
 AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
+BUFFS = require("main.config").BUFFS or {}
+BUFF_SLOT_ORDER = require("main.config").BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
 ALIEN_REVEAL_WEIGHTS = ALIEN_BALANCE.REVEAL_WEIGHTS or {}
 ALIEN_ACTION_COSTS = ALIEN_BALANCE.ACTION_COSTS or {}
 SOLO_SETUP_PANEL_X = MP_SETUP_PANEL_X
@@ -474,6 +476,7 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         lightValue = 1,
         moveValue = 1,
         coverValue = 1,
+        isOutside = false,
         accessRight = true,
         accessDown = true,
         isPowered = false,
@@ -515,6 +518,7 @@ function create_tile_prototype(tile_id)
             lightValue = 3,
             moveValue = 1,
             coverValue = 1,
+            isOutside = false,
             accessRight = true,
             accessDown = true,
             isPowered = false,
@@ -1726,6 +1730,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
     for i = 1, #world_grid do
         world_grid[i].tileID = hash("empty")
         world_grid[i].tileInstanceId = 0
+        world_grid[i].isOutside = false
         world_grid[i].blipSpawnEnabled = false
         world_grid[i].hasLoot = false
         world_grid[i].lootOffsetX = 0
@@ -1765,6 +1770,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.lightValue = tile_cell.lightValue
                         world_cell.moveValue = tile_cell.moveValue
                         world_cell.coverValue = tile_cell.coverValue
+                        world_cell.isOutside = tile_cell.isOutside == true
                         world_cell.accessRight = tile_cell.accessRight
                         world_cell.accessDown = tile_cell.accessDown
                         world_cell.isPowered = tile_cell.isPowered
@@ -5738,6 +5744,16 @@ local function is_walkable_cell(world_grid, cell_id)
     return cell and cell.tileID ~= hash("empty")
 end
 
+local function create_empty_equipment()
+    return {
+        top = nil,
+        center = nil,
+        left = nil,
+        right = nil,
+        bottom = nil
+    }
+end
+
 local function create_squad_units()
     return {
         sarge = {
@@ -5762,6 +5778,7 @@ local function create_squad_units()
             move_path_index = 0,
             anim_phase = 0,
             reactive_fire_enabled = true,
+            equipment = create_empty_equipment(),
             go_path = "/human",
             sprite_path = "/human#sprite",
             shadow_path = "/human#shadow",
@@ -5789,6 +5806,7 @@ local function create_squad_units()
             move_path_index = 0,
             anim_phase = 0,
             reactive_fire_enabled = true,
+            equipment = create_empty_equipment(),
             go_path = "/techie",
             sprite_path = "/techie#sprite",
             shadow_path = "/techie#shadow",
@@ -5816,6 +5834,7 @@ local function create_squad_units()
             move_path_index = 0,
             anim_phase = 0,
             reactive_fire_enabled = true,
+            equipment = create_empty_equipment(),
             go_path = "/medic",
             sprite_path = "/medic#sprite",
             shadow_path = "/medic#shadow",
@@ -5843,6 +5862,7 @@ local function create_squad_units()
             move_path_index = 0,
             anim_phase = 0,
             reactive_fire_enabled = true,
+            equipment = create_empty_equipment(),
             go_path = "/gunner",
             sprite_path = "/gunner#sprite",
             shadow_path = "/gunner#shadow",
@@ -9048,6 +9068,7 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
     UI_BAR_PIP_GAP = UI_BAR_PIP_GAP,
     UI_BAR_AMMO_X = UI_BAR_AMMO_X,
     UI_BAR_HP_X = UI_BAR_HP_X,
+    BUFFS = BUFFS,
     id_to_coords = id_to_coords,
     can_human_cross_between_cells = can_human_cross_between_cells
 })
@@ -9474,6 +9495,10 @@ multiplayer_compute_turn_checksum = function(self)
             local backpack = unit.backpack_items or {}
             for i = 1, #backpack do
                 push("bi", unit_id, i, backpack[i] or "_")
+            end
+            local equipment = unit.equipment or {}
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+                push("eq", unit_id, slot_name, tostring(equipment[slot_name] or "_"))
             end
         else
             push("u", unit_id, "missing")
@@ -11222,6 +11247,32 @@ function spawn_human_unit(self)
 
     local spawn_cells = {}
     local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    local level_loadouts = (type(selected_level) == "table") and rawget(selected_level, "unit_loadouts") or nil
+    local function clone_string_list(src)
+        local out = {}
+        if type(src) ~= "table" then
+            return out
+        end
+        for i = 1, #src do
+            if type(src[i]) == "string" then
+                out[#out + 1] = src[i]
+            end
+        end
+        return out
+    end
+    local function normalize_equipment(loadout_entry)
+        local equipment = create_empty_equipment()
+        local equipped = loadout_entry and loadout_entry.starting_equipped_buffs
+        if type(equipped) == "table" then
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+                local item_type = equipped[slot_name]
+                if type(item_type) == "string" then
+                    equipment[slot_name] = item_type
+                end
+            end
+        end
+        return equipment
+    end
     local leftmost_tile = nil
     local entry_tile = nil
     local configured_spawn_tile = (type(selected_level) == "table") and rawget(selected_level, "spawn_tile") or nil
@@ -11301,13 +11352,20 @@ function spawn_human_unit(self)
             unit.anim_phase = 0
             unit.shadow_motion_offset = nil
             unit.current_ap = unit.max_ap
-            if unit.class_id == UNIT_CLASS_TECHIE then
-                unit.backpack_items = { "power" }
-                unit.backpack_used = 1
+            local unit_loadout = (type(level_loadouts) == "table") and level_loadouts[unit.id] or nil
+            if type(unit_loadout) == "table" and unit_loadout.starting_backpack_items ~= nil then
+                unit.backpack_items = clone_string_list(unit_loadout.starting_backpack_items)
+                unit.backpack_used = #unit.backpack_items
             else
-                unit.backpack_items = {}
-                unit.backpack_used = 0
+                if unit.class_id == UNIT_CLASS_TECHIE then
+                    unit.backpack_items = { "power" }
+                    unit.backpack_used = 1
+                else
+                    unit.backpack_items = {}
+                    unit.backpack_used = 0
+                end
             end
+            unit.equipment = normalize_equipment(unit_loadout)
             unit.carrying_corpse_id = nil
             unit.death_drop_done = false
 
@@ -12084,7 +12142,8 @@ multiplayer_build_snapshot_state = function(self)
             command_points = unit.command_points,
             backpack_items = multiplayer_clone_simple_table(unit.backpack_items or {}),
             backpack_used = unit.backpack_used,
-            carrying_corpse_id = unit.carrying_corpse_id
+            carrying_corpse_id = unit.carrying_corpse_id,
+            equipment = multiplayer_clone_simple_table(unit.equipment or {})
         }
     end
     for _, alien in ipairs(self.aliens or {}) do
@@ -12176,6 +12235,14 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
             unit.backpack_items = multiplayer_clone_simple_table(unit_snapshot.backpack_items or {}) or {}
             unit.backpack_used = tonumber(unit_snapshot.backpack_used or #unit.backpack_items) or #unit.backpack_items
             unit.carrying_corpse_id = unit_snapshot.carrying_corpse_id
+            unit.equipment = create_empty_equipment()
+            local snapshot_equipment = unit_snapshot.equipment or {}
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+                local equipped_item = snapshot_equipment[slot_name]
+                if type(equipped_item) == "string" then
+                    unit.equipment[slot_name] = equipped_item
+                end
+            end
             unit.cell_id = tonumber(unit_snapshot.cell_id)
         end
     end

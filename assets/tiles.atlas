@@ -209,6 +209,45 @@ images {
   image: "/assets/images/derples_comms_turret_fullPack.png"
 }
 images {
+  image: "/assets/images/armor_info.png"
+}
+images {
+  image: "/assets/images/hazmat_suit_info.png"
+}
+images {
+  image: "/assets/images/melee_info.png"
+}
+images {
+  image: "/assets/images/night_vision_info.png"
+}
+images {
+  image: "/assets/images/oxygen_mask_info.png"
+}
+images {
+  image: "/assets/images/speed_stim_info.png"
+}
+images {
+  image: "/assets/images/buff_armour.png"
+}
+images {
+  image: "/assets/images/buff_hazmat.png"
+}
+images {
+  image: "/assets/images/buff_melee_left.png"
+}
+images {
+  image: "/assets/images/buff_melee_right.png"
+}
+images {
+  image: "/assets/images/buff_night_vision.png"
+}
+images {
+  image: "/assets/images/buff_oxygen_mask.png"
+}
+images {
+  image: "/assets/images/buff_speed_stims.png"
+}
+images {
   image: "/assets/images/command_star.png"
 }
 images {

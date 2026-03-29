@@ -2,6 +2,21 @@ local M = {}
 
 function M.create(ctx)
     local runtime = {}
+    local BUFFS_BY_ITEM_TYPE = {}
+    do
+        local buffs = (ctx and ctx.BUFFS) or {}
+        for _, buff in pairs(buffs) do
+            if type(buff) == "table" and type(buff.item_type) == "string" then
+                BUFFS_BY_ITEM_TYPE[buff.item_type] = buff
+            end
+        end
+    end
+    local function get_buff_def_by_item_type(item_type)
+        if not item_type then
+            return nil
+        end
+        return BUFFS_BY_ITEM_TYPE[item_type]
+    end
     local function is_any_vending_machine_name(name_hash)
         return name_hash == hash("machine")
             or name_hash == hash("ammo_vending_machine")
@@ -27,6 +42,10 @@ function M.create(ctx)
     end
 
     runtime.get_backpack_item_color = function(item_type)
+        local buff_def = get_buff_def_by_item_type(item_type)
+        if buff_def then
+            return vmath.vector4(0.85, 0.95, 0.3, 1)
+        end
         if item_type == "ammo" then
             return ctx.LOOT_UI.ammo_color
         elseif item_type == "meds" then
@@ -63,6 +82,10 @@ function M.create(ctx)
     end
 
     runtime.get_item_visual_animation = function(item_type)
+        local buff_def = get_buff_def_by_item_type(item_type)
+        if buff_def and buff_def.ui_anim then
+            return hash(buff_def.ui_anim)
+        end
         if item_type == "material" then
             return hash("material_unit")
         elseif item_type == "meds" then
@@ -101,6 +124,19 @@ function M.create(ctx)
             return hash("obstacle3")
         end
         return nil
+    end
+
+    runtime.is_buff_item = function(item_type)
+        return get_buff_def_by_item_type(item_type) ~= nil
+    end
+
+    runtime.get_buff_def = function(item_type)
+        return get_buff_def_by_item_type(item_type)
+    end
+
+    runtime.get_buff_slot_for_item = function(item_type)
+        local buff_def = get_buff_def_by_item_type(item_type)
+        return buff_def and buff_def.slot or nil
     end
 
     runtime.get_backpack_slot_screen_pos = function(slot_index)

@@ -201,4 +201,105 @@ M.ALIEN_BALANCE = {
     }
 }
 
+M.BUFF_SLOT_ORDER = { "top", "center", "left", "right", "bottom" }
+
+-- Buff hit-chance clamps intentionally avoid 0% and 100%.
+M.BUFF_HIT_CHANCE_MIN = 5
+M.BUFF_HIT_CHANCE_MAX = 95
+
+-- Buff registry (Phase 0 scaffold). Item ids are backpack/world ids.
+M.BUFFS = {
+    armor = {
+        id = "armor",
+        item_type = "buff_armour",
+        buff_kind = "armor",
+        slot = "center",
+        ui_anim = "buff_armour",
+        world_anim = "buff_armour",
+        info_anim = "armor_info",
+        ui_pixel_w = 59,
+        ui_pixel_h = 52,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    },
+    hazmat_suit = {
+        id = "hazmat_suit",
+        item_type = "buff_hazmat",
+        buff_kind = "hazmat_suit",
+        slot = "center",
+        ui_anim = "buff_hazmat",
+        world_anim = "buff_hazmat",
+        info_anim = "hazmat_suit_info",
+        ui_pixel_w = 100,
+        ui_pixel_h = 109,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    },
+    oxygen_mask = {
+        id = "oxygen_mask",
+        item_type = "buff_oxygen_mask",
+        buff_kind = "oxygen_mask",
+        slot = "top",
+        ui_anim = "buff_oxygen_mask",
+        world_anim = "buff_oxygen_mask",
+        info_anim = "oxygen_mask_info",
+        ui_pixel_w = 34,
+        ui_pixel_h = 36,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    },
+    speed_stim = {
+        id = "speed_stim",
+        item_type = "buff_speed_stims",
+        buff_kind = "speed_stim",
+        slot = "bottom",
+        ui_anim = "buff_speed_stims",
+        world_anim = "buff_speed_stims",
+        info_anim = "speed_stim_info",
+        ui_pixel_w = 92,
+        ui_pixel_h = 40,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    },
+    nightvision_goggles = {
+        id = "nightvision_goggles",
+        item_type = "buff_night_vision",
+        buff_kind = "nightvision_goggles",
+        slot = "top",
+        ui_anim = "buff_night_vision",
+        world_anim = "buff_night_vision",
+        info_anim = "night_vision_info",
+        ui_pixel_w = 28,
+        ui_pixel_h = 22,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    },
+    melee_weapon_left = {
+        id = "melee_weapon_left",
+        item_type = "buff_melee_left",
+        buff_kind = "melee_weapon",
+        slot = "left",
+        ui_anim = "buff_melee_left",
+        world_anim = "buff_melee_left",
+        info_anim = "melee_info",
+        ui_pixel_w = 52,
+        ui_pixel_h = 88,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    },
+    melee_weapon_right = {
+        id = "melee_weapon_right",
+        item_type = "buff_melee_right",
+        buff_kind = "melee_weapon",
+        slot = "right",
+        ui_anim = "buff_melee_right",
+        world_anim = "buff_melee_right",
+        info_anim = "melee_info",
+        ui_pixel_w = 52,
+        ui_pixel_h = 88,
+        info_pixel_w = 256,
+        info_pixel_h = 256
+    }
+}
+
 return M

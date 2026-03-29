@@ -9424,7 +9424,17 @@ function update_selected_unit_ui(self)
                 icon_color = vmath.vector4(1, 1, 1, 0.25)
             end
             msg.post(msg.url(nil, self.ui.backpack_item_icons[i], "sprite"), "play_animation", { id = icon_anim })
-            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, 0.815, icon_color, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+            local icon_scale_x = UI_BACKPACK_SLOT_SIZE * 0.021
+            local icon_scale_y = UI_BACKPACK_SLOT_SIZE * 0.021
+            local buff_def = item_type and BUFFS_BY_ITEM_TYPE[item_type] or nil
+            if buff_def then
+                local draw_w = math.max(1, tonumber(buff_def.ui_pixel_w or UI_BACKPACK_SLOT_SIZE) or UI_BACKPACK_SLOT_SIZE)
+                local draw_h = math.max(1, tonumber(buff_def.ui_pixel_h or UI_BACKPACK_SLOT_SIZE) or UI_BACKPACK_SLOT_SIZE)
+                local draw_scale = tonumber(buff_def.backpack_draw_scale or 1.0) or 1.0
+                icon_scale_x = (draw_w * 0.021) * draw_scale
+                icon_scale_y = (draw_h * 0.021) * draw_scale
+            end
+            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, 0.815, icon_color, icon_scale_x, icon_scale_y)
         else
             set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
         end
@@ -11297,6 +11307,8 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     UI_BACKPACK_COLS = UI_BACKPACK_COLS,
     UI_BACKPACK_ROWS = UI_BACKPACK_ROWS,
     UI_BACKPACK_SLOT_SIZE = UI_BACKPACK_SLOT_SIZE,
+    UI_PANEL_X = UI_PANEL_X,
+    UI_PANEL_Y = UI_PANEL_Y,
     BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
     UNIT_CLICK_SELECT_RADIUS = UNIT_CLICK_SELECT_RADIUS,
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,

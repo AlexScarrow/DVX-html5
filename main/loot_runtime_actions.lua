@@ -119,12 +119,12 @@ function M.extend(runtime, ctx)
         SPOT_ALIEN = { anim = hash("derples_comms_alienSpotted"), duration = 1.05, cooldown = 1.9, scale = 0.54, x_offset = 50, y_offset = 74 },
         NOT_ENOUGH_AP = { anim = hash("derples_comms_notEnough_AP"), duration = 1.05, cooldown = 0.4, scale = 0.54, x_offset = 50, y_offset = 74 },
         TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 },
-        BUFF_ARMOR_INFO = { anim = hash("armor_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
-        BUFF_HAZMAT_INFO = { anim = hash("hazmat_suit_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
-        BUFF_OXYGEN_INFO = { anim = hash("oxygen_mask_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
-        BUFF_SPEED_INFO = { anim = hash("speed_stim_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
-        BUFF_NIGHTVISION_INFO = { anim = hash("night_vision_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 },
-        BUFF_MELEE_INFO = { anim = hash("melee_info"), duration = 1.2, cooldown = 0.35, scale = 0.54, x_offset = 50, y_offset = 74 }
+        BUFF_ARMOR_INFO = { anim = hash("armor_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
+        BUFF_HAZMAT_INFO = { anim = hash("hazmat_suit_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
+        BUFF_OXYGEN_INFO = { anim = hash("oxygen_mask_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
+        BUFF_SPEED_INFO = { anim = hash("speed_stim_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
+        BUFF_NIGHTVISION_INFO = { anim = hash("night_vision_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
+        BUFF_MELEE_INFO = { anim = hash("melee_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true }
     }
     local get_dead_human_by_id
     local get_dead_civilian_by_id
@@ -276,6 +276,17 @@ function M.extend(runtime, ctx)
         if event_type then
             runtime.emit_derple_feedback(self, unit.id, event_type)
         end
+    end
+
+    local function get_derple_feedback_world_pos(self, unit, x_offset, y_offset, ui_anchor)
+        if ui_anchor and ctx.screen_to_world then
+            local sx = (ctx.UI_PANEL_X or 0) + (x_offset or 0)
+            local sy = (ctx.UI_PANEL_Y or 0) + (y_offset or 70)
+            local wx, wy = ctx.screen_to_world(sx, sy, self.camera_pos, self.camera_zoom)
+            return wx, wy
+        end
+        local pos = go.get_position(unit.go_path)
+        return pos.x + (x_offset or 0), pos.y + (y_offset or 70)
     end
 
     local function try_consume_drag_ap(source_unit, target_unit, ap_cost_override)
@@ -2058,8 +2069,8 @@ function M.extend(runtime, ctx)
             self.derple_feedback_by_unit_id[unit_id] = nil
         end
 
-        local pos = go.get_position(unit.go_path)
-        local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(pos.x + (def.x_offset or 0), pos.y + (def.y_offset or 70), 0.84))
+        local marker_x, marker_y = get_derple_feedback_world_pos(self, unit, def.x_offset, def.y_offset, def.ui_anchor == true)
+        local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(marker_x, marker_y, 0.84))
         if not marker_id then
             return false
         end
@@ -2074,7 +2085,8 @@ function M.extend(runtime, ctx)
             event_type = event_type,
             ttl = def.duration or 1.0,
             x_offset = def.x_offset or 0,
-            y_offset = def.y_offset or 70
+            y_offset = def.y_offset or 70,
+            ui_anchor = def.ui_anchor == true
         }
         table.insert(self.derple_feedback_entries, entry)
         self.derple_feedback_by_unit_id[unit_id] = #self.derple_feedback_entries
@@ -2092,8 +2104,8 @@ function M.extend(runtime, ctx)
                 if unit and unit.go_path and (unit.current_health or 0) > 0 then
                     entry.ttl = (entry.ttl or 0) - dt
                     if entry.ttl > 0 then
-                        local pos = go.get_position(unit.go_path)
-                        go.set_position(vmath.vector3(pos.x + (entry.x_offset or 0), pos.y + (entry.y_offset or 70), 0.84), entry.go_id)
+                        local px, py = get_derple_feedback_world_pos(self, unit, entry.x_offset, entry.y_offset, entry.ui_anchor == true)
+                        go.set_position(vmath.vector3(px, py, 0.84), entry.go_id)
                         keep = true
                     end
                 end

@@ -263,6 +263,10 @@ MISSION_TYPE_DNA_SAMPLE = "dna_sample"
 RESCUE_ENTRY_TILE_NAME = "rescue_entry"
 RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
 RESCUE_ENTRY_VICTORY_LOCAL_CELL = 4
+do
+    local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
+    MP_SYNC_TRACE_ENABLED = (sync_trace_cfg == "1" or sync_trace_cfg == "true" or sync_trace_cfg == "on")
+end
 AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
 BUFFS = require("main.config").BUFFS or {}
@@ -7434,9 +7438,10 @@ end
 
 multiplayer_setup_set_player_count = function(self, player_count)
     self.mp_setup = self.mp_setup or {}
+    local selected_unit_before = self.mp_setup.selected_unit_id
     self.mp_setup.player_count = math.max(2, math.min(4, player_count or 2))
     self.mp_setup.mission_type = multiplayer_normalize_mission_type(self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
-    self.mp_setup.selected_unit_id = "techie"
+    self.mp_setup.selected_unit_id = selected_unit_before or "techie"
     self.mp_setup.seat_slots = {}
     local defaults = multiplayer_get_default_seat_assignments(self.mp_setup.player_count)
     for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
@@ -7576,8 +7581,12 @@ multiplayer_setup_apply_session_config = function(self, session_config)
     if type(session_config) ~= "table" then
         return
     end
+    local selected_unit_before = self.mp_setup and self.mp_setup.selected_unit_id or nil
     local player_count = math.max(2, math.min(4, tonumber(session_config.player_count or 2) or 2))
     multiplayer_setup_set_player_count(self, player_count)
+    if selected_unit_before and selected_unit_before ~= false then
+        self.mp_setup.selected_unit_id = selected_unit_before
+    end
     self.mp_setup.mission_type = multiplayer_normalize_mission_type(session_config.mission_type or self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     local assignments = multiplayer_clone_seat_assignments(session_config.seat_assignments or {}, player_count)
     for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
@@ -7600,8 +7609,14 @@ multiplayer_setup_push_state = function(self)
     if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         return
     end
+    local config = multiplayer_setup_build_session_config(self)
+    -- Primary path: direct host event broadcast keeps setup UI synced even if command handling drops.
+    multiplayer_transport_broadcast_event(self, "setup_state_updated", {
+        session_config = config
+    })
+    -- Compatibility path: keep the command route so existing trace/debug flow still exercises it.
     multiplayer_transport_send_command(self, "push_setup_state", {
-        session_config = multiplayer_setup_build_session_config(self)
+        session_config = config
     }, self.mp_state.local_player_id)
 end
 
@@ -9668,6 +9683,8 @@ function try_next_turn_button(self, screen_x, screen_y)
     return false
 end
 
+local multiplayer_sync_trace
+
 multiplayer_transport_emit_event = function(self, event_type, payload)
     local sender_id = self.mp_state and self.mp_state.host_player_id or "p1"
     if self.mp_state then
@@ -9678,7 +9695,7 @@ multiplayer_transport_emit_event = function(self, event_type, payload)
         tostring((self.mp_state and self.mp_state.session_id) or "local_session"),
         tonumber(self.mp_state and self.mp_state.event_seq or 0) or 0
     )
-    return {
+    local evt = {
         version = 1,
         session_id = (self.mp_state and self.mp_state.session_id) or "local_session",
         event_id = event_id,
@@ -9686,6 +9703,36 @@ multiplayer_transport_emit_event = function(self, event_type, payload)
         type = event_type,
         payload = payload or {}
     }
+    multiplayer_sync_trace(self, "emit_event", string.format("event=%s id=%s sender=%s", tostring(event_type), tostring(event_id), tostring(sender_id)))
+    return evt
+end
+
+multiplayer_sync_trace = function(self, tag, details)
+    if MP_SYNC_TRACE_ENABLED ~= true then
+        return
+    end
+    local turn_id = tonumber(self and self.mp_state and self.mp_state.turn_id or 0) or 0
+    local local_id = tostring(self and self.mp_state and self.mp_state.local_player_id or "p?")
+    local host_id = tostring(self and self.mp_state and self.mp_state.host_player_id or "p?")
+    local role = (local_id == host_id) and "host" or "client"
+    local checksum = "na"
+    if multiplayer_compute_turn_checksum then
+        local ok, value = pcall(multiplayer_compute_turn_checksum, self)
+        if ok and value then
+            checksum = tostring(value)
+        end
+    end
+    local suffix = details and (" | " .. tostring(details)) or ""
+    print(string.format(
+        "MP TRACE | %s | role=%s local=%s host=%s turn=%d checksum=%s%s",
+        tostring(tag or "unknown"),
+        role,
+        local_id,
+        host_id,
+        turn_id,
+        checksum,
+        suffix
+    ))
 end
 
 multiplayer_compute_turn_checksum = function(self)
@@ -9826,6 +9873,17 @@ multiplayer_transport_handle_command = function(self, command)
     local payload = command.payload or {}
     local cmd_message_id = command.message_id
     local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+    multiplayer_sync_trace(
+        self,
+        "recv_command",
+        string.format(
+            "type=%s sender=%s msg=%s payload_turn=%s",
+            tostring(cmd_type),
+            tostring(sender),
+            tostring(cmd_message_id or "-"),
+            tostring(payload.turn_id or "-")
+        )
+    )
     if not is_local_host then
         return events
     end
@@ -9833,6 +9891,7 @@ multiplayer_transport_handle_command = function(self, command)
         self.mp_state.seen_command_ids = self.mp_state.seen_command_ids or {}
         local dedupe_key = string.format("%s|%s", tostring(sender or "unknown"), tostring(cmd_message_id))
         if self.mp_state.seen_command_ids[dedupe_key] == true then
+            multiplayer_sync_trace(self, "drop_command_duplicate", string.format("key=%s type=%s", dedupe_key, tostring(cmd_type)))
             return events
         end
         self.mp_state.seen_command_ids[dedupe_key] = true
@@ -10467,9 +10526,21 @@ multiplayer_transport_on_event = function(self, event)
         return
     end
     local event_id = event.event_id
+    multiplayer_sync_trace(
+        self,
+        "recv_event",
+        string.format(
+            "type=%s id=%s sender=%s payload_turn=%s",
+            tostring(event.type),
+            tostring(event_id or "-"),
+            tostring(event.sender_player_id or "-"),
+            tostring(event.payload and event.payload.turn_id or "-")
+        )
+    )
     if event_id and event_id ~= "" then
         self.mp_state.seen_event_ids = self.mp_state.seen_event_ids or {}
         if self.mp_state.seen_event_ids[event_id] == true then
+            multiplayer_sync_trace(self, "drop_event_duplicate", string.format("id=%s type=%s", tostring(event_id), tostring(event.type)))
             return
         end
         self.mp_state.seen_event_ids[event_id] = true
@@ -10646,14 +10717,6 @@ multiplayer_transport_on_event = function(self, event)
         if target_player_id and target_player_id ~= local_player_id then
             return
         end
-        local sender_player_id = event.sender_player_id or nil
-        if (self.mp_state.local_player_id == self.mp_state.host_player_id)
-            and (not target_player_id)
-            and sender_player_id == self.mp_state.host_player_id
-        then
-            -- Host already has this setup locally; ignore relay echo.
-            return
-        end
         local config = event.payload and event.payload.session_config or nil
         if type(config) == "table" then
             multiplayer_setup_apply_session_config(self, config)
@@ -10675,8 +10738,12 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
+        multiplayer_sync_trace(self, "apply_event_begin", "type=move_unit_applied")
         if not multiplayer_apply_move_unit_event(self, event.payload or {}) then
             print("MP COMMAND | move_unit_applied ignored.")
+            multiplayer_sync_trace(self, "apply_event_end", "type=move_unit_applied ok=false")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=move_unit_applied ok=true")
         end
         return
     end
@@ -10685,8 +10752,12 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
+        multiplayer_sync_trace(self, "apply_event_begin", "type=manual_shot_applied")
         if not multiplayer_apply_manual_shot_event(self, event.payload or {}) then
             print("MP COMMAND | manual_shot_applied ignored.")
+            multiplayer_sync_trace(self, "apply_event_end", "type=manual_shot_applied ok=false")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=manual_shot_applied ok=true")
         end
         return
     end
@@ -10695,11 +10766,15 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
+        multiplayer_sync_trace(self, "apply_event_begin", "type=resource_drag_applied")
         self.mp_state.applying_remote_event = true
         local ok = multiplayer_apply_resource_drag_event(self, event.payload or {})
         self.mp_state.applying_remote_event = false
         if not ok then
             print("MP COMMAND | resource_drag_applied ignored.")
+            multiplayer_sync_trace(self, "apply_event_end", "type=resource_drag_applied ok=false")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=resource_drag_applied ok=true")
         end
         return
     end
@@ -10718,8 +10793,12 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
+        multiplayer_sync_trace(self, "apply_event_begin", "type=pickup_turret_applied")
         if not multiplayer_apply_pickup_turret_event(self, event.payload or {}) then
             print("MP COMMAND | pickup_turret_applied ignored.")
+            multiplayer_sync_trace(self, "apply_event_end", "type=pickup_turret_applied ok=false")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=pickup_turret_applied ok=true")
         end
         return
     end
@@ -10778,8 +10857,12 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
+        multiplayer_sync_trace(self, "apply_event_begin", "type=toggle_door_applied")
         if not multiplayer_apply_toggle_door_event(self, event.payload or {}) then
             print("MP COMMAND | toggle_door_applied ignored.")
+            multiplayer_sync_trace(self, "apply_event_end", "type=toggle_door_applied ok=false")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=toggle_door_applied ok=true")
         end
         return
     end
@@ -10788,8 +10871,12 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
+        multiplayer_sync_trace(self, "apply_event_begin", "type=scavenge_crate_applied")
         if not multiplayer_apply_scavenge_crate_event(self, event.payload or {}) then
             print("MP COMMAND | scavenge_crate_applied ignored.")
+            multiplayer_sync_trace(self, "apply_event_end", "type=scavenge_crate_applied ok=false")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=scavenge_crate_applied ok=true")
         end
         return
     end
@@ -10857,6 +10944,9 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.connected_players = self.mp_state.connected_players or {}
             self.mp_state.connected_players[player_id] = true
             print(string.format("MP NET | player_joined | player_id=%s", tostring(player_id)))
+            if self.mp_state.local_player_id == self.mp_state.host_player_id then
+                multiplayer_setup_push_state(self)
+            end
         end
         return
     end
@@ -10892,6 +10982,16 @@ multiplayer_transport_send_command = function(self, cmd_type, payload, sender_pl
     if not sender then
         sender = self.mp_state.local_player_id or "p1"
     end
+    multiplayer_sync_trace(
+        self,
+        "send_command",
+        string.format(
+            "type=%s sender=%s payload_turn=%s",
+            tostring(cmd_type),
+            tostring(sender),
+            tostring(payload and payload.turn_id or "-")
+        )
+    )
     self.mp_transport.send_command({
         version = 1,
         session_id = self.mp_state.session_id or "local_session",
@@ -10966,14 +11066,16 @@ end
 multiplayer_get_runtime_local_player_id = function()
     local configured = MULTIPLAYER_LOCAL_PLAYER_ID or "p1"
     local config_override = sys.get_config and sys.get_config("multiplayer.local_player_id") or nil
+    local has_explicit_override = false
     if config_override == "p1" or config_override == "p2" or config_override == "p3" or config_override == "p4" then
         configured = config_override
+        has_explicit_override = true
     end
     local info = sys.get_sys_info and sys.get_sys_info() or nil
     local system_name = info and info.system_name or ""
     local is_html5_runtime = (system_name == "HTML5")
-    -- Single-machine host+browser testing: desktop host remains p1, browser defaults to p2.
-    if is_html5_runtime and configured == MULTIPLAYER_HOST_PLAYER_ID then
+    -- Single-machine host+browser testing: if no explicit player override is set, browser defaults to p2.
+    if is_html5_runtime and (not has_explicit_override) and configured == MULTIPLAYER_HOST_PLAYER_ID then
         return "p2"
     end
     return configured

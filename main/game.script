@@ -508,6 +508,7 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         moveValue = 1,
         coverValue = 1,
         isOutside = false,
+        hazard_type = "none",
         accessRight = true,
         accessDown = true,
         isPowered = false,
@@ -550,6 +551,7 @@ function create_tile_prototype(tile_id)
             moveValue = 1,
             coverValue = 1,
             isOutside = false,
+            hazard_type = "none",
             accessRight = true,
             accessDown = true,
             isPowered = false,
@@ -1762,6 +1764,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
         world_grid[i].tileID = hash("empty")
         world_grid[i].tileInstanceId = 0
         world_grid[i].isOutside = false
+        world_grid[i].hazard_type = "none"
+        world_grid[i].isFireHazard = false
+        world_grid[i].isGasHazard = false
         world_grid[i].blipSpawnEnabled = false
         world_grid[i].hasLoot = false
         world_grid[i].lootOffsetX = 0
@@ -1802,6 +1807,9 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.moveValue = tile_cell.moveValue
                         world_cell.coverValue = tile_cell.coverValue
                         world_cell.isOutside = tile_cell.isOutside == true
+                        world_cell.hazard_type = tostring(tile_cell.hazard_type or tile_cell.hazardType or tile_cell.hazard or "none")
+                        world_cell.isFireHazard = tile_cell.isFireHazard == true or tile_cell.has_fire_hazard == true or tile_cell.hasFireHazard == true
+                        world_cell.isGasHazard = tile_cell.isGasHazard == true or tile_cell.has_gas_hazard == true or tile_cell.hasGasHazard == true
                         world_cell.accessRight = tile_cell.accessRight
                         world_cell.accessDown = tile_cell.accessDown
                         world_cell.isPowered = tile_cell.isPowered
@@ -3967,6 +3975,8 @@ apply_brute_alpha_pulse = function(self, alien, dt)
     end
 end
 
+local get_cell_hazard_flags
+
 local function update_alien_movement(self, dt)
     if not self.aliens then
         return
@@ -4323,104 +4333,144 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
                     end
                     alien.cell_id = target_cell_id
-                    if alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON then
-                        go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
-                    end
-                    if alien.type ~= ALIEN_TYPE_SPEEDY then
-                        local obstacle_nudge_scale = 1
-                        if alien.type == ALIEN_TYPE_BRUTE then
-                            obstacle_nudge_scale = 2
-                        end
-                        trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_before_step, obstacle_nudge_scale)
-                    end
-                    if alien.type == ALIEN_TYPE_BLIP then
-                        alien.blip_cell_offset_x = alien.blip_step_offset_x or alien.blip_cell_offset_x
-                        alien.blip_cell_offset_y = alien.blip_step_offset_y or alien.blip_cell_offset_y
-                        alien.blip_step_for_index = nil
-                        alien.blip_step_offset_x = nil
-                        alien.blip_step_offset_y = nil
-                    end
-                    alien.counter_move_total_dist = nil
-                    if is_vent_jump then
-                        local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
-                        local vx = cx + (to_vent.offsetX or 0)
-                        local vy = cy + (to_vent.offsetY or 0)
-                        go.set_position(vmath.vector3(vx, vy, 0.6), alien.go_id)
-                    end
-                    if alien.type == ALIEN_TYPE_BRUTE and is_cell_barricaded(self.world_grid, target_cell_id) then
-                        alien.turn_ap_remaining = 0
-                        alien.counter_shadow_offset = nil
-                        alien.counter_move_total_dist = nil
-                        alien.is_moving = false
-                        alien.move_path = nil
-                        alien.move_path_index = 0
-                        print(string.format("Brute #%d entered barricade cell %d and braces to attack.", alien.id or 0, target_cell_id))
-                    else
-                        alien.move_path_index = alien.move_path_index + 1
-                    end
-                    maybe_reveal_blip(self, alien)
-                    local killed = resolve_human_reaction_fire(self, alien)
-                    if not killed then
-                        if alien.move_path and alien.move_path_index > #alien.move_path then
-                            local weakest_human = nil
-                            for _, unit in ipairs(get_living_alien_targets(self)) do
-                                if unit and unit.cell_id == alien.cell_id and unit.go_path then
-                                    if (not weakest_human)
-                                        or ((unit.current_health or 0) < (weakest_human.current_health or 0))
-                                        or (((unit.current_health or 0) == (weakest_human.current_health or 0)) and tostring(unit.id) < tostring(weakest_human.id))
-                                    then
-                                        weakest_human = unit
-                                    end
+                    local continue_after_step = true
+                    local step_has_fire = get_cell_hazard_flags(to_cell)
+                    if step_has_fire then
+                        local fire_step_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
+                        if fire_step_damage > 0 then
+                            alien.hp_current = math.max(0, (alien.hp_current or 0) - fire_step_damage)
+                            print(string.format(
+                                "ALIEN HAZARD | #%d (%s) took %d fire damage on cell %d (HP=%d)",
+                                alien.id or 0,
+                                alien.type or "?",
+                                fire_step_damage,
+                                target_cell_id or 0,
+                                alien.hp_current or 0
+                            ))
+                            if (alien.hp_current or 0) <= 0 then
+                                alien.is_dead = true
+                                alien.turn_ap_remaining = 0
+                                alien.counter_shadow_offset = nil
+                                alien.counter_move_total_dist = nil
+                                alien.is_moving = false
+                                alien.move_path = nil
+                                alien.move_path_index = 0
+                                if alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON then
+                                    go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
                                 end
+                                continue_after_step = false
                             end
-                            if weakest_human and weakest_human.go_path then
-                                local hpos = go.get_position(weakest_human.go_path)
-                                local apos = go.get_position(alien.go_id)
-                                local desired_x = hpos.x + 38
-                                if apos.x < hpos.x then
-                                    desired_x = hpos.x - 38
-                                end
-                                desired_x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x)
-                                local _, ty_adj = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
-                                if alien.type == ALIEN_TYPE_SPEEDY then
-                                    ty_adj = ty_adj + 50
-                                elseif alien.type == ALIEN_TYPE_SPITTER then
-                                    ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-                                elseif alien.type == ALIEN_TYPE_CANNON then
-                                    ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
-                                end
-                                local occupied = {}
-                                if self.aliens then
-                                    for _, other in ipairs(self.aliens) do
-                                        if other.id ~= alien.id and (not other.is_dead) and other.cell_id == alien.cell_id and other.go_id then
-                                            local op = go.get_position(other.go_id)
-                                            table.insert(occupied, op.x)
+                        end
+                    end
+                    if continue_after_step then
+                        if alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON then
+                            go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                        end
+                        if alien.type ~= ALIEN_TYPE_SPEEDY then
+                            local obstacle_nudge_scale = 1
+                            if alien.type == ALIEN_TYPE_BRUTE then
+                                obstacle_nudge_scale = 2
+                            end
+                            trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_before_step, obstacle_nudge_scale)
+                        end
+                        if alien.type == ALIEN_TYPE_BLIP then
+                            alien.blip_cell_offset_x = alien.blip_step_offset_x or alien.blip_cell_offset_x
+                            alien.blip_cell_offset_y = alien.blip_step_offset_y or alien.blip_cell_offset_y
+                            alien.blip_step_for_index = nil
+                            alien.blip_step_offset_x = nil
+                            alien.blip_step_offset_y = nil
+                        end
+                        alien.counter_move_total_dist = nil
+                        if is_vent_jump then
+                            local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+                            local vx = cx + (to_vent.offsetX or 0)
+                            local vy = cy + (to_vent.offsetY or 0)
+                            go.set_position(vmath.vector3(vx, vy, 0.6), alien.go_id)
+                        end
+                        if alien.type == ALIEN_TYPE_BRUTE and is_cell_barricaded(self.world_grid, target_cell_id) then
+                            alien.turn_ap_remaining = 0
+                            alien.counter_shadow_offset = nil
+                            alien.counter_move_total_dist = nil
+                            alien.is_moving = false
+                            alien.move_path = nil
+                            alien.move_path_index = 0
+                            print(string.format("Brute #%d entered barricade cell %d and braces to attack.", alien.id or 0, target_cell_id))
+                        else
+                            alien.move_path_index = alien.move_path_index + 1
+                        end
+                        maybe_reveal_blip(self, alien)
+                        local killed = resolve_human_reaction_fire(self, alien)
+                        if not killed then
+                            if alien.move_path and alien.move_path_index > #alien.move_path then
+                                local weakest_human = nil
+                                for _, unit in ipairs(get_living_alien_targets(self)) do
+                                    if unit and unit.cell_id == alien.cell_id and unit.go_path then
+                                        if (not weakest_human)
+                                            or ((unit.current_health or 0) < (weakest_human.current_health or 0))
+                                            or (((unit.current_health or 0) == (weakest_human.current_health or 0)) and tostring(unit.id) < tostring(weakest_human.id))
+                                        then
+                                            weakest_human = unit
                                         end
                                     end
                                 end
-                                local final_x = desired_x
-                                for hop = 0, 4 do
-                                    local cand_a = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x + (hop * 24))
-                                    local cand_b = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x - (hop * 24))
-                                    local cand = cand_a
-                                    if hop % 2 == 1 then
-                                        cand = cand_b
+                                if weakest_human and weakest_human.go_path then
+                                    local hpos = go.get_position(weakest_human.go_path)
+                                    local apos = go.get_position(alien.go_id)
+                                    local desired_x = hpos.x + 38
+                                    if apos.x < hpos.x then
+                                        desired_x = hpos.x - 38
                                     end
-                                    local ok = true
-                                    for i = 1, #occupied do
-                                        if math.abs(cand - occupied[i]) < 18 then
-                                            ok = false
+                                    desired_x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x)
+                                    local _, ty_adj = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
+                                    if alien.type == ALIEN_TYPE_SPEEDY then
+                                        ty_adj = ty_adj + 50
+                                    elseif alien.type == ALIEN_TYPE_SPITTER then
+                                        ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                                    elseif alien.type == ALIEN_TYPE_CANNON then
+                                        ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+                                    end
+                                    local occupied = {}
+                                    if self.aliens then
+                                        for _, other in ipairs(self.aliens) do
+                                            if other.id ~= alien.id and (not other.is_dead) and other.cell_id == alien.cell_id and other.go_id then
+                                                local op = go.get_position(other.go_id)
+                                                table.insert(occupied, op.x)
+                                            end
+                                        end
+                                    end
+                                    local final_x = desired_x
+                                    for hop = 0, 4 do
+                                        local cand_a = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x + (hop * 24))
+                                        local cand_b = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x - (hop * 24))
+                                        local cand = cand_a
+                                        if hop % 2 == 1 then
+                                            cand = cand_b
+                                        end
+                                        local ok = true
+                                        for i = 1, #occupied do
+                                            if math.abs(cand - occupied[i]) < 18 then
+                                                ok = false
+                                                break
+                                            end
+                                        end
+                                        if ok then
+                                            final_x = cand
                                             break
                                         end
                                     end
-                                    if ok then
-                                        final_x = cand
-                                        break
+                                    if math.abs(final_x - apos.x) > 1 then
+                                        alien.melee_shuffle_target_x = final_x
+                                        alien.melee_shuffle_target_y = ty_adj
+                                    else
+                                        alien.counter_shadow_offset = nil
+                                        alien.counter_move_total_dist = nil
+                                        alien.is_moving = false
+                                        alien.move_path = nil
+                                        alien.move_path_index = 0
+                                        if alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON then
+                                            go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                                        end
                                     end
-                                end
-                                if math.abs(final_x - apos.x) > 1 then
-                                    alien.melee_shuffle_target_x = final_x
-                                    alien.melee_shuffle_target_y = ty_adj
                                 else
                                     alien.counter_shadow_offset = nil
                                     alien.counter_move_total_dist = nil
@@ -4430,15 +4480,6 @@ local function update_alien_movement(self, dt)
                                     if alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON then
                                         go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
                                     end
-                                end
-                            else
-                                alien.counter_shadow_offset = nil
-                                alien.counter_move_total_dist = nil
-                                alien.is_moving = false
-                                alien.move_path = nil
-                                alien.move_path_index = 0
-                                if alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON then
-                                    go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
                                 end
                             end
                         end
@@ -4799,6 +4840,14 @@ local function refresh_civilian_visuals(self)
                 end
                 if civilian.is_moving ~= true then
                     pcall(go.set_scale, vmath.vector3(CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE, 1), go_id)
+                end
+                if civilian.is_dead ~= true then
+                    local civilian_tint = civilian.hazard_flash_active == true
+                        and (civilian.hazard_flash_tint or vmath.vector4(1.0, 0.78, 0.25, 1))
+                        or vmath.vector4(1, 1, 1, 1)
+                    pcall(go.set, msg.url(nil, go_id, "sprite"), "tint", civilian_tint)
+                else
+                    pcall(go.set, msg.url(nil, go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                 end
                 local shadow_id = self.civilian_shadow_visuals[civilian.id]
                 if not shadow_id then
@@ -5840,7 +5889,7 @@ local function get_nightvision_reveal_context(self)
     return true, tonumber(cell.tileInstanceId or 0) or 0
 end
 
-local function get_cell_hazard_flags(cell)
+get_cell_hazard_flags = function(cell)
     if not cell then
         return false, false
     end
@@ -5882,6 +5931,21 @@ local function apply_start_of_turn_environment_damage(self)
             end
             if damage > 0 then
                 unit.current_health = math.max(0, (unit.current_health or 0) - damage)
+                local hazard_flash_tint = vmath.vector4(1.0, 0.78, 0.25, 1)
+                if has_gas and (not has_hazmat) and not (has_fire and (not has_hazmat)) then
+                    hazard_flash_tint = vmath.vector4(0.58, 1.0, 0.66, 1)
+                elseif (cell and cell.isOutside == true) and not has_oxygen_mask and not has_fire and not has_gas then
+                    hazard_flash_tint = vmath.vector4(0.62, 0.82, 1.0, 1)
+                end
+                unit.hazard_flash_tint = hazard_flash_tint
+                unit.hazard_flash_active = true
+                unit.hazard_flash_token = (unit.hazard_flash_token or 0) + 1
+                local flash_token = unit.hazard_flash_token
+                timer.delay(0.75, false, function()
+                    if unit and unit.hazard_flash_token == flash_token then
+                        unit.hazard_flash_active = false
+                    end
+                end)
                 print(string.format(
                     "TURN HAZARD | %s took %d damage (HP=%d) [outside=%s fire=%s gas=%s mask=%s hazmat=%s]",
                     unit.display_name or tostring(unit.id),
@@ -5895,6 +5959,49 @@ local function apply_start_of_turn_environment_damage(self)
                 ))
                 if unit.current_health <= 0 then
                     handle_human_death_loot_drop(self, unit, "environment_hazard")
+                end
+            end
+        end
+    end
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true and (civilian.current_health or 0) > 0 and civilian.cell_id then
+            local cell = self.world_grid[civilian.cell_id]
+            local damage = 0
+            local has_fire, has_gas = get_cell_hazard_flags(cell)
+            if cell and cell.isOutside == true then
+                damage = damage + outside_damage
+            end
+            if has_fire then
+                damage = damage + fire_damage
+            end
+            if has_gas then
+                damage = damage + gas_damage
+            end
+            if damage > 0 then
+                civilian.current_health = math.max(0, (civilian.current_health or 0) - damage)
+                civilian.hazard_flash_tint = has_fire and vmath.vector4(1.0, 0.78, 0.25, 1)
+                    or (has_gas and vmath.vector4(0.58, 1.0, 0.66, 1) or vmath.vector4(0.62, 0.82, 1.0, 1))
+                civilian.hazard_flash_active = true
+                civilian.hazard_flash_token = (civilian.hazard_flash_token or 0) + 1
+                local civilian_flash_token = civilian.hazard_flash_token
+                timer.delay(0.75, false, function()
+                    if civilian and civilian.hazard_flash_token == civilian_flash_token then
+                        civilian.hazard_flash_active = false
+                    end
+                end)
+                print(string.format(
+                    "TURN HAZARD | %s took %d damage (HP=%d) [outside=%s fire=%s gas=%s]",
+                    civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0)),
+                    damage,
+                    civilian.current_health or 0,
+                    (cell and cell.isOutside == true) and "y" or "n",
+                    has_fire and "y" or "n",
+                    has_gas and "y" or "n"
+                ))
+                if civilian.current_health <= 0 then
+                    civilian.is_dead = true
+                    civilian.is_awake = false
+                    print(string.format("%s died from environment hazard", civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0))))
                 end
             end
         end
@@ -6393,6 +6500,8 @@ local function update_human_visual_state(self)
                 else
                     safe_set_tint(vmath.vector4(0.65, 0.05, 0.05, 1))
                 end
+            elseif unit.hazard_flash_active == true then
+                safe_set_tint(unit.hazard_flash_tint or vmath.vector4(1.0, 0.78, 0.25, 1))
             elseif unit.current_ap <= 0 then
                 safe_set_tint(HUMAN_TINT_NO_AP)
             else
@@ -9165,6 +9274,9 @@ set_aesthetic_mode = function(self, mode)
     if LOOT_RUNTIME then
         if LOOT_RUNTIME.refresh_loot_markers then
             LOOT_RUNTIME.refresh_loot_markers(self)
+        end
+        if LOOT_RUNTIME.refresh_hazard_fx then
+            LOOT_RUNTIME.refresh_hazard_fx(self)
         end
         if LOOT_RUNTIME.refresh_machine_markers then
             LOOT_RUNTIME.refresh_machine_markers(self)
@@ -12725,6 +12837,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
 
     if LOOT_RUNTIME.refresh_world_item_visuals then LOOT_RUNTIME.refresh_world_item_visuals(self) end
     if LOOT_RUNTIME.refresh_loot_markers then LOOT_RUNTIME.refresh_loot_markers(self) end
+    if LOOT_RUNTIME.refresh_hazard_fx then LOOT_RUNTIME.refresh_hazard_fx(self) end
     if LOOT_RUNTIME.refresh_machine_markers then LOOT_RUNTIME.refresh_machine_markers(self) end
     if LOOT_RUNTIME.refresh_turret_markers then LOOT_RUNTIME.refresh_turret_markers(self) end
     if LOOT_RUNTIME.refresh_fix_markers then LOOT_RUNTIME.refresh_fix_markers(self) end
@@ -13458,6 +13571,9 @@ end
 
         print("Spawned " .. spawned_count .. " cells")
         LOOT_RUNTIME.refresh_loot_markers(self)
+        if LOOT_RUNTIME.refresh_hazard_fx then
+            LOOT_RUNTIME.refresh_hazard_fx(self)
+        end
         LOOT_RUNTIME.refresh_machine_markers(self)
         LOOT_RUNTIME.refresh_turret_markers(self)
         LOOT_RUNTIME.refresh_fix_markers(self)
@@ -14070,6 +14186,9 @@ function update(self, dt)
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
+    if LOOT_RUNTIME.update_hazard_fx_visibility then
+        LOOT_RUNTIME.update_hazard_fx_visibility(self)
+    end
     if LOOT_RUNTIME.update_factory_conveyor_tokens then
         LOOT_RUNTIME.update_factory_conveyor_tokens(self, dt)
     end

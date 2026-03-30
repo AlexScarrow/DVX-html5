@@ -16,6 +16,8 @@ function M.extend(runtime, ctx)
     local BARRICADE_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
     local DOOR_HP_DEFAULT = 3
     local DOOR_HP_MAX = 3
+    local HAZARD_FX_Y_OFFSET = -35
+    local HAZARD_FX_Z = 0.69
 
     local function boardgame_shadows_enabled(self)
         return self and self.aesthetic_mode == "boardgame"
@@ -79,6 +81,125 @@ function M.extend(runtime, ctx)
                 if marker_id then
                     go.set_scale(vmath.vector3(ctx.LOOT_UI.marker_size, ctx.LOOT_UI.marker_size, 1), marker_id)
                     loot_objects[cell_id] = marker_id
+                end
+            end
+        end
+    end
+
+    runtime.refresh_hazard_fx = function(self)
+        self.hazard_fx_objects = self.hazard_fx_objects or {}
+        for _, fx_entry in ipairs(self.hazard_fx_objects) do
+            if fx_entry then
+                if fx_entry.fire_id then
+                    go.delete(fx_entry.fire_id)
+                end
+                if fx_entry.gas_id then
+                    go.delete(fx_entry.gas_id)
+                end
+            end
+        end
+        self.hazard_fx_objects = {}
+
+        if not self.world_grid then
+            return
+        end
+
+        local function get_hazard_flags(cell)
+            if not cell then
+                return false, false
+            end
+            local fire = false
+            local gas = false
+            local t = cell.hazard_type or cell.hazardType or cell.hazard
+            if type(t) == "string" then
+                local hazard = string.lower(t)
+                fire = (hazard == "fire") or (hazard == "fire_gas") or (hazard == "gas_fire")
+                gas = (hazard == "gas") or (hazard == "fire_gas") or (hazard == "gas_fire") or (hazard == "poison")
+            end
+            fire = fire or cell.isFireHazard == true or cell.has_fire_hazard == true or cell.hasFireHazard == true
+            gas = gas or cell.isGasHazard == true or cell.has_gas_hazard == true or cell.hasGasHazard == true
+            return fire, gas
+        end
+
+        for cell_id, cell in ipairs(self.world_grid) do
+            if cell and cell.tileID ~= hash("empty") then
+                local has_fire, has_gas = get_hazard_flags(cell)
+                if has_fire or has_gas then
+                    local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    local fx_y = y + HAZARD_FX_Y_OFFSET
+                    local entry = {
+                        cell_id = cell_id,
+                        fire_id = nil,
+                        gas_id = nil,
+                        fire_active = false,
+                        gas_active = false
+                    }
+                    if has_fire then
+                        local fire_id = factory.create("/fire_fx_factory#fire_fx_factory", vmath.vector3(x, fx_y, HAZARD_FX_Z))
+                        if fire_id then
+                            entry.fire_id = fire_id
+                        end
+                    end
+                    if has_gas then
+                        local gas_id = factory.create("/gas_fx_factory#gas_fx_factory", vmath.vector3(x, fx_y, HAZARD_FX_Z))
+                        if gas_id then
+                            entry.gas_id = gas_id
+                        end
+                    end
+                    if entry.fire_id or entry.gas_id then
+                        table.insert(self.hazard_fx_objects, entry)
+                    end
+                end
+            end
+        end
+        if runtime.update_hazard_fx_visibility then
+            runtime.update_hazard_fx_visibility(self)
+        end
+    end
+
+    runtime.update_hazard_fx_visibility = function(self)
+        if not (self and self.world_grid and self.hazard_fx_objects) then
+            return
+        end
+        local occupied_tile_instances = {}
+        if self.squad_units then
+            for _, unit in pairs(self.squad_units) do
+                if unit and (unit.current_health or 0) > 0 and unit.cell_id and self.world_grid[unit.cell_id] then
+                    local tile_id = tonumber(self.world_grid[unit.cell_id].tileInstanceId or 0) or 0
+                    if tile_id > 0 then
+                        occupied_tile_instances[tile_id] = true
+                    end
+                end
+            end
+        end
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian and civilian.is_dead ~= true and (civilian.current_health or 0) > 0 and civilian.cell_id and self.world_grid[civilian.cell_id] then
+                local tile_id = tonumber(self.world_grid[civilian.cell_id].tileInstanceId or 0) or 0
+                if tile_id > 0 then
+                    occupied_tile_instances[tile_id] = true
+                end
+            end
+        end
+        for _, entry in ipairs(self.hazard_fx_objects) do
+            local cell = entry and entry.cell_id and self.world_grid[entry.cell_id] or nil
+            local tile_instance_id = tonumber(cell and cell.tileInstanceId or 0) or 0
+            local show_fx = cell and ((cell.isPowered == true) or (tile_instance_id > 0 and occupied_tile_instances[tile_instance_id] == true)) or false
+            if entry.fire_id then
+                if show_fx and entry.fire_active ~= true then
+                    pcall(particlefx.play, msg.url(nil, entry.fire_id, "particlefx"))
+                    entry.fire_active = true
+                elseif (not show_fx) and entry.fire_active == true then
+                    pcall(particlefx.stop, msg.url(nil, entry.fire_id, "particlefx"))
+                    entry.fire_active = false
+                end
+            end
+            if entry.gas_id then
+                if show_fx and entry.gas_active ~= true then
+                    pcall(particlefx.play, msg.url(nil, entry.gas_id, "particlefx"))
+                    entry.gas_active = true
+                elseif (not show_fx) and entry.gas_active == true then
+                    pcall(particlefx.stop, msg.url(nil, entry.gas_id, "particlefx"))
+                    entry.gas_active = false
                 end
             end
         end

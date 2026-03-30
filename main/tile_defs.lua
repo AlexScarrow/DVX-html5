@@ -19,6 +19,7 @@ local function create_tile_prototype(tile_id)
             moveValue = 1,
             coverValue = 1,
             isOutside = false,
+            hazard_type = "none",
             accessRight = true,
             accessDown = true,
             isPowered = false,
@@ -71,7 +72,7 @@ function M.create_tile_library(COMPONENT_UI)
         entry.cells[i].lightValue = 2
         entry.cells[i].moveValue = 1
         entry.cells[i].coverValue = 1
-        entry.cells[i].isOutside = false
+        entry.cells[i].isOutside = true
     end
     entry.cells[3].moveValue = 3
     entry.cells[6].moveValue = 3
@@ -100,7 +101,7 @@ function M.create_tile_library(COMPONENT_UI)
         rescue_entry.cells[i].lightValue = 2
         rescue_entry.cells[i].moveValue = 1
         rescue_entry.cells[i].coverValue = 1
-        rescue_entry.cells[i].isOutside = false
+        rescue_entry.cells[i].isOutside = true
     end
     rescue_entry.cells[3].moveValue = 3
     rescue_entry.cells[6].moveValue = 3
@@ -254,6 +255,7 @@ canteen.cells[3].object1 = {
     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
 }
+canteen.cells[3].hazard_type = "gas"
 canteen.cells[4].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
@@ -282,11 +284,13 @@ canteen.cells[2].object3 = {
     offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
+canteen.cells[2].hazard_type = "gas"
 canteen.cells[1].object1 = {
     name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 64, requiredComponent = nil,
     powerLoaded = 0, powerRequired = 9
 }
+canteen.cells[1].hazard_type = "gas"
 canteen.cells[8].object1 = {
     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
@@ -316,6 +320,7 @@ canteen.cells[8].object4 = {
     offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
+canteen.cells[8].hazard_type = "fire"
 
 canteen.cells[9].object2 = {
     name = hash("supply_loader"), isFixed = true, hasFood = true, contributesToExitObjective = false,
@@ -330,6 +335,7 @@ canteen.cells[7].object1 = {
     name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
     offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
 }
+canteen.cells[7].hazard_type = "fire"
 -- 
 -- 
 library["canteen"] = canteen

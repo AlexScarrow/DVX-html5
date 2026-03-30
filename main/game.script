@@ -5891,19 +5891,33 @@ end
 
 get_cell_hazard_flags = function(cell)
     if not cell then
-        return false, false
+        return false, false, false
     end
     local fire = false
     local gas = false
+    local outside = false
     local t = cell.hazard_type or cell.hazardType or cell.hazard
     if type(t) == "string" then
-        local hazard = string.lower(t)
-        fire = (hazard == "fire") or (hazard == "fire_gas") or (hazard == "gas_fire")
-        gas = (hazard == "gas") or (hazard == "fire_gas") or (hazard == "gas_fire") or (hazard == "poison")
+        local hazard = string.lower(t or "")
+        if hazard ~= "" and hazard ~= "none" then
+            local tokens = {}
+            for token in string.gmatch(hazard, "[^_%-%s]+") do
+                tokens[token] = true
+            end
+            fire = tokens.fire == true
+            gas = (tokens.gas == true) or (tokens.poison == true)
+            outside = (tokens.outside == true) or (tokens.o2 == true)
+        end
     end
     fire = fire or cell.isFireHazard == true or cell.has_fire_hazard == true or cell.hasFireHazard == true
     gas = gas or cell.isGasHazard == true or cell.has_gas_hazard == true or cell.hasGasHazard == true
-    return fire, gas
+    outside = outside or cell.isOutsideHazard == true or cell.has_outside_hazard == true or cell.hasOutsideHazard == true
+    -- Transitional fallback for pre-hazard-tag data only.
+    -- Once all authored maps use hazard_type/flags, this can be removed.
+    if outside ~= true and t == nil then
+        outside = cell.isOutside == true
+    end
+    return fire, gas, outside
 end
 
 local function apply_start_of_turn_environment_damage(self)
@@ -5919,10 +5933,10 @@ local function apply_start_of_turn_environment_damage(self)
             local has_oxygen_mask = unit_has_equipped_buff_kind(unit, "oxygen_mask")
             local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
             local damage = 0
-            if cell and cell.isOutside == true and not has_oxygen_mask then
+            local has_fire, has_gas, has_outside = get_cell_hazard_flags(cell)
+            if has_outside and not has_oxygen_mask then
                 damage = damage + outside_damage
             end
-            local has_fire, has_gas = get_cell_hazard_flags(cell)
             if has_fire and not has_hazmat then
                 damage = damage + fire_damage
             end
@@ -5934,7 +5948,7 @@ local function apply_start_of_turn_environment_damage(self)
                 local hazard_flash_tint = vmath.vector4(1.0, 0.78, 0.25, 1)
                 if has_gas and (not has_hazmat) and not (has_fire and (not has_hazmat)) then
                     hazard_flash_tint = vmath.vector4(0.58, 1.0, 0.66, 1)
-                elseif (cell and cell.isOutside == true) and not has_oxygen_mask and not has_fire and not has_gas then
+                elseif has_outside and not has_oxygen_mask and not has_fire and not has_gas then
                     hazard_flash_tint = vmath.vector4(0.62, 0.82, 1.0, 1)
                 end
                 unit.hazard_flash_tint = hazard_flash_tint
@@ -5951,7 +5965,7 @@ local function apply_start_of_turn_environment_damage(self)
                     unit.display_name or tostring(unit.id),
                     damage,
                     unit.current_health or 0,
-                    (cell and cell.isOutside == true) and "y" or "n",
+                    has_outside and "y" or "n",
                     has_fire and "y" or "n",
                     has_gas and "y" or "n",
                     has_oxygen_mask and "y" or "n",
@@ -5967,8 +5981,8 @@ local function apply_start_of_turn_environment_damage(self)
         if civilian and civilian.is_dead ~= true and (civilian.current_health or 0) > 0 and civilian.cell_id then
             local cell = self.world_grid[civilian.cell_id]
             local damage = 0
-            local has_fire, has_gas = get_cell_hazard_flags(cell)
-            if cell and cell.isOutside == true then
+            local has_fire, has_gas, has_outside = get_cell_hazard_flags(cell)
+            if has_outside then
                 damage = damage + outside_damage
             end
             if has_fire then
@@ -5994,7 +6008,7 @@ local function apply_start_of_turn_environment_damage(self)
                     civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0)),
                     damage,
                     civilian.current_health or 0,
-                    (cell and cell.isOutside == true) and "y" or "n",
+                    has_outside and "y" or "n",
                     has_fire and "y" or "n",
                     has_gas and "y" or "n"
                 ))

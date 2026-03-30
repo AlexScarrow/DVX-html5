@@ -72,8 +72,17 @@ function M.create_tile_library(COMPONENT_UI)
         entry.cells[i].lightValue = 2
         entry.cells[i].moveValue = 1
         entry.cells[i].coverValue = 1
-        entry.cells[i].isOutside = true
+        entry.cells[i].isOutside = false
     end
+    entry.cells[1].hazard_type = "outside"
+    entry.cells[2].hazard_type = "outside"
+    entry.cells[3].hazard_type = "outside"
+    entry.cells[4].hazard_type = "outside"
+    entry.cells[5].hazard_type = "outside"
+    entry.cells[6].hazard_type = "outside"
+    entry.cells[7].hazard_type = "outside"
+    entry.cells[8].hazard_type = "outside"
+    entry.cells[9].hazard_type = "outside"
     entry.cells[3].moveValue = 3
     entry.cells[6].moveValue = 3
 

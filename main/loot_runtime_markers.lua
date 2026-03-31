@@ -32,6 +32,30 @@ function M.extend(runtime, ctx)
         return shadow_id
     end
 
+    local function create_hazard_fire_fx_for_cell(cell)
+        if not cell then
+            return nil, false
+        end
+        local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local fx_y = y + HAZARD_FX_Y_OFFSET
+        local unpowered = cell.isPowered ~= true
+        local factory_path = unpowered and "/fire_black_fx_factory#fire_black_fx_factory" or "/fire_fx_factory#fire_fx_factory"
+        local fire_id = factory.create(factory_path, vmath.vector3(x, fx_y, HAZARD_FX_Z))
+        return fire_id, unpowered
+    end
+
+    local function create_hazard_gas_fx_for_cell(cell)
+        if not cell then
+            return nil, false
+        end
+        local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        local fx_y = y + HAZARD_FX_Y_OFFSET
+        local unpowered = cell.isPowered ~= true
+        local factory_path = unpowered and "/gas_black_fx_factory#gas_black_fx_factory" or "/gas_fx_factory#gas_fx_factory"
+        local gas_id = factory.create(factory_path, vmath.vector3(x, fx_y, HAZARD_FX_Z))
+        return gas_id, unpowered
+    end
+
     runtime.clear_loot_marker = function(self, cell_id)
         local loot_objects = ctx.get_loot_objects()
         local marker = loot_objects[cell_id]
@@ -130,20 +154,24 @@ function M.extend(runtime, ctx)
                     local entry = {
                         cell_id = cell_id,
                         fire_id = nil,
+                        fire_unpowered = false,
                         gas_id = nil,
+                        gas_unpowered = false,
                         fire_active = false,
                         gas_active = false
                     }
                     if has_fire then
-                        local fire_id = factory.create("/fire_fx_factory#fire_fx_factory", vmath.vector3(x, fx_y, HAZARD_FX_Z))
+                        local fire_id, fire_unpowered = create_hazard_fire_fx_for_cell(cell)
                         if fire_id then
                             entry.fire_id = fire_id
+                            entry.fire_unpowered = fire_unpowered == true
                         end
                     end
                     if has_gas then
-                        local gas_id = factory.create("/gas_fx_factory#gas_fx_factory", vmath.vector3(x, fx_y, HAZARD_FX_Z))
+                        local gas_id, gas_unpowered = create_hazard_gas_fx_for_cell(cell)
                         if gas_id then
                             entry.gas_id = gas_id
+                            entry.gas_unpowered = gas_unpowered == true
                         end
                     end
                     if entry.fire_id or entry.gas_id then
@@ -185,12 +213,34 @@ function M.extend(runtime, ctx)
             local tile_instance_id = tonumber(cell and cell.tileInstanceId or 0) or 0
             local show_fx = cell and ((cell.isPowered == true) or (tile_instance_id > 0 and occupied_tile_instances[tile_instance_id] == true)) or false
             if entry.fire_id then
+                local desired_unpowered = (not cell) or (cell.isPowered ~= true)
+                if entry.fire_unpowered ~= desired_unpowered then
+                    pcall(go.delete, entry.fire_id)
+                    entry.fire_id = nil
+                    entry.fire_active = false
+                    local replacement_id, replacement_unpowered = create_hazard_fire_fx_for_cell(cell)
+                    entry.fire_id = replacement_id
+                    entry.fire_unpowered = replacement_unpowered == true
+                end
+            end
+            if entry.fire_id then
                 if show_fx and entry.fire_active ~= true then
                     pcall(particlefx.play, msg.url(nil, entry.fire_id, "particlefx"))
                     entry.fire_active = true
                 elseif (not show_fx) and entry.fire_active == true then
                     pcall(particlefx.stop, msg.url(nil, entry.fire_id, "particlefx"))
                     entry.fire_active = false
+                end
+            end
+            if entry.gas_id then
+                local desired_unpowered = (not cell) or (cell.isPowered ~= true)
+                if entry.gas_unpowered ~= desired_unpowered then
+                    pcall(go.delete, entry.gas_id)
+                    entry.gas_id = nil
+                    entry.gas_active = false
+                    local replacement_id, replacement_unpowered = create_hazard_gas_fx_for_cell(cell)
+                    entry.gas_id = replacement_id
+                    entry.gas_unpowered = replacement_unpowered == true
                 end
             end
             if entry.gas_id then

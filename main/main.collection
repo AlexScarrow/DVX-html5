@@ -441,11 +441,31 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "fire_black_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"fire_black_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/fire_black_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "gas_fx_factory"
   data: "embedded_components {\n"
   "  id: \"gas_fx_factory\"\n"
   "  type: \"factory\"\n"
   "  data: \"prototype: \\\"/main/gas_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "gas_black_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"gas_black_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/gas_black_fx.go\\\"\\n"
   "\"\n"
   "}\n"
   ""

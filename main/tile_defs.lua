@@ -102,6 +102,10 @@ function M.create_tile_library(COMPONENT_UI)
     
     library["entry"] = entry
 
+-- =====================================================================
+-- RESCUE_ENTRY (start of rescue level)
+-- =====================================================================
+
     local rescue_entry = create_tile_prototype("rescue_entry")
     rescue_entry.visualTile = "rescue_entry_computerGame"
     rescue_entry.visualTileComputer = "rescue_entry_computerGame"
@@ -130,6 +134,54 @@ function M.create_tile_library(COMPONENT_UI)
     }
     library["rescue_entry"] = rescue_entry
 
+    -- =====================================================================
+    -- EXRERIOR1 TILE (some outside space)
+    -- =====================================================================
+
+    local exterior1 = create_tile_prototype("exterior1")
+    exterior1.visualTile = "exterior1_computerGame"
+    exterior1.visualTileComputer = "exterior1_computerGame"
+    exterior1.visualTileBoardgame = "exterior1_boardGame"
+    for i = 1, 9 do
+        exterior1.cells[i].lightValue = 2
+        exterior1.cells[i].moveValue = 1
+        exterior1.cells[i].coverValue = 1
+        exterior1.cells[i].isOutside = true
+    end
+    exterior1.cells[3].moveValue = 3
+    exterior1.cells[6].moveValue = 3
+
+    
+    exterior1.cells[1].accessDown = true
+    exterior1.cells[1].accessRight = true
+    exterior1.cells[2].accessDown = false
+    exterior1.cells[2].accessRight = true
+    exterior1.cells[3].accessRight = false
+    exterior1.cells[3].accessDown = false
+    exterior1.cells[4].accessRight = false
+    exterior1.cells[4].accessDown = true
+    exterior1.cells[5].accessDown = true
+    exterior1.cells[5].accessRight = true
+    exterior1.cells[6].accessDown = false
+    exterior1.cells[6].accessRight = false
+    exterior1.cells[7].accessDown = true
+    exterior1.cells[7].accessRight = false
+    exterior1.cells[8].accessDown = false
+    exterior1.cells[8].accessRight = false
+    exterior1.cells[9].accessDown = false
+    exterior1.cells[9].accessRight = true
+
+
+    
+   -- exterior1.cells[8].accessDown = false
+    --rescue_entry.cells[5].accessRight = false
+    --exterior1.cells[6].accessRight = false
+    exterior1.cells[9].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
+        offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    library["exterior1"] = exterior1
+
 -- =====================================================================
 -- COMS (acquire Nav data)
 -- =====================================================================
@@ -148,13 +200,20 @@ function M.create_tile_library(COMPONENT_UI)
 
     coms.cells[1].accessDown = false
     coms.cells[1].accessRight = false
+    coms.cells[2].accessDown = true
     coms.cells[2].accessRight = false
     coms.cells[3].accessRight = false
     coms.cells[3].accessDown = false
     coms.cells[4].accessDown = false
+    coms.cells[4].accessRight = true
+    coms.cells[5].accessDown = true
     coms.cells[5].accessRight = false
+    coms.cells[6].accessDown = false
     coms.cells[6].accessRight = false
+    coms.cells[7].accessDown = true
+    coms.cells[7].accessRight = true
     coms.cells[8].accessDown = false
+    coms.cells[8].accessRight = true
     coms.cells[9].accessDown = false
     coms.cells[9].accessRight = false
 

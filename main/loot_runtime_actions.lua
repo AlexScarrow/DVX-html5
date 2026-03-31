@@ -119,6 +119,16 @@ function M.extend(runtime, ctx)
         SPOT_ALIEN = { anim = hash("derples_comms_alienSpotted"), duration = 1.05, cooldown = 1.9, scale = 0.54, x_offset = 50, y_offset = 74 },
         NOT_ENOUGH_AP = { anim = hash("derples_comms_notEnough_AP"), duration = 1.05, cooldown = 0.4, scale = 0.54, x_offset = 50, y_offset = 74 },
         TURRET_BACKPACK_NOT_EMPTY = { anim = hash("derples_comms_turret_fullPack"), duration = 1.05, cooldown = 0.5, scale = 0.54, x_offset = 50, y_offset = 74 },
+        COMMS_NEED_POWER = { anim = hash("coms_need_power"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_NEED_MEDS = { anim = hash("coms_need_meds"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_NEED_AMMO = { anim = hash("coms_need_ammo"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_NEED_MATERIAL = { anim = hash("coms_need_material"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_NEED_COMMAND = { anim = hash("coms_need_command"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_GIVE_POWER = { anim = hash("coms_give_power"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_GIVE_MEDS = { anim = hash("coms_give_meds"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_GIVE_AMMO = { anim = hash("coms_give_ammo"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_GIVE_MATERIAL = { anim = hash("coms_give_material"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        COMMS_GIVE_COMMAND = { anim = hash("coms_give_command"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
         BUFF_ARMOR_INFO = { anim = hash("armor_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
         BUFF_HAZMAT_INFO = { anim = hash("hazmat_suit_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
         BUFF_OXYGEN_INFO = { anim = hash("oxygen_mask_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
@@ -2084,6 +2094,7 @@ function M.extend(runtime, ctx)
             unit_id = unit_id,
             event_type = event_type,
             ttl = def.duration or 1.0,
+            fade_out = math.max(0, tonumber(def.fade_out or 0) or 0),
             x_offset = def.x_offset or 0,
             y_offset = def.y_offset or 70,
             ui_anchor = def.ui_anchor == true
@@ -2106,6 +2117,11 @@ function M.extend(runtime, ctx)
                     if entry.ttl > 0 then
                         local px, py = get_derple_feedback_world_pos(self, unit, entry.x_offset, entry.y_offset, entry.ui_anchor == true)
                         go.set_position(vmath.vector3(px, py, 0.84), entry.go_id)
+                        local alpha = 1
+                        if (entry.fade_out or 0) > 0 then
+                            alpha = math.max(0, math.min(1, entry.ttl / entry.fade_out))
+                        end
+                        go.set(msg.url(nil, entry.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, alpha))
                         keep = true
                     end
                 end

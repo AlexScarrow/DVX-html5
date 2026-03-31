@@ -154,6 +154,38 @@ UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
 UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
 UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
+COMMS_PANEL_W = 300
+COMMS_PANEL_H = 470
+COMMS_PANEL_Z = 0.842
+COMMS_PANEL_X = UI_PANEL_X + UI_PANEL_W
+COMMS_PANEL_Y = UI_PANEL_Y
+COMMS_TOGGLE_BTN_Z = 0.843
+COMMS_TOGGLE_BTN_X = UI_PANEL_X + (UI_PANEL_W * 0.5) - 118
+COMMS_TOGGLE_BTN_Y = UI_PANEL_Y - (UI_PANEL_H * 0.5) + 73
+COMMS_TOGGLE_BTN_HIT_W = 42
+COMMS_TOGGLE_BTN_HIT_H = 42
+COMMS_TOGGLE_BTN_DRAW = 0.18
+COMMS_SLOT_COLS = 2
+COMMS_SLOT_ROWS = 5
+COMMS_SLOT_SPACING_X = 92
+COMMS_SLOT_SPACING_Y = 74
+COMMS_SLOT_START_X = COMMS_PANEL_X - 46
+COMMS_SLOT_START_Y = COMMS_PANEL_Y + 149
+COMMS_SLOT_HIT_W = 72
+COMMS_SLOT_HIT_H = 72
+COMMS_SOLO_TEST_ENABLED = false
+COMMS_EVENT_TYPE_BY_INDEX = {
+    [1] = "COMMS_GIVE_COMMAND",
+    [2] = "COMMS_NEED_COMMAND",
+    [3] = "COMMS_GIVE_MATERIAL",
+    [4] = "COMMS_NEED_MATERIAL",
+    [5] = "COMMS_GIVE_MEDS",
+    [6] = "COMMS_NEED_MEDS",
+    [7] = "COMMS_GIVE_AMMO",
+    [8] = "COMMS_NEED_AMMO",
+    [9] = "COMMS_GIVE_POWER",
+    [10] = "COMMS_NEED_POWER"
+}
 NEW_TURN_BUTTON_X = 140
 NEW_TURN_BUTTON_Y = 64
 NEW_TURN_BUTTON_W = 180
@@ -6877,6 +6909,44 @@ get_ui_panel_reactive_button_center = function()
     return close_x - 74, close_y
 end
 
+local function get_comms_slot_center(slot_index)
+    local idx = math.max(1, math.min(COMMS_SLOT_ROWS * COMMS_SLOT_COLS, tonumber(slot_index) or 1))
+    local row = math.floor((idx - 1) / COMMS_SLOT_COLS)
+    local col = (idx - 1) % COMMS_SLOT_COLS
+    local x = COMMS_SLOT_START_X + (col * COMMS_SLOT_SPACING_X)
+    local y = COMMS_SLOT_START_Y - (row * COMMS_SLOT_SPACING_Y)
+    return x, y
+end
+
+local function should_show_comms_ui(self, unit)
+    if not (self and unit and unit.id and (unit.current_health or 0) > 0) then
+        return false
+    end
+    if COMMS_SOLO_TEST_ENABLED == true then
+        return true
+    end
+    if not (self.mp_state and self.mp_state.enabled) then
+        return false
+    end
+    return multiplayer_can_control_unit(self, unit.id) == true
+end
+
+local function close_comms_panel(self)
+    self.comms_panel_open = false
+end
+
+local function is_valid_comms_event_type(event_type)
+    if type(event_type) ~= "string" or event_type == "" then
+        return false
+    end
+    for _, candidate in ipairs(COMMS_EVENT_TYPE_BY_INDEX) do
+        if candidate == event_type then
+            return true
+        end
+    end
+    return false
+end
+
 count_non_nil_entries = function(t)
     if not t then
         return 0
@@ -7013,6 +7083,8 @@ local function initialize_unit_ui(self)
         fix_button = nil,
         loot_button = nil,
         retrieve_button = nil,
+        comms_toggle_button = nil,
+        comms_panel = nil,
         close_button = nil,
         not_enough_ap_icon = nil,
         level_buttons = {},
@@ -7079,6 +7151,8 @@ local function initialize_unit_ui(self)
     self.ui.fix_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.fix_button_color, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     self.ui.loot_button = create_ui_square(0, 0, 0.82, LOOT_UI.button_color, LOOT_UI.button_size, LOOT_UI.button_size)
     self.ui.retrieve_button = create_ui_square(0, 0, 0.82, LOOT_UI.retrieve_button_color, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
+    self.ui.comms_toggle_button = create_ui_marker_sprite(hash("coms_need_command"), COMMS_TOGGLE_BTN_Z)
+    self.ui.comms_panel = create_ui_marker_sprite(hash("human_coms_panel"), COMMS_PANEL_Z)
     self.ui.close_button = create_ui_square(0, 0, 0.83, vmath.vector4(0.8, 0.2, 0.2, 0.95), 28, 28)
     self.ui.not_enough_ap_icon = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.835))
     if self.ui.not_enough_ap_icon then
@@ -7193,6 +7267,8 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
+    set_ui_square_transform(self, self.ui.comms_toggle_button, -9999, -9999, COMMS_TOGGLE_BTN_Z, hidden, COMMS_TOGGLE_BTN_DRAW, COMMS_TOGGLE_BTN_DRAW)
+    set_ui_panel_transform(self, self.ui.comms_panel, -9999, -9999, COMMS_PANEL_Z, COMMS_PANEL_W, COMMS_PANEL_H, hidden)
     set_ui_square_transform(self, self.ui.close_button, -9999, -9999, 0.83, hidden, 28, 28)
     set_ui_square_transform(self, self.ui.not_enough_ap_icon, -9999, -9999, 0.835, hidden, 0.81, 0.81)
     if self.ui.level_buttons then
@@ -9450,6 +9526,7 @@ function update_selected_unit_ui(self)
             70,
             30
         )
+        close_comms_panel(self)
         return
     end
 
@@ -9654,6 +9731,21 @@ function update_selected_unit_ui(self)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
     set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), LOOT_UI.button_size, LOOT_UI.button_size)
     set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, vmath.vector4(0, 0, 0, 0), LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
+    local comms_visible = should_show_comms_ui(self, unit)
+    if not comms_visible then
+        close_comms_panel(self)
+    end
+    if comms_visible then
+        local toggle_tint = self.comms_panel_open and vmath.vector4(1, 1, 1, 1) or vmath.vector4(1, 1, 1, 0.75)
+        set_ui_square_transform(self, self.ui.comms_toggle_button, COMMS_TOGGLE_BTN_X, COMMS_TOGGLE_BTN_Y, COMMS_TOGGLE_BTN_Z, toggle_tint, COMMS_TOGGLE_BTN_DRAW, COMMS_TOGGLE_BTN_DRAW)
+    else
+        set_ui_square_transform(self, self.ui.comms_toggle_button, -9999, -9999, COMMS_TOGGLE_BTN_Z, vmath.vector4(0, 0, 0, 0), COMMS_TOGGLE_BTN_DRAW, COMMS_TOGGLE_BTN_DRAW)
+    end
+    if comms_visible and self.comms_panel_open then
+        set_ui_panel_transform(self, self.ui.comms_panel, COMMS_PANEL_X, COMMS_PANEL_Y, COMMS_PANEL_Z, COMMS_PANEL_W, COMMS_PANEL_H, vmath.vector4(1, 1, 1, 1))
+    else
+        set_ui_panel_transform(self, self.ui.comms_panel, -9999, -9999, COMMS_PANEL_Z, COMMS_PANEL_W, COMMS_PANEL_H, vmath.vector4(0, 0, 0, 0))
+    end
     local close_button_x, close_button_y = get_ui_panel_close_button_center()
     set_ui_square_transform(
         self,
@@ -9733,8 +9825,68 @@ function try_close_selected_unit_ui(self, screen_x, screen_y)
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
     self.selected_start_cell = nil
+    close_comms_panel(self)
     update_human_visual_state(self)
     print("Unit panel closed.")
+    return true
+end
+
+local function is_point_in_comms_panel(screen_x, screen_y)
+    return is_point_in_screen_rect(screen_x, screen_y, COMMS_PANEL_X, COMMS_PANEL_Y, COMMS_PANEL_W, COMMS_PANEL_H)
+end
+
+local function try_toggle_comms_panel(self, screen_x, screen_y)
+    local unit = get_selected_unit(self)
+    if not should_show_comms_ui(self, unit) then
+        close_comms_panel(self)
+        return false
+    end
+    if is_point_in_screen_rect(screen_x, screen_y, COMMS_TOGGLE_BTN_X, COMMS_TOGGLE_BTN_Y, COMMS_TOGGLE_BTN_HIT_W, COMMS_TOGGLE_BTN_HIT_H) then
+        self.comms_panel_open = not (self.comms_panel_open == true)
+        return true
+    end
+    return false
+end
+
+local function emit_comms_command(self, unit, slot_index)
+    if not (unit and unit.id) then
+        return false
+    end
+    local event_type = COMMS_EVENT_TYPE_BY_INDEX[slot_index]
+    if not is_valid_comms_event_type(event_type) then
+        return false
+    end
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_transport_send_command(self, "comms_command", {
+            turn_id = self.mp_state.turn_id or 1,
+            unit_id = unit.id,
+            comms_event_type = event_type
+        }, multiplayer_get_active_player_id_for_commands(self))
+    elseif LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback then
+        LOOT_RUNTIME.emit_derple_feedback(self, unit.id, event_type)
+    end
+    self.comms_panel_open = false
+    return true
+end
+
+local function try_activate_comms_slot(self, screen_x, screen_y)
+    local unit = get_selected_unit(self)
+    if not should_show_comms_ui(self, unit) then
+        close_comms_panel(self)
+        return false
+    end
+    if self.comms_panel_open ~= true then
+        return false
+    end
+    if not is_point_in_comms_panel(screen_x, screen_y) then
+        return false
+    end
+    for slot_index = 1, (COMMS_SLOT_ROWS * COMMS_SLOT_COLS) do
+        local cx, cy = get_comms_slot_center(slot_index)
+        if is_point_in_screen_rect(screen_x, screen_y, cx, cy, COMMS_SLOT_HIT_W, COMMS_SLOT_HIT_H) then
+            return emit_comms_command(self, unit, slot_index)
+        end
+    end
     return true
 end
 
@@ -10263,6 +10415,46 @@ multiplayer_transport_handle_command = function(self, command)
         table.insert(events, multiplayer_transport_emit_event(self, "manual_shot_applied", {
             unit_id = unit_id,
             alien_id = alien_id
+        }))
+        return events
+    end
+
+    if cmd_type == "comms_command" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "comms_command",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local event_type = tostring(payload.comms_event_type or "")
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "comms_command",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or (unit.current_health or 0) <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "comms_command",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        if not is_valid_comms_event_type(event_type) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "comms_command",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "comms_command_applied", {
+            unit_id = unit_id,
+            comms_event_type = event_type
         }))
         return events
     end
@@ -10887,6 +11079,16 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "comms_command_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_comms_command_event(self, event.payload or {}) then
+            print("MP COMMAND | comms_command_applied ignored.")
+        end
+        return
+    end
     if event.type == "resource_drag_applied" then
         if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
             multiplayer_queue_pending_event(self, event)
@@ -11284,6 +11486,7 @@ multiplayer_enforce_controlled_unit = function(self, force_select)
     for _, unit in pairs(self.squad_units) do
         unit.is_selected = (unit.id == chosen_unit_id) and ((unit.current_health or 0) > 0) or false
     end
+    self.comms_panel_open = false
     if force_select == true and (owned_unit.current_health or 0) <= 0 then
         owned_unit.is_selected = false
     end
@@ -12513,6 +12716,25 @@ multiplayer_apply_manual_shot_event = function(self, payload)
         return false
     end
     return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+end
+
+multiplayer_apply_comms_command_event = function(self, payload)
+    if not payload then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local event_type = payload.comms_event_type
+    local unit = self.squad_units and self.squad_units[unit_id] or nil
+    if not unit or (unit.current_health or 0) <= 0 then
+        return false
+    end
+    if not is_valid_comms_event_type(event_type) then
+        return false
+    end
+    if not (LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback) then
+        return false
+    end
+    return LOOT_RUNTIME.emit_derple_feedback(self, unit_id, event_type) == true
 end
 
 multiplayer_clone_flat_table = function(src)
@@ -13755,6 +13977,7 @@ function init(self)
     self.selected_start_cell = nil
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
+    self.comms_panel_open = false
     self.squad_units = create_squad_units()
     self.controlled_unit_id = "sarge"
     self.spawn_human_unit_fn = spawn_human_unit
@@ -14484,6 +14707,12 @@ function on_input(self, action_id, action)
                     return true
                 end
                 if try_advance_reactive_alien_turn(self, input_x, input_y) then
+                    return true
+                end
+                if try_toggle_comms_panel(self, input_x, input_y) then
+                    return true
+                end
+                if try_activate_comms_slot(self, input_x, input_y) then
                     return true
                 end
                 if get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then

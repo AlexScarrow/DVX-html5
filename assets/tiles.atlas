@@ -466,6 +466,39 @@ images {
 images {
   image: "/assets/images/mp_unit_techie.png"
 }
+images {
+  image: "/assets/images/human_coms_panel.png"
+}
+images {
+  image: "/assets/images/coms_need_power.png"
+}
+images {
+  image: "/assets/images/coms_need_meds.png"
+}
+images {
+  image: "/assets/images/coms_need_ammo.png"
+}
+images {
+  image: "/assets/images/coms_need_material.png"
+}
+images {
+  image: "/assets/images/coms_need_command.png"
+}
+images {
+  image: "/assets/images/coms_give_power.png"
+}
+images {
+  image: "/assets/images/coms_give_meds.png"
+}
+images {
+  image: "/assets/images/coms_give_ammo.png"
+}
+images {
+  image: "/assets/images/coms_give_material.png"
+}
+images {
+  image: "/assets/images/coms_give_command.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

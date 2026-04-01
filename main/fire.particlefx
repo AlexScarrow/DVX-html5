@@ -11,7 +11,7 @@ emitters {
   properties {
     key: EMITTER_KEY_SPAWN_RATE
     points {
-      y: 50.0
+      y: 100.0
     }
   }
   properties {
@@ -35,15 +35,15 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 150.0
+      y: 125.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SIZE
     points {
-      y: 40.0
+      y: 15.0
     }
-    spread: 40.0
+    spread: 60.0
   }
   properties {
     key: EMITTER_KEY_PARTICLE_RED

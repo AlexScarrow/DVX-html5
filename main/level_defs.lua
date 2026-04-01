@@ -19,17 +19,18 @@ function M.create_level_library()
     levels[1] = {
        
         { x = 8, y = 8, tile = "canteen" },
-        { x = 11, y = 11, tile = "factory" },
+        { x = 14, y = 11, tile = "factory" },
         { x = 8, y = 11, tile = "workshop" },
         { x = 5, y = 11, tile = "coms" },
         { x = 11, y = 8, tile = "medbay" },
         { x = 2, y = 8, tile = "entry" },
         { x = 5, y = 8, tile = "armoury" },
         { x = 14, y = 8, tile = "exterior1" },
+        { x = 11, y = 11, tile = "lab" },
         { x = 14, y = 5, tile = "portal" },
         --{ x = 14, y = 9, tile = "portal" },
         { x = 11, y = 2, tile = "exit" },
-        { x = 9, y = 5, tile = "passage1" },
+        { x = 10, y = 5, tile = "passage1" },
     }
     levels[1].mission_type = "escape"
     levels[1].spawn_tile = "entry"
@@ -63,7 +64,7 @@ function M.create_level_library()
         { x = 5, y = 11, tile = "armoury" },
         { x = 8, y = 12, tile = "coms" },
         { x = 8, y = 6, tile = "workshop" },
-        { x = 3, y = 5, tile = "passage1" },
+        { x = 4, y = 5, tile = "passage1" },
         { x = 2, y = 2, tile = "portal" },  
         { x = 5, y = 2, tile = "exit" },      
     }

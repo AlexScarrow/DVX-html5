@@ -665,27 +665,133 @@ library["canteen"] = canteen
     -- - Single isolated accessible cell: 4
     -- - Cell 4 remains enterable from left neighbor tile via edge rules.
     passage1.cells[1].accessDown = false   -- blocks 2 <-> 3
-    passage1.cells[2].accessDown = false   -- blocks 2 <-> 3
+    passage1.cells[1].accessRight = false   -- blocks 2 <-> 3
+    passage1.cells[2].accessDown = true   -- blocks 2 <-> 3
     passage1.cells[2].accessRight = false   -- blocks 2 <-> 3
     passage1.cells[3].accessRight = false   -- blocks right boundary from 3
+    passage1.cells[3].accessDown = false
     passage1.cells[4].accessRight = false   -- blocks 4 <-> 5
     passage1.cells[4].accessDown = false    -- blocks 4 <-> 1
+    passage1.cells[5].accessDown = true
     passage1.cells[5].accessRight = false   -- blocks 5 <-> 6
     passage1.cells[6].accessRight = false   -- blocks right boundary from 6
-    passage1.cells[6].accessDown = true     -- allows 6 <-> 3
+    passage1.cells[6].accessDown = false     -- allows 6 <-> 3
     passage1.cells[7].accessRight = false   -- blocks 7 <-> 8
     passage1.cells[7].accessDown = false    -- blocks 7 <-> 4
+    passage1.cells[8].accessDown = true
     passage1.cells[8].accessRight = false   -- blocks 8 <-> 9
     passage1.cells[9].accessRight = false   -- blocks right boundary from 9
-    passage1.cells[9].accessDown = true     -- allows 9 <-> 6
+    passage1.cells[9].accessDown = false     -- allows 9 <-> 6
 
 
-passage1.cells[6].object1 = {
+-- passage1.cells[6].object1 = {
+--     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+--     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+-- }
+
+library["passage1"] = passage1
+
+-- =====================================================================
+-- CORRIDOR 1 (horizontal middle row)
+-- =====================================================================
+local corridor1 = create_tile_prototype("corridor1")
+corridor1.visualTile = "corridor1_off"
+corridor1.powerLightOffAnim = "tile_corridor1_off"
+corridor1.powerLightOnAnim = "tile_corridor1_on"
+
+for i = 1, 9 do
+    corridor1.cells[i].lightValue = 0
+    corridor1.cells[i].moveValue = 0
+    corridor1.cells[i].coverValue = 0
+end
+
+-- passage1.cells[4].lightValue = 1
+-- passage1.cells[4].moveValue = 1
+-- passage1.cells[3].moveValue = 3
+-- passage1.cells[6].moveValue = 3
+-- passage1.cells[9].moveValue = 3
+
+-- Internal connectivity:
+-- - Vertical shaft only on right column: 3 <-> 6 <-> 9
+-- - Single isolated accessible cell: 4
+-- - Cell 4 remains enterable from left neighbor tile via edge rules.
+corridor1.cells[1].accessDown = false   -- blocks 2 <-> 3
+corridor1.cells[1].accessRight = false   -- blocks 2 <-> 3
+corridor1.cells[2].accessDown = false   -- blocks 2 <-> 3
+corridor1.cells[2].accessRight = false   -- blocks 2 <-> 3
+corridor1.cells[3].accessRight = false   -- blocks right boundary from 3
+corridor1.cells[3].accessDown = false
+corridor1.cells[4].accessRight = true   -- blocks 4 <-> 5
+corridor1.cells[4].accessDown = false    -- blocks 4 <-> 1
+corridor1.cells[5].accessDown = false
+corridor1.cells[5].accessRight = true   -- blocks 5 <-> 6
+corridor1.cells[6].accessRight = true   -- blocks right boundary from 6
+corridor1.cells[6].accessDown = false     -- allows 6 <-> 3
+corridor1.cells[7].accessRight = false   -- blocks 7 <-> 8
+corridor1.cells[7].accessDown = false    -- blocks 7 <-> 4
+corridor1.cells[8].accessDown = false
+corridor1.cells[8].accessRight = false   -- blocks 8 <-> 9
+corridor1.cells[9].accessRight = false   -- blocks right boundary from 9
+corridor1.cells[9].accessDown = false     -- allows 9 <-> 6
+
+
+-- corridor1.cells[6].object1 = {
+--     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+--     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+-- }
+
+library["corridor1"] = corridor1
+
+-- =====================================================================
+-- LAB (horizontal middle row)
+-- =====================================================================
+local lab = create_tile_prototype("lab")
+lab.visualTile = "lab_off"
+lab.powerLightOffAnim = "tile_lab_off"
+lab.powerLightOnAnim = "tile_lab_on"
+
+for i = 1, 9 do
+    lab.cells[i].lightValue = 0
+    lab.cells[i].moveValue = 0
+    lab.cells[i].coverValue = 0
+end
+
+-- lab.cells[4].lightValue = 1
+-- lab.cells[4].moveValue = 1
+-- lab.cells[3].moveValue = 3
+-- lab.cells[6].moveValue = 3
+-- lab.cells[9].moveValue = 3
+
+-- Internal connectivity:
+-- - Vertical shaft only on right column: 3 <-> 6 <-> 9
+-- - Single isolated accessible cell: 4
+-- - Cell 4 remains enterable from left neighbor tile via edge rules.
+lab.cells[1].accessDown = false   -- blocks 2 <-> 3
+lab.cells[1].accessRight = true   -- blocks 2 <-> 3
+lab.cells[2].accessDown = false   -- blocks 2 <-> 3
+lab.cells[2].accessRight = true   -- blocks 2 <-> 3
+lab.cells[3].accessRight = false   -- blocks right boundary from 3
+lab.cells[3].accessDown = true
+lab.cells[4].accessRight = true   -- blocks 4 <-> 5
+lab.cells[4].accessDown = true    -- blocks 4 <-> 1
+lab.cells[5].accessDown = false
+lab.cells[5].accessRight = true   -- blocks 5 <-> 6
+lab.cells[6].accessRight = true   -- blocks right boundary from 6
+lab.cells[6].accessDown = false     -- allows 6 <-> 3
+lab.cells[7].accessRight = false   -- blocks 7 <-> 8
+lab.cells[7].accessDown = false    -- blocks 7 <-> 4
+lab.cells[8].accessDown = false
+lab.cells[8].accessRight = false   -- blocks 8 <-> 9
+lab.cells[9].accessRight = false   -- blocks right boundary from 9
+lab.cells[9].accessDown = false     -- allows 9 <-> 6
+
+
+lab.cells[3].object1 = {
     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
 }
 
-    library["passage1"] = passage1
+library["lab"] = lab
 
 -- =====================================================================
 -- FACTORY

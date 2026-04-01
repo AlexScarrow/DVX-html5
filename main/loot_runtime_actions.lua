@@ -129,6 +129,36 @@ function M.extend(runtime, ctx)
         COMMS_GIVE_AMMO = { anim = hash("coms_give_ammo"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
         COMMS_GIVE_MATERIAL = { anim = hash("coms_give_material"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
         COMMS_GIVE_COMMAND = { anim = hash("coms_give_command"), duration = 10.0, cooldown = 0.15, scale = 0.54, x_offset = 50, y_offset = 74, fade_out = 1.2 },
+        WARNING_HAZARD_GAS_HP = {
+            anim = hash("warning_gas_HP-da9eac34-b415-43b9-9748-de79679476a4"),
+            duration = 5.0,
+            cooldown = 0.01,
+            scale = 0.75,
+            x_offset = 0,
+            y_offset = 84,
+            rise_px = 180,
+            fade_full_duration = true
+        },
+        WARNING_HAZARD_FIRE_HP = {
+            anim = hash("warning_fire_HP-1238217d-2248-4b90-8db6-687fbeab5835"),
+            duration = 5.0,
+            cooldown = 0.01,
+            scale = 0.75,
+            x_offset = 0,
+            y_offset = 84,
+            rise_px = 180,
+            fade_full_duration = true
+        },
+        WARNING_HAZARD_O2_HP = {
+            anim = hash("warning_O2_HP-90e05440-d33d-411a-a4d1-a0cc135ec652"),
+            duration = 5.0,
+            cooldown = 0.01,
+            scale = 0.75,
+            x_offset = 0,
+            y_offset = 84,
+            rise_px = 180,
+            fade_full_duration = true
+        },
         BUFF_ARMOR_INFO = { anim = hash("armor_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
         BUFF_HAZMAT_INFO = { anim = hash("hazmat_suit_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
         BUFF_OXYGEN_INFO = { anim = hash("oxygen_mask_info"), duration = 2.5, cooldown = 0.35, scale = 0.54, x_offset = 150, y_offset = 174, ui_anchor = true },
@@ -2094,7 +2124,10 @@ function M.extend(runtime, ctx)
             unit_id = unit_id,
             event_type = event_type,
             ttl = def.duration or 1.0,
+            ttl_start = def.duration or 1.0,
             fade_out = math.max(0, tonumber(def.fade_out or 0) or 0),
+            fade_full_duration = def.fade_full_duration == true,
+            rise_px = math.max(0, tonumber(def.rise_px or 0) or 0),
             x_offset = def.x_offset or 0,
             y_offset = def.y_offset or 70,
             ui_anchor = def.ui_anchor == true
@@ -2115,10 +2148,15 @@ function M.extend(runtime, ctx)
                 if unit and unit.go_path and (unit.current_health or 0) > 0 then
                     entry.ttl = (entry.ttl or 0) - dt
                     if entry.ttl > 0 then
-                        local px, py = get_derple_feedback_world_pos(self, unit, entry.x_offset, entry.y_offset, entry.ui_anchor == true)
+                        local ttl_start = math.max(0.001, tonumber(entry.ttl_start or 1.0) or 1.0)
+                        local progress = 1 - math.max(0, math.min(1, entry.ttl / ttl_start))
+                        local rise = (entry.rise_px or 0) * progress
+                        local px, py = get_derple_feedback_world_pos(self, unit, entry.x_offset, (entry.y_offset or 0) + rise, entry.ui_anchor == true)
                         go.set_position(vmath.vector3(px, py, 0.84), entry.go_id)
                         local alpha = 1
-                        if (entry.fade_out or 0) > 0 then
+                        if entry.fade_full_duration == true then
+                            alpha = math.max(0, math.min(1, entry.ttl / ttl_start))
+                        elseif (entry.fade_out or 0) > 0 then
                             alpha = math.max(0, math.min(1, entry.ttl / entry.fade_out))
                         end
                         go.set(msg.url(nil, entry.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, alpha))

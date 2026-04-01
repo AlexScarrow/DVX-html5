@@ -476,6 +476,15 @@ images {
   image: "/assets/images/human_coms_panel.png"
 }
 images {
+  image: "/assets/images/warning_gas_HP-da9eac34-b415-43b9-9748-de79679476a4.png"
+}
+images {
+  image: "/assets/images/warning_fire_HP-1238217d-2248-4b90-8db6-687fbeab5835.png"
+}
+images {
+  image: "/assets/images/warning_O2_HP-90e05440-d33d-411a-a4d1-a0cc135ec652.png"
+}
+images {
   image: "/assets/images/coms_need_power.png"
 }
 images {

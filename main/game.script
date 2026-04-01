@@ -5977,6 +5977,17 @@ local function apply_start_of_turn_environment_damage(self)
             end
             if damage > 0 then
                 unit.current_health = math.max(0, (unit.current_health or 0) - damage)
+                local hazard_feedback_event_type = nil
+                if has_fire and not has_hazmat then
+                    hazard_feedback_event_type = "WARNING_HAZARD_FIRE_HP"
+                elseif has_gas and not has_hazmat then
+                    hazard_feedback_event_type = "WARNING_HAZARD_GAS_HP"
+                elseif has_outside and not has_oxygen_mask then
+                    hazard_feedback_event_type = "WARNING_HAZARD_O2_HP"
+                end
+                if hazard_feedback_event_type and LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
+                    LOOT_RUNTIME.emit_derple_feedback(self, unit.id, hazard_feedback_event_type)
+                end
                 local hazard_flash_tint = vmath.vector4(1.0, 0.78, 0.25, 1)
                 if has_gas and (not has_hazmat) and not (has_fire and (not has_hazmat)) then
                     hazard_flash_tint = vmath.vector4(0.58, 1.0, 0.66, 1)

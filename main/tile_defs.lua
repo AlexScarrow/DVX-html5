@@ -786,7 +786,13 @@ lab.cells[9].accessRight = false   -- blocks right boundary from 9
 lab.cells[9].accessDown = false     -- allows 9 <-> 6
 
 
-lab.cells[3].object1 = {
+lab.cells[4].object1 = {
+    name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+    offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate,
+    isSecureAlienProof = true
+}
+
+lab.cells[4].object2 = {
     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
 }

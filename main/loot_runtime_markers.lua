@@ -18,6 +18,12 @@ function M.extend(runtime, ctx)
     local DOOR_HP_MAX = 3
     local HAZARD_FX_Y_OFFSET = -35
     local HAZARD_FX_Z = 0.69
+    local DNA_BAR_SLOT_COUNT = 10
+    local DNA_BAR_SLOT_ANIM = hash("power_unit")
+    local DNA_BAR_SLOT_Z = 0.56
+    local DNA_BAR_WIDTH_RATIO = 0.72
+    local DNA_BAR_Y_OFFSET_RATIO = -0.32
+    local DNA_BAR_SLOT_SCALE = 0.42
 
     local function boardgame_shadows_enabled(self)
         return self and self.aesthetic_mode == "boardgame"
@@ -54,6 +60,108 @@ function M.extend(runtime, ctx)
         local factory_path = unpowered and "/gas_black_fx_factory#gas_black_fx_factory" or "/gas_fx_factory#gas_fx_factory"
         local gas_id = factory.create(factory_path, vmath.vector3(x, fx_y, HAZARD_FX_Z))
         return gas_id, unpowered
+    end
+
+    local function clear_dna_mission_markers(self)
+        self.dna_lab_progress_markers = self.dna_lab_progress_markers or {}
+        self.dna_lab_progress_shadows = self.dna_lab_progress_shadows or {}
+        for _, marker_id in ipairs(self.dna_lab_progress_markers) do
+            if marker_id then
+                pcall(go.delete, marker_id)
+            end
+        end
+        for _, shadow_id in ipairs(self.dna_lab_progress_shadows) do
+            if shadow_id then
+                pcall(go.delete, shadow_id)
+            end
+        end
+        self.dna_lab_progress_markers = {}
+        self.dna_lab_progress_shadows = {}
+    end
+
+    local function get_lab_cell2_anchor(self)
+        local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+        if type(level) ~= "table" then
+            return nil, nil
+        end
+        for _, placement in ipairs(level) do
+            if placement and tostring(placement.tile or "") == "lab" then
+                local local_idx = 2
+                local local_x = (local_idx - 1) % 3
+                local local_y = math.floor((local_idx - 1) / 3)
+                local cell_x = (placement.x or 0) - 1 + local_x
+                local cell_y = (placement.y or 0) - 1 + local_y
+                local world_cell_id = ctx.coords_to_id and ctx.coords_to_id(cell_x, cell_y) or nil
+                local cell = world_cell_id and self.world_grid and self.world_grid[world_cell_id] or nil
+                if cell and cell.tileID ~= hash("empty") then
+                    return ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                end
+            end
+        end
+        return nil, nil
+    end
+
+    runtime.refresh_dna_mission_markers = function(self)
+        clear_dna_mission_markers(self)
+        local mission_type = ctx.get_current_mission_type and tostring(ctx.get_current_mission_type(self) or "") or ""
+        if mission_type ~= "dna_sample" then
+            self.dna_lab_progress_last_progress = nil
+            self.dna_lab_progress_last_complete = nil
+            self.dna_lab_progress_last_return_ready = nil
+            self.dna_lab_progress_last_mission = mission_type
+            return
+        end
+        local dna_status = (ctx.get_dna_mission_status and ctx.get_dna_mission_status(self)) or {}
+        local progress = math.max(0, math.min(DNA_BAR_SLOT_COUNT, tonumber(dna_status.progress or 0) or 0))
+        local anchor_x, anchor_y = get_lab_cell2_anchor(self)
+        if not anchor_x then
+            return
+        end
+        local total_width = ctx.CELL_WIDTH * DNA_BAR_WIDTH_RATIO
+        local spacing = total_width / (DNA_BAR_SLOT_COUNT - 1)
+        local start_x = anchor_x - (total_width * 0.5)
+        local slot_y = anchor_y + (ctx.CELL_HEIGHT * DNA_BAR_Y_OFFSET_RATIO)
+        self.dna_lab_progress_markers = self.dna_lab_progress_markers or {}
+        self.dna_lab_progress_shadows = self.dna_lab_progress_shadows or {}
+        for i = 1, DNA_BAR_SLOT_COUNT do
+            local slot_x = start_x + ((i - 1) * spacing)
+            local shadow_id = nil
+            if boardgame_shadows_enabled(self) then
+                shadow_id = spawn_world_shadow(slot_x + 4, slot_y - 6, DNA_BAR_SLOT_Z - 0.01, 0.42, 0.16, 0.26)
+            end
+            local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(slot_x, slot_y, DNA_BAR_SLOT_Z))
+            if marker_id then
+                msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = DNA_BAR_SLOT_ANIM })
+                go.set_scale(vmath.vector3(DNA_BAR_SLOT_SCALE, DNA_BAR_SLOT_SCALE, 1), marker_id)
+                local lit = i <= progress
+                local tint = lit and vmath.vector4(0.2, 1.0, 0.34, 0.95) or vmath.vector4(0.08, 0.2, 0.12, 0.42)
+                go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+                table.insert(self.dna_lab_progress_markers, marker_id)
+            end
+            if shadow_id then
+                table.insert(self.dna_lab_progress_shadows, shadow_id)
+            end
+        end
+        self.dna_lab_progress_last_progress = progress
+        self.dna_lab_progress_last_complete = dna_status.complete == true
+        self.dna_lab_progress_last_return_ready = dna_status.return_ready == true
+        self.dna_lab_progress_last_mission = mission_type
+        self.dna_lab_progress_last_shadow_mode = boardgame_shadows_enabled(self) and 1 or 0
+    end
+
+    runtime.update_dna_mission_markers = function(self)
+        local mission_type = ctx.get_current_mission_type and tostring(ctx.get_current_mission_type(self) or "") or ""
+        local dna_status = (ctx.get_dna_mission_status and ctx.get_dna_mission_status(self)) or {}
+        local progress = math.max(0, math.min(DNA_BAR_SLOT_COUNT, tonumber(dna_status.progress or 0) or 0))
+        local shadow_mode = boardgame_shadows_enabled(self) and 1 or 0
+        if mission_type ~= (self.dna_lab_progress_last_mission or "")
+            or progress ~= self.dna_lab_progress_last_progress
+            or (dna_status.complete == true) ~= (self.dna_lab_progress_last_complete == true)
+            or (dna_status.return_ready == true) ~= (self.dna_lab_progress_last_return_ready == true)
+            or shadow_mode ~= (self.dna_lab_progress_last_shadow_mode or -1)
+        then
+            runtime.refresh_dna_mission_markers(self)
+        end
     end
 
     runtime.clear_loot_marker = function(self, cell_id)

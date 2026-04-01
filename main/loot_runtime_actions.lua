@@ -795,6 +795,13 @@ function M.extend(runtime, ctx)
         return tostring(ctx.get_current_mission_type(self) or "") == "rescue"
     end
 
+    local function is_dna_mission(self)
+        if not (ctx and ctx.get_current_mission_type) then
+            return false
+        end
+        return tostring(ctx.get_current_mission_type(self) or "") == "dna_sample"
+    end
+
     local function get_rescue_victory_cell_ids(self)
         local out = {}
         if not (self and self.level_library and ctx and ctx.coords_to_id) then
@@ -2860,6 +2867,9 @@ function M.extend(runtime, ctx)
         state.nav_ready = false
         state.supplies_ready = false
         state.exit_tile_powered = false
+        state.dna_analysis_progress = 0
+        state.dna_analysis_complete = false
+        state.dna_return_ready = false
         if self.squad_units then
             for _, unit in pairs(self.squad_units) do
                 if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
@@ -2875,6 +2885,13 @@ function M.extend(runtime, ctx)
             end
         end
         if is_rescue_mission(self) then
+            return state
+        end
+        if is_dna_mission(self) then
+            local dna_status = (ctx and ctx.get_dna_mission_status and ctx.get_dna_mission_status(self)) or {}
+            state.dna_analysis_progress = tonumber(dna_status.progress or 0) or 0
+            state.dna_analysis_complete = dna_status.complete == true
+            state.dna_return_ready = dna_status.return_ready == true
             return state
         end
         if self.world_grid then
@@ -2932,6 +2949,19 @@ function M.extend(runtime, ctx)
                 exit_tile_powered = true
             }
         end
+        if is_dna_mission(self) then
+            return {
+                can_launch = (state.dna_analysis_complete == true) and (state.dna_return_ready == true),
+                seated_humans = 0,
+                dna_analysis_progress = tonumber(state.dna_analysis_progress or 0) or 0,
+                dna_analysis_complete = state.dna_analysis_complete == true,
+                dna_return_ready = state.dna_return_ready == true,
+                power_loaded = 0,
+                nav_ready = true,
+                supplies_ready = true,
+                exit_tile_powered = true
+            }
+        end
         return {
             can_launch = state.seated_humans >= 1
                 and state.power_loaded >= 9
@@ -2953,6 +2983,12 @@ function M.extend(runtime, ctx)
                 print(string.format(
                     "Launch blocked | rescued_civilians=%d (need >=1)",
                     tonumber(status.rescued_civilians or 0) or 0
+                ))
+            elseif is_dna_mission(self) then
+                print(string.format(
+                    "Launch blocked | dna=%d/10 return_ready=%s",
+                    tonumber(status.dna_analysis_progress or 0) or 0,
+                    status.dna_return_ready and "yes" or "no"
                 ))
             else
                 print(string.format(

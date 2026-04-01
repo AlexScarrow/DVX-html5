@@ -295,6 +295,10 @@ MISSION_TYPE_DNA_SAMPLE = "dna_sample"
 RESCUE_ENTRY_TILE_NAME = "rescue_entry"
 RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
 RESCUE_ENTRY_VICTORY_LOCAL_CELL = 4
+DNA_LAB_TILE_NAME = "lab"
+DNA_PROGRESS_TARGET = 10
+DNA_BRUTE_LOCAL_CELLS = { 5, 6 }
+DNA_BAR_LOCAL_CELL = 2
 do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
     MP_SYNC_TRACE_ENABLED = (sync_trace_cfg == "1" or sync_trace_cfg == "true" or sync_trace_cfg == "on")
@@ -972,6 +976,10 @@ function get_door_object_on_cell(cell)
     return nil
 end
 
+local function is_secure_door_object(door_obj)
+    return door_obj and door_obj.isSecureAlienProof == true
+end
+
 function is_object_dependency_met_for_door(world_grid, obj)
     if not obj then
         return false
@@ -1308,6 +1316,9 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
     if not owner_cell or not door_obj or not door_closed then
         return false
     end
+    if is_secure_door_object(door_obj) then
+        return false
+    end
     self.door_damage_cells_this_turn = self.door_damage_cells_this_turn or {}
     local damage_key = owner_cell.idNumber or 0
     if alien.go_id and is_true_brute then
@@ -1412,6 +1423,9 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
     local _, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
     if not door_obj or not door_closed then
         return true
+    end
+    if is_secure_door_object(door_obj) then
+        return false
     end
     return alien_type == ALIEN_TYPE_BRUTE
         or (alien_type == ALIEN_TYPE_BLIP and hidden_reveal_type == ALIEN_TYPE_BRUTE)
@@ -1775,6 +1789,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
             isFixed = (obj and obj.isFixed) == true,
             isWelded = (obj and obj.isWelded) == true,
             isOpen = (obj and obj.isOpen) == true,
+            isSecureAlienProof = (obj and obj.isSecureAlienProof) == true,
             dependsOn = (obj and obj.dependsOn) or 0,
             isDependentOn = dep_list,
             objectId = (obj and obj.objectId) or 0,
@@ -2375,6 +2390,7 @@ end
 
 local function get_edge_spawn_cell_ids(world_grid)
     local ids = {}
+    local fallback_edge_ids = {}
     for cell_id, cell in ipairs(world_grid) do
         if cell and cell.tileID ~= hash("empty") then
             local has_spawn = cell.blipSpawnEnabled == true
@@ -2388,7 +2404,17 @@ local function get_edge_spawn_cell_ids(world_grid)
             if has_spawn then
                 table.insert(ids, cell_id)
             end
+            if is_in_list(cell_id, LEFT_EDGE)
+                or is_in_list(cell_id, RIGHT_EDGE)
+                or is_in_list(cell_id, TOP_EDGE)
+                or is_in_list(cell_id, BOTTOM_EDGE)
+            then
+                table.insert(fallback_edge_ids, cell_id)
+            end
         end
+    end
+    if #ids == 0 and #fallback_edge_ids > 0 then
+        return fallback_edge_ids
     end
     return ids
 end
@@ -4154,7 +4180,15 @@ local function update_alien_movement(self, dt)
                     or (alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE)
                 then
                     local _, door_obj, door_closed = get_edge_door_context(self.world_grid, from_cell_before_step, target_cell_id)
-                    if door_obj and door_closed and try_brute_damage_edge_door(self, alien, from_cell_before_step, target_cell_id) then
+                    if door_obj and door_closed and is_secure_door_object(door_obj) then
+                        brute_door_blocked = true
+                        alien.counter_shadow_offset = nil
+                        alien.counter_move_total_dist = nil
+                        alien.is_moving = false
+                        alien.move_path = nil
+                        alien.move_path_index = 0
+                        alien.turn_ap_remaining = 0
+                    elseif door_obj and door_closed and try_brute_damage_edge_door(self, alien, from_cell_before_step, target_cell_id) then
                         brute_door_blocked = true
                         alien.counter_shadow_offset = nil
                         alien.counter_move_total_dist = nil
@@ -4531,6 +4565,7 @@ local function update_alien_movement(self, dt)
 end
 
 local any_civilian_is_moving
+local get_current_mission_type
 
 local function process_alien_turn(self)
     self.aliens = self.aliens or {}
@@ -4697,7 +4732,7 @@ local function spawn_initial_blips(self, count)
     end
 end
 
-local function get_current_mission_type(self)
+get_current_mission_type = function(self)
     local selected = self.selected_mission_type or (self.mp_state and self.mp_state.mission_type)
     if selected then
         return multiplayer_normalize_mission_type(selected)
@@ -4755,6 +4790,114 @@ local function is_cell_in_any_rescue_entry_tile(self, cell_id)
         end
     end
     return false
+end
+
+local function get_world_cell_ids_for_tile_local_cells(self, tile_name, local_cells)
+    local out = {}
+    local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if type(level) ~= "table" or type(local_cells) ~= "table" then
+        return out
+    end
+    for _, placement in ipairs(level) do
+        if placement and tostring(placement.tile or "") == tostring(tile_name or "") then
+            for _, local_idx in ipairs(local_cells) do
+                local idx = tonumber(local_idx or 0) or 0
+                if idx >= 1 and idx <= 9 then
+                    local local_x = (idx - 1) % 3
+                    local local_y = math.floor((idx - 1) / 3)
+                    local cell_x = (placement.x or 0) - 1 + local_x
+                    local cell_y = (placement.y or 0) - 1 + local_y
+                    local cell_id = coords_to_id(cell_x, cell_y)
+                    if cell_id and self.world_grid and self.world_grid[cell_id] and self.world_grid[cell_id].tileID ~= hash("empty") then
+                        out[#out + 1] = cell_id
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function build_cell_lookup(cell_ids)
+    local out = {}
+    for _, cell_id in ipairs(cell_ids or {}) do
+        out[tonumber(cell_id or 0) or 0] = true
+    end
+    return out
+end
+
+local function dna_is_active_mission(self)
+    return tostring(get_current_mission_type(self) or "") == MISSION_TYPE_DNA_SAMPLE
+end
+
+local function has_alive_brute_on_any_cell(self, lookup)
+    for _, alien in ipairs(self.aliens or {}) do
+        if alien
+            and alien.type == ALIEN_TYPE_BRUTE
+            and (alien.hp_current or 0) > 0
+            and lookup[tonumber(alien.cell_id or 0) or 0] == true
+        then
+            return true
+        end
+    end
+    return false
+end
+
+local function refresh_dna_marker_runtime(self)
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_dna_mission_markers then
+        LOOT_RUNTIME.refresh_dna_mission_markers(self)
+    end
+end
+
+local function tick_dna_progress_for_new_human_turn(self)
+    if not dna_is_active_mission(self) then
+        self.dna_analysis_progress = 0
+        self.dna_analysis_complete = false
+        refresh_dna_marker_runtime(self)
+        return
+    end
+    self.dna_analysis_progress = math.max(0, tonumber(self.dna_analysis_progress or 0) or 0)
+    if self.dna_analysis_complete == true then
+        self.dna_analysis_progress = DNA_PROGRESS_TARGET
+        refresh_dna_marker_runtime(self)
+        return
+    end
+    local brute_target_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DNA_BRUTE_LOCAL_CELLS)
+    local has_brute = has_alive_brute_on_any_cell(self, build_cell_lookup(brute_target_cells))
+    if has_brute then
+        self.dna_analysis_progress = math.min(DNA_PROGRESS_TARGET, self.dna_analysis_progress + 1)
+        if self.dna_analysis_progress >= DNA_PROGRESS_TARGET then
+            self.dna_analysis_complete = true
+            self.dna_analysis_progress = DNA_PROGRESS_TARGET
+        end
+    else
+        self.dna_analysis_progress = 0
+    end
+    refresh_dna_marker_runtime(self)
+end
+
+local function has_any_living_human_on_dna_return_cell(self)
+    local return_cells = get_rescue_entry_victory_cell_ids(self)
+    local lookup = build_cell_lookup(return_cells)
+    for _, unit in pairs(self.squad_units or {}) do
+        local unit_cell_id = tonumber(unit and unit.cell_id or 0) or 0
+        if unit
+            and (unit.current_health or 0) > 0
+            and unit.in_shuttle ~= true
+            and lookup[unit_cell_id] == true
+        then
+            return true
+        end
+    end
+    return false
+end
+
+local function get_dna_mission_status(self)
+    return {
+        progress = math.max(0, math.min(DNA_PROGRESS_TARGET, tonumber(self.dna_analysis_progress or 0) or 0)),
+        complete = self.dna_analysis_complete == true,
+        return_ready = has_any_living_human_on_dna_return_cell(self)
+    }
 end
 
 local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
@@ -8508,6 +8651,7 @@ function reset_and_load_level(self, level_index)
     safe_delete_array(self.wiregap_shadow_objects)
     safe_delete_array(self.wiregap_fx_objects)
     safe_delete_array(self.light_value_objects)
+    safe_delete_array(self.dna_lab_progress_markers)
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
             safe_delete(alien and alien.go_id)
@@ -8601,6 +8745,8 @@ function reset_and_load_level(self, level_index)
     self.drag_resource = { active = false }
     self.civilian_turn_waiting_for_alien = false
     self.exit_objective_state = nil
+    self.dna_analysis_progress = 0
+    self.dna_analysis_complete = false
     self.launch_fx_timer = 0
     self.game_won = false
     self.score_turn_counter = 0
@@ -8642,6 +8788,7 @@ function reset_and_load_level(self, level_index)
     score_log_snapshot(self, "level_reset")
     spawn_exit_test_stash(self)
     LOOT_RUNTIME.refresh_exit_objective_state(self)
+    refresh_dna_marker_runtime(self)
     update_human_visual_state(self)
     update_selected_unit_ui(self)
     if self.mp_state and self.mp_state.enabled then
@@ -11726,8 +11873,11 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     COMPONENT_UI = COMPONENT_UI,
     CELL_WIDTH = CELL_WIDTH,
     CELL_HEIGHT = CELL_HEIGHT,
+    coords_to_id = coords_to_id,
     coords_to_world_pos = coords_to_world_pos,
     screen_to_world = screen_to_world,
+    get_current_mission_type = get_current_mission_type,
+    get_dna_mission_status = get_dna_mission_status,
     get_loot_objects = function() return loot_objects end,
     get_machine_objects = function() return machine_objects end,
     get_turret_tripod_objects = function(self_ref)
@@ -11767,6 +11917,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     record_civilian_escorted = score_record_civilian_escorted,
     record_launch_success = score_record_launch_success,
     get_current_mission_type = get_current_mission_type,
+    get_dna_mission_status = get_dna_mission_status,
     RESCUE_ENTRY_VICTORY_LOCAL_CELL = RESCUE_ENTRY_VICTORY_LOCAL_CELL,
     mp_is_enabled = function(self_ref)
         return self_ref and self_ref.mp_state and self_ref.mp_state.enabled == true
@@ -11850,6 +12001,7 @@ local function next_turn_reset_human_ap(self)
     end
 
     tick_turret_arming_timers(self)
+    tick_dna_progress_for_new_human_turn(self)
     multiplayer_on_turn_advanced(self)
     if self.mp_state and self.mp_state.enabled then
         self.mp_state.debug_active_player_id = self.mp_state.local_player_id or self.mp_state.host_player_id
@@ -12853,6 +13005,8 @@ multiplayer_build_snapshot_state = function(self)
         workshop_states = multiplayer_clone_with_string_keys(self.workshop_states or {}),
         medbay_states = multiplayer_clone_with_string_keys(self.medbay_states or {}),
         exit_objective_state = multiplayer_clone_with_string_keys(self.exit_objective_state or {}),
+        dna_analysis_progress = tonumber(self.dna_analysis_progress or 0) or 0,
+        dna_analysis_complete = self.dna_analysis_complete == true,
         score_turn_counter = tonumber(self.score_turn_counter or 0) or 0,
         score_state = multiplayer_clone_with_string_keys(self.score_state or {})
     }
@@ -13053,6 +13207,10 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     self.exit_objective_state = multiplayer_restore_numeric_top_keys(
         multiplayer_clone_simple_table(snapshot.exit_objective_state or {}) or {}
     )
+    self.dna_analysis_progress = tonumber(snapshot.dna_analysis_progress or self.dna_analysis_progress or 0) or 0
+    self.dna_analysis_progress = math.max(0, math.min(DNA_PROGRESS_TARGET, self.dna_analysis_progress))
+    self.dna_analysis_complete = snapshot.dna_analysis_complete == true
+        or self.dna_analysis_progress >= DNA_PROGRESS_TARGET
     self.score_turn_counter = tonumber(snapshot.score_turn_counter or self.score_turn_counter or 0) or 0
     self.score_state = multiplayer_clone_simple_table(snapshot.score_state or self.score_state or {}) or {}
     ensure_score_state(self)
@@ -13095,6 +13253,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     if LOOT_RUNTIME.refresh_light_value_markers then LOOT_RUNTIME.refresh_light_value_markers(self) end
     if LOOT_RUNTIME.refresh_factory_underlay_visuals then LOOT_RUNTIME.refresh_factory_underlay_visuals(self) end
     if LOOT_RUNTIME.refresh_exit_objective_state then LOOT_RUNTIME.refresh_exit_objective_state(self) end
+    refresh_dna_marker_runtime(self)
     refresh_civilian_visuals(self)
     update_human_visual_state(self)
     update_score_hud(self, true)
@@ -13962,6 +14121,8 @@ function init(self)
     self.world_backdrop_parallax_x = nil
     self.world_backdrop_parallax_y = nil
     self.world_backdrop_anchor_camera_y = nil
+    self.dna_analysis_progress = 0
+    self.dna_analysis_complete = false
     self.backdrop_emissive_phase = 0
     self.backdrop_emissive_speed_timer = nil
     self.backdrop_emissive_speed_mul_target = nil
@@ -14436,6 +14597,9 @@ function update(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     if LOOT_RUNTIME.update_hazard_fx_visibility then
         LOOT_RUNTIME.update_hazard_fx_visibility(self)
+    end
+    if LOOT_RUNTIME.update_dna_mission_markers then
+        LOOT_RUNTIME.update_dna_mission_markers(self)
     end
     if LOOT_RUNTIME.update_factory_conveyor_tokens then
         LOOT_RUNTIME.update_factory_conveyor_tokens(self, dt)

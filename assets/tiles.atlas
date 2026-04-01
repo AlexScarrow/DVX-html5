@@ -467,6 +467,12 @@ images {
   image: "/assets/images/mp_unit_techie.png"
 }
 images {
+  image: "/assets/images/tile_exterior1_boardGame.png"
+}
+images {
+  image: "/assets/images/tile_exterior1_computerGame.png"
+}
+images {
   image: "/assets/images/human_coms_panel.png"
 }
 images {

@@ -113,6 +113,8 @@ function M.extend(runtime, ctx)
     local RESCUE_ENTRY_TILE_NAME = "rescue_entry"
     local RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
     local RESCUE_ENTRY_VICTORY_LOCAL_CELL = tonumber(ctx.RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
+    local DNA_SAMPLE_RETURN_LOCAL_CELL = tonumber(ctx.DNA_SAMPLE_RETURN_LOCAL_CELL or 5) or 5
+    local DNA_SAMPLE_ITEM_TYPE = tostring(ctx.DNA_SAMPLE_ITEM_TYPE or "dna_sample")
     local DERPLE_FEEDBACK_EVENT_DEFS = {
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
@@ -381,6 +383,8 @@ function M.extend(runtime, ctx)
             return hash("ammo_unit")
         elseif item_type == "power" then
             return hash("power_unit")
+        elseif item_type == DNA_SAMPLE_ITEM_TYPE then
+            return hash("dna_sample")
         elseif item_type == TURRET_PACKED_ITEM then
             return hash("gun_turret_dropped")
         elseif item_type == OBSTACLE_ITEM then
@@ -802,7 +806,7 @@ function M.extend(runtime, ctx)
         return tostring(ctx.get_current_mission_type(self) or "") == "dna_sample"
     end
 
-    local function get_rescue_victory_cell_ids(self)
+    local function get_rescue_victory_cell_ids(self, local_cell_override)
         local out = {}
         if not (self and self.level_library and ctx and ctx.coords_to_id) then
             return out
@@ -811,9 +815,9 @@ function M.extend(runtime, ctx)
         if type(level) ~= "table" then
             return out
         end
+        local local_idx = tonumber(local_cell_override or RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
         for _, placement in ipairs(level) do
             if placement and is_rescue_entry_tile_name(placement.tile) then
-                local local_idx = tonumber(RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
                 local local_x = (local_idx - 1) % 3
                 local local_y = math.floor((local_idx - 1) / 3)
                 local cell_x = (placement.x or 0) - 1 + local_x
@@ -825,6 +829,18 @@ function M.extend(runtime, ctx)
             end
         end
         return out
+    end
+
+    local function unit_has_backpack_item(unit, item_type)
+        if not unit or type(unit.backpack_items) ~= "table" then
+            return false
+        end
+        for _, item in ipairs(unit.backpack_items) do
+            if item == item_type then
+                return true
+            end
+        end
+        return false
     end
 
     local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
@@ -2870,6 +2886,7 @@ function M.extend(runtime, ctx)
         state.dna_analysis_progress = 0
         state.dna_analysis_complete = false
         state.dna_return_ready = false
+        state.dna_sample_returned = false
         if self.squad_units then
             for _, unit in pairs(self.squad_units) do
                 if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
@@ -2892,6 +2909,7 @@ function M.extend(runtime, ctx)
             state.dna_analysis_progress = tonumber(dna_status.progress or 0) or 0
             state.dna_analysis_complete = dna_status.complete == true
             state.dna_return_ready = dna_status.return_ready == true
+            state.dna_sample_returned = dna_status.sample_returned == true
             return state
         end
         if self.world_grid then
@@ -3103,6 +3121,81 @@ function M.extend(runtime, ctx)
             end
             if rescued_any and ctx.update_civilian_visual_state then
                 ctx.update_civilian_visual_state(self)
+            end
+            runtime.refresh_exit_objective_state(self)
+            return
+        end
+        if is_dna_mission(self) then
+            local victory_lookup = {}
+            for _, cell_id in ipairs(get_rescue_victory_cell_ids(self, DNA_SAMPLE_RETURN_LOCAL_CELL)) do
+                victory_lookup[cell_id] = true
+            end
+            if next(victory_lookup) == nil then
+                runtime.refresh_exit_objective_state(self)
+                return
+            end
+            local turned_in = false
+            local evacuated_any = false
+            for _, unit in pairs(self.squad_units) do
+                if unit
+                    and (unit.current_health or 0) > 0
+                    and unit.in_shuttle ~= true
+                    and unit.cell_id
+                    and victory_lookup[unit.cell_id]
+                    and unit_has_backpack_item(unit, DNA_SAMPLE_ITEM_TYPE)
+                then
+                    local removed_sample = false
+                    for i = #unit.backpack_items, 1, -1 do
+                        if unit.backpack_items[i] == DNA_SAMPLE_ITEM_TYPE then
+                            table.remove(unit.backpack_items, i)
+                            removed_sample = true
+                            break
+                        end
+                    end
+                    unit.backpack_used = #unit.backpack_items
+                    if removed_sample then
+                        local old_cell = unit.cell_id
+                        if self.cell_slot_assignments and self.cell_slot_assignments[old_cell] then
+                            self.cell_slot_assignments[old_cell][unit.id] = nil
+                        end
+                        unit.in_shuttle = true
+                        unit.is_selected = false
+                        unit.is_moving = false
+                        unit.move_path = nil
+                        unit.move_path_index = 0
+                        unit.cell_id = nil
+                        if unit.go_path then
+                            go.set_position(SHUTTLE_HIDE_POS, unit.go_path)
+                        end
+                        if unit.shadow_path then
+                            go.set_position(SHUTTLE_HIDE_POS, unit.shadow_path)
+                        end
+                        if self.controlled_unit_id == unit.id then
+                            self.controlled_unit_id = nil
+                        end
+                        turned_in = true
+                        evacuated_any = true
+                        print(string.format("%s delivered dna_sample and evacuated.", unit.display_name))
+                        break
+                    end
+                end
+            end
+            if turned_in then
+                self.dna_sample_returned = true
+            end
+            if evacuated_any and self.squad_units then
+                if not self.controlled_unit_id then
+                    for _, scan in pairs(self.squad_units) do
+                        if scan and (scan.current_health or 0) > 0 and scan.in_shuttle ~= true then
+                            self.controlled_unit_id = scan.id
+                            scan.is_selected = true
+                            break
+                        end
+                    end
+                end
+                if ctx.update_human_visual_state then
+                    ctx.update_human_visual_state(self)
+                end
             end
             runtime.refresh_exit_objective_state(self)
             return

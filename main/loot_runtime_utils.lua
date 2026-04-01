@@ -52,6 +52,8 @@ function M.create(ctx)
             return ctx.LOOT_UI.meds_color
         elseif item_type == "power" then
             return ctx.LOOT_UI.power_color
+        elseif item_type == "dna_sample" then
+            return vmath.vector4(1, 1, 1, 1)
         elseif item_type == "material" then
             return ctx.LOOT_UI.material_color
         elseif item_type == "corpse" then
@@ -94,6 +96,8 @@ function M.create(ctx)
             return hash("ammo_unit")
         elseif item_type == "power" then
             return hash("power_unit")
+        elseif item_type == "dna_sample" then
+            return hash("dna_sample")
         elseif item_type == ctx.COMPONENT_UI.component_wiring_straight then
             return hash("wiregap_straight_on")
         elseif item_type == ctx.COMPONENT_UI.component_wiring_corner then

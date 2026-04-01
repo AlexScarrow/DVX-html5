@@ -299,6 +299,8 @@ DNA_LAB_TILE_NAME = "lab"
 DNA_PROGRESS_TARGET = 10
 DNA_BRUTE_LOCAL_CELLS = { 5, 6 }
 DNA_BAR_LOCAL_CELL = 2
+DNA_SAMPLE_ITEM_TYPE = "dna_sample"
+DNA_RESCUE_RETURN_LOCAL_CELL = 5
 do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
     MP_SYNC_TRACE_ENABLED = (sync_trace_cfg == "1" or sync_trace_cfg == "true" or sync_trace_cfg == "on")
@@ -4849,16 +4851,59 @@ local function refresh_dna_marker_runtime(self)
     end
 end
 
+local function has_world_item_type(self, item_type)
+    for _, item in ipairs(self.world_item_instances or {}) do
+        if item and item.item_type == item_type then
+            return true
+        end
+    end
+    return false
+end
+
+local function try_spawn_dna_sample_item(self)
+    if not dna_is_active_mission(self) then
+        return false
+    end
+    if self.dna_sample_spawned == true or self.dna_sample_returned == true then
+        return false
+    end
+    if has_world_item_type(self, DNA_SAMPLE_ITEM_TYPE) then
+        self.dna_sample_spawned = true
+        return false
+    end
+    local sample_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, { DNA_BAR_LOCAL_CELL })
+    local sample_cell_id = tonumber(sample_cells and sample_cells[1] or 0) or 0
+    if sample_cell_id <= 0 then
+        return false
+    end
+    if not (LOOT_RUNTIME and LOOT_RUNTIME.create_world_item_instance and LOOT_RUNTIME.refresh_world_item_visuals) then
+        return false
+    end
+    LOOT_RUNTIME.create_world_item_instance(self, DNA_SAMPLE_ITEM_TYPE, sample_cell_id, nil, {
+        dna_sample = true,
+        slot_order = 1
+    })
+    self.dna_sample_spawned = true
+    LOOT_RUNTIME.refresh_world_item_visuals(self)
+    print(string.format("DNA SAMPLE | spawned at cell %d", sample_cell_id))
+    return true
+end
+
 local function tick_dna_progress_for_new_human_turn(self)
     if not dna_is_active_mission(self) then
         self.dna_analysis_progress = 0
         self.dna_analysis_complete = false
+        self.dna_sample_spawned = false
+        self.dna_sample_returned = false
         refresh_dna_marker_runtime(self)
         return
     end
     self.dna_analysis_progress = math.max(0, tonumber(self.dna_analysis_progress or 0) or 0)
     if self.dna_analysis_complete == true then
         self.dna_analysis_progress = DNA_PROGRESS_TARGET
+        if self.dna_sample_spawned ~= true and self.dna_sample_returned ~= true then
+            try_spawn_dna_sample_item(self)
+        end
         refresh_dna_marker_runtime(self)
         return
     end
@@ -4869,6 +4914,7 @@ local function tick_dna_progress_for_new_human_turn(self)
         if self.dna_analysis_progress >= DNA_PROGRESS_TARGET then
             self.dna_analysis_complete = true
             self.dna_analysis_progress = DNA_PROGRESS_TARGET
+            try_spawn_dna_sample_item(self)
         end
     else
         self.dna_analysis_progress = 0
@@ -4876,27 +4922,13 @@ local function tick_dna_progress_for_new_human_turn(self)
     refresh_dna_marker_runtime(self)
 end
 
-local function has_any_living_human_on_dna_return_cell(self)
-    local return_cells = get_rescue_entry_victory_cell_ids(self)
-    local lookup = build_cell_lookup(return_cells)
-    for _, unit in pairs(self.squad_units or {}) do
-        local unit_cell_id = tonumber(unit and unit.cell_id or 0) or 0
-        if unit
-            and (unit.current_health or 0) > 0
-            and unit.in_shuttle ~= true
-            and lookup[unit_cell_id] == true
-        then
-            return true
-        end
-    end
-    return false
-end
-
 local function get_dna_mission_status(self)
     return {
         progress = math.max(0, math.min(DNA_PROGRESS_TARGET, tonumber(self.dna_analysis_progress or 0) or 0)),
         complete = self.dna_analysis_complete == true,
-        return_ready = has_any_living_human_on_dna_return_cell(self)
+        return_ready = self.dna_sample_returned == true,
+        sample_spawned = self.dna_sample_spawned == true,
+        sample_returned = self.dna_sample_returned == true
     }
 end
 
@@ -8747,6 +8779,8 @@ function reset_and_load_level(self, level_index)
     self.exit_objective_state = nil
     self.dna_analysis_progress = 0
     self.dna_analysis_complete = false
+    self.dna_sample_spawned = false
+    self.dna_sample_returned = false
     self.launch_fx_timer = 0
     self.game_won = false
     self.score_turn_counter = 0
@@ -11919,6 +11953,8 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     get_current_mission_type = get_current_mission_type,
     get_dna_mission_status = get_dna_mission_status,
     RESCUE_ENTRY_VICTORY_LOCAL_CELL = RESCUE_ENTRY_VICTORY_LOCAL_CELL,
+    DNA_SAMPLE_RETURN_LOCAL_CELL = DNA_RESCUE_RETURN_LOCAL_CELL,
+    DNA_SAMPLE_ITEM_TYPE = DNA_SAMPLE_ITEM_TYPE,
     mp_is_enabled = function(self_ref)
         return self_ref and self_ref.mp_state and self_ref.mp_state.enabled == true
     end,
@@ -13007,6 +13043,8 @@ multiplayer_build_snapshot_state = function(self)
         exit_objective_state = multiplayer_clone_with_string_keys(self.exit_objective_state or {}),
         dna_analysis_progress = tonumber(self.dna_analysis_progress or 0) or 0,
         dna_analysis_complete = self.dna_analysis_complete == true,
+        dna_sample_spawned = self.dna_sample_spawned == true,
+        dna_sample_returned = self.dna_sample_returned == true,
         score_turn_counter = tonumber(self.score_turn_counter or 0) or 0,
         score_state = multiplayer_clone_with_string_keys(self.score_state or {})
     }
@@ -13198,6 +13236,9 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
 
     self.world_item_instances = multiplayer_clone_simple_table(snapshot.world_item_instances or {}) or {}
     self.next_world_item_id = tonumber(snapshot.next_world_item_id or 0) or 0
+    if self.dna_sample_spawned ~= true then
+        self.dna_sample_spawned = has_world_item_type(self, DNA_SAMPLE_ITEM_TYPE)
+    end
     self.workshop_states = multiplayer_restore_numeric_top_keys(
         multiplayer_clone_simple_table(snapshot.workshop_states or {}) or {}
     )
@@ -13211,6 +13252,8 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     self.dna_analysis_progress = math.max(0, math.min(DNA_PROGRESS_TARGET, self.dna_analysis_progress))
     self.dna_analysis_complete = snapshot.dna_analysis_complete == true
         or self.dna_analysis_progress >= DNA_PROGRESS_TARGET
+    self.dna_sample_spawned = snapshot.dna_sample_spawned == true
+    self.dna_sample_returned = snapshot.dna_sample_returned == true
     self.score_turn_counter = tonumber(snapshot.score_turn_counter or self.score_turn_counter or 0) or 0
     self.score_state = multiplayer_clone_simple_table(snapshot.score_state or self.score_state or {}) or {}
     ensure_score_state(self)
@@ -14123,6 +14166,8 @@ function init(self)
     self.world_backdrop_anchor_camera_y = nil
     self.dna_analysis_progress = 0
     self.dna_analysis_complete = false
+    self.dna_sample_spawned = false
+    self.dna_sample_returned = false
     self.backdrop_emissive_phase = 0
     self.backdrop_emissive_speed_timer = nil
     self.backdrop_emissive_speed_mul_target = nil

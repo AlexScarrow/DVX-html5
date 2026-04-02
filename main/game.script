@@ -79,6 +79,8 @@ HUMAN_MAX_ACTION_POINTS = 5
 SPEED_STIM_REFRESH_AP = 6
 NIGHTVISION_UNPOWERED_TINT = vmath.vector4(0.16, 0.36, 0.18, 1)
 NIGHTVISION_POWER_NODE_TINT = vmath.vector4(0.45, 1.0, 0.55, 1)
+NIGHTVISION_REVEAL_DELAY_S = 0.0
+NIGHTVISION_REVEAL_FADE_S = 2.0
 CIVILIAN_MAX_ACTION_POINTS = 3
 CIVILIAN_MAX_HEALTH = 10
 CIVILIAN_OBJECT_NAME = hash("civilian_spawn")
@@ -6232,22 +6234,57 @@ local function get_human_armor_hit_reduction(unit)
     return 0
 end
 
-local function get_nightvision_reveal_context(self)
+local function get_nightvision_reveal_context(self, dt_step)
     local selected_unit = nil
     if self and self.squad_units and self.controlled_unit_id then
         selected_unit = self.squad_units[self.controlled_unit_id]
     end
-    if not selected_unit or (selected_unit.current_health or 0) <= 0 or not selected_unit.cell_id then
-        return false, nil
+    local target_tile_id = 0
+    local target_unit_id = nil
+    local can_reveal = false
+    if selected_unit
+        and (selected_unit.current_health or 0) > 0
+        and selected_unit.cell_id
+        and unit_has_equipped_buff_kind(selected_unit, "nightvision_goggles")
+    then
+        local cell = self.world_grid and self.world_grid[selected_unit.cell_id] or nil
+        if cell and cell.isPowered ~= true then
+            target_tile_id = tonumber(cell.tileInstanceId or 0) or 0
+            if target_tile_id > 0 then
+                target_unit_id = tostring(selected_unit.id or "")
+                can_reveal = true
+            end
+        end
     end
-    if not unit_has_equipped_buff_kind(selected_unit, "nightvision_goggles") then
-        return false, nil
+
+    if self.nightvision_reveal_unit_id ~= target_unit_id
+        or (tonumber(self.nightvision_reveal_tile_id or 0) or 0) ~= target_tile_id
+    then
+        self.nightvision_reveal_unit_id = target_unit_id
+        self.nightvision_reveal_tile_id = target_tile_id
+        self.nightvision_reveal_hold_timer = 0
+        self.nightvision_reveal_alpha = 0
     end
-    local cell = self.world_grid and self.world_grid[selected_unit.cell_id] or nil
-    if not cell or cell.isPowered == true then
-        return false, nil
+
+    local alpha = tonumber(self.nightvision_reveal_alpha or 0) or 0
+    if can_reveal and dt_step and dt_step > 0 then
+        local hold = tonumber(self.nightvision_reveal_hold_timer or 0) or 0
+        if hold < NIGHTVISION_REVEAL_DELAY_S then
+            hold = math.min(NIGHTVISION_REVEAL_DELAY_S, hold + dt_step)
+            self.nightvision_reveal_hold_timer = hold
+            alpha = 0
+        else
+            local fade_s = math.max(0.001, NIGHTVISION_REVEAL_FADE_S)
+            alpha = math.min(1, alpha + (dt_step / fade_s))
+        end
+    elseif not can_reveal then
+        self.nightvision_reveal_hold_timer = 0
+        alpha = 0
     end
-    return true, tonumber(cell.tileInstanceId or 0) or 0
+    self.nightvision_reveal_alpha = alpha
+    local hold_now = tonumber(self.nightvision_reveal_hold_timer or 0) or 0
+    local reveal_active = can_reveal and hold_now >= NIGHTVISION_REVEAL_DELAY_S
+    return reveal_active, target_tile_id, alpha
 end
 
 get_cell_hazard_flags = function(cell)
@@ -9009,6 +9046,10 @@ function reset_and_load_level(self, level_index)
     self.purge_time_expired = false
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
+    self.nightvision_reveal_unit_id = nil
+    self.nightvision_reveal_tile_id = 0
+    self.nightvision_reveal_hold_timer = 0
+    self.nightvision_reveal_alpha = 0
     self.launch_fx_timer = 0
     self.game_won = false
     self.score_turn_counter = 0
@@ -9364,7 +9405,7 @@ apply_computer_emissive_accents = function(self, dt)
         end
     end
     local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
-    local nightvision_reveal_enabled, nightvision_tile_instance_id = get_nightvision_reveal_context(self)
+    local nightvision_reveal_enabled, nightvision_tile_instance_id, nightvision_reveal_alpha = get_nightvision_reveal_context(self)
     if selected_level and next(human_tile_instances) ~= nil then
         for human_tile_id, _ in pairs(human_tile_instances) do
             local a = selected_level[human_tile_id]
@@ -9395,7 +9436,13 @@ apply_computer_emissive_accents = function(self, dt)
     local function get_instance_tint(instance_key, powered, apply_off_human_proximity_rule)
         local n = tonumber(instance_key) or 0
         if (not powered) and nightvision_reveal_enabled and n == nightvision_tile_instance_id then
-            return NIGHTVISION_UNPOWERED_TINT
+            local a = math.max(0, math.min(1, tonumber(nightvision_reveal_alpha or 0) or 0))
+            return vmath.vector4(
+                NIGHTVISION_UNPOWERED_TINT.x * a,
+                NIGHTVISION_UNPOWERED_TINT.y * a,
+                NIGHTVISION_UNPOWERED_TINT.z * a,
+                a
+            )
         end
         if apply_off_human_proximity_rule and not powered then
             self.tile_off_proximity_mul_state = self.tile_off_proximity_mul_state or {}
@@ -9476,7 +9523,13 @@ apply_computer_emissive_accents = function(self, dt)
             local tint = vmath.vector4(0, 0, 0, 0)
             if should_show then
                 if visible_in_unpowered and not powered then
-                        tint = NIGHTVISION_POWER_NODE_TINT
+                        local a = math.max(0, math.min(1, tonumber(nightvision_reveal_alpha or 0) or 0))
+                        tint = vmath.vector4(
+                            NIGHTVISION_POWER_NODE_TINT.x * a,
+                            NIGHTVISION_POWER_NODE_TINT.y * a,
+                            NIGHTVISION_POWER_NODE_TINT.z * a,
+                            a
+                        )
                 else
                     tint = get_instance_tint(cell_id, powered)
                 end
@@ -9485,6 +9538,9 @@ apply_computer_emissive_accents = function(self, dt)
             local shadow_id = self.power_node_shadow_objects and self.power_node_shadow_objects[cell_id] or nil
             if shadow_id then
                 local shadow_alpha = should_show and 0.33 or 0
+                if visible_in_unpowered and not powered then
+                    shadow_alpha = shadow_alpha * (math.max(0, math.min(1, tonumber(nightvision_reveal_alpha or 0) or 0)))
+                end
                 pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, shadow_alpha))
             end
         end
@@ -14437,6 +14493,10 @@ function init(self)
     self.purge_time_expired = false
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
+    self.nightvision_reveal_unit_id = nil
+    self.nightvision_reveal_tile_id = 0
+    self.nightvision_reveal_hold_timer = 0
+    self.nightvision_reveal_alpha = 0
     self.backdrop_emissive_phase = 0
     self.backdrop_emissive_speed_timer = nil
     self.backdrop_emissive_speed_mul_target = nil
@@ -14600,7 +14660,7 @@ function update(self, dt)
         enforce_fixed_window_size(self, dt, false)
     end
     update_smooth_zoom(self, dt)
-    local nightvision_reveal_enabled, nightvision_tile_instance_id = get_nightvision_reveal_context(self)
+    local nightvision_reveal_enabled, nightvision_tile_instance_id = get_nightvision_reveal_context(self, dt)
     if self.world_grid and self.tile_light_layers then
         self.tile_light_display_power_state = self.tile_light_display_power_state or {}
         for tile_instance_id, light_go in pairs(self.tile_light_layers) do
@@ -14635,6 +14695,8 @@ function update(self, dt)
                             -- Nightvision reveal should show ON art instantly, not OFF flicker.
                             self.tile_light_flicker_state[tile_instance_id] = nil
                             msg.post(msg.url(nil, light_go, "sprite"), "play_animation", { id = light_anim_on })
+                            -- Prevent one-frame pop: swap ON art at zero tint, then let NV tint fade drive visibility.
+                            go.set(msg.url(nil, light_go, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
                         else
                             -- Fluorescent-style startup flicker: OFF/ON pulses before stabilizing ON.
                             self.tile_light_flicker_state[tile_instance_id] = {

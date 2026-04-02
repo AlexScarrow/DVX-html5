@@ -114,7 +114,9 @@ function M.extend(runtime, ctx)
     local RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
     local RESCUE_ENTRY_VICTORY_LOCAL_CELL = tonumber(ctx.RESCUE_ENTRY_VICTORY_LOCAL_CELL or 4) or 4
     local DNA_SAMPLE_RETURN_LOCAL_CELL = tonumber(ctx.DNA_SAMPLE_RETURN_LOCAL_CELL or 5) or 5
+    local PURGE_RESCUE_RETURN_LOCAL_CELL = tonumber(ctx.PURGE_RESCUE_RETURN_LOCAL_CELL or 5) or 5
     local DNA_SAMPLE_ITEM_TYPE = tostring(ctx.DNA_SAMPLE_ITEM_TYPE or "dna_sample")
+    local PURGE_BOMB_ITEM_TYPE = tostring(ctx.PURGE_BOMB_ITEM_TYPE or "bomb")
     local DERPLE_FEEDBACK_EVENT_DEFS = {
         RECEIVE_ITEM = { anim = hash("derples_comms_itemRecieved"), duration = 0.95, cooldown = 0.55, scale = 0.54, x_offset = 50, y_offset = 74 },
         LOW_HP = { anim = hash("derples_comms_lowHealth"), duration = 1.15, cooldown = 3.0, scale = 0.54, x_offset = 50, y_offset = 74 },
@@ -385,6 +387,8 @@ function M.extend(runtime, ctx)
             return hash("power_unit")
         elseif item_type == DNA_SAMPLE_ITEM_TYPE then
             return hash("dna_sample")
+        elseif item_type == PURGE_BOMB_ITEM_TYPE then
+            return hash("bomb")
         elseif item_type == TURRET_PACKED_ITEM then
             return hash("gun_turret_dropped")
         elseif item_type == OBSTACLE_ITEM then
@@ -415,6 +419,9 @@ function M.extend(runtime, ctx)
         local base_scale = 0.85
         if item_type == DNA_SAMPLE_ITEM_TYPE then
             return base_scale * 0.55
+        end
+        if item_type == PURGE_BOMB_ITEM_TYPE then
+            return 1.0
         end
         local buff_def = runtime and runtime.get_buff_def and runtime.get_buff_def(item_type) or nil
         if buff_def then
@@ -809,6 +816,13 @@ function M.extend(runtime, ctx)
         return tostring(ctx.get_current_mission_type(self) or "") == "dna_sample"
     end
 
+    local function is_purge_mission(self)
+        if not (ctx and ctx.get_current_mission_type) then
+            return false
+        end
+        return tostring(ctx.get_current_mission_type(self) or "") == "purge"
+    end
+
     local function get_rescue_victory_cell_ids(self, local_cell_override)
         local out = {}
         if not (self and self.level_library and ctx and ctx.coords_to_id) then
@@ -844,6 +858,28 @@ function M.extend(runtime, ctx)
             end
         end
         return false
+    end
+
+    local function count_alive_humans_on_rescue_local_cell(self, local_cell_idx)
+        local lookup = {}
+        for _, cell_id in ipairs(get_rescue_victory_cell_ids(self, local_cell_idx)) do
+            lookup[cell_id] = true
+        end
+        if next(lookup) == nil then
+            return 0
+        end
+        local count = 0
+        for _, unit in pairs(self.squad_units or {}) do
+            if unit
+                and (unit.current_health or 0) > 0
+                and unit.in_shuttle ~= true
+                and unit.cell_id
+                and lookup[unit.cell_id]
+            then
+                count = count + 1
+            end
+        end
+        return count
     end
 
     local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
@@ -2893,6 +2929,12 @@ function M.extend(runtime, ctx)
         state.dna_analysis_complete = false
         state.dna_return_ready = false
         state.dna_sample_returned = false
+        state.purge_bomb_planted = false
+        state.purge_timer_started = false
+        state.purge_launch_pressed = false
+        state.purge_extract_ready = false
+        state.purge_time_remaining_s = 0
+        state.purge_time_expired = false
         if self.squad_units then
             for _, unit in pairs(self.squad_units) do
                 if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
@@ -2916,6 +2958,16 @@ function M.extend(runtime, ctx)
             state.dna_analysis_complete = dna_status.complete == true
             state.dna_return_ready = dna_status.return_ready == true
             state.dna_sample_returned = dna_status.sample_returned == true
+            return state
+        end
+        if is_purge_mission(self) then
+            local purge_status = (ctx and ctx.get_purge_mission_status and ctx.get_purge_mission_status(self)) or {}
+            state.purge_bomb_planted = purge_status.bomb_planted == true
+            state.purge_timer_started = purge_status.timer_started == true
+            state.purge_launch_pressed = purge_status.launch_pressed == true
+            state.purge_extract_ready = purge_status.extract_ready == true
+            state.purge_time_remaining_s = tonumber(purge_status.remaining_s or 0) or 0
+            state.purge_time_expired = purge_status.expired == true
             return state
         end
         if self.world_grid then
@@ -2986,6 +3038,25 @@ function M.extend(runtime, ctx)
                 exit_tile_powered = true
             }
         end
+        if is_purge_mission(self) then
+            return {
+                can_launch = state.purge_bomb_planted == true
+                    and state.purge_timer_started == true
+                    and state.purge_extract_ready == true
+                    and state.purge_time_expired ~= true,
+                seated_humans = 0,
+                purge_bomb_planted = state.purge_bomb_planted == true,
+                purge_timer_started = state.purge_timer_started == true,
+                purge_launch_pressed = state.purge_launch_pressed == true,
+                purge_extract_ready = state.purge_extract_ready == true,
+                purge_time_remaining_s = tonumber(state.purge_time_remaining_s or 0) or 0,
+                purge_time_expired = state.purge_time_expired == true,
+                power_loaded = 0,
+                nav_ready = true,
+                supplies_ready = true,
+                exit_tile_powered = true
+            }
+        end
         return {
             can_launch = state.seated_humans >= 1
                 and state.power_loaded >= 9
@@ -3014,6 +3085,14 @@ function M.extend(runtime, ctx)
                     tonumber(status.dna_analysis_progress or 0) or 0,
                     status.dna_return_ready and "yes" or "no"
                 ))
+            elseif is_purge_mission(self) then
+                print(string.format(
+                    "Launch blocked | bomb_planted=%s timer_started=%s extract_ready=%s expired=%s",
+                    status.purge_bomb_planted and "yes" or "no",
+                    status.purge_timer_started and "yes" or "no",
+                    status.purge_extract_ready and "yes" or "no",
+                    status.purge_time_expired and "yes" or "no"
+                ))
             else
                 print(string.format(
                     "Launch blocked | seated=%d (need >=1) power=%d/9 nav=%s supplies=%s",
@@ -3027,6 +3106,19 @@ function M.extend(runtime, ctx)
                 end
             end
             return false
+        end
+        if is_purge_mission(self) then
+            if ctx and ctx.mark_purge_launch_pressed then
+                ctx.mark_purge_launch_pressed(self)
+            end
+            self.purge_result_locked = true
+            self.game_won = true
+            self.launch_fx_timer = 1.2
+            local escaped = count_alive_humans_on_rescue_local_cell(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
+            record_launch_success(self, escaped)
+            runtime.refresh_exit_objective_state(self)
+            print(string.format("PURGE | launch confirmed before timeout. escaped=%d", escaped))
+            return true
         end
         self.game_won = true
         self.launch_fx_timer = 1.2

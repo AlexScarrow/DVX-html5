@@ -532,6 +532,9 @@ images {
 images {
   image: "/assets/images/dna_research_bar_pip.png"
 }
+images {
+  image: "/assets/images/bomb.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

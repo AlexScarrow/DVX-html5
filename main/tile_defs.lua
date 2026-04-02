@@ -921,7 +921,11 @@ library["lab"] = lab
         offsetX = -56, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 170, hitH = 118, requiredComponent = nil
     }
 
-   
+    workshop.cells[7].object2 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+        offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "wiring_straight","fuse","wiring_straight", COMPONENT_UI.component_fuse }
+    }
 
     library["workshop"] = workshop
 

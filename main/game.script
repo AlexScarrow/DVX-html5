@@ -4895,7 +4895,8 @@ local function try_spawn_dna_sample_item(self)
     end
     LOOT_RUNTIME.create_world_item_instance(self, DNA_SAMPLE_ITEM_TYPE, sample_cell_id, nil, {
         dna_sample = true,
-        slot_order = 1
+        slot_order = 1,
+        impact_ring_on_spawn = true
     })
     self.dna_sample_spawned = true
     LOOT_RUNTIME.refresh_world_item_visuals(self)
@@ -14973,6 +14974,9 @@ function update(self, dt)
         process_alien_turn(self)
     end
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
+    if LOOT_RUNTIME.update_impact_rings then
+        LOOT_RUNTIME.update_impact_rings(self, dt)
+    end
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     if LOOT_RUNTIME.update_hazard_fx_visibility then

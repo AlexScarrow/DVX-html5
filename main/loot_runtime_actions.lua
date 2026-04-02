@@ -938,6 +938,79 @@ function M.extend(runtime, ctx)
         self.derple_feedback_by_unit_id = self.derple_feedback_by_unit_id or {}
         self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
         self.derple_feedback_clock = self.derple_feedback_clock or 0
+        self.impact_ring_entries = self.impact_ring_entries or {}
+    end
+
+    local function spawn_impact_ring(self, world_x, world_y, tint, duration_s)
+        runtime.ensure_item_runtime_state(self)
+        local ring_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(world_x, world_y, 0.9))
+        if not ring_id then
+            return nil
+        end
+        msg.post(msg.url(nil, ring_id, "sprite"), "play_animation", { id = hash("impactRing") })
+        go.set_scale(vmath.vector3(0.1, 0.1, 1), ring_id)
+        local c = tint or vmath.vector4(0.2, 1.0, 0.25, 1)
+        go.set(msg.url(nil, ring_id, "sprite"), "tint", vmath.vector4(c.x, c.y, c.z, 1))
+        table.insert(self.impact_ring_entries, {
+            go_id = ring_id,
+            tint = c,
+            t = 0,
+            duration = math.max(0.08, tonumber(duration_s or 0.7) or 0.7)
+        })
+        return ring_id
+    end
+
+    local function spawn_impact_ring_for_object(self, cell, obj, tint)
+        if not cell or not obj then
+            return
+        end
+        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+        spawn_impact_ring(self, cx + (obj.offsetX or 0), cy + (obj.offsetY or 0), tint, 0.7)
+    end
+
+    runtime.update_impact_rings = function(self, dt)
+        runtime.ensure_item_runtime_state(self)
+        for i = #self.impact_ring_entries, 1, -1 do
+            local entry = self.impact_ring_entries[i]
+            if not entry or not entry.go_id then
+                table.remove(self.impact_ring_entries, i)
+            else
+                local d = math.max(0.08, tonumber(entry.duration or 0.7) or 0.7)
+                entry.t = math.min(1, (entry.t or 0) + ((dt or 0) / d))
+                local p = entry.t or 0
+                local scale = 0.1 + ((4.0 - 0.1) * p)
+                local alpha = 1 - p
+                local c = entry.tint or vmath.vector4(0.2, 1.0, 0.25, 1)
+                pcall(go.set_scale, vmath.vector3(scale, scale, 1), entry.go_id)
+                pcall(go.set, msg.url(nil, entry.go_id, "sprite"), "tint", vmath.vector4(c.x, c.y, c.z, alpha))
+                if p >= 1 then
+                    pcall(go.delete, entry.go_id)
+                    table.remove(self.impact_ring_entries, i)
+                end
+            end
+        end
+        local purge_status = (ctx and ctx.get_purge_mission_status and ctx.get_purge_mission_status(self)) or nil
+        if purge_status and purge_status.bomb_planted == true and self.world_grid then
+            for _, cell in ipairs(self.world_grid) do
+                if cell and cell.tileID ~= hash("empty") then
+                    local items = runtime.get_world_items_on_cell(self, cell.idNumber)
+                    local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    for i, item in ipairs(items) do
+                        if item and item.item_type == PURGE_BOMB_ITEM_TYPE then
+                            item.meta = item.meta or {}
+                            local timer_s = tonumber(item.meta.impact_ring_repeat_t or 0) or 0
+                            timer_s = timer_s - (dt or 0)
+                            if timer_s <= 0 then
+                                local ox, oy = get_world_item_render_offset(item, i, #items)
+                                spawn_impact_ring(self, cx + ox, cy + oy, vmath.vector4(1.0, 0.16, 0.16, 1), 0.7)
+                                timer_s = 5.0
+                            end
+                            item.meta.impact_ring_repeat_t = timer_s
+                        end
+                    end
+                end
+            end
+        end
     end
 
     local function get_factory_instances(self)
@@ -1765,6 +1838,8 @@ function M.extend(runtime, ctx)
                             end
                         end
                         print(string.format("%s revived in medbay.", tostring(corpse_unit.display_name or "Unit")))
+                        local rx, ry = ctx.coords_to_world_pos(revive_cell.xCell, revive_cell.yCell)
+                        spawn_impact_ring(self, rx + MEDBAY_REVIVE_OFFSET_X, ry + MEDBAY_REVIVE_OFFSET_Y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
                     else
                         print("Medbay revive failed: source corpse unavailable.")
                     end
@@ -2084,6 +2159,7 @@ function M.extend(runtime, ctx)
                                 local token_scale = get_world_item_draw_scale(selected.item_type)
                                 go.set_scale(vmath.vector3(token_scale, token_scale, 1), token_id)
                                 go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.98))
+                                spawn_impact_ring(self, c1x - 98, c1y - 36, vmath.vector4(0.2, 1.0, 0.25, 1), 0.7)
                                 table.insert(self.workshop_conveyor_tokens, {
                                     go_id = token_id,
                                     tile_instance_id = tile_instance_id,
@@ -2563,6 +2639,14 @@ function M.extend(runtime, ctx)
                         local marker_scale = get_world_item_draw_scale(item.item_type)
                         go.set_scale(vmath.vector3(marker_scale, marker_scale, 1), marker_id)
                         self.world_item_visuals[item.id] = marker_id
+                        if item.meta and item.meta.impact_ring_on_spawn == true then
+                            local ring_tint = vmath.vector4(0.2, 1.0, 0.25, 1)
+                            if item.item_type == DNA_SAMPLE_ITEM_TYPE then
+                                ring_tint = vmath.vector4(0.72, 0.35, 1.0, 1)
+                            end
+                            spawn_impact_ring(self, wx, wy, ring_tint, 0.7)
+                            item.meta.impact_ring_on_spawn = false
+                        end
                         print(string.format(
                             "WORLD ITEM VISUAL | id=%d type=%s cell=%d slot=%d/%d pos=(%.1f, %.1f)",
                             item.id or 0,
@@ -4191,6 +4275,7 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             nav_obj.hasNavData = false
             nav_obj.isFixed = false
+            spawn_impact_ring_for_object(self, cell, nav_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
             runtime.refresh_world_item_visuals(self)
@@ -4210,6 +4295,7 @@ function M.extend(runtime, ctx)
         unit.current_ap = (unit.current_ap or 0) - ap_cost
         nav_obj.hasNavData = true
         nav_obj.isFixed = true
+        spawn_impact_ring_for_object(self, cell, nav_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
         runtime.refresh_exit_objective_state(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
@@ -4265,6 +4351,7 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             loader_obj.hasFood = false
             loader_obj.isFixed = false
+            spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
             runtime.refresh_world_item_visuals(self)
@@ -4284,6 +4371,7 @@ function M.extend(runtime, ctx)
         unit.current_ap = (unit.current_ap or 0) - ap_cost
         loader_obj.hasFood = true
         loader_obj.isFixed = true
+        spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
         runtime.refresh_exit_objective_state(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
@@ -4950,6 +5038,7 @@ function M.extend(runtime, ctx)
                                 local power_node = runtime.get_power_node_object(target_power_cell)
                                 if power_node then
                                     power_node.isFixed = true
+                                    spawn_impact_ring_for_object(self, target_power_cell, power_node, vmath.vector4(1.0, 0.92, 0.2, 1))
                                 end
 
                                 local target_tile_instance = target_power_cell.tileInstanceId or 0
@@ -5285,6 +5374,15 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_factory_underlay_visuals(self)
                                     runtime.refresh_exit_objective_state(self)
                                     runtime.refresh_world_item_visuals(self)
+                                    if source_item == ctx.COMPONENT_UI.component_wiring_straight
+                                        or source_item == ctx.COMPONENT_UI.component_wiring_corner
+                                        or source_item == ctx.COMPONENT_UI.component_fuse
+                                    then
+                                        local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
+                                        if target_cell then
+                                            spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.2, 1.0, 1.0, 1))
+                                        end
+                                    end
                                     print(string.format(
                                         "%s installed 1 %s on object #%d. (AP -%d)",
                                         source_unit.display_name,

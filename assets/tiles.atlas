@@ -535,6 +535,9 @@ images {
 images {
   image: "/assets/images/bomb.png"
 }
+images {
+  image: "/assets/images/impactRing.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

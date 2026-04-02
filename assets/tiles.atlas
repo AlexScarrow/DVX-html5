@@ -529,6 +529,9 @@ images {
 images {
   image: "/assets/images/dna_sample.png"
 }
+images {
+  image: "/assets/images/dna_research_bar_pip.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

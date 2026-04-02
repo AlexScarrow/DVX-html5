@@ -792,7 +792,7 @@ lab.cells[4].object1 = {
     isSecureAlienProof = true
 }
 
-lab.cells[4].object2 = {
+lab.cells[3].object2 = {
     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
 }

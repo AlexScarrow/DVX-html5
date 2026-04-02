@@ -413,6 +413,9 @@ function M.extend(runtime, ctx)
 
     local function get_world_item_draw_scale(item_type)
         local base_scale = 0.85
+        if item_type == DNA_SAMPLE_ITEM_TYPE then
+            return base_scale * 0.55
+        end
         local buff_def = runtime and runtime.get_buff_def and runtime.get_buff_def(item_type) or nil
         if buff_def then
             local mul = tonumber(buff_def.world_draw_scale or 1.0) or 1.0
@@ -2453,6 +2456,9 @@ function M.extend(runtime, ctx)
 
     local function get_world_item_render_offset(item, slot_index, total_items)
         local meta = item and item.meta or nil
+        if item and item.item_type == DNA_SAMPLE_ITEM_TYPE then
+            return -123, 33
+        end
         if meta and meta.factory_stock == true then
             local slot_order = tonumber(meta.factory_slot_order or 0) or 0
             if slot_order >= 1 and slot_order <= #FACTORY_STACK_SLOT_OFFSETS then

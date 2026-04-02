@@ -19,10 +19,11 @@ function M.extend(runtime, ctx)
     local HAZARD_FX_Y_OFFSET = -35
     local HAZARD_FX_Z = 0.69
     local DNA_BAR_SLOT_COUNT = 10
-    local DNA_BAR_SLOT_ANIM = hash("power_unit")
-    local DNA_BAR_SLOT_Z = 0.56
-    local DNA_BAR_WIDTH_RATIO = 0.72
+    local DNA_BAR_SLOT_ANIM = hash("dna_research_bar_pip")
+    local DNA_BAR_SLOT_Z = 0.49
+    local DNA_BAR_WIDTH_RATIO = 0.36
     local DNA_BAR_Y_OFFSET_RATIO = -0.32
+    local DNA_BAR_Y_OFFSET_PX = 32
     local DNA_BAR_SLOT_SCALE = 0.42
 
     local function boardgame_shadows_enabled(self)
@@ -120,7 +121,7 @@ function M.extend(runtime, ctx)
         local total_width = ctx.CELL_WIDTH * DNA_BAR_WIDTH_RATIO
         local spacing = total_width / (DNA_BAR_SLOT_COUNT - 1)
         local start_x = anchor_x - (total_width * 0.5)
-        local slot_y = anchor_y + (ctx.CELL_HEIGHT * DNA_BAR_Y_OFFSET_RATIO)
+        local slot_y = anchor_y + (ctx.CELL_HEIGHT * DNA_BAR_Y_OFFSET_RATIO) + DNA_BAR_Y_OFFSET_PX
         self.dna_lab_progress_markers = self.dna_lab_progress_markers or {}
         self.dna_lab_progress_shadows = self.dna_lab_progress_shadows or {}
         for i = 1, DNA_BAR_SLOT_COUNT do
@@ -134,7 +135,7 @@ function M.extend(runtime, ctx)
                 msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = DNA_BAR_SLOT_ANIM })
                 go.set_scale(vmath.vector3(DNA_BAR_SLOT_SCALE, DNA_BAR_SLOT_SCALE, 1), marker_id)
                 local lit = i <= progress
-                local tint = lit and vmath.vector4(0.2, 1.0, 0.34, 0.95) or vmath.vector4(0.08, 0.2, 0.12, 0.42)
+                local tint = lit and vmath.vector4(1, 1, 1, 0.98) or vmath.vector4(1, 1, 1, 0.35)
                 go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
                 table.insert(self.dna_lab_progress_markers, marker_id)
             end

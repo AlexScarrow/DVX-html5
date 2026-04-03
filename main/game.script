@@ -9555,6 +9555,33 @@ apply_computer_emissive_accents = function(self, dt)
     end
 end
 
+get_tile_alpha_overlay_anim_id = function(tile_def, aesthetic_mode)
+    if not tile_def then
+        return hash("tile_generic_alpha_layer")
+    end
+    local mode = tostring(tile_def.alphaOverlayMode or "generic")
+    if mode ~= "specified" then
+        return hash("tile_generic_alpha_layer")
+    end
+    local overlay_name = nil
+    if aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+        overlay_name = tile_def.alphaOverlayBoardgame
+    elseif aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+        overlay_name = tile_def.alphaOverlayComputer
+    end
+    if not overlay_name or overlay_name == "" then
+        overlay_name = tile_def.alphaOverlay
+    end
+    if not overlay_name or overlay_name == "" then
+        return hash("tile_generic_alpha_layer")
+    end
+    local anim = tostring(overlay_name)
+    if string.sub(anim, 1, 5) ~= "tile_" then
+        anim = "tile_" .. anim
+    end
+    return hash(anim)
+end
+
 apply_aesthetic_mode = function(self)
     local profile = get_aesthetic_profile(self)
     local sheen_enabled = profile and profile.sheen_enabled == true
@@ -9714,8 +9741,8 @@ apply_aesthetic_mode = function(self)
         local selected_level = self.level_library[self.current_level_index]
         for placement_index, placement in ipairs(selected_level or {}) do
             local tile_id = self.tile_base_objects[placement_index]
+            local tile_def = self.tile_library and self.tile_library[placement.tile] or nil
             if tile_id then
-                local tile_def = self.tile_library and self.tile_library[placement.tile] or nil
                 local visual_tile_name = (tile_def and tile_def.visualTile) or placement.tile
                 if tile_def then
                     if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME and tile_def.visualTileBoardgame then
@@ -9725,6 +9752,14 @@ apply_aesthetic_mode = function(self)
                     end
                 end
                 msg.post(msg.url(nil, tile_id, "sprite"), "play_animation", { id = hash("tile_" .. visual_tile_name) })
+            end
+            local alpha_id = self.tile_alpha_layers and self.tile_alpha_layers[placement_index] or nil
+            if alpha_id then
+                msg.post(
+                    msg.url(nil, alpha_id, "sprite"),
+                    "play_animation",
+                    { id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode) }
+                )
             end
         end
     end
@@ -14292,7 +14327,11 @@ end
             -- Shared foreground alpha layer for depth, rendered above units/objects.
             local alpha_id = factory.create("/tile_factory#tile_factory", vmath.vector3(center_x, center_y, 0.7), nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
             if alpha_id then
-                msg.post(msg.url(nil, alpha_id, "sprite"), "play_animation", { id = hash("tile_generic_alpha_layer") })
+                msg.post(
+                    msg.url(nil, alpha_id, "sprite"),
+                    "play_animation",
+                    { id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode) }
+                )
                 go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
                 self.tile_alpha_layers[placement_index] = alpha_id
                 self.tile_alpha_power_state[placement_index] = false

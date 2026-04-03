@@ -538,6 +538,9 @@ images {
 images {
   image: "/assets/images/impactRing.png"
 }
+images {
+  image: "/assets/images/tile_workshop_overlay.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

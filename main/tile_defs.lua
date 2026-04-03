@@ -7,6 +7,8 @@ local function create_tile_prototype(tile_id)
     local tile = {
         tileID = hash(tile_id),
         visualTile = tile_id,
+        alphaOverlayMode = "generic",
+        alphaOverlay = "generic_alpha_layer",
         cells = {}
     }
 
@@ -856,6 +858,9 @@ library["lab"] = lab
     workshop.visualTile = "workshop_off"
     workshop.powerLightOffAnim = "tile_workshop_off"
     workshop.powerLightOnAnim = "tile_workshop_on"
+
+    workshop.alphaOverlayMode = "specified"
+    workshop.alphaOverlay = "tile_workshop_overlay"
 
     for i = 1, 9 do
         workshop.cells[i].lightValue = 2

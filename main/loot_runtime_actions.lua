@@ -1001,7 +1001,10 @@ function M.extend(runtime, ctx)
                             local timer_s = tonumber(item.meta.impact_ring_repeat_t or 0) or 0
                             timer_s = timer_s - (dt or 0)
                             if timer_s <= 0 then
-                                local ox, oy = get_world_item_render_offset(item, i, #items)
+                                local ox, oy = runtime.get_world_item_offset_for_slot(i, #items)
+                                if item.item_type == DNA_SAMPLE_ITEM_TYPE then
+                                    ox, oy = -123, 33
+                                end
                                 spawn_impact_ring(self, cx + ox, cy + oy, vmath.vector4(1.0, 0.16, 0.16, 1), 0.7)
                                 timer_s = 5.0
                             end

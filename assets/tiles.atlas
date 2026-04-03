@@ -539,7 +539,13 @@ images {
   image: "/assets/images/impactRing.png"
 }
 images {
+  image: "/assets/images/tile_lab_overlay.png"
+}
+images {
   image: "/assets/images/tile_workshop_overlay.png"
+}
+images {
+  image: "/assets/images/tile_medbay_overlay.png"
 }
 margin: 2
 extrude_borders: 2

@@ -567,7 +567,10 @@ library["canteen"] = canteen
      local medbay = create_tile_prototype("medbay")
      medbay.visualTile = "medbay_off"
      medbay.powerLightOffAnim = "tile_medbay_off"
-     medbay.powerLightOnAnim = "tile_medbay_on"
+    medbay.powerLightOnAnim = "tile_medbay_on"
+
+    medbay.alphaOverlayMode = "specified"
+    medbay.alphaOverlay = "tile_medbay_overlay"
     
      for i = 1, 9 do
          medbay.cells[i].lightValue = 4
@@ -751,6 +754,9 @@ local lab = create_tile_prototype("lab")
 lab.visualTile = "lab_off"
 lab.powerLightOffAnim = "tile_lab_off"
 lab.powerLightOnAnim = "tile_lab_on"
+
+lab.alphaOverlayMode = "specified"
+lab.alphaOverlay = "tile_lab_overlay"
 
 for i = 1, 9 do
     lab.cells[i].lightValue = 0

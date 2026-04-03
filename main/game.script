@@ -5069,24 +5069,15 @@ local function update_purge_runtime(self)
     self.purge_result_locked = true
     local extract_ready = purge_is_extract_ready(self)
     local launch_ready = self.purge_launch_pressed == true
-    if launch_ready and extract_ready then
-        local rescue_cells = get_rescue_entry_victory_cell_ids(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
-        local escaped = get_alive_human_count_on_lookup(self, build_cell_lookup(rescue_cells))
-        self.game_won = true
-        self.launch_fx_timer = 1.2
-        score_record_launch_success(self, escaped)
-        print(string.format("PURGE | SUCCESS at timeout. escaped=%d", escaped))
-        enter_outro_flow_from_launch(self)
-    else
-        local state = ensure_score_state(self)
-        SCORE_RUNTIME.record_mission_failed(state)
-        print(string.format(
-            "PURGE | FAILURE at timeout. launch=%s extract=%s",
-            launch_ready and "yes" or "no",
-            extract_ready and "yes" or "no"
-        ))
-        enter_score_flow(self)
-    end
+    local state = ensure_score_state(self)
+    SCORE_RUNTIME.record_mission_failed(state)
+    self.game_won = false
+    print(string.format(
+        "PURGE | FAILURE at timeout. launch=%s extract=%s",
+        launch_ready and "yes" or "no",
+        extract_ready and "yes" or "no"
+    ))
+    enter_mission_outro(self, "lose", "purge_timeout")
 end
 
 local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
@@ -8265,15 +8256,36 @@ multiplayer_setup_push_state = function(self)
     }, self.mp_state.local_player_id)
 end
 
-function enter_outro_flow_from_launch(self)
+function enter_mission_outro(self, result, reason)
     self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
     self.flow_outro_timer = 0
     self.flow_submit_done = false
     self.drag_resource = { active = false }
     self.is_panning = false
     self.did_drag = false
+    local mission_type = multiplayer_normalize_mission_type(get_current_mission_type(self))
+    local final_result = tostring(result or (self.game_won and "win" or "lose"))
+    if final_result ~= "win" and final_result ~= "lose" then
+        final_result = self.game_won and "win" or "lose"
+    end
+    self.end_result = final_result
+    self.end_mission_type = mission_type
+    self.end_outro_sequence_id = string.format("%s_%s", mission_type, final_result)
+    self.end_reason = tostring(reason or "unknown")
+    self.end_session_origin = (self.mp_state and self.mp_state.enabled) and "multiplayer" or "solo"
     enter_flow_state(self, FLOW_STATE_OUTRO)
-    print("FLOW | launch -> outro")
+    print(string.format(
+        "FLOW | mission_end -> outro | mission=%s result=%s reason=%s origin=%s sequence=%s",
+        tostring(self.end_mission_type),
+        tostring(self.end_result),
+        tostring(self.end_reason),
+        tostring(self.end_session_origin),
+        tostring(self.end_outro_sequence_id)
+    ))
+end
+
+function enter_outro_flow_from_launch(self)
+    enter_mission_outro(self, "win", "launch")
 end
 
 function enter_score_flow(self)
@@ -9047,6 +9059,11 @@ function reset_and_load_level(self, level_index)
     self.purge_time_expired = false
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
+    self.end_result = ""
+    self.end_mission_type = ""
+    self.end_outro_sequence_id = ""
+    self.end_reason = ""
+    self.end_session_origin = ""
     self.nightvision_reveal_unit_id = nil
     self.nightvision_reveal_tile_id = 0
     self.nightvision_reveal_hold_timer = 0
@@ -12179,7 +12196,7 @@ function try_launch_button(self, screen_x, screen_y)
         if LOOT_RUNTIME.try_launch_escape_pod then
             local launched = LOOT_RUNTIME.try_launch_escape_pod(self)
             if launched then
-                enter_outro_flow_from_launch(self)
+                enter_mission_outro(self, "win", "launch")
             end
         end
         return true
@@ -13392,6 +13409,11 @@ multiplayer_build_snapshot_state = function(self)
         purge_time_expired = self.purge_time_expired == true,
         purge_result_locked = self.purge_result_locked == true,
         purge_deadline_epoch_ms = tonumber(self.purge_deadline_epoch_ms or 0) or 0,
+        end_result = tostring(self.end_result or ""),
+        end_mission_type = tostring(self.end_mission_type or ""),
+        end_outro_sequence_id = tostring(self.end_outro_sequence_id or ""),
+        end_reason = tostring(self.end_reason or ""),
+        end_session_origin = tostring(self.end_session_origin or ""),
         score_turn_counter = tonumber(self.score_turn_counter or 0) or 0,
         score_state = multiplayer_clone_with_string_keys(self.score_state or {})
     }
@@ -13607,6 +13629,11 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     self.purge_time_expired = snapshot.purge_time_expired == true
     self.purge_result_locked = snapshot.purge_result_locked == true
     self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
+    self.end_result = tostring(snapshot.end_result or self.end_result or "")
+    self.end_mission_type = tostring(snapshot.end_mission_type or self.end_mission_type or "")
+    self.end_outro_sequence_id = tostring(snapshot.end_outro_sequence_id or self.end_outro_sequence_id or "")
+    self.end_reason = tostring(snapshot.end_reason or self.end_reason or "")
+    self.end_session_origin = tostring(snapshot.end_session_origin or self.end_session_origin or "")
     self.score_turn_counter = tonumber(snapshot.score_turn_counter or self.score_turn_counter or 0) or 0
     self.score_state = multiplayer_clone_simple_table(snapshot.score_state or self.score_state or {}) or {}
     ensure_score_state(self)
@@ -14533,6 +14560,11 @@ function init(self)
     self.purge_time_expired = false
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
+    self.end_result = ""
+    self.end_mission_type = ""
+    self.end_outro_sequence_id = ""
+    self.end_reason = ""
+    self.end_session_origin = ""
     self.nightvision_reveal_unit_id = nil
     self.nightvision_reveal_tile_id = 0
     self.nightvision_reveal_hold_timer = 0

@@ -237,6 +237,10 @@ FLOW_UI_PANEL_Z = 1.42
 FLOW_UI_BUTTON_Z = 1.43
 FLOW_UI_SCREEN_W = 1260
 FLOW_UI_SCREEN_H = 720
+OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
+OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
+OUTRO_SLIDE_DEFAULT_W = 960
+OUTRO_SLIDE_DEFAULT_H = 540
 FLOW_STATE_TITLE = "title"
 FLOW_STATE_GAME = "game"
 FLOW_STATE_OUTRO = "outro"
@@ -319,6 +323,16 @@ do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
     MP_SYNC_TRACE_ENABLED = (sync_trace_cfg == "1" or sync_trace_cfg == "true" or sync_trace_cfg == "on")
 end
+do
+    local preview_cfg = sys.get_config and sys.get_config("debug.outro_preview") or nil
+    DEBUG_OUTRO_PREVIEW_ENABLED = (preview_cfg == "1" or preview_cfg == "true" or preview_cfg == "on")
+    DEBUG_OUTRO_PREVIEW_SEQUENCE = tostring((sys.get_config and sys.get_config("debug.outro_preview_sequence")) or "")
+    local preview_result = tostring((sys.get_config and sys.get_config("debug.outro_preview_result")) or "win")
+    if preview_result ~= "win" and preview_result ~= "lose" then
+        preview_result = "win"
+    end
+    DEBUG_OUTRO_PREVIEW_RESULT = preview_result
+end
 AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
 BUFFS = require("main.config").BUFFS or {}
@@ -384,6 +398,8 @@ end)()
 SCORE_RUNTIME = require("main.score_runtime")
 MP_TRANSPORT = require("main.multiplayer_transport")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
+OUTRO_SLIDESHOW = require("main.outro_slideshow")
+OUTRO_SEQUENCES = require("main.outro_sequences")
 LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
 HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
@@ -7383,7 +7399,7 @@ collect_runtime_reference_counts = function(self)
             "panel_art", "panel_shadow", "component_button", "fix_button", "loot_button", "retrieve_button",
             "close_button", "not_enough_ap_icon", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
             "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_panel",
-            "flow_outro_ship", "flow_outro_skip_button", "flow_score_submit_button", "flow_score_title_button",
+            "flow_outro_slide", "flow_outro_ship", "flow_outro_skip_button", "flow_score_submit_button", "flow_score_title_button",
             "flow_title_solo_button", "flow_title_multiplayer_button"
         }
         for _, k in ipairs(named) do
@@ -7469,6 +7485,7 @@ local function initialize_unit_ui(self)
         drag_pip = nil,
         flow_overlay = nil,
         flow_panel = nil,
+        flow_outro_slide = nil,
         flow_outro_ship = nil,
         flow_outro_skip_button = nil,
         flow_score_submit_button = nil,
@@ -7573,6 +7590,7 @@ local function initialize_unit_ui(self)
     self.ui.drag_pip = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.9))
     self.ui.flow_overlay = create_ui_square(0, 0, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 0), SCREEN_WIDTH, SCREEN_HEIGHT)
     self.ui.flow_panel = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+    self.ui.flow_outro_slide = create_ui_marker_sprite(hash("lootCrate"), FLOW_UI_PANEL_Z + 0.001)
     self.ui.flow_outro_ship = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 280, 120)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
     self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
@@ -7686,6 +7704,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     set_ui_square_transform(self, self.ui.flow_overlay, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
     set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+    set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
@@ -8256,6 +8275,177 @@ multiplayer_setup_push_state = function(self)
     }, self.mp_state.local_player_id)
 end
 
+local function stop_outro_slideshow_runtime(self, reason)
+    if self.outro_slideshow_state then
+        OUTRO_SLIDESHOW.stop(self.outro_slideshow_state, reason or "stopped")
+        self.outro_slideshow_state = nil
+    end
+    if self.outro_slide_layer_nodes then
+        for i = 2, #self.outro_slide_layer_nodes do
+            local node = self.outro_slide_layer_nodes[i]
+            if node then
+                pcall(go.delete, node)
+            end
+        end
+    end
+    self.outro_slide_layer_nodes = { self.ui and self.ui.flow_outro_slide or nil }
+    self.outro_slide_layer_anim_ids = {}
+    if self.outro_fx_instances then
+        for _, fx_id in ipairs(self.outro_fx_instances) do
+            pcall(go.delete, fx_id)
+        end
+        self.outro_fx_instances = {}
+    end
+    self.outro_slide_anim_id = nil
+end
+
+local function ensure_outro_slide_layer_nodes(self, needed)
+    needed = math.max(1, tonumber(needed or 1) or 1)
+    self.outro_slide_layer_nodes = self.outro_slide_layer_nodes or { self.ui and self.ui.flow_outro_slide or nil }
+    self.outro_slide_layer_anim_ids = self.outro_slide_layer_anim_ids or {}
+    while #self.outro_slide_layer_nodes < needed do
+        local id = create_ui_marker_sprite(hash("lootCrate"), FLOW_UI_PANEL_Z + 0.001)
+        table.insert(self.outro_slide_layer_nodes, id)
+    end
+end
+
+local function start_outro_slideshow_runtime(self)
+    stop_outro_slideshow_runtime(self, "restart")
+    self.flow_outro_timer = 0
+    self.outro_fx_instances = {}
+    self.outro_slide_layer_nodes = { self.ui and self.ui.flow_outro_slide or nil }
+    self.outro_slide_layer_anim_ids = {}
+    local sequence = OUTRO_SEQUENCES.get_sequence(self.end_outro_sequence_id)
+    if not sequence then
+        print(string.format("OUTRO | no sequence for id=%s, using placeholder timer", tostring(self.end_outro_sequence_id)))
+        self.outro_slideshow_state = nil
+        return
+    end
+    local hooks = {
+        on_frame = function(pose, state)
+            if not (self.ui and self.ui.flow_outro_slide and pose) then
+                return
+            end
+            local layers = pose.layers or {}
+            ensure_outro_slide_layer_nodes(self, #layers)
+            local shake_x = tonumber(pose.camera_shake_x or 0) or 0
+            local shake_y = tonumber(pose.camera_shake_y or 0) or 0
+            for i, layer in ipairs(layers) do
+                local node = self.outro_slide_layer_nodes and self.outro_slide_layer_nodes[i] or nil
+                if node then
+                    local anim_name = tostring(layer.anim or "")
+                    if anim_name ~= "" and anim_name ~= (self.outro_slide_layer_anim_ids[i] or "") then
+                        self.outro_slide_layer_anim_ids[i] = anim_name
+                        pcall(msg.post, msg.url(nil, node, "sprite"), "play_animation", { id = hash(anim_name) })
+                    end
+                    local x = OUTRO_SLIDE_CENTER_X + (tonumber(layer.x or 0) or 0) + shake_x
+                    local y = OUTRO_SLIDE_CENTER_Y + (tonumber(layer.y or 0) or 0) + shake_y
+                    -- Allow tiny values for comic overlays (e.g. scale 0.002 start points).
+                    local scale_x = math.max(0.0001, tonumber(layer.scale_x or layer.scale or 1) or 1)
+                    local scale_y = math.max(0.0001, tonumber(layer.scale_y or layer.scale or 1) or 1)
+                    local alpha = math.max(0, math.min(1, tonumber(layer.alpha or 1) or 1))
+                    local draw_w = tonumber(layer.draw_w or OUTRO_SLIDE_DEFAULT_W) or OUTRO_SLIDE_DEFAULT_W
+                    if draw_w <= 0 then draw_w = OUTRO_SLIDE_DEFAULT_W end
+                    local draw_h = tonumber(layer.draw_h or OUTRO_SLIDE_DEFAULT_H) or OUTRO_SLIDE_DEFAULT_H
+                    if draw_h <= 0 then draw_h = OUTRO_SLIDE_DEFAULT_H end
+                    local z = FLOW_UI_PANEL_Z + 0.001 + ((tonumber(layer.z or 0) or 0) * 0.0001)
+                    set_ui_square_transform(
+                        self,
+                        node,
+                        x,
+                        y,
+                        z,
+                        vmath.vector4(
+                            tonumber(layer.tint_r or 1) or 1,
+                            tonumber(layer.tint_g or 1) or 1,
+                            tonumber(layer.tint_b or 1) or 1,
+                            alpha
+                        ),
+                        (draw_w * scale_x) * 0.021,
+                        (draw_h * scale_y) * 0.021
+                    )
+                end
+            end
+            if self.outro_slide_layer_nodes then
+                local hidden = vmath.vector4(0, 0, 0, 0)
+                for i = (#layers + 1), #self.outro_slide_layer_nodes do
+                    local node = self.outro_slide_layer_nodes[i]
+                    if node then
+                        set_ui_square_transform(
+                            self,
+                            node,
+                            -9999,
+                            -9999,
+                            FLOW_UI_PANEL_Z + 0.001,
+                            hidden,
+                            OUTRO_SLIDE_DEFAULT_W * 0.021,
+                            OUTRO_SLIDE_DEFAULT_H * 0.021
+                        )
+                    end
+                end
+            end
+        end,
+        on_complete = function(done_reason, state)
+            self.outro_slideshow_state = nil
+            self.outro_slide_anim_id = nil
+            if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
+                enter_score_flow(self)
+            end
+        end,
+        spawn_fx = function(cue, state)
+            local factory_path = tostring((cue and cue.factory) or "")
+            if factory_path == "" then
+                return nil
+            end
+            local x = OUTRO_SLIDE_CENTER_X + (tonumber(cue.x or cue.offset_x or 0) or 0)
+            local y = OUTRO_SLIDE_CENTER_Y + (tonumber(cue.y or cue.offset_y or 0) or 0)
+            local z = tonumber(cue.z or (FLOW_UI_PANEL_Z + 0.002)) or (FLOW_UI_PANEL_Z + 0.002)
+            local wx, wy = screen_to_world(x, y, self.camera_pos, self.camera_zoom)
+            local fx_id = factory.create(factory_path, vmath.vector3(wx, wy, z))
+            if fx_id then
+                if cue.rotation_deg ~= nil then
+                    pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(tonumber(cue.rotation_deg) or 0)), fx_id)
+                end
+                pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+                table.insert(self.outro_fx_instances, fx_id)
+            end
+            return fx_id
+        end,
+        stop_fx = function(handle, cue, state)
+            if handle then
+                pcall(go.delete, handle)
+            end
+        end,
+        play_sfx = function(cue, state)
+            print(string.format("OUTRO SFX | cue=%s", tostring(cue and cue.cue or "")))
+        end,
+        start_music = function(soundtrack, state)
+            print(string.format("OUTRO MUSIC START | cue=%s", tostring(soundtrack and soundtrack.cue or "")))
+        end,
+        stop_music = function(soundtrack, state)
+            print(string.format("OUTRO MUSIC STOP | cue=%s", tostring(soundtrack and soundtrack.cue or "")))
+        end
+    }
+    self.outro_slideshow_state = OUTRO_SLIDESHOW.start(sequence, hooks)
+    if not self.outro_slideshow_state then
+        print(string.format("OUTRO | sequence start failed for id=%s, using placeholder timer", tostring(self.end_outro_sequence_id)))
+    end
+end
+
+local function update_outro_slideshow_runtime(self, dt)
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_OUTRO then
+        return
+    end
+    if self.outro_slideshow_state then
+        OUTRO_SLIDESHOW.update(self.outro_slideshow_state, dt)
+    else
+        self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
+        if (self.flow_outro_timer or 0) >= 8.0 then
+            enter_score_flow(self)
+        end
+    end
+end
+
 function enter_mission_outro(self, result, reason)
     self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
     self.flow_outro_timer = 0
@@ -8274,6 +8464,7 @@ function enter_mission_outro(self, result, reason)
     self.end_reason = tostring(reason or "unknown")
     self.end_session_origin = (self.mp_state and self.mp_state.enabled) and "multiplayer" or "solo"
     enter_flow_state(self, FLOW_STATE_OUTRO)
+    start_outro_slideshow_runtime(self)
     print(string.format(
         "FLOW | mission_end -> outro | mission=%s result=%s reason=%s origin=%s sequence=%s",
         tostring(self.end_mission_type),
@@ -8289,6 +8480,7 @@ function enter_outro_flow_from_launch(self)
 end
 
 function enter_score_flow(self)
+    stop_outro_slideshow_runtime(self, "score_flow")
     if not self.flow_score_breakdown then
         self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
     end
@@ -8318,6 +8510,7 @@ function update_flow_ui(self, dt)
     if state == FLOW_STATE_GAME then
         set_ui_square_transform(self, self.ui.flow_overlay, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
         set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 760, 420)
+        set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
@@ -8389,6 +8582,7 @@ function update_flow_ui(self, dt)
                 end
             end
         end
+        set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
@@ -8412,6 +8606,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
@@ -8479,6 +8674,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
@@ -8562,7 +8758,12 @@ function update_flow_ui(self, dt)
     if state == FLOW_STATE_OUTRO then
         local wobble = math.sin((self.flow_overlay_phase or 0) * 2.4) * 12
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.12, 0.12, 0.18, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
-        set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
+        set_ui_square_transform(self, self.ui.flow_outro_slide, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z + 0.001, vmath.vector4(1, 1, 1, 1), OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
+        if self.outro_slideshow_state then
+            set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+        else
+            set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
+        end
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0.98), 170, 52)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -8637,6 +8838,7 @@ function update_flow_ui(self, dt)
             end
         end
     end
+    set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     if self.ui.flow_score_rows then
@@ -8823,7 +9025,11 @@ function handle_flow_touch(self, input_x, input_y)
     end
     if state == FLOW_STATE_OUTRO then
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH - 110, 54, 170, 52) then
-            enter_score_flow(self)
+            if self.outro_slideshow_state then
+                OUTRO_SLIDESHOW.skip(self.outro_slideshow_state)
+            else
+                enter_score_flow(self)
+            end
             return true
         end
         return true
@@ -9064,6 +9270,9 @@ function reset_and_load_level(self, level_index)
     self.end_outro_sequence_id = ""
     self.end_reason = ""
     self.end_session_origin = ""
+    self.outro_slideshow_state = nil
+    self.outro_fx_instances = {}
+    self.outro_slide_anim_id = nil
     self.nightvision_reveal_unit_id = nil
     self.nightvision_reveal_tile_id = 0
     self.nightvision_reveal_hold_timer = 0
@@ -14565,6 +14774,9 @@ function init(self)
     self.end_outro_sequence_id = ""
     self.end_reason = ""
     self.end_session_origin = ""
+    self.outro_slideshow_state = nil
+    self.outro_fx_instances = {}
+    self.outro_slide_anim_id = nil
     self.nightvision_reveal_unit_id = nil
     self.nightvision_reveal_tile_id = 0
     self.nightvision_reveal_hold_timer = 0
@@ -14661,6 +14873,19 @@ function init(self)
     self.flow_outro_timer = 0
     self.flow_submit_done = false
     enter_flow_state(self, FLOW_STATE_TITLE)
+    if DEBUG_OUTRO_PREVIEW_ENABLED == true then
+        self.game_won = DEBUG_OUTRO_PREVIEW_RESULT == "win"
+        enter_mission_outro(self, DEBUG_OUTRO_PREVIEW_RESULT, "debug_preview")
+        if DEBUG_OUTRO_PREVIEW_SEQUENCE and DEBUG_OUTRO_PREVIEW_SEQUENCE ~= "" then
+            self.end_outro_sequence_id = DEBUG_OUTRO_PREVIEW_SEQUENCE
+            start_outro_slideshow_runtime(self)
+        end
+        print(string.format(
+            "DEBUG OUTRO PREVIEW | enabled sequence=%s result=%s",
+            tostring(self.end_outro_sequence_id),
+            tostring(DEBUG_OUTRO_PREVIEW_RESULT)
+        ))
+    end
 
     print("=== Initialization Complete ===")
 
@@ -15068,13 +15293,8 @@ function update(self, dt)
     update_exit_green_smoke_fx(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
-    if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
-        self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
-        if (self.flow_outro_timer or 0) >= 8.0 then
-            enter_score_flow(self)
-        end
-    end
     update_flow_ui(self, dt)
+    update_outro_slideshow_runtime(self, dt)
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
     if self.world_backdrop or (self.world_backdrop_tiles and #self.world_backdrop_tiles > 0) then

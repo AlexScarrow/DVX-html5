@@ -547,6 +547,33 @@ images {
 images {
   image: "/assets/images/tile_medbay_overlay.png"
 }
+images {
+  image: "/assets/images/outro_purge_win_planet.png"
+}
+images {
+  image: "/assets/images/outro_purge_win_space.png"
+}
+images {
+  image: "/assets/images/outro_purge_win_techie_cockpit.png"
+}
+images {
+  image: "/assets/images/outro_purge_win_techie_spaceship.png"
+}
+images {
+  image: "/assets/images/outro_purge_win_spaceship_passby.png"
+}
+images {
+  image: "/assets/images/outro_purge_win_spaceship_fadeBlack.png"
+}
+images {
+  image: "/assets/images/outro_rescue_win_civ_cockpit.png"
+}
+images {
+  image: "/assets/images/outro_rescue_win_civ_spaceship.png"
+}
+images {
+  image: "/assets/images/outro_rescue_win_civ_spaceship_passby.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

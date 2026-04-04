@@ -1,7 +1,7 @@
 [project]
 title = Derples vs Xenos
 version = 1.0
-dependencies = https://github.com/defold/extension-websocket/archive/master.zip
+dependencies#0 = https://github.com/defold/extension-websocket/archive/master.zip
 
 [bootstrap]
 main_collection = /main/main.collectionc
@@ -36,4 +36,12 @@ max_instances = 2048
 
 [html5]
 htmlfile = /web/index.html
+
+[multiplayer]
+sync_trace = 0
+
+[debug]
+outro_preview = 1
+outro_preview_sequence = rescue_win
+outro_preview_result = win
 

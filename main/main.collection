@@ -480,3 +480,13 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "spaceship_launch_thruster_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"spaceship_launch_thruster_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/spaceship_launch_thruster_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

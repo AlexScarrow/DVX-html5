@@ -7027,7 +7027,7 @@ create_ui_marker_sprite = function(anim_id, z)
     return id
 end
 
-local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color, scale_x, scale_y)
+local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color, scale_x, scale_y, rotation_deg)
     if not go_id then
         return
     end
@@ -7077,6 +7077,9 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
     local wx, wy = screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
     go.set_position(vmath.vector3(wx, wy, z), go_id)
     go.set_scale(vmath.vector3(scale_x / self.camera_zoom, scale_y / self.camera_zoom, 1), go_id)
+    if rotation_deg ~= nil then
+        pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(tonumber(rotation_deg) or 0)), go_id)
+    end
     go.set(msg.url(nil, go_id, "sprite"), "tint", color)
 end
 
@@ -8362,7 +8365,8 @@ local function start_outro_slideshow_runtime(self)
                             alpha
                         ),
                         (draw_w * scale_x) * 0.021,
-                        (draw_h * scale_y) * 0.021
+                        (draw_h * scale_y) * 0.021,
+                        tonumber(layer.rotation_deg or 0) or 0
                     )
                 end
             end
@@ -8399,7 +8403,9 @@ local function start_outro_slideshow_runtime(self)
             end
             local x = OUTRO_SLIDE_CENTER_X + (tonumber(cue.x or cue.offset_x or 0) or 0)
             local y = OUTRO_SLIDE_CENTER_Y + (tonumber(cue.y or cue.offset_y or 0) or 0)
-            local z = tonumber(cue.z or (FLOW_UI_PANEL_Z + 0.002)) or (FLOW_UI_PANEL_Z + 0.002)
+            -- Match slideshow layer z semantics (relative stack), not absolute world z.
+            local z_local = tonumber(cue and cue.z or 0) or 0
+            local z = FLOW_UI_PANEL_Z + 0.002 + (z_local * 0.0001)
             local wx, wy = screen_to_world(x, y, self.camera_pos, self.camera_zoom)
             local fx_id = factory.create(factory_path, vmath.vector3(wx, wy, z))
             if fx_id then
@@ -8415,6 +8421,17 @@ local function start_outro_slideshow_runtime(self)
             if handle then
                 pcall(go.delete, handle)
             end
+        end,
+        update_fx = function(handle, cue, fx_pose, state)
+            if not handle or not fx_pose then
+                return
+            end
+            local x = OUTRO_SLIDE_CENTER_X + (tonumber(fx_pose.x or 0) or 0)
+            local y = OUTRO_SLIDE_CENTER_Y + (tonumber(fx_pose.y or 0) or 0)
+            local z_local = tonumber(fx_pose.z or (cue and cue.z) or 0) or 0
+            local z = FLOW_UI_PANEL_Z + 0.002 + (z_local * 0.0001)
+            local wx, wy = screen_to_world(x, y, self.camera_pos, self.camera_zoom)
+            pcall(go.set_position, vmath.vector3(wx, wy, z), handle)
         end,
         play_sfx = function(cue, state)
             print(string.format("OUTRO SFX | cue=%s", tostring(cue and cue.cue or "")))
@@ -8460,7 +8477,12 @@ function enter_mission_outro(self, result, reason)
     end
     self.end_result = final_result
     self.end_mission_type = mission_type
-    self.end_outro_sequence_id = string.format("%s_%s", mission_type, final_result)
+    local preview_override = tostring(self.debug_outro_sequence_override or "")
+    if preview_override ~= "" then
+        self.end_outro_sequence_id = preview_override
+    else
+        self.end_outro_sequence_id = string.format("%s_%s", mission_type, final_result)
+    end
     self.end_reason = tostring(reason or "unknown")
     self.end_session_origin = (self.mp_state and self.mp_state.enabled) and "multiplayer" or "solo"
     enter_flow_state(self, FLOW_STATE_OUTRO)
@@ -14440,7 +14462,7 @@ end
                 vmath.vector3(center_x + 12, center_y - 12, 0.005),
                 nil,
                 {},
-                vmath.vector3(750, 450, 1)
+                vmath.vector3(1, 1, 1)
             )
             if tile_shadow_id then
                 go.set(msg.url(nil, tile_shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
@@ -14875,11 +14897,9 @@ function init(self)
     enter_flow_state(self, FLOW_STATE_TITLE)
     if DEBUG_OUTRO_PREVIEW_ENABLED == true then
         self.game_won = DEBUG_OUTRO_PREVIEW_RESULT == "win"
+        self.debug_outro_sequence_override = tostring(DEBUG_OUTRO_PREVIEW_SEQUENCE or "")
         enter_mission_outro(self, DEBUG_OUTRO_PREVIEW_RESULT, "debug_preview")
-        if DEBUG_OUTRO_PREVIEW_SEQUENCE and DEBUG_OUTRO_PREVIEW_SEQUENCE ~= "" then
-            self.end_outro_sequence_id = DEBUG_OUTRO_PREVIEW_SEQUENCE
-            start_outro_slideshow_runtime(self)
-        end
+        self.debug_outro_sequence_override = nil
         print(string.format(
             "DEBUG OUTRO PREVIEW | enabled sequence=%s result=%s",
             tostring(self.end_outro_sequence_id),

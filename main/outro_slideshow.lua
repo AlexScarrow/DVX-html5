@@ -43,6 +43,7 @@ local function build_pose(defaults, pose)
         x = get_or(defaults.x, pose.x),
         y = get_or(defaults.y, pose.y),
         z = get_or(defaults.z, pose.z),
+        rotation_deg = get_or(defaults.rotation_deg, pose.rotation_deg),
         scale = base_scale,
         scale_x = sx,
         scale_y = sy,
@@ -51,7 +52,7 @@ local function build_pose(defaults, pose)
 end
 
 local function normalize_layer(layer, fallback_defaults)
-    local defaults = fallback_defaults or { x = 0, y = 0, z = 0, scale = 1, scale_x = 1, scale_y = 1, alpha = 1 }
+    local defaults = fallback_defaults or { x = 0, y = 0, z = 0, rotation_deg = 0, scale = 1, scale_x = 1, scale_y = 1, alpha = 1 }
     local from_pose = build_pose(defaults, layer and layer.from)
     local to_pose = build_pose(from_pose, layer and layer["to"])
     local tint = layer and layer.tint or nil
@@ -69,6 +70,8 @@ local function normalize_layer(layer, fallback_defaults)
         ease = tostring(layer and layer.ease or "linear"),
         from = from_pose,
         ["to"] = to_pose,
+        rotation_ping_pong = layer and layer.rotation_ping_pong == true or false,
+        rotation_freq_hz = tonumber(layer and layer.rotation_freq_hz or 1) or 1,
         draw_w = tonumber(layer and layer.draw_w or 0) or 0,
         draw_h = tonumber(layer and layer.draw_h or 0) or 0,
         tint_r = tint_r,
@@ -82,7 +85,7 @@ local function normalize_shot(shot)
     if duration <= 0 then
         duration = 0.1
     end
-    local defaults = { x = 0, y = 0, z = 0, scale = 1, scale_x = 1, scale_y = 1, alpha = 1 }
+    local defaults = { x = 0, y = 0, z = 0, rotation_deg = 0, scale = 1, scale_x = 1, scale_y = 1, alpha = 1 }
     local from_pose = build_pose(defaults, shot and shot.from)
     local to_pose = build_pose(from_pose, shot and shot["to"])
     local layers = {}
@@ -97,6 +100,8 @@ local function normalize_shot(shot)
             ease = tostring(shot and shot.ease or "linear"),
             from = from_pose,
             ["to"] = to_pose,
+            rotation_ping_pong = shot and shot.rotation_ping_pong == true or false,
+            rotation_freq_hz = tonumber(shot and shot.rotation_freq_hz or 1) or 1,
             z = tonumber(shot and shot.z or 0) or 0
         }, defaults))
     end
@@ -199,6 +204,40 @@ local function trigger_cues_at_time(state, shot, cue_list, elapsed, key_prefix, 
             trigger_fn(cue)
         end
     end
+end
+
+local function resolve_cue_motion(cue, shot_elapsed, shot_duration)
+    local has_path = type(cue and cue.from) == "table" or type(cue and cue["to"]) == "table"
+    if not has_path then
+        return nil
+    end
+    local at_t = tonumber(cue and cue.at or 0) or 0
+    local base_x = tonumber((cue and (cue.x or cue.offset_x)) or 0) or 0
+    local base_y = tonumber((cue and (cue.y or cue.offset_y)) or 0) or 0
+    local base_z = tonumber(cue and cue.z or 0) or 0
+    local from_t = cue and cue.from or {}
+    local to_t = cue and cue["to"] or {}
+    local from_x = tonumber(from_t.x or base_x) or base_x
+    local from_y = tonumber(from_t.y or base_y) or base_y
+    local from_z = tonumber(from_t.z or base_z) or base_z
+    local to_x = tonumber(to_t.x or from_x) or from_x
+    local to_y = tonumber(to_t.y or from_y) or from_y
+    local to_z = tonumber(to_t.z or from_z) or from_z
+    local move_duration = tonumber(cue and (cue.move_duration or cue.duration) or nil)
+    if move_duration == nil then
+        move_duration = (tonumber(shot_duration or 0) or 0) - at_t
+    end
+    if move_duration <= 0 then
+        move_duration = 0.0001
+    end
+    local p = clamp01(((tonumber(shot_elapsed or 0) or 0) - at_t) / move_duration)
+    local e = ease_value(tostring(cue and cue.ease or "linear"), p)
+    return {
+        x = lerp(from_x, to_x, e),
+        y = lerp(from_y, to_y, e),
+        z = lerp(from_z, to_z, e),
+        progress = p
+    }
 end
 
 local function start_soundtrack_if_needed(state)
@@ -356,6 +395,8 @@ function M.update(state, dt)
                     handle = handle,
                     cue = cue,
                     shot_key = active.shot_key,
+                    shot_start_at = shot.start_at or 0,
+                    shot_duration = shot.duration or 0,
                     stop_on_shot_end = true
                 })
             elseif handle ~= nil and cue.stop_on_sequence_end == true then
@@ -363,6 +404,8 @@ function M.update(state, dt)
                     handle = handle,
                     cue = cue,
                     shot_key = active.shot_key,
+                    shot_start_at = shot.start_at or 0,
+                    shot_duration = shot.duration or 0,
                     stop_on_shot_end = false
                 })
             end
@@ -389,6 +432,12 @@ function M.update(state, dt)
         end
         for _, layer in ipairs(shot.layers or {}) do
             local eased = ease_value(layer.ease, p)
+            local rotation_deg = lerp(layer.from.rotation_deg, layer["to"].rotation_deg, eased)
+            if layer.rotation_ping_pong == true then
+                local hz = tonumber(layer.rotation_freq_hz or 1) or 1
+                local swing_t = 0.5 - (0.5 * math.cos((local_elapsed or 0) * hz * math.pi * 2))
+                rotation_deg = lerp(layer.from.rotation_deg, layer["to"].rotation_deg, swing_t)
+            end
             table.insert(layer_poses, {
                 id = layer.id,
                 anim = layer.anim,
@@ -399,6 +448,7 @@ function M.update(state, dt)
                 scale_y = lerp(layer.from.scale_y, layer["to"].scale_y, eased),
                 alpha = lerp(layer.from.alpha, layer["to"].alpha, eased),
                 z = lerp(layer.from.z, layer["to"].z, eased),
+                rotation_deg = rotation_deg,
                 draw_w = layer.draw_w or 0,
                 draw_h = layer.draw_h or 0,
                 tint_r = layer.tint_r or 1,
@@ -410,7 +460,16 @@ function M.update(state, dt)
             })
         end
     end
-    local first_layer = layer_poses[1] or { x = 0, y = 0, scale = 1, scale_x = 1, scale_y = 1, alpha = 1, anim = nil }
+    if type(hooks.update_fx) == "function" then
+        for _, entry in ipairs(state.active_fx_handles or {}) do
+            local cue = entry.cue
+            local fx_pose = resolve_cue_motion(cue, total_t - (entry.shot_start_at or 0), entry.shot_duration or 0)
+            if fx_pose ~= nil then
+                pcall(hooks.update_fx, entry.handle, cue, fx_pose, state)
+            end
+        end
+    end
+    local first_layer = layer_poses[1] or { x = 0, y = 0, scale = 1, scale_x = 1, scale_y = 1, alpha = 1, rotation_deg = 0, anim = nil }
     local primary = active_list[#active_list]
     local pose = {
         x = first_layer.x,
@@ -419,6 +478,7 @@ function M.update(state, dt)
         scale_x = first_layer.scale_x,
         scale_y = first_layer.scale_y,
         alpha = first_layer.alpha,
+        rotation_deg = first_layer.rotation_deg,
         anim = first_layer.anim,
         layers = layer_poses,
         camera_shake_x = shake_x,

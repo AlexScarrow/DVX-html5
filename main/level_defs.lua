@@ -32,7 +32,7 @@ function M.create_level_library()
         { x = 11, y = 2, tile = "exit" },
         { x = 10, y = 5, tile = "passage1" },
     }
-    levels[1].mission_type = "eacape"
+    levels[1].mission_type = "escape"
     levels[1].spawn_tile = "entry"
     levels[1].spawn_cell = 2
     levels[1].unit_loadouts = {

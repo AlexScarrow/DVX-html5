@@ -7756,8 +7756,8 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
     end
-    set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, OBJECTIVE_BUTTON_W * 0.021, OBJECTIVE_BUTTON_H * 0.021)
-    set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, OBJECTIVE_REMINDER_W * 0.021, OBJECTIVE_REMINDER_H * 0.021)
+    set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, 1, 1)
     if self.ui.purge_timer_digit_icons then
         for _, digit_id in ipairs(self.ui.purge_timer_digit_icons) do
             set_ui_square_transform(self, digit_id, -9999, -9999, PURGE_TIMER_HUD_Z, hidden, PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021, PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021)
@@ -7977,8 +7977,8 @@ local function update_objective_ui(self, visible)
     end
     local hidden = vmath.vector4(0, 0, 0, 0)
     if visible ~= true then
-        set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, OBJECTIVE_BUTTON_W * 0.021, OBJECTIVE_BUTTON_H * 0.021)
-        set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, OBJECTIVE_REMINDER_W * 0.021, OBJECTIVE_REMINDER_H * 0.021)
+        set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, 1, 1)
         return
     end
     set_ui_square_transform(
@@ -7988,8 +7988,8 @@ local function update_objective_ui(self, visible)
         OBJECTIVE_BUTTON_Y,
         OBJECTIVE_BUTTON_Z,
         vmath.vector4(1, 1, 1, 1),
-        OBJECTIVE_BUTTON_W * 0.021,
-        OBJECTIVE_BUTTON_H * 0.021
+        1,
+        1
     )
     if self.objective_reminder_visible == true then
         msg.post(msg.url(nil, self.ui.objective_reminder, "sprite"), "play_animation", { id = get_objective_reminder_anim_id(self) })
@@ -8000,11 +8000,11 @@ local function update_objective_ui(self, visible)
             OBJECTIVE_REMINDER_Y,
             OBJECTIVE_REMINDER_Z,
             vmath.vector4(1, 1, 1, 1),
-            OBJECTIVE_REMINDER_W * 0.021,
-            OBJECTIVE_REMINDER_H * 0.021
+            1,
+            1
         )
     else
-        set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, OBJECTIVE_REMINDER_W * 0.021, OBJECTIVE_REMINDER_H * 0.021)
+        set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, 1, 1)
     end
 end
 

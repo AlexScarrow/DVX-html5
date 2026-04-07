@@ -586,6 +586,37 @@ images {
 images {
   image: "/assets/images/tile_drop_shadow.png"
 }
+images {
+  image: "/assets/images/tile_rescue_entry_overlay.png"
+  pivot_y: 0.519525
+}
+images {
+  image: "/assets/images/outro_rescue_win_ground_hole.png"
+}
+images {
+  image: "/assets/images/outro_rescue_win_ground_hole_glow.png"
+}
+images {
+  image: "/assets/images/outro_rescue_win_ground_hole_hatch.png"
+}
+images {
+  image: "/assets/images/outro_top_down_landscape.png"
+}
+images {
+  image: "/assets/images/outro_dying_derple.png"
+}
+images {
+  image: "/assets/images/outro_dying_derple_eyelids.png"
+}
+images {
+  image: "/assets/images/outro_dying_derple_eyes.png"
+}
+images {
+  image: "/assets/images/outro_title_aliens_lines.png"
+}
+images {
+  image: "/assets/images/outro_title_xenos_word.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

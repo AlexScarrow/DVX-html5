@@ -226,7 +226,6 @@ M.SEQUENCES = {
     }, --END OF OUTRO (purge_win)
 
     -----------------------------------------RESCUE WIN--------------------------------------------
-
     rescue_win = {
         soundtrack = {
             cue = "music_outro_purge_win",
@@ -234,7 +233,7 @@ M.SEQUENCES = {
         },
         shots = {
             {
-                id = "rescue_win_01",
+                id = "dna_win_01",
                 start_at = 0,
                 anim = "outro_purge_win_spaceship_fadeBlack",
                 duration = 2,
@@ -245,13 +244,13 @@ M.SEQUENCES = {
                 sfx_cues = {}
             },
             {
-                id = "rescue_win_02",
+                id = "dna_win_02",
                 start_at = 0,
                 anim = "backdrop_computer",
                 duration = 5,
                 ease = "linear",
-                from = { x = 0, y =150, z=1, scale_x = 0.075, scale_y = 0.15, alpha = 1 },
-                to = { x = 0, y = 100, z=1, scale_x = 0.075, scale_y = 0.15, alpha = 1 },
+                from = { x = 0, y = 0, z=1, scale_x = 0.075, scale_y = 0.15, alpha = 1 },
+                to = { x = 0, y = -50, z=1, scale_x = 0.075, scale_y = 0.15, alpha = 1 },
                 --fx_cues = {},
                 shake = {
                     amp_x = 2,      -- horizontal px
@@ -263,127 +262,126 @@ M.SEQUENCES = {
 
                     --fx_cues = {},
                     --sfx_cues = {}
-                --},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_03",
-                start_at = 0,
-                anim = "outro_arrive_outside_base_entry",
-                duration = 5,
-                ease = "linear",
-                from = { x = 0, y = 0, z=2, scale_x = 0.065, scale_y = 0.1, alpha = 1 },
-                to = { x = 0, y = -100, z=2, scale_x = 0.065, scale_y = 0.1, alpha = 1 },
-                --fx_cues = {},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_04",
-                start_at = 0,
-                anim = "outro_purge_win_techie_spaceship",
-                duration = 5,
-                ease = "in_quad",
-                --from = { x = 50, y =-100, z=1.5, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
-                --to = { x = 50, y = 600, z=1.5, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
-                from = { x = 50, y = -100, z = 1.5, rotation_deg = -4, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
-                to   = { x = 50, y =  600, z = 1.5, rotation_deg =  2, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
-                rotation_ping_pong = true,
-                rotation_freq_hz = 0.5,
-                --fx_cues = {},
-                fx_cues = {
-                    {
-                        at = 0.0, -- seconds into this shot
-                        factory = "/spaceship_launch_thruster_fx_factory#spaceship_launch_thruster_fx_factory",
-                        from = { x = 50, y = -300, z = 2.5 }, -- start under ship
-                        to =   { x = 50, y = 320,  z = 2.5 }, -- rise with ship
-                        move_duration = 5.0,                  -- match shot movement
-                        ease = "in_quad",
-                        rotation_deg = 0,
-                        stop_on_shot_end = true,
-                    },
+                    --},
+                    sfx_cues = {}
                 },
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_05",
-                start_at = 4,
-                anim = "outro_purge_win_spaceship_fadeBlack",
-                duration = 1,
-                ease = "linear",--"in_out_sine",
-                from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
-                --fx_cues = {},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_06",
-                start_at = 5,
-                anim = "outro_purge_win_spaceship_fadeBlack",
-                duration = 2,
-                ease = "linear",--"in_out_sine",
-                from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
-                to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                --fx_cues = {},
-                sfx_cues = {}
-            },
---   
-            {
-                id = "rescue_win_07",
-                start_at = 5,
-                anim = "outro_purge_win_space",
-                duration = 10,
-                ease = "linear",--"in_out_sine",
-                from = { x = 0, y = 0, z=0, rotation_deg = 0, scale_x = 0.15, scale_y = 0.2, alpha = 1.0 },
-                to = { x = 0, y = 0, z=0, rotation_deg = -45, scale_x = 0.15, scale_y = 0.2, alpha = 1.0 },
+                {
+                    id = "dna_win_03",
+                    start_at = 0,
+                    anim = "outro_arrive_outside_base_entry",
+                    duration = 5,
+                    ease = "linear",
+                    from = { x = 0, y = 0, z=2, scale_x = 0.065, scale_y = 0.1, alpha = 1 },
+                    to = { x = 0, y = -100, z=2, scale_x = 0.065, scale_y = 0.1, alpha = 1 },
                     --fx_cues = {},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_08",
-                start_at = 5,
-                anim = "outro_purge_win_planet",
-                duration = 10,
-                ease = "linear",--"in_out_sine",
-                from = { x = 0, y = -400, z=0.5, rotation_deg = 0, scale_x = 0.075, scale_y = 0.125, alpha = 1.0 },
-                to = { x = 0, y = -400, z=0.5, rotation_deg = -45, scale_x = 0.075, scale_y = 0.125, alpha = 1.0 },
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_04",
+                    start_at = 0,
+                    anim = "outro_purge_win_techie_spaceship",
+                    duration = 5,
+                    ease = "in_quad",
+                    from = { x = 50, y = -100, z = 1.5, rotation_deg = -4, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
+                    to   = { x = 50, y =  600, z = 1.5, rotation_deg =  2, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
+                    rotation_ping_pong = true,
+                    rotation_freq_hz = 0.5,
                     --fx_cues = {},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_09",
-                start_at = 6,
-                anim = "outro_purge_win_spaceship_passby",
-                duration = 3,
-                ease = "in_out_sine",--"in_out_sine",
-                from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
-                to = { x = 3500, y = 300, z=2, scale_x = 0.2, scale_y = 0.4, alpha = 1.0 },
+                    fx_cues = {
+                        {
+                            at = 0.0, -- seconds into this shot
+                            factory = "/spaceship_launch_thruster_fx_factory#spaceship_launch_thruster_fx_factory",
+                            from = { x = 50, y = -300, z = 2.5 }, -- start under ship
+                            to =   { x = 50, y = 320,  z = 2.5 }, -- rise with ship
+                            move_duration = 5.0,                  -- match shot movement
+                            ease = "in_quad",
+                            rotation_deg = 0,
+                            stop_on_shot_end = true,
+                        },
+                    },
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_05",
+                    start_at = 4,
+                    anim = "outro_purge_win_spaceship_fadeBlack",
+                    duration = 1,
+                    ease = "linear",--"in_out_sine",
+                    from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
+                    to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
                     --fx_cues = {},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_10",
-                start_at = 6,
-                anim = "impactRing",
-                duration = 3,
-                ease = "in_out_sine",--"in_out_sine",
-                from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
-                to = { x = 3500, y = 300, z=2, scale_x = 10, scale_y = 20, alpha = 1.0 },
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_06",
+                    start_at = 5,
+                    anim = "outro_purge_win_spaceship_fadeBlack",
+                    duration = 2,
+                    ease = "linear",--"in_out_sine",
+                    from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                    to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
                     --fx_cues = {},
-                sfx_cues = {}
-            },
-            {
-                id = "rescue_win_11",
-                start_at = 10,
-                anim = "outro_purge_win_spaceship_fadeBlack",
-                duration = 5,
-                ease = "linear",--"in_out_sine",
-                from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                    sfx_cues = {}
+                },
+                --   
+                {
+                    id = "dna_win_07",
+                    start_at = 5,
+                    anim = "outro_purge_win_space",
+                    duration = 10,
+                    ease = "linear",--"in_out_sine",
+                    from = { x = 0, y = 0, z=0, scale_x = 0.1, scale_y = 0.1, alpha = 1.0 },
+                    to = { x = 0, y = 0, z=0, scale_x = 0.1, scale_y = 0.1, alpha = 1.0 },
                     --fx_cues = {},
-                sfx_cues = {}
-            },
-        } --END OF SHOTS
-    }, -- END OF OUTRO (rescue_win)
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_08",
+                    start_at = 5,
+                    anim = "outro_purge_win_planet",
+                    duration = 10,
+                    ease = "linear",--"in_out_sine",
+                    from = { x = 0, y = 0, z=0.5, scale_x = 0.155, scale_y = 0.3, alpha = 1.0 },
+                    to = { x = 0, y = 0, z=0.5, scale_x = 0.01, scale_y = 0.02, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_09",
+                    start_at = 6,
+                    anim = "outro_purge_win_spaceship_passby",
+                    duration = 3,
+                    ease = "in_out_sine",--"in_out_sine",
+                    from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
+                    to = { x = 3500, y = 300, z=2, scale_x = 0.2, scale_y = 0.4, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_10",
+                    start_at = 6,
+                    anim = "impactRing",
+                    duration = 3,
+                    ease = "in_out_sine",--"in_out_sine",
+                    from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
+                    to = { x = 3500, y = 300, z=2, scale_x = 10, scale_y = 20, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+                {
+                    id = "dna_win_11",
+                    start_at = 10,
+                    anim = "outro_purge_win_spaceship_fadeBlack",
+                    duration = 5,
+                    ease = "linear",--"in_out_sine",
+                    from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
+                    to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+            } --END OF SHOTS
+        }, -- END OF OUTRO (dna_sample_win)
+   
 
     -----------------------------------------DNA_SAMPLE WIN--------------------------------------------
 
@@ -544,169 +542,354 @@ M.SEQUENCES = {
         }, -- END OF OUTRO (dna_sample_win)
 
 -----------------------------------------ESCAPE WIN--------------------------------------------
+escape_win = {
+    soundtrack = {
+        cue = "music_outro_purge_win",
+        stop_on_end = true
+    },
+    shots = {
+        {
+            id = "escape_win_00",
+            start_at = 0,
+            anim = "outro_purge_win_spaceship_fadeBlack",
+            duration = 2,
+            ease = "linear",--"in_out_sine",
+            from = { x = 0, y = 0, z=3.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+            to = { x = 0, y = 0, z=3.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
+            id = "escape_win_01",
+            start_at = 0,
+            anim = "outro_rescue_win_ground_hole",
+            duration = 10,
+            ease = "linear",--"in_out_sine",
+            from = { x = 0, y = -50, z=2.2, scale_x = 0.06, scale_y = 0.09, alpha = 1.0 },
+            to = { x = 0, y = -50, z=2.2, scale_x = 0.08, scale_y = 0.14, alpha = 1.0 },
 
-        escape_win = {
-            soundtrack = {
-                cue = "music_outro_purge_win",
-                stop_on_end = true
+            --fx_cues = {},
+            fx_cues = {
+                -- {
+                --     at = 2,
+                --     factory = "/rocket_hole_fx_factory#rocket_hole_fx_factory",
+                --     x = 0,
+                --     y = 0,
+                --     z = 2.2,
+                --     stop_on_shot_end = true
+                -- }
             },
-            shots = {
-                {
-                    id = "escape_win_01",
-                    start_at = 0,
-                    anim = "outro_purge_win_spaceship_fadeBlack",
-                    duration = 2,
-                    ease = "linear",--"in_out_sine",
-                    from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
-                    to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                    --fx_cues = {},
-                    sfx_cues = {}
+            sfx_cues = {}
+        },
+        {
+            id = "escape_win_02",
+            start_at = 0,
+            anim = "outro_rescue_win_ground_hole_hatch",
+            duration = 10,
+            ease = "in_out_sine",
+            from = { x = 350, y =-70, z=2, scale_x = 0.1, scale_y = 0.1, alpha = 1 },
+            to = { x = 800, y = -70, z=2, scale_x = 0.1, scale_y = 0.1, alpha = 1 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
+            id = "escape_win_03",
+            start_at = 0,
+            anim = "outro_rescue_win_ground_hole_hatch",
+            duration = 10,
+            ease = "in_out_sine",
+            from = { x = -250, y =-70, z=2, scale_x = 0.1, scale_y = 0.1, alpha = 1 },
+            to = { x = -800, y = -70, z=2, scale_x = 0.1, scale_y = 0.1, alpha = 1 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
+            id = "escape_win_04",
+            start_at = 0,
+            anim = "outro_rescue_win_ground_hole_glow",
+            duration = 10,
+            ease = "linear",--"in_out_sine",
+            from = { x = 0, y = -50, z=1.5, scale_x = 1, scale_y = 1, alpha = 1.0 },
+            to = { x = 0, y = -50, z=1.5, scale_x = 1, scale_y = 1, alpha = 1.0 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        -------------
+        {
+            id = "escape_win_05",
+            start_at = 10,
+            anim = "outro_rescue_win_civ_cockpit",
+            duration = 8,
+            ease = "linear",
+            from = { x = 0, y = -1500, z=1, scale_x = 0.35, scale_y = 0.7, alpha = 1.0 },
+            to = { x = 0, y = 0, z=1, scale_x = 0.00002, scale_y = 0.00003, alpha = 1.0 },
+
+            shake = {
+                amp_x = 8,      -- horizontal px
+                amp_y = 5,      -- vertical px
+                freq_hz = 8.0,  -- shake speed
+                start_at = 0.0, -- seconds into shot
+                end_at = 8,   -- seconds into shot
+                decay = true},    -- fades shake out toward end_at
+
+                --fx_cues = {},
+                sfx_cues = {}
+        },
+            {
+                id = "escape_win_06",
+                start_at = 11.4,
+                anim = "outro_rescue_win_civ_spaceship",
+                duration = 6.6,
+                ease = "linear",
+                from = { x = 50, y = -800, z=2, scale_x = 0.4, scale_y = 0.8, alpha = 1 },
+                to = { x = 0, y = 0, z=2, scale_x = 0.0005, scale_y = 0.001, alpha = 1 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "escape_win_07",
+                start_at = 17.9,
+                anim = "impactRing",
+                duration = 2,
+                ease = "in_out_sine",--"in_out_sine",
+                from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
+                to = { x = 0, y = 0, z=1, scale_x = 15, scale_y = 30, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "escape_win_072",
+                start_at = 18.5,
+                anim = "outro_rescue_win_civ_spaceship",
+                duration = 1,
+                ease = "linear",
+                from = { x = 0, y = 0, z=2, scale_x = 0.005, scale_y = 0.01, alpha = 1 },
+                to = { x = 0, y = 0, z=2, scale_x = 0.4, scale_y = 0.8, alpha = 1 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "escape_win_05",
+                start_at = 18.5,
+                anim = "outro_rescue_win_civ_cockpit",
+                duration = 1,
+                ease = "linear",
+                from = { x = 0, y = 0, z=1, scale_x = 0.0002, scale_y = 0.0003, alpha = 1.0 },
+                to = { x = -50, y = 0, z=1, scale_x = 0.35, scale_y = 0.7, alpha = 1.0 },
                 },
-                {
-                    id = "escape_win_02",
-                    start_at = 0,
-                    anim = "backdrop_computer",
-                    duration = 5,
-                    ease = "linear",
-                    from = { x = 0, y = 0, z=1, scale_x = 0.075, scale_y = 0.15, alpha = 1 },
-                    to = { x = 0, y = -50, z=1, scale_x = 0.075, scale_y = 0.15, alpha = 1 },
-                    --fx_cues = {},
-                    shake = {
-                        amp_x = 2,      -- horizontal px
-                        amp_y = 1,      -- vertical px
-                        freq_hz = 8.0,  -- shake speed
-                        start_at = 0.0, -- seconds into shot
-                        end_at = 5,   -- seconds into shot
-                        decay = false},    -- fades shake out toward end_at
+            {
+                id = "escape_win_08",
+                start_at = 11,
+                anim = "outro_top_down_landscape",
+                duration = 14,
+                ease = "linear",--"in_out_sine",
+                from = { x = 0, y = 0, z=0.5, rotation_deg = 0, scale_x = 0.8, scale_y = 1, alpha = 1.0 },
+                to = { x = 0, y = 0, z=0.5, rotation_deg = -45, scale_x = 0.15, scale_y = 0.2, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "escape_win_09",
+                start_at = 22,
+                anim = "outro_purge_win_spaceship_fadeBlack",
+                duration = 3,
+                ease = "linear",--"in_out_sine",
+                from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
+                to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+        },
+    },
 
-                        --fx_cues = {},
-                        --sfx_cues = {}
-                        --},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_03",
-                        start_at = 0,
-                        anim = "outro_arrive_outside_base_entry",
-                        duration = 5,
-                        ease = "linear",
-                        from = { x = 0, y = 0, z=2, scale_x = 0.065, scale_y = 0.1, alpha = 1 },
-                        to = { x = 0, y = -100, z=2, scale_x = 0.065, scale_y = 0.1, alpha = 1 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_04",
-                        start_at = 0,
-                        anim = "outro_purge_win_techie_spaceship",
-                        duration = 5,
-                        ease = "in_quad",
-                        from = { x = 50, y =-100, z=1.5, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
-                        to = { x = 50, y = 600, z=1.5, scale_x = 0.025, scale_y = 0.05, alpha = 1 },
-                        --fx_cues = {},
-                        fx_cues = {
-                            {
-                                at = 0.0, -- seconds into this shot
-                                factory = "/spaceship_launch_thruster_fx_factory#spaceship_launch_thruster_fx_factory",
-                                from = { x = 50, y = -300, z = 2.5 }, -- start under ship
-                                to =   { x = 50, y = 320,  z = 2.5 }, -- rise with ship
-                                move_duration = 5.0,                  -- match shot movement
-                                ease = "in_quad",
-                                rotation_deg = 0,
-                                stop_on_shot_end = true,
-                            },
-                        },
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_05",
-                        start_at = 4,
-                        anim = "outro_purge_win_spaceship_fadeBlack",
-                        duration = 1,
-                        ease = "linear",--"in_out_sine",
-                        from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                        to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_06",
-                        start_at = 5,
-                        anim = "outro_purge_win_spaceship_fadeBlack",
-                        duration = 2,
-                        ease = "linear",--"in_out_sine",
-                        from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
-                        to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    --   
-                    {
-                        id = "escape_win_07",
-                        start_at = 5,
-                        anim = "outro_purge_win_space",
-                        duration = 10,
-                        ease = "linear",--"in_out_sine",
-                        from = { x = 0, y = 0, z=0, scale_x = 0.1, scale_y = 0.1, alpha = 1.0 },
-                        to = { x = 0, y = 0, z=0, scale_x = 0.1, scale_y = 0.1, alpha = 1.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_08",
-                        start_at = 5,
-                        anim = "outro_purge_win_planet",
-                        duration = 10,
-                        ease = "linear",--"in_out_sine",
-                        from = { x = 0, y = 0, z=0.5, scale_x = 0.155, scale_y = 0.3, alpha = 1.0 },
-                        to = { x = 0, y = 0, z=0.5, scale_x = 0.01, scale_y = 0.02, alpha = 1.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_09",
-                        start_at = 6,
-                        anim = "outro_purge_win_spaceship_passby",
-                        duration = 3,
-                        ease = "in_out_sine",--"in_out_sine",
-                        from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
-                        to = { x = 3500, y = 300, z=2, scale_x = 0.2, scale_y = 0.4, alpha = 1.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_10",
-                        start_at = 6,
-                        anim = "impactRing",
-                        duration = 3,
-                        ease = "in_out_sine",--"in_out_sine",
-                        from = { x = 0, y = 0, z=2, scale_x = 0.002, scale_y = 0.002, alpha = 1.0 },
-                        to = { x = 3500, y = 300, z=2, scale_x = 10, scale_y = 20, alpha = 1.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                    {
-                        id = "escape_win_11",
-                        start_at = 10,
-                        anim = "outro_purge_win_spaceship_fadeBlack",
-                        duration = 5,
-                        ease = "linear",--"in_out_sine",
-                        from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
-                        to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
-                        --fx_cues = {},
-                        sfx_cues = {}
-                    },
-                } --END OF SHOTS
-            }, -- END OF OUTRO (escape_win)
+    -----------------------------------------PURGE LOSE--------------------------------------------
 
------------------------------------------PURGE LOSE--------------------------------------------
+    lose = {
+        soundtrack = {
+            cue = "music_outro_purge_win",
+            stop_on_end = true
+        },
+        shots = {
+            {
+                id = "lose_01",
+                start_at = 0,
+                anim = "outro_purge_win_spaceship_fadeBlack",
+                duration = 2,
+                ease = "linear",--"in_out_sine",
+                from = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                to = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 0.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "lose_02",
+                start_at = 2,
+                anim = "sweep_shadow",
+                duration = 2,
+                ease = "linear",
+                from = { x = -1000, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
+                to = { x = 700, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "lose_03",
+                start_at = 0,
+                anim = "outro_dying_derple",
+                duration = 6,
+                ease = "in_out_sine",
+                from = { x = 0, y = -350, z = 2.2, scale_x = 0.2, scale_y = 0.350, alpha = 1.0 },
+                to = { x = 0, y = 0, z = 2.2, scale_x = 0.05, scale_y = 0.087, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "lose_04",
+                start_at = 0,
+                anim = "outro_dying_derple_eyes",
+                duration = 6,
+                ease = "in_out_sine",
+                from = { x = 0, y = -350, z = 1.8, scale_x = 0.2, scale_y = 0.350, alpha = 1.0 },
+                to = { x = 0, y = 0, z = 1.8, scale_x = 0.05, scale_y = 0.087, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "lose_05",
+                start_at = 0,
+                anim = "outro_dying_derple_eyelids",
+                duration = 6,
+                ease = "in_out_sine",
+                from = { x = 0, y = -250, z = 1.9, scale_x = 0.2, scale_y = 0.350, alpha = 1.0 },
+                to = { x = 0, y = -50, z = 1.9, scale_x = 0.05, scale_y = 0.087, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            -- {
+            --     id = "lose_05b",
+            --     start_at = 3,
+            --     anim = "outro_dying_derple_eyelids",
+            --     duration = 3,
+            --     ease = "in_out_sine",
+            --     from = { x = 0, y = -50, z = 1.9, scale_x = 0.2, scale_y = 0.350, alpha = 1.0 },
+            --     to = { x = 0, y = -250, z = 1.9, scale_x = 0.05, scale_y = 0.087, alpha = 1.0 },
+            --     --fx_cues = {},
+            --     sfx_cues = {}
+            -- },
+            {
+                id = "lose_06",
+                start_at = 4,
+                anim = "outro_purge_win_spaceship_fadeBlack",
+                duration = 2,
+                ease = "linear",--"in_out_sine",
+                from = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 0.0 },
+                to = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+        } --END OF SHOTS
+    }, -- END OF OUTRO (lose)
+
+    
 -----------------------------------------RESCUE LOSE--------------------------------------------         
 -----------------------------------------DNA_SAMPLE LOSE--------------------------------------------
 -----------------------------------------ESCAPE LOSE--------------------------------------------
 -----------------------------------------TITLE--------------------------------------------
 
+title = {
+    soundtrack = {
+        cue = "music_outro_purge_win",
+        stop_on_end = true
+    },
+    shots = {
+        {
+            id = "title_01",
+            start_at = 0,
+            anim = "outro_purge_win_spaceship_fadeBlack",
+            duration = 2,
+            ease = "linear",--"in_out_sine",
+            from = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 1.0 },
+            to = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 0.0 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
+            id = "title_02",
+            start_at = 0,
+            anim = "outro_purge_win_space",
+            duration = 20,
+            ease = "linear",
+            from = { x = 0, y = 0, z = 1, scale_x = 1, scale_y = 1, alpha = 1 },
+            to = { x = 0, y = 0, z = 1, scale_x = 1, scale_y = 1, alpha = 1 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
+            id = "title_03",
+            start_at = 0,
+            anim = "outro_title_aliens_lines",
+            duration = 6,
+            ease = "in_out_sine",
+            from = { x = 0, y = 0, z = 2, scale_x = 1, scale_y = 1, alpha = 1.0 },
+            to = { x = 0, y = 0, z = 2, scale_x = 1, scale_y = 1, alpha = 1.0 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
+            id = "title_04",
+            start_at = 6,
+            anim = "outro_title_xenos_word",
+            duration = 12,
+            ease = "in_out_sine",
+            from = { x = 0, y = 0, z = 1.8, scale_x = 1, scale_y = 1, alpha = 0 },
+            to = { x = 0, y = 0, z = 1.8, scale_x = 1, scale_y = 1, alpha = 1.0 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        -- {
+        --     id = "lose_05",
+        --     start_at = 0,
+        --     anim = "outro_dying_derple_eyelids",
+        --     duration = 6,
+        --     ease = "in_out_sine",
+        --     from = { x = 0, y = -250, z = 1.9, scale_x = 0.2, scale_y = 0.350, alpha = 1.0 },
+        --     to = { x = 0, y = -50, z = 1.9, scale_x = 0.05, scale_y = 0.087, alpha = 1.0 },
+        --     --fx_cues = {},
+        --     sfx_cues = {}
+        -- },
+        -- {
+        --     id = "lose_05b",
+        --     start_at = 3,
+        --     anim = "outro_dying_derple_eyelids",
+        --     duration = 3,
+        --     ease = "in_out_sine",
+        --     from = { x = 0, y = -50, z = 1.9, scale_x = 0.2, scale_y = 0.350, alpha = 1.0 },
+        --     to = { x = 0, y = -250, z = 1.9, scale_x = 0.05, scale_y = 0.087, alpha = 1.0 },
+        --     --fx_cues = {},
+        --     sfx_cues = {}
+        -- },
+        -- {
+        --     id = "lose_06",
+        --     start_at = 4,
+        --     anim = "outro_purge_win_spaceship_fadeBlack",
+        --     duration = 2,
+        --     ease = "linear",--"in_out_sine",
+        --     from = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 0.0 },
+        --     to = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 1.0 },
+        --     --fx_cues = {},
+        --     sfx_cues = {}
+        -- },
+    } --END OF SHOTS
+}, -- END OF OUTRO (lose)
+
     
 } --END OF OUTRO SEQENCES (list of outros
+
+-- Mission-specific lose IDs map to the shared lose sequence.
+M.SEQUENCES.purge_lose = M.SEQUENCES.lose
+M.SEQUENCES.rescue_lose = M.SEQUENCES.lose
+M.SEQUENCES.dna_sample_lose = M.SEQUENCES.lose
+M.SEQUENCES.escape_lose = M.SEQUENCES.lose
 
 local function ensure_rotation_defaults(shot)
     if type(shot) ~= "table" then

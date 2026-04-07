@@ -490,3 +490,23 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "rocket_hole_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"rocket_hole_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/rocket_hole_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "thrusters_top_down_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"thrusters_top_down_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/thrusters_top_down_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

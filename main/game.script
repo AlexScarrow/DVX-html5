@@ -313,11 +313,11 @@ DNA_PROGRESS_TARGET = 10
 DNA_BRUTE_LOCAL_CELLS = { 5, 6 }
 DNA_BAR_LOCAL_CELL = 2
 DNA_SAMPLE_ITEM_TYPE = "dna_sample"
-DNA_RESCUE_RETURN_LOCAL_CELL = 5
+DNA_RESCUE_RETURN_LOCAL_CELL = 4
 PURGE_BOMB_ITEM_TYPE = "bomb"
 PURGE_BOMB_TILE_NAME = "portal"
 PURGE_BOMB_LOCAL_CELL = 6
-PURGE_RESCUE_RETURN_LOCAL_CELL = 5
+PURGE_RESCUE_RETURN_LOCAL_CELL = 4
 PURGE_COUNTDOWN_SECONDS = 300
 do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
@@ -332,6 +332,17 @@ do
         preview_result = "win"
     end
     DEBUG_OUTRO_PREVIEW_RESULT = preview_result
+end
+
+local function read_debug_outro_preview_settings()
+    local preview_cfg = sys.get_config and sys.get_config("debug.outro_preview") or nil
+    local enabled = (preview_cfg == "1" or preview_cfg == "true" or preview_cfg == "on")
+    local sequence = tostring((sys.get_config and sys.get_config("debug.outro_preview_sequence")) or "")
+    local result = tostring((sys.get_config and sys.get_config("debug.outro_preview_result")) or "win")
+    if result ~= "win" and result ~= "lose" then
+        result = "win"
+    end
+    return enabled, sequence, result
 end
 AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
@@ -4954,10 +4965,29 @@ local function tick_dna_progress_for_new_human_turn(self)
 end
 
 local function get_dna_mission_status(self)
+    local carriers_ready = 0
+    local victory_lookup = build_cell_lookup(get_rescue_entry_victory_cell_ids(self, DNA_RESCUE_RETURN_LOCAL_CELL))
+    if next(victory_lookup) ~= nil then
+        for _, unit in pairs(self.squad_units or {}) do
+            if unit
+                and (unit.current_health or 0) > 0
+                and unit.in_shuttle ~= true
+                and victory_lookup[tonumber(unit.cell_id or 0) or 0] == true
+            then
+                for _, item in ipairs(unit.backpack_items or {}) do
+                    if item == DNA_SAMPLE_ITEM_TYPE then
+                        carriers_ready = carriers_ready + 1
+                        break
+                    end
+                end
+            end
+        end
+    end
     return {
         progress = math.max(0, math.min(DNA_PROGRESS_TARGET, tonumber(self.dna_analysis_progress or 0) or 0)),
         complete = self.dna_analysis_complete == true,
-        return_ready = self.dna_sample_returned == true,
+        return_ready = carriers_ready > 0,
+        carriers_ready = carriers_ready,
         sample_spawned = self.dna_sample_spawned == true,
         sample_returned = self.dna_sample_returned == true
     }
@@ -10008,6 +10038,8 @@ apply_aesthetic_mode = function(self)
                     "play_animation",
                     { id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode) }
                 )
+                local always_visible = tile_def and tile_def.alphaOverlayAlwaysVisible == true
+                go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, always_visible and 1 or 0))
             end
         end
     end
@@ -14590,9 +14622,10 @@ end
                     "play_animation",
                     { id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode) }
                 )
-                go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+                local always_visible = tile_def and tile_def.alphaOverlayAlwaysVisible == true
+                go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, always_visible and 1 or 0))
                 self.tile_alpha_layers[placement_index] = alpha_id
-                self.tile_alpha_power_state[placement_index] = false
+                self.tile_alpha_power_state[placement_index] = always_visible and true or false
             end
         end
         print("Spawned " .. #tile_objects .. " tiles")
@@ -14895,15 +14928,16 @@ function init(self)
     self.flow_outro_timer = 0
     self.flow_submit_done = false
     enter_flow_state(self, FLOW_STATE_TITLE)
-    if DEBUG_OUTRO_PREVIEW_ENABLED == true then
-        self.game_won = DEBUG_OUTRO_PREVIEW_RESULT == "win"
-        self.debug_outro_sequence_override = tostring(DEBUG_OUTRO_PREVIEW_SEQUENCE or "")
-        enter_mission_outro(self, DEBUG_OUTRO_PREVIEW_RESULT, "debug_preview")
+    local preview_enabled, preview_sequence, preview_result = read_debug_outro_preview_settings()
+    if preview_enabled == true then
+        self.game_won = preview_result == "win"
+        self.debug_outro_sequence_override = tostring(preview_sequence or "")
+        enter_mission_outro(self, preview_result, "debug_preview")
         self.debug_outro_sequence_override = nil
         print(string.format(
             "DEBUG OUTRO PREVIEW | enabled sequence=%s result=%s",
             tostring(self.end_outro_sequence_id),
-            tostring(DEBUG_OUTRO_PREVIEW_RESULT)
+            tostring(preview_result)
         ))
     end
 
@@ -15062,20 +15096,29 @@ function update(self, dt)
     if self.world_grid and self.tile_alpha_layers then
         for tile_instance_id, alpha_go in pairs(self.tile_alpha_layers) do
             local tile_powered = false
-            for _, cell in ipairs(self.world_grid) do
-                if cell.tileInstanceId == tile_instance_id and cell.isPowered then
-                    tile_powered = true
-                    break
+            local always_visible = false
+            local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+            local placement = selected_level and selected_level[tile_instance_id] or nil
+            local tile_def = placement and self.tile_library and self.tile_library[placement.tile] or nil
+            if tile_def and tile_def.alphaOverlayAlwaysVisible == true then
+                always_visible = true
+            else
+                for _, cell in ipairs(self.world_grid) do
+                    if cell.tileInstanceId == tile_instance_id and cell.isPowered then
+                        tile_powered = true
+                        break
+                    end
                 end
             end
             local was_powered = self.tile_alpha_power_state[tile_instance_id]
-            if was_powered == nil or was_powered ~= tile_powered then
-                if tile_powered then
+            local now_on = always_visible or tile_powered
+            if was_powered == nil or was_powered ~= now_on then
+                if now_on then
                     go.set(msg.url(nil, alpha_go, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                 else
                     go.set(msg.url(nil, alpha_go, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
                 end
-                self.tile_alpha_power_state[tile_instance_id] = tile_powered
+                self.tile_alpha_power_state[tile_instance_id] = now_on
             end
         end
     end

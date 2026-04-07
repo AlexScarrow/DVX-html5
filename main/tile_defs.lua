@@ -9,6 +9,7 @@ local function create_tile_prototype(tile_id)
         visualTile = tile_id,
         alphaOverlayMode = "generic",
         alphaOverlay = "generic_alpha_layer",
+        alphaOverlayAlwaysVisible = false,
         cells = {}
     }
 
@@ -112,6 +113,11 @@ function M.create_tile_library(COMPONENT_UI)
     rescue_entry.visualTile = "rescue_entry_computerGame"
     rescue_entry.visualTileComputer = "rescue_entry_computerGame"
     rescue_entry.visualTileBoardgame = "rescue_entry_boardGame"
+
+    rescue_entry.alphaOverlayMode = "specified"
+    rescue_entry.alphaOverlay = "tile_rescue_entry_overlay"
+    rescue_entry.alphaOverlayAlwaysVisible = true
+    
     for i = 1, 9 do
         rescue_entry.cells[i].lightValue = 2
         rescue_entry.cells[i].moveValue = 1

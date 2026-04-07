@@ -42,6 +42,6 @@ sync_trace = 0
 
 [debug]
 outro_preview = 1
-outro_preview_sequence = escape_lose
+outro_preview_sequence = title
 outro_preview_result = win
 

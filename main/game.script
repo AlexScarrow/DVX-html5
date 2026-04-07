@@ -7057,6 +7057,14 @@ create_ui_marker_sprite = function(anim_id, z)
     return id
 end
 
+local function create_outro_marker_sprite(anim_id, z)
+    local id = factory.create("/outro_marker_factory#outro_marker_factory", vmath.vector3(-9999, -9999, z or FLOW_UI_BUTTON_Z))
+    if id and anim_id then
+        msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = anim_id })
+    end
+    return id
+end
+
 local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color, scale_x, scale_y, rotation_deg)
     if not go_id then
         return
@@ -7623,7 +7631,7 @@ local function initialize_unit_ui(self)
     self.ui.drag_pip = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.9))
     self.ui.flow_overlay = create_ui_square(0, 0, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 0), SCREEN_WIDTH, SCREEN_HEIGHT)
     self.ui.flow_panel = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
-    self.ui.flow_outro_slide = create_ui_marker_sprite(hash("lootCrate"), FLOW_UI_PANEL_Z + 0.001)
+    self.ui.flow_outro_slide = create_outro_marker_sprite(hash("outro_purge_win_spaceship_fadeBlack"), FLOW_UI_PANEL_Z + 0.001)
     self.ui.flow_outro_ship = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 280, 120)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
     self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
@@ -8337,7 +8345,7 @@ local function ensure_outro_slide_layer_nodes(self, needed)
     self.outro_slide_layer_nodes = self.outro_slide_layer_nodes or { self.ui and self.ui.flow_outro_slide or nil }
     self.outro_slide_layer_anim_ids = self.outro_slide_layer_anim_ids or {}
     while #self.outro_slide_layer_nodes < needed do
-        local id = create_ui_marker_sprite(hash("lootCrate"), FLOW_UI_PANEL_Z + 0.001)
+        local id = create_outro_marker_sprite(hash("outro_purge_win_spaceship_fadeBlack"), FLOW_UI_PANEL_Z + 0.001)
         table.insert(self.outro_slide_layer_nodes, id)
     end
 end

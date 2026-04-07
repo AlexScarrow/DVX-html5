@@ -476,6 +476,21 @@ images {
   image: "/assets/images/human_coms_panel.png"
 }
 images {
+  image: "/assets/images/objective_button.png"
+}
+images {
+  image: "/assets/images/objective_escape.png"
+}
+images {
+  image: "/assets/images/objective_rescue.png"
+}
+images {
+  image: "/assets/images/objective_purge.png"
+}
+images {
+  image: "/assets/images/objective_dna.png"
+}
+images {
   image: "/assets/images/warning_gas_HP-da9eac34-b415-43b9-9748-de79679476a4.png"
 }
 images {

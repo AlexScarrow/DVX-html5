@@ -124,8 +124,26 @@ function M.create_tile_library(COMPONENT_UI)
         rescue_entry.cells[i].coverValue = 1
         rescue_entry.cells[i].isOutside = true
     end
+
+    rescue_entry.cells[1].hazard_type = "outside"
+    rescue_entry.cells[2].hazard_type = "outside"
+    rescue_entry.cells[3].hazard_type = "outside"
+    --rescue_entry.cells[4].hazard_type = "outside"
+    --rescue_entry.cells[5].hazard_type = "outside"
+    rescue_entry.cells[6].hazard_type = "outside"
+    rescue_entry.cells[7].hazard_type = "outside"
+    rescue_entry.cells[8].hazard_type = "outside"
+    rescue_entry.cells[9].hazard_type = "outside"
+
+
+
+    
     rescue_entry.cells[3].moveValue = 3
     rescue_entry.cells[6].moveValue = 3
+
+
+
+    
     rescue_entry.cells[1].accessDown = false
     rescue_entry.cells[2].accessDown = false
     rescue_entry.cells[3].accessRight = false

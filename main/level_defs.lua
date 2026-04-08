@@ -171,6 +171,51 @@ function M.create_level_library()
             starting_equipped_buffs = {}
         }
     }
+--TUTORIAL LEVEL
+    levels[5] = {
+
+        -- { x = 8, y = 8, tile = "canteen" },
+        -- { x = 14, y = 11, tile = "factory" },
+        -- { x = 8, y = 11, tile = "workshop" },
+        -- { x = 5, y = 11, tile = "coms" },
+        -- { x = 11, y = 8, tile = "medbay" },
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "canteen" },
+        { x = 5, y = 5, tile = "exit" },
+        { x = 5, y = 11, tile = "coms" },
+        { x = 8, y = 6, tile = "workshop" },
+        { x = 11, y = 6, tile = "factory" },
+        -- { x = 5, y = 8, tile = "armoury" },
+        -- { x = 14, y = 8, tile = "exterior1" },
+        -- { x = 11, y = 11, tile = "lab" },
+        -- { x = 14, y = 5, tile = "portal" },
+        -- --{ x = 14, y = 9, tile = "portal" },
+        -- { x = 11, y = 2, tile = "exit" },
+        -- { x = 10, y = 5, tile = "passage1" },
+    }
+    levels[5].mission_type = "tutorial"
+    levels[5].spawn_tile = "entry"
+    levels[5].spawn_cell = 2
+    levels[5].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = {"power" },
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power" },
+            starting_equipped_buffs = {}
+        },
+        medic = {
+            starting_backpack_items = {"power"},
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {}
+        }
+    }
     
     -- Example Level 2
     -- EXPERIMENTAL layout: temporary playtest board, intended to be easy to replace.

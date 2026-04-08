@@ -73,6 +73,9 @@ images {
 images {
   image: "/assets/images/outro_title_derples_word.png"
 }
+images {
+  image: "/assets/images/outro_title_derple_definition.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

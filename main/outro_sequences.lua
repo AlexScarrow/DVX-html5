@@ -902,6 +902,17 @@ title = {
             sfx_cues = {}
         },
         {
+            id = "title_03",
+            start_at = 18,
+            anim = "outro_title_derple_definition",
+            duration = 6,
+            ease = "linear",
+            from = { x = 0, y = -130, z = 2.7, scale_x = 0.03, scale_y = 0.04, alpha = 0 },
+            to = { x = 0, y = -130, z = 2.7, scale_x = 0.03, scale_y = 0.04, alpha = 1.0 },
+            --fx_cues = {},
+            sfx_cues = {}
+        },
+        {
             id = "title_01",
             start_at = 23,
             anim = "outro_purge_win_spaceship_fadeBlack",

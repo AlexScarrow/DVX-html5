@@ -151,7 +151,9 @@ function M.create_tile_library(COMPONENT_UI)
     rescue_entry.cells[4].accessRight = true
     rescue_entry.cells[4].accessDown = true
     rescue_entry.cells[5].accessDown = false
+    rescue_entry.cells[7].accessDown = false
     rescue_entry.cells[8].accessDown = false
+    rescue_entry.cells[8].accessRight = false
     --rescue_entry.cells[5].accessRight = false
     rescue_entry.cells[6].accessRight = false
     rescue_entry.cells[9].object1 = {

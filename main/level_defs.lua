@@ -189,7 +189,7 @@ function M.create_level_library()
         -- { x = 14, y = 8, tile = "exterior1" },
         -- { x = 11, y = 11, tile = "lab" },
         -- { x = 14, y = 5, tile = "portal" },
-        -- --{ x = 14, y = 9, tile = "portal" },
+        { x = 8, y = 9, tile = "portal" },
         -- { x = 11, y = 2, tile = "exit" },
         -- { x = 10, y = 5, tile = "passage1" },
     }
@@ -198,21 +198,21 @@ function M.create_level_library()
     levels[5].spawn_cell = 2
     levels[5].unit_loadouts = {
         sarge = {
-            starting_backpack_items = {"power" },
+            starting_backpack_items = {"power","ammo","ammo" },
             starting_equipped_buffs = {
                 top = "buff_night_vision"
             }
         },
         techie = {
-            starting_backpack_items = { "power" },
+            starting_backpack_items = { "power","power","power" },
             starting_equipped_buffs = {}
         },
         medic = {
-            starting_backpack_items = {"power"},
+            starting_backpack_items = {"power","meds","meds"},
             starting_equipped_buffs = {}
         },
         gunner = {
-            starting_backpack_items = {},
+            starting_backpack_items = {"power","ammo","ammo"},
             starting_equipped_buffs = {}
         }
     }

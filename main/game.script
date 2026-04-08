@@ -257,6 +257,7 @@ TUTORIAL_PANEL_W = 600
 TUTORIAL_PANEL_H = 300
 TUTORIAL_PANEL_Z = FLOW_UI_PANEL_Z + 0.02
 TUTORIAL_NEXT_HOTSPOT_SIZE = 128
+TUTORIAL_PANEL_DRAW_SCALE = 0.8
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -440,7 +441,8 @@ local TUTORIAL_STEP_DEFS = {
     { anim = hash("tutorial5"), tile = "escape", cell = 1 },
     { anim = hash("tutorial6"), tile = "coms", cell = 5 },
     { anim = hash("tutorial7"), tile = "workshop", cell = 6 },
-    { anim = hash("tutorial8"), tile = "factory", cell = 6 }
+    { anim = hash("tutorial8"), tile = "factory", cell = 6 },
+    { anim = hash("tutorial9"), tile = "factory", cell = 6 }
 }
 LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
@@ -4639,9 +4641,13 @@ local function update_alien_movement(self, dt)
 end
 
 local any_civilian_is_moving
+local tutorial_rules_locked
 local get_current_mission_type
 
 local function process_alien_turn(self)
+    if tutorial_rules_locked and tutorial_rules_locked(self) then
+        return
+    end
     self.aliens = self.aliens or {}
 
     if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase or any_civilian_is_moving(self) then
@@ -4790,6 +4796,9 @@ local function process_alien_turn(self)
 end
 
 local function spawn_initial_blips(self, count)
+    if tutorial_rules_locked and tutorial_rules_locked(self) then
+        return
+    end
     local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
     if #edge_cells == 0 then
         return
@@ -4987,9 +4996,9 @@ local function tutorial_try_advance_from_click(self, screen_x, screen_y)
     if zoom <= 0 then
         zoom = 1
     end
-    local panel_w_screen = TUTORIAL_PANEL_W * zoom
-    local panel_h_screen = TUTORIAL_PANEL_H * zoom
-    local hotspot_size_screen = math.max(48, TUTORIAL_NEXT_HOTSPOT_SIZE * zoom)
+    local panel_w_screen = TUTORIAL_PANEL_W * TUTORIAL_PANEL_DRAW_SCALE * zoom
+    local panel_h_screen = TUTORIAL_PANEL_H * TUTORIAL_PANEL_DRAW_SCALE * zoom
+    local hotspot_size_screen = math.max(48, TUTORIAL_NEXT_HOTSPOT_SIZE * TUTORIAL_PANEL_DRAW_SCALE * zoom)
     local half_w = panel_w_screen * 0.5
     local half_h = panel_h_screen * 0.5
     local hotspot_center_x = self.tutorial_panel_screen_x + half_w - (hotspot_size_screen * 0.5)
@@ -5004,12 +5013,17 @@ local function tutorial_try_advance_from_click(self, screen_x, screen_y)
             self.tutorial_step_index = nil
             self.tutorial_anchor_world_x = nil
             self.tutorial_anchor_world_y = nil
+            self.tutorial_completed = true
         else
             tutorial_set_current_step(self, next_idx)
         end
         return true
     end
     return true
+end
+
+tutorial_rules_locked = function(self)
+    return self and self.tutorial_mode == true and self.tutorial_completed ~= true
 end
 
 local function build_cell_lookup(cell_ids)
@@ -8318,6 +8332,7 @@ local function start_tutorial_game_flow(self)
     self.controlled_unit_id = "sarge"
     reset_and_load_level(self, 5)
     self.tutorial_mode = true
+    self.tutorial_completed = false
     local step1 = TUTORIAL_STEP_DEFS[1]
     local wx, wy = get_tutorial_step_world_center(self, step1)
     if wx and wy then
@@ -9610,6 +9625,7 @@ function reset_and_load_level(self, level_index)
     self.outro_fx_instances = {}
     self.outro_slide_anim_id = nil
     self.tutorial_mode = false
+    self.tutorial_completed = false
     self.tutorial_overlay_active = false
     self.tutorial_step_index = nil
     self.tutorial_anchor_world_x = nil
@@ -9699,11 +9715,23 @@ function update_global_ui_buttons(self)
         update_score_hud(self, false)
         return
     end
+    local tutorial_locked = tutorial_rules_locked and tutorial_rules_locked(self)
     local alien_cycle_active = self.alien_turn_active
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase
         or any_alien_is_moving(self)
-    if alien_cycle_active then
+    if tutorial_locked then
+        set_ui_square_transform(
+            self,
+            self.ui.new_turn_button,
+            NEW_TURN_BUTTON_X,
+            NEW_TURN_BUTTON_Y,
+            NEW_TURN_BUTTON_Z,
+            vmath.vector4(0.85, 0.2, 0.2, 0.95),
+            NEW_TURN_BUTTON_VISUAL_SCALE,
+            NEW_TURN_BUTTON_VISUAL_SCALE
+        )
+    elseif alien_cycle_active then
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
@@ -9864,11 +9892,11 @@ local function update_tutorial_overlay_ui(self)
             world_x, world_y = screen_to_world(self.tutorial_panel_screen_x, self.tutorial_panel_screen_y, self.camera_pos, self.camera_zoom)
         end
         go.set_position(vmath.vector3(world_x, world_y, TUTORIAL_PANEL_Z), self.ui.tutorial_panel)
-        go.set_scale(vmath.vector3(1, 1, 1), self.ui.tutorial_panel)
+        go.set_scale(vmath.vector3(TUTORIAL_PANEL_DRAW_SCALE, TUTORIAL_PANEL_DRAW_SCALE, 1), self.ui.tutorial_panel)
         go.set(msg.url(nil, self.ui.tutorial_panel, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
     else
         go.set_position(vmath.vector3(-9999, -9999, TUTORIAL_PANEL_Z), self.ui.tutorial_panel)
-        go.set_scale(vmath.vector3(1, 1, 1), self.ui.tutorial_panel)
+        go.set_scale(vmath.vector3(TUTORIAL_PANEL_DRAW_SCALE, TUTORIAL_PANEL_DRAW_SCALE, 1), self.ui.tutorial_panel)
         go.set(msg.url(nil, self.ui.tutorial_panel, "sprite"), "tint", hidden)
     end
 end
@@ -11062,6 +11090,9 @@ function try_next_turn_button(self, screen_x, screen_y)
         and screen_x <= (NEW_TURN_BUTTON_X + half_w)
         and screen_y >= (NEW_TURN_BUTTON_Y - half_h)
         and screen_y <= (NEW_TURN_BUTTON_Y + half_h) then
+        if tutorial_rules_locked and tutorial_rules_locked(self) then
+            return true
+        end
         if not can_advance_next_turn(self, true) then
             return true
         end
@@ -12989,7 +13020,7 @@ local function next_turn_reset_human_ap(self)
 end
 
 local function enforce_tutorial_infinite_ap(self)
-    if not (self and self.tutorial_mode == true and self.squad_units) then
+    if not (self and tutorial_rules_locked and tutorial_rules_locked(self) and self.squad_units) then
         return
     end
     for _, unit in pairs(self.squad_units) do
@@ -16086,6 +16117,9 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
+        if tutorial_rules_locked and tutorial_rules_locked(self) then
+            return true
+        end
         if self.alien_turn_active
             or self.pending_spitter_attack_phase
             or self.pending_melee_attack_phase
@@ -16123,6 +16157,9 @@ end
 function on_message(self, message_id, message, sender)
     if message_id == hash("next_turn") then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return
+        end
+        if tutorial_rules_locked and tutorial_rules_locked(self) then
             return
         end
         if self.alien_turn_active

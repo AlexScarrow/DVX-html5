@@ -351,7 +351,7 @@ canteen.cells[3].object1 = {
     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
 }
-canteen.cells[3].hazard_type = "gas"
+--canteen.cells[3].hazard_type = "gas"
 canteen.cells[4].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
@@ -359,6 +359,9 @@ canteen.cells[4].object1 = {
         "power",
         "wiring_straight",
         "wiring_straight",
+        "ammo",
+        "meds",
+        "material"
         -- "buff_armour",
         -- "buff_hazmat",
         -- "buff_oxygen_mask",
@@ -466,6 +469,27 @@ library["canteen"] = canteen
     exit.cells[8].accessRight = false
     exit.cells[9].accessRight = false
     exit.cells[9].accessDown = false
+
+    exit.cells[2].object1 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = {
+            "power",
+            "buff_armour",
+            "ammo",
+            "ammo",
+            "ammo",
+            "ammo",
+            "power",
+            "power"
+            -- "buff_hazmat",
+            -- "buff_oxygen_mask",
+            -- "buff_speed_stims",
+            -- "buff_night_vision",
+            -- "buff_melee_left",
+            -- "buff_melee_right"
+        }
+    }
     
     exit.cells[3].object1 = {
         name = hash("escape_pod_power_socket"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2301,

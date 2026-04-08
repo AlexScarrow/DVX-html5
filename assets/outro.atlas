@@ -76,6 +76,30 @@ images {
 images {
   image: "/assets/images/outro_title_derple_definition.png"
 }
+images {
+  image: "/assets/images/tutorial1.png"
+}
+images {
+  image: "/assets/images/tutorial2.png"
+}
+images {
+  image: "/assets/images/tutorial3.png"
+}
+images {
+  image: "/assets/images/tutorial4.png"
+}
+images {
+  image: "/assets/images/tutorial5.png"
+}
+images {
+  image: "/assets/images/tutorial6.png"
+}
+images {
+  image: "/assets/images/tutorial7.png"
+}
+images {
+  image: "/assets/images/tutorial8.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

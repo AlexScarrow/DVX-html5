@@ -325,7 +325,7 @@ end
 canteen.cells[3].moveValue = 3
 canteen.cells[6].moveValue = 3
 
-canteen.cells[1].accessDown = false
+canteen.cells[1].accessDown = true--false
 --canteen.cells[1].accessRight = false
 --canteen.cells[2].accessRight = false
 --canteen.cells[3].accessRight = false
@@ -356,13 +356,16 @@ canteen.cells[4].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
     lootItems = {
-        "buff_armour",
-        "buff_hazmat",
-        "buff_oxygen_mask",
-        "buff_speed_stims",
-        "buff_night_vision",
-        "buff_melee_left",
-        "buff_melee_right"
+        "power",
+        "wiring_straight",
+        "wiring_straight",
+        -- "buff_armour",
+        -- "buff_hazmat",
+        -- "buff_oxygen_mask",
+        -- "buff_speed_stims",
+        -- "buff_night_vision",
+        -- "buff_melee_left",
+        -- "buff_melee_right"
     }
 }
 canteen.cells[2].object1 = {
@@ -380,13 +383,13 @@ canteen.cells[2].object3 = {
     offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
-canteen.cells[2].hazard_type = "gas"
+--canteen.cells[2].hazard_type = "gas"
 canteen.cells[1].object1 = {
     name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 64, requiredComponent = nil,
     powerLoaded = 0, powerRequired = 9
 }
-canteen.cells[1].hazard_type = "gas"
+--canteen.cells[1].hazard_type = "gas"
 canteen.cells[8].object1 = {
     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
@@ -401,22 +404,22 @@ canteen.cells[9].object1 = {
 --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
 --     offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
 -- }
-canteen.cells[8].object2 = {
-    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
-    offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
-    stackCount = 1, obstacleCount = 1
-}
-canteen.cells[8].object3 = {
-    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 803,
-    offsetX = 0, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
-    stackCount = 1, obstacleCount = 1
-}
-canteen.cells[8].object4 = {
-    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 804,
-    offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
-    stackCount = 1, obstacleCount = 1
-}
-canteen.cells[8].hazard_type = "fire"
+-- canteen.cells[8].object2 = {
+--     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+--     offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+--     stackCount = 1, obstacleCount = 1
+-- }
+-- canteen.cells[8].object3 = {
+--     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 803,
+--     offsetX = 0, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+--     stackCount = 1, obstacleCount = 1
+-- }
+-- canteen.cells[8].object4 = {
+--     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 804,
+--     offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+--     stackCount = 1, obstacleCount = 1
+-- }
+--canteen.cells[8].hazard_type = "fire"
 
 canteen.cells[9].object2 = {
     name = hash("supply_loader"), isFixed = true, hasFood = true, contributesToExitObjective = false,
@@ -431,7 +434,7 @@ canteen.cells[7].object1 = {
     name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
     offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
 }
-canteen.cells[7].hazard_type = "fire"
+--canteen.cells[7].hazard_type = "fire"
 -- 
 -- 
 library["canteen"] = canteen

@@ -41,7 +41,7 @@ htmlfile = /web/index.html
 sync_trace = 0
 
 [debug]
-outro_preview = 1
+outro_preview = 0
 outro_preview_sequence = title
 outro_preview_result = win
 

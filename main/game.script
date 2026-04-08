@@ -247,6 +247,16 @@ FLOW_UI_PANEL_Z = 1.42
 FLOW_UI_BUTTON_Z = 1.43
 FLOW_UI_SCREEN_W = 1260
 FLOW_UI_SCREEN_H = 720
+TITLE_TUTORIAL_BUTTON_X = SCREEN_WIDTH * 0.5
+TITLE_TUTORIAL_BUTTON_Y = SCREEN_HEIGHT * 0.66
+TITLE_SOLO_BUTTON_X = SCREEN_WIDTH * 0.5
+TITLE_SOLO_BUTTON_Y = SCREEN_HEIGHT * 0.52
+TITLE_MULTIPLAYER_BUTTON_X = SCREEN_WIDTH * 0.5
+TITLE_MULTIPLAYER_BUTTON_Y = SCREEN_HEIGHT * 0.38
+TUTORIAL_PANEL_W = 600
+TUTORIAL_PANEL_H = 300
+TUTORIAL_PANEL_Z = FLOW_UI_PANEL_Z + 0.02
+TUTORIAL_NEXT_HOTSPOT_SIZE = 128
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -315,6 +325,7 @@ MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
+MISSION_TYPE_TUTORIAL = "tutorial"
 RESCUE_ENTRY_TILE_NAME = "rescue_entry"
 RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
 RESCUE_ENTRY_VICTORY_LOCAL_CELL = 4
@@ -421,6 +432,16 @@ MP_TRANSPORT = require("main.multiplayer_transport")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
+local TUTORIAL_STEP_DEFS = {
+    { anim = hash("tutorial1"), tile = "entry", cell = 7 },
+    { anim = hash("tutorial2"), tile = "canteen", cell = 9 },
+    { anim = hash("tutorial3"), tile = "canteen", cell = 3 },
+    { anim = hash("tutorial4"), tile = "escape", cell = 6 },
+    { anim = hash("tutorial5"), tile = "escape", cell = 1 },
+    { anim = hash("tutorial6"), tile = "coms", cell = 5 },
+    { anim = hash("tutorial7"), tile = "workshop", cell = 6 },
+    { anim = hash("tutorial8"), tile = "factory", cell = 6 }
+}
 LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
 HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
@@ -4871,6 +4892,126 @@ local function get_world_cell_ids_for_tile_local_cells(self, tile_name, local_ce
     return out
 end
 
+local function tutorial_world_to_screen(self, world_x, world_y)
+    local zoom = tonumber(self and self.camera_zoom or 1) or 1
+    if zoom <= 0 then
+        zoom = 1
+    end
+    local camera_pos = (self and self.camera_pos) or vmath.vector3(0, 0, 0)
+    local screen_x = ((world_x - camera_pos.x) * zoom) + (SCREEN_WIDTH * 0.5)
+    local screen_y = ((world_y - camera_pos.y) * zoom) + (SCREEN_HEIGHT * 0.5)
+    return screen_x, screen_y
+end
+
+local function get_tutorial_step_world_center(self, step_def)
+    if not (self and step_def and self.level_library and self.current_level_index and self.world_grid) then
+        return nil, nil
+    end
+    local level = self.level_library[self.current_level_index]
+    if type(level) ~= "table" then
+        return nil, nil
+    end
+    local target_tile = tostring(step_def.tile or "")
+    local local_idx = tonumber(step_def.cell or 0) or 0
+    if target_tile == "" or local_idx < 1 or local_idx > 9 then
+        return nil, nil
+    end
+    for _, placement in ipairs(level) do
+        local placement_tile = tostring(placement and placement.tile or "")
+        local tile_matches = placement_tile == target_tile
+            or (target_tile == "escape" and placement_tile == "exit")
+        if tile_matches then
+            local local_x = (local_idx - 1) % 3
+            local local_y = math.floor((local_idx - 1) / 3)
+            local cell_x = (placement.x or 0) - 1 + local_x
+            local cell_y = (placement.y or 0) - 1 + local_y
+            local world_cell_id = coords_to_id(cell_x, cell_y)
+            local world_cell = world_cell_id and self.world_grid[world_cell_id] or nil
+            if world_cell and world_cell.tileID ~= hash("empty") then
+                local wx, wy = coords_to_world_pos(world_cell.xCell, world_cell.yCell)
+                return wx, wy
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function get_tutorial_step_screen_center(self, step_def)
+    local wx, wy = get_tutorial_step_world_center(self, step_def)
+    if not (wx and wy) then
+        return SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5
+    end
+    return tutorial_world_to_screen(self, wx, wy)
+end
+
+local function tutorial_set_current_step(self, step_index)
+    if not self then
+        return
+    end
+    local idx = tonumber(step_index or 1) or 1
+    if idx < 1 then
+        idx = 1
+    end
+    local step_def = TUTORIAL_STEP_DEFS[idx]
+    if not step_def then
+        self.tutorial_step_index = nil
+        self.tutorial_overlay_active = false
+        self.tutorial_anchor_world_x = nil
+        self.tutorial_anchor_world_y = nil
+        return
+    end
+    self.tutorial_step_index = idx
+    self.tutorial_overlay_active = true
+    local wx, wy = get_tutorial_step_world_center(self, step_def)
+    self.tutorial_anchor_world_x = wx
+    self.tutorial_anchor_world_y = wy
+    if wx and wy then
+        self.camera_pos.x = wx
+        self.camera_pos.y = wy
+        go.set_position(self.camera_pos, "/camera")
+        go.set("/camera#camera", "orthographic_zoom", self.camera_zoom)
+    end
+    local sx, sy = get_tutorial_step_screen_center(self, step_def)
+    self.tutorial_panel_screen_x = sx
+    self.tutorial_panel_screen_y = sy
+    if self.ui and self.ui.tutorial_panel and step_def.anim then
+        msg.post(msg.url(nil, self.ui.tutorial_panel, "sprite"), "play_animation", { id = step_def.anim })
+    end
+end
+
+local function tutorial_try_advance_from_click(self, screen_x, screen_y)
+    if not (self and self.tutorial_mode == true and self.tutorial_overlay_active == true and self.tutorial_panel_screen_x and self.tutorial_panel_screen_y) then
+        return false
+    end
+    local zoom = tonumber(self.camera_zoom or 1) or 1
+    if zoom <= 0 then
+        zoom = 1
+    end
+    local panel_w_screen = TUTORIAL_PANEL_W * zoom
+    local panel_h_screen = TUTORIAL_PANEL_H * zoom
+    local hotspot_size_screen = math.max(48, TUTORIAL_NEXT_HOTSPOT_SIZE * zoom)
+    local half_w = panel_w_screen * 0.5
+    local half_h = panel_h_screen * 0.5
+    local hotspot_center_x = self.tutorial_panel_screen_x + half_w - (hotspot_size_screen * 0.5)
+    local hotspot_center_y = self.tutorial_panel_screen_y - half_h + (hotspot_size_screen * 0.5)
+    if not is_point_in_screen_rect(screen_x, screen_y, self.tutorial_panel_screen_x, self.tutorial_panel_screen_y, panel_w_screen, panel_h_screen) then
+        return false
+    end
+    if is_point_in_screen_rect(screen_x, screen_y, hotspot_center_x, hotspot_center_y, hotspot_size_screen, hotspot_size_screen) then
+        local next_idx = (tonumber(self.tutorial_step_index or 1) or 1) + 1
+        if next_idx > #TUTORIAL_STEP_DEFS then
+            self.tutorial_overlay_active = false
+            self.tutorial_step_index = nil
+            self.tutorial_anchor_world_x = nil
+            self.tutorial_anchor_world_y = nil
+        else
+            tutorial_set_current_step(self, next_idx)
+        end
+        return true
+    end
+    return true
+end
+
 local function build_cell_lookup(cell_ids)
     local out = {}
     for _, cell_id in ipairs(cell_ids or {}) do
@@ -7207,6 +7348,7 @@ multiplayer_normalize_mission_type = function(mission_type)
         or value == MISSION_TYPE_RESCUE
         or value == MISSION_TYPE_PURGE
         or value == MISSION_TYPE_DNA_SAMPLE
+        or value == MISSION_TYPE_TUTORIAL
     then
         return value
     end
@@ -7567,8 +7709,10 @@ local function initialize_unit_ui(self)
         flow_outro_skip_button = nil,
         flow_score_submit_button = nil,
         flow_score_title_button = nil,
+        flow_title_tutorial_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
+        tutorial_panel = nil,
         flow_solo_setup_panel = nil,
         flow_solo_mission_select = nil,
         flow_mp_setup_panel = nil,
@@ -7674,8 +7818,10 @@ local function initialize_unit_ui(self)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
     self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
+    self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+    self.ui.tutorial_panel = create_outro_marker_sprite(hash("tutorial1"), TUTORIAL_PANEL_Z)
     self.ui.flow_solo_setup_panel = create_ui_marker_sprite(hash("solo_setup_panel"), SOLO_SETUP_PANEL_Z)
     self.ui.flow_solo_mission_select = create_ui_marker_sprite(hash("solo_mission_select"), SOLO_SETUP_UI_Z + 0.001)
     self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
@@ -7790,8 +7936,10 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.tutorial_panel, -9999, -9999, TUTORIAL_PANEL_Z, hidden, TUTORIAL_PANEL_W, TUTORIAL_PANEL_H)
     set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
     set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_SCALE_X, MP_SETUP_PANEL_SCALE_Y)
@@ -8145,6 +8293,7 @@ end
 
 function start_solo_game_flow(self)
     self.multiplayer_mode_active = false
+    self.tutorial_mode = false
     if self.mp_state then
         self.mp_state.enabled = false
     end
@@ -8159,6 +8308,30 @@ function start_solo_game_flow(self)
     self.game_won = false
 end
 
+local function start_tutorial_game_flow(self)
+    self.multiplayer_mode_active = false
+    self.tutorial_mode = true
+    if self.mp_state then
+        self.mp_state.enabled = false
+    end
+    self.selected_mission_type = MISSION_TYPE_TUTORIAL
+    self.controlled_unit_id = "sarge"
+    reset_and_load_level(self, 5)
+    self.tutorial_mode = true
+    local step1 = TUTORIAL_STEP_DEFS[1]
+    local wx, wy = get_tutorial_step_world_center(self, step1)
+    if wx and wy then
+        self.camera_pos.x = wx
+        self.camera_pos.y = wy
+        apply_camera_transform(self)
+    end
+    tutorial_set_current_step(self, 1)
+    reset_derple_feedback_runtime(self)
+    apply_aesthetic_mode(self)
+    enter_flow_state(self, FLOW_STATE_GAME)
+    self.game_won = false
+end
+
 solo_setup_init_runtime = function(self)
     self.solo_setup = self.solo_setup or {}
     self.solo_setup.mission_type = multiplayer_normalize_mission_type(self.solo_setup.mission_type or MISSION_TYPE_ESCAPE)
@@ -8166,6 +8339,7 @@ end
 
 function start_multiplayer_game_flow(self, session_config)
     self.multiplayer_mode_active = true
+    self.tutorial_mode = false
     self.selected_mission_type = multiplayer_normalize_mission_type(session_config and session_config.mission_type or self.selected_mission_type or MISSION_TYPE_ESCAPE)
     if self.mp_state then
         self.mp_state.enabled = true
@@ -8664,6 +8838,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
@@ -8703,9 +8878,13 @@ function update_flow_ui(self, dt)
     end
     set_ui_square_transform(self, self.ui.flow_overlay, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_OVERLAY_Z, vmath.vector4(0.03, 0.03, 0.06, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
     if state == FLOW_STATE_TITLE then
+        if not self.ui.flow_title_tutorial_button then
+            self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+        end
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
-        set_ui_square_transform(self, self.ui.flow_title_solo_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.96), 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.96), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.98), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.96), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.96), 280, 70)
         set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
@@ -8753,6 +8932,7 @@ function update_flow_ui(self, dt)
             end
         end
         set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
@@ -8821,6 +9001,7 @@ function update_flow_ui(self, dt)
             )
         end
         set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
@@ -8914,6 +9095,7 @@ function update_flow_ui(self, dt)
             set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
         end
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0.98), 170, 52)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
@@ -8957,6 +9139,7 @@ function update_flow_ui(self, dt)
     set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.07, 0.13, 0.09, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, FLOW_UI_BUTTON_Z, self.flow_submit_done and vmath.vector4(0.2, 0.65, 0.22, 0.95) or vmath.vector4(0.2, 0.45, 0.75, 0.95), 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, FLOW_UI_BUTTON_Z, vmath.vector4(0.72, 0.24, 0.24, 0.95), 250, 56)
+    set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
@@ -9144,12 +9327,16 @@ end
 function handle_flow_touch(self, input_x, input_y)
     local state = self.game_flow_state or FLOW_STATE_GAME
     if state == FLOW_STATE_TITLE then
-        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.52, 280, 70) then
+        if is_point_in_screen_rect(input_x, input_y, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, 280, 70) then
+            start_tutorial_game_flow(self)
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, 280, 70) then
             solo_setup_init_runtime(self)
             enter_flow_state(self, FLOW_STATE_SOLO_SETUP)
             return true
         end
-        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.38, 280, 70) then
+        if is_point_in_screen_rect(input_x, input_y, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, 280, 70) then
             self.multiplayer_mode_active = true
             if self.mp_state then
                 self.mp_state.enabled = true
@@ -9422,6 +9609,13 @@ function reset_and_load_level(self, level_index)
     self.outro_slideshow_state = nil
     self.outro_fx_instances = {}
     self.outro_slide_anim_id = nil
+    self.tutorial_mode = false
+    self.tutorial_overlay_active = false
+    self.tutorial_step_index = nil
+    self.tutorial_anchor_world_x = nil
+    self.tutorial_anchor_world_y = nil
+    self.tutorial_panel_screen_x = nil
+    self.tutorial_panel_screen_y = nil
     self.nightvision_reveal_unit_id = nil
     self.nightvision_reveal_tile_id = 0
     self.nightvision_reveal_hold_timer = 0
@@ -9651,6 +9845,32 @@ function update_global_ui_buttons(self)
     update_objective_ui(self, true)
     update_score_hud(self, true)
     update_purge_timer_hud(self, true)
+end
+
+local function update_tutorial_overlay_ui(self)
+    if not (self and self.ui and self.ui.tutorial_panel) then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if self.tutorial_mode == true and self.tutorial_overlay_active == true and self.tutorial_panel_screen_x and self.tutorial_panel_screen_y then
+        local world_x, world_y = nil, nil
+        if self.tutorial_anchor_world_x and self.tutorial_anchor_world_y then
+            local sx, sy = tutorial_world_to_screen(self, self.tutorial_anchor_world_x, self.tutorial_anchor_world_y)
+            self.tutorial_panel_screen_x = sx
+            self.tutorial_panel_screen_y = sy
+            world_x = self.tutorial_anchor_world_x
+            world_y = self.tutorial_anchor_world_y
+        else
+            world_x, world_y = screen_to_world(self.tutorial_panel_screen_x, self.tutorial_panel_screen_y, self.camera_pos, self.camera_zoom)
+        end
+        go.set_position(vmath.vector3(world_x, world_y, TUTORIAL_PANEL_Z), self.ui.tutorial_panel)
+        go.set_scale(vmath.vector3(1, 1, 1), self.ui.tutorial_panel)
+        go.set(msg.url(nil, self.ui.tutorial_panel, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    else
+        go.set_position(vmath.vector3(-9999, -9999, TUTORIAL_PANEL_Z), self.ui.tutorial_panel)
+        go.set_scale(vmath.vector3(1, 1, 1), self.ui.tutorial_panel)
+        go.set(msg.url(nil, self.ui.tutorial_panel, "sprite"), "tint", hidden)
+    end
 end
 
 get_aesthetic_profile = function(self)
@@ -12768,6 +12988,21 @@ local function next_turn_reset_human_ap(self)
     print("Next turn: squad AP restored")
 end
 
+local function enforce_tutorial_infinite_ap(self)
+    if not (self and self.tutorial_mode == true and self.squad_units) then
+        return
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit then
+            if (unit.current_health or 0) > 0 then
+                unit.current_ap = get_human_ap_refresh_cap(unit)
+            else
+                unit.current_ap = 0
+            end
+        end
+    end
+end
+
 local function get_human_world_pos_for_cell(cell)
     local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
     -- Keep feet near the floor: 10px above each cell's bottom boundary.
@@ -15449,6 +15684,7 @@ function update(self, dt)
     end
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
+    enforce_tutorial_infinite_ap(self)
     if LOOT_RUNTIME.update_hazard_fx_visibility then
         LOOT_RUNTIME.update_hazard_fx_visibility(self)
     end
@@ -15470,6 +15706,7 @@ function update(self, dt)
     update_selected_unit_ui(self)
     update_flow_ui(self, dt)
     update_outro_slideshow_runtime(self, dt)
+    update_tutorial_overlay_ui(self)
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
     if self.world_backdrop or (self.world_backdrop_tiles and #self.world_backdrop_tiles > 0) then
@@ -15705,6 +15942,9 @@ function on_input(self, action_id, action)
                 return true
             end
             if not self.did_drag then
+                if tutorial_try_advance_from_click(self, input_x, input_y) then
+                    return true
+                end
                 if try_multiplayer_debug_player_buttons(self, input_x, input_y) then
                     return true
                 end

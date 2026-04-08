@@ -758,21 +758,22 @@ function M.extend(runtime, ctx)
                 local cy = y + (socket.offsetY or 0)
                 local loaded = math.max(0, socket.powerLoaded or 0)
                 local required = math.max(1, socket.powerRequired or 9)
-                local spacing = 18
+                local spacing = 34
                 local index = 0
                 for row = 1, 3 do
                     for col = 1, 3 do
                         index = index + 1
+                        local lit = index <= math.min(required, loaded)
+                        if lit then
                         local ox = (col - 2) * spacing
                         local oy = (2 - row) * spacing
                         local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(cx + ox, cy + oy, 0.552))
                         if marker_id then
                             msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("power_unit") })
                             go.set_scale(vmath.vector3(0.55, 0.55, 1), marker_id)
-                            local lit = index <= math.min(required, loaded)
-                            local tint = lit and vmath.vector4(0.95, 0.95, 1, 0.95) or vmath.vector4(0.2, 0.2, 0.24, 0.35)
-                            go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+                            go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(0.95, 0.95, 1, 0.95))
                             table.insert(self.escape_pod_power_slot_markers, marker_id)
+                        end
                         end
                     end
                 end

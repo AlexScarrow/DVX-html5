@@ -189,7 +189,7 @@ function M.create_level_library()
         -- { x = 14, y = 8, tile = "exterior1" },
         -- { x = 11, y = 11, tile = "lab" },
         -- { x = 14, y = 5, tile = "portal" },
-        { x = 8, y = 9, tile = "portal" },
+        { x = 5, y = 2, tile = "portal" },
         -- { x = 11, y = 2, tile = "exit" },
         -- { x = 10, y = 5, tile = "passage1" },
     }

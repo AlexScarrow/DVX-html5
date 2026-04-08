@@ -196,7 +196,7 @@ function M.create_tile_library(COMPONENT_UI)
     exterior1.cells[7].accessRight = false
     exterior1.cells[8].accessDown = false
     exterior1.cells[8].accessRight = false
-    exterior1.cells[9].accessDown = false
+    --exterior1.cells[9].accessDown = false
     exterior1.cells[9].accessRight = true
 
 
@@ -459,7 +459,7 @@ library["canteen"] = canteen
 
     exit.cells[1].accessDown = false
     exit.cells[1].accessRight = false
-    exit.cells[2].accessDown = false
+    --exit.cells[2].accessDown = false
     exit.cells[3].accessDown = false
     exit.cells[3].accessRight = false
     exit.cells[4].accessDown = false
@@ -493,7 +493,9 @@ library["canteen"] = canteen
     
     exit.cells[3].object1 = {
         name = hash("escape_pod_power_socket"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2301,
-        offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 64, requiredComponent = nil,
+        -- Slot grid center matches updated tile art at (x=616, y=373) in 750x450 tile space.
+        -- Cell 3 center is (625, 375), so the socket anchor offset is (-9, -2).
+        offsetX = -9, offsetY = -2, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 170, hitH = 170, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
     }
 
@@ -511,11 +513,11 @@ library["canteen"] = canteen
     exit.cells[8].object1 = {
         name = hash("nav_computer"), isFixed = false, hasNavData = false, contributesToExitObjective = true,
         isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2801,
-        offsetX = -52, offsetY = 14, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
+        offsetX = -90, offsetY = 14, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_nav_data
     }
     exit.cells[8].object2 = {
         name = hash("supply_loader"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2802,
-        offsetX = 56, offsetY = -6, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 56, requiredComponent = COMPONENT_UI.component_food_supplies
+        offsetX = 0, offsetY = -6, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 56, requiredComponent = COMPONENT_UI.component_food_supplies
     }
     library["exit"] = exit
 

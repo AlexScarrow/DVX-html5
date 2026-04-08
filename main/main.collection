@@ -221,6 +221,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "ui_alpha_factory"
+  data: "embedded_components {\n"
+  "  id: \"ui_alpha_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/ui_square_alpha.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "ui_ready_icon_factory"
   data: "embedded_components {\n"
   "  id: \"ui_ready_icon_factory\"\n"

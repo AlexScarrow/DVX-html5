@@ -7229,6 +7229,16 @@ local function create_ui_square(screen_x, screen_y, z, color, scale_x, scale_y)
     return id
 end
 
+local function create_ui_square_alpha(screen_x, screen_y, z, color, scale_x, scale_y)
+    local pos = vmath.vector3(screen_x, screen_y, z)
+    local id = factory.create("/ui_alpha_factory#ui_alpha_factory", pos)
+    if id then
+        go.set_scale(vmath.vector3(scale_x, scale_y, 1), id)
+        go.set(msg.url(nil, id, "sprite"), "tint", color)
+    end
+    return id
+end
+
 local function create_ui_panel_sprite(screen_x, screen_y, z, scale_x, scale_y)
     local pos = vmath.vector3(screen_x, screen_y, z)
     local id = factory.create("/ui_panel_factory#ui_panel_factory", pos)
@@ -7252,6 +7262,56 @@ local function create_outro_marker_sprite(anim_id, z)
         msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = anim_id })
     end
     return id
+end
+
+local function ui_is_button_node(self, go_id)
+    if not (self and self.ui and go_id) then
+        return false
+    end
+    if go_id == self.ui.component_button
+        or go_id == self.ui.fix_button
+        or go_id == self.ui.loot_button
+        or go_id == self.ui.retrieve_button
+        or go_id == self.ui.comms_toggle_button
+        or go_id == self.ui.close_button
+        or go_id == self.ui.new_turn_button
+        or go_id == self.ui.launch_button
+        or go_id == self.ui.aesthetic_toggle_button
+        or go_id == self.ui.zoom_in_button
+        or go_id == self.ui.zoom_out_button
+        or go_id == self.ui.reactive_toggle_button
+        or go_id == self.ui.reactive_advance_button
+        or go_id == self.ui.objective_button
+        or go_id == self.ui.flow_outro_skip_button
+        or go_id == self.ui.flow_score_submit_button
+        or go_id == self.ui.flow_score_title_button
+        or go_id == self.ui.flow_title_tutorial_button
+        or go_id == self.ui.flow_title_solo_button
+        or go_id == self.ui.flow_title_multiplayer_button
+        or go_id == self.ui.flow_mp_back_button
+        or go_id == self.ui.flow_mp_start_button
+    then
+        return true
+    end
+    local array_fields = {
+        "level_buttons",
+        "ready_buttons",
+        "mp_debug_player_buttons",
+        "flow_mp_mission_buttons",
+        "flow_mp_count_buttons",
+        "flow_mp_unit_buttons"
+    }
+    for _, field_name in ipairs(array_fields) do
+        local arr = self.ui[field_name]
+        if arr then
+            for _, node in ipairs(arr) do
+                if go_id == node then
+                    return true
+                end
+            end
+        end
+    end
+    return false
 end
 
 local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color, scale_x, scale_y, rotation_deg)
@@ -7307,7 +7367,11 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
     if rotation_deg ~= nil then
         pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(tonumber(rotation_deg) or 0)), go_id)
     end
-    go.set(msg.url(nil, go_id, "sprite"), "tint", color)
+    local final_color = color
+    if final_color and ui_is_button_node(self, go_id) then
+        final_color = vmath.vector4(final_color.x, final_color.y, final_color.z, 1)
+    end
+    go.set(msg.url(nil, go_id, "sprite"), "tint", final_color)
 end
 
 local function set_ui_panel_transform(self, go_id, screen_x, screen_y, z, scale_x, scale_y, tint)
@@ -7798,7 +7862,7 @@ local function initialize_unit_ui(self)
             msg.post(msg.url(nil, self.ui.purge_timer_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
         end
     end
-    self.ui.new_turn_button = create_ui_square(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
+    self.ui.new_turn_button = create_ui_square_alpha(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     if self.ui.new_turn_button then
         msg.post(msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = hash("button_newTurn") })
     end
@@ -8709,7 +8773,11 @@ local function start_outro_slideshow_runtime(self)
             self.outro_slideshow_state = nil
             self.outro_slide_anim_id = nil
             if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
-                enter_score_flow(self)
+                if tostring(self.end_outro_sequence_id or "") == "title" then
+                    enter_flow_state(self, FLOW_STATE_TITLE)
+                else
+                    enter_score_flow(self)
+                end
             end
         end,
         spawn_fx = function(cue, state)
@@ -8774,7 +8842,11 @@ local function update_outro_slideshow_runtime(self, dt)
     else
         self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
         if (self.flow_outro_timer or 0) >= 8.0 then
-            enter_score_flow(self)
+            if tostring(self.end_outro_sequence_id or "") == "title" then
+                enter_flow_state(self, FLOW_STATE_TITLE)
+            else
+                enter_score_flow(self)
+            end
         end
     end
 end
@@ -15316,6 +15388,15 @@ function init(self)
             tostring(self.end_outro_sequence_id),
             tostring(preview_result)
         ))
+    else
+        self.end_result = "win"
+        self.end_mission_type = "title"
+        self.end_outro_sequence_id = "title"
+        self.end_reason = "startup"
+        self.end_session_origin = "boot"
+        enter_flow_state(self, FLOW_STATE_OUTRO)
+        start_outro_slideshow_runtime(self)
+        print("FLOW | startup_title_outro -> outro | sequence=title")
     end
 
     print("=== Initialization Complete ===")

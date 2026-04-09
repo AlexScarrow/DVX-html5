@@ -4169,8 +4169,49 @@ function M.extend(runtime, ctx)
         local machine_has_nav = (nav_obj.hasNavData == true) or (nav_obj.hasNavData == nil and nav_obj.isFixed == true)
         nav_obj.hasNavData = machine_has_nav
         nav_obj.isFixed = machine_has_nav
+        if nav_obj.contributesToExitObjective == true then
+            if nav_obj.hasNavData == true then
+                print("Nav data already delivered and locked.")
+            else
+                print("Deliver nav data by dragging it from backpack onto this terminal.")
+            end
+            return true
+        end
 
         if machine_has_nav then
+            local token_exists_elsewhere = false
+            for _, scan_unit in pairs(self.squad_units or {}) do
+                for _, scan_item in ipairs(scan_unit.backpack_items or {}) do
+                    if scan_item == ctx.COMPONENT_UI.component_nav_data then
+                        token_exists_elsewhere = true
+                        break
+                    end
+                end
+                if token_exists_elsewhere then
+                    break
+                end
+            end
+            if not token_exists_elsewhere then
+                for _, world_item in ipairs(self.world_item_instances or {}) do
+                    if world_item and world_item.item_type == ctx.COMPONENT_UI.component_nav_data then
+                        token_exists_elsewhere = true
+                        break
+                    end
+                end
+            end
+            if not token_exists_elsewhere then
+                for _, scan_cell in ipairs(self.world_grid or {}) do
+                    local scan_nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(scan_cell) or nil
+                    if scan_nav_obj and scan_nav_obj.contributesToExitObjective == true and scan_nav_obj.hasNavData == true then
+                        token_exists_elsewhere = true
+                        break
+                    end
+                end
+            end
+            if token_exists_elsewhere then
+                print("Nav data token already exists elsewhere.")
+                return true
+            end
             if #unit.backpack_items >= cap then
                 print("Backpack full.")
                 flash_invalid_drag_units(unit, nil)
@@ -4188,24 +4229,7 @@ function M.extend(runtime, ctx)
             print(string.format("%s retrieved nav-data from machine. (AP -%d)", unit.display_name, ap_cost))
             return true
         end
-
-        local nav_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_nav_data)
-        if not nav_slot then
-            print("Need 1 nav-data in backpack.")
-            flash_invalid_drag_units(unit, nil)
-            return true
-        end
-
-        table.remove(unit.backpack_items, nav_slot)
-        unit.backpack_used = #unit.backpack_items
-        unit.current_ap = (unit.current_ap or 0) - ap_cost
-        nav_obj.hasNavData = true
-        nav_obj.isFixed = true
-        spawn_impact_ring_for_object(self, cell, nav_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
-        runtime.refresh_exit_objective_state(self)
-        runtime.refresh_fix_markers(self)
-        runtime.refresh_world_item_visuals(self)
-        print(string.format("%s inserted nav-data into machine. (AP -%d)", unit.display_name, ap_cost))
+        print("Nav data token already collected from this terminal.")
         return true
     end
 
@@ -4245,8 +4269,49 @@ function M.extend(runtime, ctx)
         local machine_has_food = (loader_obj.hasFood == true) or (loader_obj.hasFood == nil and loader_obj.isFixed == true)
         loader_obj.hasFood = machine_has_food
         loader_obj.isFixed = machine_has_food
+        if loader_obj.contributesToExitObjective == true then
+            if loader_obj.hasFood == true then
+                print("Food supplies already delivered and locked.")
+            else
+                print("Deliver food supplies by dragging it from backpack onto this terminal.")
+            end
+            return true
+        end
 
         if machine_has_food then
+            local token_exists_elsewhere = false
+            for _, scan_unit in pairs(self.squad_units or {}) do
+                for _, scan_item in ipairs(scan_unit.backpack_items or {}) do
+                    if scan_item == ctx.COMPONENT_UI.component_food_supplies then
+                        token_exists_elsewhere = true
+                        break
+                    end
+                end
+                if token_exists_elsewhere then
+                    break
+                end
+            end
+            if not token_exists_elsewhere then
+                for _, world_item in ipairs(self.world_item_instances or {}) do
+                    if world_item and world_item.item_type == ctx.COMPONENT_UI.component_food_supplies then
+                        token_exists_elsewhere = true
+                        break
+                    end
+                end
+            end
+            if not token_exists_elsewhere then
+                for _, scan_cell in ipairs(self.world_grid or {}) do
+                    local scan_loader_obj = runtime.get_supply_loader_object and runtime.get_supply_loader_object(scan_cell) or nil
+                    if scan_loader_obj and scan_loader_obj.contributesToExitObjective == true and scan_loader_obj.hasFood == true then
+                        token_exists_elsewhere = true
+                        break
+                    end
+                end
+            end
+            if token_exists_elsewhere then
+                print("Food supplies token already exists elsewhere.")
+                return true
+            end
             if #unit.backpack_items >= cap then
                 print("Backpack full.")
                 flash_invalid_drag_units(unit, nil)
@@ -4257,31 +4322,17 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             loader_obj.hasFood = false
             loader_obj.isFixed = false
-            spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
+            -- For exit objective loader, only successful deploy should trigger the green ring.
+            if loader_obj.contributesToExitObjective ~= true then
+                spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
+            end
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
             runtime.refresh_world_item_visuals(self)
             print(string.format("%s retrieved food supplies from machine. (AP -%d)", unit.display_name, ap_cost))
             return true
         end
-
-        local food_slot = get_backpack_item_slot(unit, ctx.COMPONENT_UI.component_food_supplies)
-        if not food_slot then
-            print("Need 1 food supplies in backpack.")
-            flash_invalid_drag_units(unit, nil)
-            return true
-        end
-
-        table.remove(unit.backpack_items, food_slot)
-        unit.backpack_used = #unit.backpack_items
-        unit.current_ap = (unit.current_ap or 0) - ap_cost
-        loader_obj.hasFood = true
-        loader_obj.isFixed = true
-        spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
-        runtime.refresh_exit_objective_state(self)
-        runtime.refresh_fix_markers(self)
-        runtime.refresh_world_item_visuals(self)
-        print(string.format("%s inserted food supplies into machine. (AP -%d)", unit.display_name, ap_cost))
+        print("Food supplies token already collected from this terminal.")
         return true
     end
 
@@ -4416,9 +4467,15 @@ function M.extend(runtime, ctx)
         local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
         local object_kind, clicked_cell, clicked_obj = runtime.get_clicked_interactive_object(self, world_x, world_y, clicked_cell_id)
         if object_kind then
-            if clicked_cell.isPowered ~= true or clicked_cell_id ~= unit.cell_id then
+            if clicked_cell_id ~= unit.cell_id then
                 return false
             end
+            if clicked_cell.isPowered ~= true then
+                -- Allow fallback world-item pickup on unpowered tiles; just skip powered object interactions.
+                object_kind = nil
+            end
+        end
+        if object_kind then
             if object_kind == "crate" then
                 return runtime.try_scavenge_selected_unit_on_cell(self, unit, clicked_cell)
             end
@@ -5275,11 +5332,43 @@ function M.extend(runtime, ctx)
                                     component_target.isFixed = true
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data then
+                                        local drop_cell = (self.world_grid and self.world_grid[drop_cell_id]) or nil
+                                        local is_exit_tile = drop_cell and drop_cell.tileID == hash("exit")
+                                        if not (
+                                            component_target.contributesToExitObjective == true
+                                            or is_exit_tile == true
+                                        ) then
+                                            print("Nav data can only be delivered to the exit nav terminal.")
+                                            flash_invalid_drag_units(source_unit, nil)
+                                            self.drag_resource = { active = false }
+                                            return true
+                                        end
                                         component_target.hasNavData = true
+                                        if component_target.contributesToExitObjective == true
+                                            or is_exit_tile == true
+                                        then
+                                            component_target.objectiveLocked = true
+                                        end
                                     end
                                     if component_target.name == hash("supply_loader")
                                         and source_item == ctx.COMPONENT_UI.component_food_supplies then
+                                        local drop_cell = (self.world_grid and self.world_grid[drop_cell_id]) or nil
+                                        local is_exit_tile = drop_cell and drop_cell.tileID == hash("exit")
+                                        if not (
+                                            component_target.contributesToExitObjective == true
+                                            or is_exit_tile == true
+                                        ) then
+                                            print("Food supplies can only be delivered to the exit food terminal.")
+                                            flash_invalid_drag_units(source_unit, nil)
+                                            self.drag_resource = { active = false }
+                                            return true
+                                        end
                                         component_target.hasFood = true
+                                        if component_target.contributesToExitObjective == true
+                                            or is_exit_tile == true
+                                        then
+                                            component_target.objectiveLocked = true
+                                        end
                                     end
                                     consumed = true
                                     runtime.refresh_fix_markers(self)
@@ -5358,6 +5447,13 @@ function M.extend(runtime, ctx)
                             end
                         end
                         if (not consumed) and (not suppress_generic_world_drop) and (not vending_attempted) and drop_cell_id and source_unit.cell_id then
+                            if source_item == ctx.COMPONENT_UI.component_nav_data
+                                or source_item == ctx.COMPONENT_UI.component_food_supplies
+                            then
+                                print("Objective item must be delivered to its terminal. Item returned to backpack.")
+                                self.drag_resource = { active = false }
+                                return true
+                            end
                             local sx, sy = ctx.id_to_coords(source_unit.cell_id)
                             local tx, ty = ctx.id_to_coords(drop_cell_id)
                             local manhattan = math.abs(sx - tx) + math.abs(sy - ty)

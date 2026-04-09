@@ -647,7 +647,12 @@ function M.extend(runtime, ctx)
                 end
             end
             local nav_obj = runtime.get_nav_computer_object and runtime.get_nav_computer_object(cell) or nil
-            if nav_obj and cell.isPowered == true then
+            local is_exit_tile_cell = (cell and cell.tileID == hash("exit"))
+            local nav_is_exit_objective = nav_obj and (nav_obj.contributesToExitObjective == true or is_exit_tile_cell) or false
+            if nav_obj and (cell.isPowered == true or nav_is_exit_objective) then
+                local nav_present = (nav_obj.hasNavData == true) or (nav_obj.hasNavData == nil and nav_obj.isFixed == true)
+                    or (nav_is_exit_objective and nav_obj.objectiveLocked == true)
+                if nav_present then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local wx = x + (nav_obj.offsetX or 0)
                 local wy = y + (nav_obj.offsetY or 0)
@@ -655,15 +660,17 @@ function M.extend(runtime, ctx)
                 if marker_id then
                     msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("nav_data") })
                     go.set_scale(vmath.vector3(0.62, 0.62, 1), marker_id)
-                    local tint = (nav_obj.isFixed == true)
-                        and vmath.vector4(0.3, 1, 0.45, 0.85)
-                        or vmath.vector4(0.35, 0.85, 1, 0.95)
-                    go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                     table.insert(self.exit_requirement_markers, marker_id)
+                end
                 end
             end
             local supply_obj = runtime.get_supply_loader_object and runtime.get_supply_loader_object(cell) or nil
-            if supply_obj and cell.isPowered == true then
+            local supply_is_exit_objective = supply_obj and (supply_obj.contributesToExitObjective == true or is_exit_tile_cell) or false
+            if supply_obj and (cell.isPowered == true or supply_is_exit_objective) then
+                local food_present = (supply_obj.hasFood == true) or (supply_obj.hasFood == nil and supply_obj.isFixed == true)
+                    or (supply_is_exit_objective and supply_obj.objectiveLocked == true)
+                if food_present then
                 local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                 local wx = x + (supply_obj.offsetX or 0)
                 local wy = y + (supply_obj.offsetY or 0)
@@ -676,6 +683,7 @@ function M.extend(runtime, ctx)
                         or vmath.vector4(1, 0.86, 0.35, 0.95)
                     go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
                     table.insert(self.exit_requirement_markers, marker_id)
+                end
                 end
             end
         end

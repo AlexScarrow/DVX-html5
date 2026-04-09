@@ -424,6 +424,11 @@ ENTRY_FIRE_ROTATION_DEG = -20
 EXIT_GREEN_SMOKE_Z = 0.56
 EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_X = 0
 EXIT_GREEN_SMOKE_CELL3_BOTTOM_OFFSET_Y = -(CELL_HEIGHT * 0.5) + 15
+LADDER_Z = 0.72
+LADDER_OFFSET_X = 75
+LADDER_OFFSET_Y = 27
+LADDER_TINT_ON = vmath.vector4(1, 1, 1, 1)
+LADDER_TINT_OFF = vmath.vector4(0, 0, 0, 1)
 LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     local cfg = require("main.config").create_ui_config(UI_PANEL_X, UI_PANEL_Y, UI_PANEL_W, UI_PANEL_H)
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
@@ -4813,6 +4818,46 @@ local function spawn_initial_blips(self, count)
         used[idx] = true
         spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
     end
+end
+
+local function update_ladder_tints(self)
+    if not (self and self.world_grid and self.ladder_markers) then
+        return
+    end
+    for source_cell_id, marker_id in pairs(self.ladder_markers) do
+        local source_cell = self.world_grid[source_cell_id]
+        if marker_id and source_cell and source_cell.tileID ~= hash("empty") then
+            local tint = (source_cell.isPowered == true) and LADDER_TINT_ON or LADDER_TINT_OFF
+            go.set(msg.url(nil, marker_id, "sprite"), "tint", tint)
+        end
+    end
+end
+
+local function is_valid_ladder_cell(cell)
+    return cell
+        and cell.tileID ~= hash("empty")
+        and (cell.isOutside ~= true)
+        and ((tonumber(cell.moveValue) or 0) > 0)
+end
+
+local function can_spawn_ladder_between(world_grid, source_cell_id, below_cell_id)
+    if not (world_grid and source_cell_id and below_cell_id) then
+        return false
+    end
+    local source = world_grid[source_cell_id]
+    local below = world_grid[below_cell_id]
+    if not (is_valid_ladder_cell(source) and is_valid_ladder_cell(below)) then
+        return false
+    end
+    if source.accessDown ~= true then
+        return false
+    end
+    -- Final baked-topology rule: this vertical edge must actually be traversable in
+    -- the baked world, otherwise it is an invalid ladder placement.
+    if not can_cross_between_cells(world_grid, source_cell_id, below_cell_id) then
+        return false
+    end
+    return true
 end
 
 get_current_mission_type = function(self)
@@ -9585,6 +9630,7 @@ function reset_and_load_level(self, level_index)
     safe_delete_array(self.wiregap_fx_objects)
     safe_delete_array(self.light_value_objects)
     safe_delete_array(self.dna_lab_progress_markers)
+    safe_delete_map(self.ladder_markers)
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
             safe_delete(alien and alien.go_id)
@@ -14887,6 +14933,14 @@ end
     function spawn_visuals(self)
         print("Creating visual representation...")
         local spawned_count = 0
+        if self.ladder_markers then
+            for key, ladder_id in pairs(self.ladder_markers) do
+                if ladder_id then
+                    pcall(go.delete, ladder_id)
+                end
+                self.ladder_markers[key] = nil
+            end
+        end
         cell_objects = {}
         tile_objects = {}
         self.tile_light_layers = {}
@@ -14901,6 +14955,7 @@ end
         self.entry_fire_fx_objects = {}
         self.exit_green_smoke_fx_objects = {}
         self.exit_green_smoke_fx_power_state = {}
+        self.ladder_markers = {}
         self.tile_base_objects = {}
         self.tile_alpha_power_state = {}
         self.tile_off_proximity_mul_state = {}
@@ -15077,6 +15132,23 @@ end
                 self.tile_alpha_power_state[placement_index] = always_visible and true or false
             end
         end
+        for _, cell in ipairs(self.world_grid) do
+            if is_valid_ladder_cell(cell) then
+                local below_cell_id = get_adjacent_cell(cell.idNumber, "down")
+                local below_cell = below_cell_id and self.world_grid and self.world_grid[below_cell_id] or nil
+                if below_cell and can_spawn_ladder_between(self.world_grid, cell.idNumber, below_cell_id) then
+                    local bx, by = coords_to_world_pos(below_cell.xCell, below_cell.yCell)
+                    local ladder_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(bx + LADDER_OFFSET_X, by + LADDER_OFFSET_Y, LADDER_Z))
+                    if ladder_id then
+                        msg.post(msg.url(nil, ladder_id, "sprite"), "play_animation", { id = hash("ladder") })
+                        local initial_tint = (cell.isPowered == true) and LADDER_TINT_ON or LADDER_TINT_OFF
+                        go.set(msg.url(nil, ladder_id, "sprite"), "tint", initial_tint)
+                        self.ladder_markers[cell.idNumber] = ladder_id
+                    end
+                end
+            end
+        end
+        update_ladder_tints(self)
         print("Spawned " .. #tile_objects .. " tiles")
 
         -- Spawn cell sprites (debug grid under semi-transparent tiles)
@@ -15814,6 +15886,7 @@ function update(self, dt)
     update_purge_runtime(self)
     update_all_humans_dead_loss(self)
     update_exit_green_smoke_fx(self)
+    update_ladder_tints(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
     update_flow_ui(self, dt)

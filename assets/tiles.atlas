@@ -569,6 +569,9 @@ images {
   image: "/assets/images/tile_rescue_entry_overlay.png"
   pivot_y: 0.519525
 }
+images {
+  image: "/assets/images/ladder.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

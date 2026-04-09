@@ -75,6 +75,7 @@ HUMAN_VISUAL_SCALE = 0.35
 HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
 HUMAN_PINGPONG_AMPLITUDE = 0.18
 HUMAN_PINGPONG_SPEED = 7
+HUMAN_VERTICAL_ROCK_DEGREES = 5
 HUMAN_MAX_ACTION_POINTS = 5
 SPEED_STIM_REFRESH_AP = 6
 NIGHTVISION_UNPOWERED_TINT = vmath.vector4(0.16, 0.36, 0.18, 1)
@@ -7041,6 +7042,16 @@ local function set_unit_scale(unit, scale_x, scale_y)
     end
 end
 
+local function set_unit_rotation_degrees(unit, degrees)
+    if unit and unit.go_path then
+        local ok = pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(degrees or 0)), unit.go_path)
+        if not ok then
+            unit.go_path = nil
+            unit.sprite_path = nil
+        end
+    end
+end
+
 set_civilian_scale = function(self, civilian, scale_x, scale_y)
     if not (self and civilian and civilian.id and self.civilian_visuals) then
         return
@@ -9631,6 +9642,9 @@ function reset_and_load_level(self, level_index)
     safe_delete_array(self.light_value_objects)
     safe_delete_array(self.dna_lab_progress_markers)
     safe_delete_map(self.ladder_markers)
+    safe_delete_array(self.workshop_conveyor_tokens)
+    safe_delete_map(self.workshop_underlay_visuals)
+    self.workshop_states = {}
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
             safe_delete(alien and alien.go_id)
@@ -13457,6 +13471,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.last_completed_step_vertical = false
         unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        set_unit_rotation_degrees(unit, 0)
         return
     end
 
@@ -13497,6 +13512,7 @@ local function update_single_unit_movement(self, unit, dt)
             end
         end
         set_unit_scale(unit, scale_x, scale_y)
+        set_unit_rotation_degrees(unit, 0)
         if distance <= step then
             local snap_z = (unit.micro_move_kind == "settle_end") and 0.5 or move_z
             go.set_position(vmath.vector3(unit.micro_target_x, unit.micro_target_y, snap_z), unit.go_path)
@@ -13512,6 +13528,7 @@ local function update_single_unit_movement(self, unit, dt)
                 unit.shadow_motion_offset = nil
                 unit.counter_move_total_dist = nil
                 set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+                set_unit_rotation_degrees(unit, 0)
                 print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
                 update_human_visual_state(self)
                 return
@@ -13541,6 +13558,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.last_completed_step_vertical = false
         unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        set_unit_rotation_degrees(unit, 0)
         return
     end
 
@@ -13648,6 +13666,7 @@ local function update_single_unit_movement(self, unit, dt)
         unit.last_completed_step_vertical = false
         unit.shadow_motion_offset = nil
         set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+        set_unit_rotation_degrees(unit, 0)
         if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
             LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "NOT_ENOUGH_AP")
         end
@@ -13695,9 +13714,16 @@ local function update_single_unit_movement(self, unit, dt)
         end
     end
     set_unit_scale(unit, scale_x, scale_y)
+    if is_vertical_step and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+        local rock = math.sin((unit.anim_phase or 0) * 2.0)
+        set_unit_rotation_degrees(unit, HUMAN_VERTICAL_ROCK_DEGREES * rock)
+    else
+        set_unit_rotation_degrees(unit, 0)
+    end
 
     if distance <= step then
         go.set_position(vmath.vector3(target_x, target_y, 0.5), unit.go_path)
+        set_unit_rotation_degrees(unit, 0)
         unit.current_ap = unit.current_ap - target_cost
         unit.forced_slot_index = unit.entry_slot_index
         local from_cell_id = unit.cell_id
@@ -13768,6 +13794,7 @@ local function update_single_unit_movement(self, unit, dt)
             unit.shadow_motion_offset = nil
             unit.counter_move_total_dist = nil
             set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
             print(unit.display_name .. " move complete on cell: " .. unit.cell_id)
             update_human_visual_state(self)
         end
@@ -14433,6 +14460,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     if LOOT_RUNTIME.refresh_vent_markers then LOOT_RUNTIME.refresh_vent_markers(self) end
     if LOOT_RUNTIME.refresh_light_value_markers then LOOT_RUNTIME.refresh_light_value_markers(self) end
     if LOOT_RUNTIME.refresh_factory_underlay_visuals then LOOT_RUNTIME.refresh_factory_underlay_visuals(self) end
+    if LOOT_RUNTIME.refresh_workshop_underlay_visuals then LOOT_RUNTIME.refresh_workshop_underlay_visuals(self) end
     if LOOT_RUNTIME.refresh_exit_objective_state then LOOT_RUNTIME.refresh_exit_objective_state(self) end
     refresh_dna_marker_runtime(self)
     refresh_civilian_visuals(self)
@@ -15205,6 +15233,9 @@ end
         if LOOT_RUNTIME.refresh_factory_underlay_visuals then
             LOOT_RUNTIME.refresh_factory_underlay_visuals(self)
         end
+        if LOOT_RUNTIME.refresh_workshop_underlay_visuals then
+            LOOT_RUNTIME.refresh_workshop_underlay_visuals(self)
+        end
     end--of spawn visuals fn
 
 local function update_exit_green_smoke_fx(self)
@@ -15880,6 +15911,9 @@ function update(self, dt)
     end
     if LOOT_RUNTIME.update_factory_underlay_animations then
         LOOT_RUNTIME.update_factory_underlay_animations(self, dt)
+    end
+    if LOOT_RUNTIME.update_workshop_underlay_animations then
+        LOOT_RUNTIME.update_workshop_underlay_animations(self, dt)
     end
     update_human_visual_state(self)
     update_derple_feedback_triggers(self, dt)

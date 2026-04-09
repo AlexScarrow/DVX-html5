@@ -93,10 +93,16 @@ function M.create_tile_library(COMPONENT_UI)
     entry.cells[2].accessDown = false
     entry.cells[3].accessRight = false
     entry.cells[3].accessDown = false
+    entry.cells[4].accessRight = false
     entry.cells[4].accessDown = false
+    entry.cells[5].accessRight = false
     entry.cells[5].accessDown = false
     entry.cells[5].accessRight = false
     entry.cells[6].accessRight = false
+    entry.cells[7].accessRight = false
+    entry.cells[7].accessDown = false
+    entry.cells[8].accessRight = false
+    entry.cells[8].accessDown = false
 
     entry.cells[9].object1 = {
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
@@ -198,6 +204,7 @@ function M.create_tile_library(COMPONENT_UI)
     exterior1.cells[8].accessRight = false
     --exterior1.cells[9].accessDown = false
     exterior1.cells[9].accessRight = true
+    exterior1.cells[9].accessDown = true
 
 
     
@@ -371,6 +378,10 @@ canteen.cells[4].object1 = {
         -- "buff_melee_right"
     }
 }
+canteen.cells[4].object2 = {
+    name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+    offsetX = 50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+}
 canteen.cells[2].object1 = {
     name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 551,
     offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
@@ -490,6 +501,11 @@ library["canteen"] = canteen
             -- "buff_melee_right"
         }
     }
+
+    exit.cells[2].object1 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
     
     exit.cells[3].object1 = {
         name = hash("escape_pod_power_socket"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 2301,
@@ -593,10 +609,10 @@ library["canteen"] = canteen
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
         offsetX = 98, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
     }
-    -- armoury.cells[8].object2 = {
-    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
-    --     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-    -- }
+    armoury.cells[8].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
     -- armoury.cells[8].object3 = {
     --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 803,
     --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
@@ -670,13 +686,15 @@ library["canteen"] = canteen
         name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 503,
         offsetX = -5, offsetY = 45, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
     }
-    medbay.cells[6].object1 = {
-        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
-        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-    }
+
     medbay.cells[6].object1 = {
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 601,
         offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+
+    medbay.cells[8].object1 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }
 
     medbay.cells[9].object1 = {
@@ -686,6 +704,11 @@ library["canteen"] = canteen
     medbay.cells[9].object2 = {
         name = hash("medbay_reviver"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
         offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 1, hitH = 1, requiredComponent = nil
+    }
+
+    medbay.cells[9].object3 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }
      -- medbay.cells[8].object2 = {
      --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 5802,
@@ -848,6 +871,10 @@ lab.cells[8].accessRight = false   -- blocks 8 <-> 9
 lab.cells[9].accessRight = false   -- blocks right boundary from 9
 lab.cells[9].accessDown = false     -- allows 9 <-> 6
 
+lab.cells[4].object1 = {
+    name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+    offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+}
 
 lab.cells[4].object1 = {
     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
@@ -881,6 +908,7 @@ library["lab"] = lab
     -- Requested internal connectivity:
     -- 2: right, 4: right, 5: right, 6: right + down
     factory.cells[2].accessRight = true
+    factory.cells[2].accessDown = true
     factory.cells[4].accessRight = true
     factory.cells[5].accessRight = true
     factory.cells[6].accessRight = true
@@ -897,6 +925,11 @@ library["lab"] = lab
     factory.cells[6].object1 = {
         name = hash("wiregap"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
         offsetX = 78, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    }
+
+    factory.cells[6].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+        offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }
 
     -- Factory machinery anchors (cells 5 and 8). These are fixed but only functional

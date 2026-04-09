@@ -3414,6 +3414,12 @@ local function update_spitter_projectiles(self, dt)
                             target.brute_damage_flash_timer = 0.24
                         end
                         if target.hp_current <= 0 then
+                            if target.type == ALIEN_TYPE_BRUTE and target.go_id then
+                                local bpos = go.get_position(target.go_id)
+                                if bpos and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
+                                    LOOT_RUNTIME.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
+                                end
+                            end
                             print(string.format(
                                 "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
                                 p.shooter_name or "Human", target.id, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
@@ -3651,6 +3657,12 @@ local function resolve_turret_pending_shot(self, shot_id)
                     target_alien.brute_damage_flash_timer = 0.24
                 end
                 if target_alien.hp_current <= 0 then
+                    if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.go_id then
+                        local bpos = go.get_position(target_alien.go_id)
+                        if bpos and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
+                            LOOT_RUNTIME.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
+                        end
+                    end
                     target_alien.is_dead = true
                     target_alien.is_moving = false
                     target_alien.move_path = nil
@@ -8942,6 +8954,26 @@ function enter_mission_outro(self, result, reason)
 end
 
 function enter_outro_flow_from_launch(self)
+    local mission_type = multiplayer_normalize_mission_type(get_current_mission_type(self))
+    if mission_type == MISSION_TYPE_TUTORIAL then
+        local preview_override = tostring(self.debug_outro_sequence_override or "")
+        if preview_override == "" then
+            self.end_outro_sequence_id = "escape_win"
+            self.flow_outro_timer = 0
+            self.flow_submit_done = false
+            self.drag_resource = { active = false }
+            self.is_panning = false
+            self.did_drag = false
+            self.end_result = "win"
+            self.end_mission_type = "escape"
+            self.end_reason = "launch"
+            self.end_session_origin = (self.mp_state and self.mp_state.enabled) and "multiplayer" or "solo"
+            enter_flow_state(self, FLOW_STATE_OUTRO)
+            start_outro_slideshow_runtime(self)
+            print("FLOW | tutorial launch -> forced escape_win outro")
+            return
+        end
+    end
     enter_mission_outro(self, "win", "launch")
 end
 
@@ -12942,7 +12974,7 @@ function try_launch_button(self, screen_x, screen_y)
         if LOOT_RUNTIME.try_launch_escape_pod then
             local launched = LOOT_RUNTIME.try_launch_escape_pod(self)
             if launched then
-                enter_mission_outro(self, "win", "launch")
+                enter_outro_flow_from_launch(self)
             end
         end
         return true

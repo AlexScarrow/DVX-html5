@@ -204,7 +204,7 @@ function M.create_level_library()
             }
         },
         techie = {
-            starting_backpack_items = { "power","power","power" },
+            starting_backpack_items = { "power","power","power","power" },
             starting_equipped_buffs = {}
         },
         medic = {
@@ -212,7 +212,7 @@ function M.create_level_library()
             starting_equipped_buffs = {}
         },
         gunner = {
-            starting_backpack_items = {"power","ammo","ammo"},
+            starting_backpack_items = {"power","ammo","ammo","ammo"},
             starting_equipped_buffs = {}
         }
     }

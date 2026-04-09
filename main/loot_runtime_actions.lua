@@ -968,6 +968,10 @@ function M.extend(runtime, ctx)
         spawn_impact_ring(self, cx + (obj.offsetX or 0), cy + (obj.offsetY or 0), tint, 0.7)
     end
 
+    runtime.spawn_impact_ring_at_world = function(self, world_x, world_y, tint, duration_s)
+        return spawn_impact_ring(self, world_x, world_y, tint, duration_s)
+    end
+
     runtime.update_impact_rings = function(self, dt)
         runtime.ensure_item_runtime_state(self)
         for i = #self.impact_ring_entries, 1, -1 do
@@ -3585,6 +3589,21 @@ function M.extend(runtime, ctx)
         runtime.refresh_door_markers(self)
         runtime.refresh_wiregap_markers(self)
         runtime.refresh_factory_underlay_visuals(self)
+        runtime.refresh_workshop_underlay_visuals(self)
+        if fixable.name == WORKSHOP_MACHINE_NAME or fixable.name == hash("wiregap") then
+            local tile_instance_id = tonumber(cell.tileInstanceId or 0) or 0
+            if tile_instance_id > 0 then
+                local workshop_instances = get_workshop_instances(self)
+                local workshop_instance = workshop_instances and workshop_instances[tile_instance_id] or nil
+                if workshop_instance and workshop_instance.functional == true and workshop_instance.menu_obj then
+                    local menu_cell = workshop_instance.cell_by_local and workshop_instance.cell_by_local[7] or nil
+                    local menu_obj = workshop_instance.menu_obj
+                    if menu_cell and menu_obj then
+                        spawn_impact_ring_for_object(self, menu_cell, menu_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
+                    end
+                end
+            end
+        end
         ctx.update_human_visual_state(self)
         return true
     end
@@ -4520,6 +4539,12 @@ function M.extend(runtime, ctx)
                         source_unit.command_points = source_unit.command_points - 1
                         target_unit.current_ap = target_unit.current_ap + 1 -- intentionally uncapped by design
                         trigger_receive_pulse(target_unit)
+                        if source_unit.id == "sarge" then
+                            local pos = target_unit.go_path and go.get_position(target_unit.go_path) or nil
+                            if pos then
+                                spawn_impact_ring(self, pos.x, pos.y + 18, vmath.vector4(1.0, 0.92, 0.2, 1), 0.7)
+                            end
+                        end
                         consumed = true
                         print(string.format("%s granted +1 AP to %s.", source_unit.display_name, target_unit.display_name))
                     else
@@ -4681,6 +4706,10 @@ function M.extend(runtime, ctx)
                                 remove_source_item()
                                 target_unit.current_health = target_unit.max_health
                                 trigger_receive_pulse(target_unit)
+                                local pos = target_unit.go_path and go.get_position(target_unit.go_path) or nil
+                                if pos then
+                                    spawn_impact_ring(self, pos.x, pos.y + 18, vmath.vector4(1.0, 0.16, 0.16, 1), 0.7)
+                                end
                                 consumed = true
                                 print(string.format(
                                     "%s used 1 meds on %s (full heal). (AP -%d)",
@@ -5259,6 +5288,7 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_wiregap_markers(self)
                                     runtime.refresh_turret_markers(self)
                                     runtime.refresh_factory_underlay_visuals(self)
+                                    runtime.refresh_workshop_underlay_visuals(self)
                                     runtime.refresh_exit_objective_state(self)
                                     runtime.refresh_world_item_visuals(self)
                                     if source_item == ctx.COMPONENT_UI.component_wiring_straight
@@ -5268,6 +5298,50 @@ function M.extend(runtime, ctx)
                                         local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                         if target_cell then
                                             spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.2, 1.0, 1.0, 1))
+                                        end
+                                    end
+                                    if component_target.name == hash("nav_computer")
+                                        and source_item == ctx.COMPONENT_UI.component_nav_data
+                                    then
+                                        local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
+                                        if target_cell then
+                                            spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.1, 0.3, 1.0, 1))
+                                        end
+                                    end
+                                    if component_target.name == hash("supply_loader")
+                                        and source_item == ctx.COMPONENT_UI.component_food_supplies
+                                    then
+                                        local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
+                                        if target_cell then
+                                            spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.2, 1.0, 0.25, 1))
+                                        end
+                                    end
+                                    if component_target.name == WORKSHOP_MACHINE_NAME then
+                                        local tile_instance_id = tonumber(drop_cell and drop_cell.tileInstanceId or 0) or 0
+                                        if tile_instance_id > 0 then
+                                            local workshop_instances = get_workshop_instances(self)
+                                            local workshop_instance = workshop_instances and workshop_instances[tile_instance_id] or nil
+                                            if workshop_instance and workshop_instance.functional == true and workshop_instance.menu_obj then
+                                                local menu_cell = workshop_instance.cell_by_local and workshop_instance.cell_by_local[7] or nil
+                                                local menu_obj = workshop_instance.menu_obj
+                                                if menu_cell and menu_obj then
+                                                    spawn_impact_ring_for_object(self, menu_cell, menu_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
+                                                end
+                                            end
+                                        end
+                                    end
+                                    if component_target.name == hash("wiregap") then
+                                        local tile_instance_id = tonumber(drop_cell and drop_cell.tileInstanceId or 0) or 0
+                                        if tile_instance_id > 0 then
+                                            local workshop_instances = get_workshop_instances(self)
+                                            local workshop_instance = workshop_instances and workshop_instances[tile_instance_id] or nil
+                                            if workshop_instance and workshop_instance.functional == true and workshop_instance.menu_obj then
+                                                local menu_cell = workshop_instance.cell_by_local and workshop_instance.cell_by_local[7] or nil
+                                                local menu_obj = workshop_instance.menu_obj
+                                                if menu_cell and menu_obj then
+                                                    spawn_impact_ring_for_object(self, menu_cell, menu_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
+                                                end
+                                            end
                                         end
                                     end
                                     print(string.format(

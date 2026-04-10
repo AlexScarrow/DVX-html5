@@ -8901,6 +8901,65 @@ local function start_outro_slideshow_runtime(self)
     end
 end
 
+local function stop_level_fx_before_outro(self)
+    if not self then
+        return
+    end
+    local function stop_and_delete_fx(go_id)
+        if not go_id then
+            return
+        end
+        pcall(particlefx.stop, msg.url(nil, go_id, "particlefx"), { clear = true })
+        pcall(go.delete, go_id)
+    end
+    if self.hazard_fx_objects then
+        for _, entry in ipairs(self.hazard_fx_objects) do
+            if entry then
+                if entry.fire_id then stop_and_delete_fx(entry.fire_id) end
+                if entry.gas_id then stop_and_delete_fx(entry.gas_id) end
+            end
+        end
+        self.hazard_fx_objects = {}
+    end
+    if self.entry_fire_fx_objects then
+        for key, fx_id in pairs(self.entry_fire_fx_objects) do
+            if fx_id then stop_and_delete_fx(fx_id) end
+            self.entry_fire_fx_objects[key] = nil
+        end
+    end
+    if self.exit_green_smoke_fx_objects then
+        for key, fx_id in pairs(self.exit_green_smoke_fx_objects) do
+            if fx_id then stop_and_delete_fx(fx_id) end
+            self.exit_green_smoke_fx_objects[key] = nil
+        end
+    end
+    self.exit_green_smoke_fx_power_state = {}
+    if self.wiregap_fx_objects then
+        for i, fx_id in ipairs(self.wiregap_fx_objects) do
+            if fx_id then stop_and_delete_fx(fx_id) end
+            self.wiregap_fx_objects[i] = nil
+        end
+    end
+    if self.power_node_loop_fx then
+        for key, fx_id in pairs(self.power_node_loop_fx) do
+            if fx_id then stop_and_delete_fx(fx_id) end
+            self.power_node_loop_fx[key] = nil
+        end
+    end
+    if self.medbay_underlay_visuals then
+        for _, entry in pairs(self.medbay_underlay_visuals) do
+            if entry and entry.bubbles_fx_id then
+                stop_and_delete_fx(entry.bubbles_fx_id)
+                entry.bubbles_fx_id = nil
+            end
+        end
+    end
+    if self.backdrop_cloud_fx then
+        stop_and_delete_fx(self.backdrop_cloud_fx)
+        self.backdrop_cloud_fx = nil
+    end
+end
+
 local function update_outro_slideshow_runtime(self, dt)
     if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_OUTRO then
         return
@@ -8926,6 +8985,7 @@ function enter_mission_outro(self, result, reason)
     self.drag_resource = { active = false }
     self.is_panning = false
     self.did_drag = false
+    stop_level_fx_before_outro(self)
     local mission_type = multiplayer_normalize_mission_type(get_current_mission_type(self))
     local final_result = tostring(result or (self.game_won and "win" or "lose"))
     if final_result ~= "win" and final_result ~= "lose" then
@@ -15925,6 +15985,7 @@ function update(self, dt)
     if self.alien_turn_active and (not self.alien_turn_waiting_for_advance) and (not any_alien_is_moving(self)) and (not self.pending_spitter_attack_phase) and (not self.pending_melee_attack_phase) then
         process_alien_turn(self)
     end
+    local in_outro_flow = (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO
     LOOT_RUNTIME.update_loot_pickup_blips(self, dt)
     if LOOT_RUNTIME.update_impact_rings then
         LOOT_RUNTIME.update_impact_rings(self, dt)
@@ -15932,26 +15993,28 @@ function update(self, dt)
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     enforce_tutorial_infinite_ap(self)
-    if LOOT_RUNTIME.update_hazard_fx_visibility then
+    if (not in_outro_flow) and LOOT_RUNTIME.update_hazard_fx_visibility then
         LOOT_RUNTIME.update_hazard_fx_visibility(self)
     end
     if LOOT_RUNTIME.update_dna_mission_markers then
         LOOT_RUNTIME.update_dna_mission_markers(self)
     end
-    if LOOT_RUNTIME.update_factory_conveyor_tokens then
+    if (not in_outro_flow) and LOOT_RUNTIME.update_factory_conveyor_tokens then
         LOOT_RUNTIME.update_factory_conveyor_tokens(self, dt)
     end
-    if LOOT_RUNTIME.update_factory_underlay_animations then
+    if (not in_outro_flow) and LOOT_RUNTIME.update_factory_underlay_animations then
         LOOT_RUNTIME.update_factory_underlay_animations(self, dt)
     end
-    if LOOT_RUNTIME.update_workshop_underlay_animations then
+    if (not in_outro_flow) and LOOT_RUNTIME.update_workshop_underlay_animations then
         LOOT_RUNTIME.update_workshop_underlay_animations(self, dt)
     end
     update_human_visual_state(self)
     update_derple_feedback_triggers(self, dt)
     update_purge_runtime(self)
     update_all_humans_dead_loss(self)
-    update_exit_green_smoke_fx(self)
+    if not in_outro_flow then
+        update_exit_green_smoke_fx(self)
+    end
     update_ladder_tints(self)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)

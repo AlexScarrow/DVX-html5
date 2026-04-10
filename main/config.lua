@@ -216,6 +216,18 @@ M.HAZARD_DAMAGE = {
     gas_per_turn = 1
 }
 
+-- Realtime mode scaffold (Phase 0):
+-- Keep disabled by default so baseline behavior remains unchanged until explicitly enabled.
+M.REALTIME_MODE = {
+    enabled = false,
+    ap_regen_per_second = 1.0,
+    alien_step_hz = 1.2,
+    civilian_step_hz = 1.0,
+    blip_spawn_interval_s = 2.0,
+    alien_move_speed_multiplier = 0.75,
+    blip_move_speed_multiplier = 0.25
+}
+
 -- Buff registry (Phase 0 scaffold). Item ids are backpack/world ids.
 M.BUFFS = {
     armor = {

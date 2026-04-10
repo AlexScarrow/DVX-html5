@@ -1499,6 +1499,29 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
         return false
     end
+    local from_cell = world_grid and world_grid[from_cell_id] or nil
+    local to_cell = world_grid and world_grid[to_cell_id] or nil
+    if from_cell and to_cell and from_cell.yCell == to_cell.yCell and from_cell.xCell ~= to_cell.xCell then
+        local dir = (to_cell.xCell > from_cell.xCell) and 1 or -1
+        local from_anchor = get_barricade_anchor_x_for_cell(from_cell)
+        local to_anchor = get_barricade_anchor_x_for_cell(to_cell)
+        if is_cell_barricaded(world_grid, from_cell_id) then
+            local from_blocks_departure = (from_anchor == 0)
+                or (dir == 1 and from_anchor > 0)
+                or (dir == -1 and from_anchor < 0)
+            if from_blocks_departure then
+                return false
+            end
+        end
+        if is_cell_barricaded(world_grid, to_cell_id) then
+            local to_blocks_entry = (to_anchor == 0)
+                or (dir == 1 and to_anchor < 0)
+                or (dir == -1 and to_anchor > 0)
+            if to_blocks_entry then
+                return false
+            end
+        end
+    end
     if is_cell_barricaded(world_grid, to_cell_id) then
         return alien_type == ALIEN_TYPE_BRUTE
     end
@@ -10037,6 +10060,9 @@ function update_global_ui_buttons(self)
     elseif launch_status and launch_status.can_launch then
         launch_color = vmath.vector4(0.2, 0.78, 0.3, 0.95)
     end
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        launch_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
+    end
     set_ui_square_transform(
         self,
         self.ui.launch_button,
@@ -13031,6 +13057,10 @@ function try_launch_button(self, screen_x, screen_y)
         and screen_x <= (LAUNCH_BUTTON_X + half_w)
         and screen_y >= (LAUNCH_BUTTON_Y - half_h)
         and screen_y <= (LAUNCH_BUTTON_Y + half_h) then
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            print("Launch is host-only in multiplayer.")
+            return true
+        end
         if LOOT_RUNTIME.try_launch_escape_pod then
             local launched = LOOT_RUNTIME.try_launch_escape_pod(self)
             if launched then

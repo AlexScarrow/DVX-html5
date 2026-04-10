@@ -230,6 +230,14 @@ SCORE_HUD_MAX_DIGITS = 8
 SCORE_HUD_DIGIT_SPACING_PX = 16
 SCORE_HUD_DIGIT_DRAW_W = 20.25
 SCORE_HUD_DIGIT_DRAW_H = 23.625
+RANGED_HIT_PREVIEW_Z = 0.77
+RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
+RANGED_HIT_PREVIEW_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W * 0.66
+RANGED_HIT_PREVIEW_DIGIT_DRAW_H = SCORE_HUD_DIGIT_DRAW_H * 0.66
+RANGED_HIT_PREVIEW_PERCENT_DRAW_W = RANGED_HIT_PREVIEW_DIGIT_DRAW_W
+RANGED_HIT_PREVIEW_PERCENT_DRAW_H = RANGED_HIT_PREVIEW_DIGIT_DRAW_H
+RANGED_HIT_PREVIEW_OFFSET_Y = 56
+RANGED_HIT_PREVIEW_FADE_SECONDS = 0.22
 OBJECTIVE_BUTTON_W = 180
 OBJECTIVE_BUTTON_H = 64
 OBJECTIVE_BUTTON_X = SCORE_HUD_CENTER_X + 220
@@ -2498,6 +2506,24 @@ local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
     return true
 end
 
+compute_manual_ranged_hit_chance = function(self, unit, alien)
+    if not (self and self.world_grid and unit and alien) then
+        return nil
+    end
+    local alien_cell = self.world_grid[alien.cell_id]
+    if not alien_cell then
+        return nil
+    end
+    local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
+    local ranged_model = require("main.config").RANGED_HIT_MODEL
+    local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
+    local range_cells = manhattan_distance_by_id(unit.cell_id, alien.cell_id)
+    local range_penalty = math.max(0, (range_cells - 1) * 10)
+    local role = CLASS_ROLE_HOOKS[unit.class_id]
+    local class_bonus = (role and role.ranged_hit_bonus) or 0
+    return math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+end
+
 local function get_edge_spawn_cell_ids(world_grid)
     local ids = {}
     local fallback_edge_ids = {}
@@ -4177,22 +4203,21 @@ local function update_alien_movement(self, dt)
                     local sdy = alien.melee_shuffle_target_y - pos.y
                     local sdist = math.sqrt(sdx * sdx + sdy * sdy)
                     local alien_move_speed = ALIEN_MOVE_SPEED
-                    if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
-                        alien_move_speed = alien_move_speed * (tonumber(self.realtime_alien_move_speed_multiplier or 1.0) or 1.0)
-                    end
-                    if alien.type == ALIEN_TYPE_BLIP then
-                        if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
-                            alien_move_speed = ALIEN_MOVE_SPEED * (tonumber(self.realtime_blip_move_speed_multiplier or 0.35) or 0.35)
-                        else
-                            alien_move_speed = ALIEN_MOVE_SPEED * 0.35
-                        end
-                    end
                     if alien.type == ALIEN_TYPE_CANNON then
                         alien_move_speed = ALIEN_MOVE_SPEED * CANNON_FODDER_MOVE_SPEED_MULTIPLIER
                     elseif alien.type == ALIEN_TYPE_SPITTER then
                         alien_move_speed = ALIEN_MOVE_SPEED * SPITTER_MOVE_SPEED_MULTIPLIER
                     elseif alien.type == ALIEN_TYPE_BRUTE then
                         alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                    elseif alien.type == ALIEN_TYPE_BLIP then
+                        if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                            alien_move_speed = ALIEN_MOVE_SPEED * (tonumber(self.realtime_blip_move_speed_multiplier or 0.35) or 0.35)
+                        else
+                            alien_move_speed = ALIEN_MOVE_SPEED * 0.35
+                        end
+                    end
+                    if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                        alien_move_speed = alien_move_speed * (tonumber(self.realtime_alien_move_speed_multiplier or 1.0) or 1.0)
                     end
                     local sstep = alien_move_speed * dt
                     local profile = get_aesthetic_profile(self)
@@ -4395,22 +4420,21 @@ local function update_alien_movement(self, dt)
                 local dy = ty - pos.y
                 local dist = math.sqrt(dx * dx + dy * dy)
                 local alien_move_speed = ALIEN_MOVE_SPEED
-                if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
-                    alien_move_speed = alien_move_speed * (tonumber(self.realtime_alien_move_speed_multiplier or 1.0) or 1.0)
-                end
-                if alien.type == ALIEN_TYPE_BLIP then
-                    if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
-                        alien_move_speed = ALIEN_MOVE_SPEED * (tonumber(self.realtime_blip_move_speed_multiplier or 0.35) or 0.35)
-                    else
-                        alien_move_speed = ALIEN_MOVE_SPEED * 0.35
-                    end
-                end
                 if alien.type == ALIEN_TYPE_CANNON then
                     alien_move_speed = ALIEN_MOVE_SPEED * CANNON_FODDER_MOVE_SPEED_MULTIPLIER
                 elseif alien.type == ALIEN_TYPE_SPITTER then
                     alien_move_speed = ALIEN_MOVE_SPEED * SPITTER_MOVE_SPEED_MULTIPLIER
                 elseif alien.type == ALIEN_TYPE_BRUTE then
                     alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                elseif alien.type == ALIEN_TYPE_BLIP then
+                    if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                        alien_move_speed = ALIEN_MOVE_SPEED * (tonumber(self.realtime_blip_move_speed_multiplier or 0.35) or 0.35)
+                    else
+                        alien_move_speed = ALIEN_MOVE_SPEED * 0.35
+                    end
+                end
+                if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                    alien_move_speed = alien_move_speed * (tonumber(self.realtime_alien_move_speed_multiplier or 1.0) or 1.0)
                 end
                 local step = alien_move_speed * dt
                 local profile = get_aesthetic_profile(self)
@@ -7382,6 +7406,115 @@ local function create_outro_marker_sprite(anim_id, z)
     return id
 end
 
+clear_ranged_hit_preview = function(self)
+    if not self then
+        return
+    end
+    self.pending_manual_shot_alien_id = nil
+    self.pending_manual_shot_unit_id = nil
+    self.pending_manual_shot_cell_id = nil
+    self.pending_manual_shot_chance = nil
+    self.ranged_hit_preview_fading_out = false
+    self.ranged_hit_preview_fade_alpha = 0
+end
+
+dismiss_ranged_hit_preview = function(self)
+    if not self then
+        return
+    end
+    if self.pending_manual_shot_alien_id and (self.ranged_hit_preview_fade_alpha or 0) > 0 then
+        self.ranged_hit_preview_fading_out = true
+    else
+        clear_ranged_hit_preview(self)
+    end
+end
+
+show_ranged_hit_preview = function(self, unit, alien, hit_chance)
+    if not (self and unit and alien) then
+        return
+    end
+    self.pending_manual_shot_alien_id = alien.id
+    self.pending_manual_shot_unit_id = unit.id
+    self.pending_manual_shot_cell_id = alien.cell_id
+    self.pending_manual_shot_chance = math.max(0, math.min(99, math.floor((tonumber(hit_chance) or 0) + 0.5)))
+    self.ranged_hit_preview_fading_out = false
+    self.ranged_hit_preview_fade_alpha = 1
+end
+
+update_ranged_hit_preview_hud = function(self, visible)
+    if not self or not self.ui then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if not (self.ui.ranged_hit_preview_digits and self.ui.ranged_hit_preview_percent) then
+        return
+    end
+    if visible ~= true
+        or not self.pending_manual_shot_alien_id
+        or not self.pending_manual_shot_chance
+        or (self.ranged_hit_preview_fade_alpha or 0) <= 0
+    then
+        local function hide_marker(go_id, draw_w, draw_h)
+            if not go_id then
+                return
+            end
+            go.set_position(vmath.vector3(-9999, -9999, RANGED_HIT_PREVIEW_Z), go_id)
+            go.set_scale(vmath.vector3((draw_w * 0.021) / math.max(0.001, self.camera_zoom or 1), (draw_h * 0.021) / math.max(0.001, self.camera_zoom or 1), 1), go_id)
+            go.set(msg.url(nil, go_id, "sprite"), "tint", hidden)
+        end
+        for _, digit_id in ipairs(self.ui.ranged_hit_preview_digits) do
+            hide_marker(digit_id, RANGED_HIT_PREVIEW_DIGIT_DRAW_W, RANGED_HIT_PREVIEW_DIGIT_DRAW_H)
+        end
+        hide_marker(self.ui.ranged_hit_preview_percent, RANGED_HIT_PREVIEW_PERCENT_DRAW_W, RANGED_HIT_PREVIEW_PERCENT_DRAW_H)
+        return
+    end
+    local alien = find_alien_by_id(self, tonumber(self.pending_manual_shot_alien_id))
+    if not alien or alien.is_dead or not alien.go_id then
+        clear_ranged_hit_preview(self)
+        return
+    end
+    local pos = go.get_position(alien.go_id)
+    local screen_x = ((pos.x - self.camera_pos.x) * self.camera_zoom) + (SCREEN_WIDTH * 0.5)
+    local screen_y = ((pos.y - self.camera_pos.y) * self.camera_zoom) + (SCREEN_HEIGHT * 0.5) + (RANGED_HIT_PREVIEW_OFFSET_Y * self.camera_zoom)
+    local chance = math.max(0, math.min(99, math.floor((tonumber(self.pending_manual_shot_chance) or 0) + 0.5)))
+    local text = string.format("%02d", chance)
+    local alpha = math.max(0, math.min(1, tonumber(self.ranged_hit_preview_fade_alpha or 0) or 0))
+    local tint = vmath.vector4(1, 1, 1, alpha)
+    local digit_count = #text
+    local total_count = digit_count + 1
+    local start_x = screen_x - (((total_count - 1) * RANGED_HIT_PREVIEW_DIGIT_SPACING_PX) * 0.5)
+    local function show_marker(go_id, sx, sy, draw_w, draw_h, marker_tint)
+        if not go_id then
+            return
+        end
+        local wx, wy = screen_to_world(sx, sy, self.camera_pos, self.camera_zoom)
+        go.set_position(vmath.vector3(wx, wy, RANGED_HIT_PREVIEW_Z), go_id)
+        go.set_scale(vmath.vector3((draw_w * 0.021) / math.max(0.001, self.camera_zoom or 1), (draw_h * 0.021) / math.max(0.001, self.camera_zoom or 1), 1), go_id)
+        go.set(msg.url(nil, go_id, "sprite"), "tint", marker_tint)
+    end
+    local function hide_marker(go_id, draw_w, draw_h)
+        show_marker(go_id, -9999, -9999, draw_w, draw_h, hidden)
+    end
+    for i, digit_id in ipairs(self.ui.ranged_hit_preview_digits) do
+        if i <= digit_count then
+            local ch = string.sub(text, i, i)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            local dx = start_x + ((i - 1) * RANGED_HIT_PREVIEW_DIGIT_SPACING_PX)
+            show_marker(digit_id, dx, screen_y, RANGED_HIT_PREVIEW_DIGIT_DRAW_W, RANGED_HIT_PREVIEW_DIGIT_DRAW_H, tint)
+        else
+            hide_marker(digit_id, RANGED_HIT_PREVIEW_DIGIT_DRAW_W, RANGED_HIT_PREVIEW_DIGIT_DRAW_H)
+        end
+    end
+    show_marker(
+        self.ui.ranged_hit_preview_percent,
+        start_x + (digit_count * RANGED_HIT_PREVIEW_DIGIT_SPACING_PX),
+        screen_y,
+        RANGED_HIT_PREVIEW_PERCENT_DRAW_W,
+        RANGED_HIT_PREVIEW_PERCENT_DRAW_H,
+        tint
+    )
+end
+
 local function ui_is_button_node(self, go_id)
     if not (self and self.ui and go_id) then
         return false
@@ -7888,6 +8021,8 @@ local function initialize_unit_ui(self)
         not_enough_ap_icon = nil,
         level_buttons = {},
         score_digit_icons = {},
+        ranged_hit_preview_digits = {},
+        ranged_hit_preview_percent = nil,
         objective_button = nil,
         objective_reminder = nil,
         purge_timer_digit_icons = {},
@@ -7973,6 +8108,13 @@ local function initialize_unit_ui(self)
             msg.post(msg.url(nil, self.ui.score_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
         end
     end
+    for i = 1, 2 do
+        self.ui.ranged_hit_preview_digits[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, RANGED_HIT_PREVIEW_Z))
+        if self.ui.ranged_hit_preview_digits[i] then
+            msg.post(msg.url(nil, self.ui.ranged_hit_preview_digits[i], "sprite"), "play_animation", { id = hash("score_0") })
+        end
+    end
+    self.ui.ranged_hit_preview_percent = create_ui_marker_sprite(hash("score_percent"), RANGED_HIT_PREVIEW_Z)
     self.ui.objective_button = create_ui_marker_sprite(hash("objective_button"), OBJECTIVE_BUTTON_Z)
     self.ui.objective_reminder = create_ui_marker_sprite(hash("objective_escape"), OBJECTIVE_REMINDER_Z)
     for i = 1, PURGE_TIMER_HUD_DIGIT_COUNT do
@@ -8100,6 +8242,32 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
     end
+    if self.ui.ranged_hit_preview_digits then
+        for _, digit_id in ipairs(self.ui.ranged_hit_preview_digits) do
+            set_ui_square_transform(
+                self,
+                digit_id,
+                -9999,
+                -9999,
+                RANGED_HIT_PREVIEW_Z,
+                hidden,
+                RANGED_HIT_PREVIEW_DIGIT_DRAW_W * 0.021,
+                RANGED_HIT_PREVIEW_DIGIT_DRAW_H * 0.021
+            )
+        end
+    end
+    if self.ui.ranged_hit_preview_percent then
+        set_ui_square_transform(
+            self,
+            self.ui.ranged_hit_preview_percent,
+            -9999,
+            -9999,
+            RANGED_HIT_PREVIEW_Z,
+            hidden,
+            RANGED_HIT_PREVIEW_PERCENT_DRAW_W * 0.021,
+            RANGED_HIT_PREVIEW_PERCENT_DRAW_H * 0.021
+        )
+    end
     set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, 1, 1)
     if self.ui.purge_timer_digit_icons then
@@ -8220,6 +8388,7 @@ function update_score_hud(self, visible)
         for _, digit_id in ipairs(self.ui.score_digit_icons) do
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
+        update_ranged_hit_preview_hud(self, false)
         return
     end
 
@@ -8248,6 +8417,7 @@ function update_score_hud(self, visible)
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
     end
+    update_ranged_hit_preview_hud(self, true)
 end
 
 local function get_purge_timer_display_text(self)
@@ -9707,6 +9877,7 @@ function reset_and_load_level(self, level_index)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
+    clear_ranged_hit_preview(self)
 
     local function safe_delete(go_id)
         if go_id then
@@ -13479,6 +13650,16 @@ local function process_realtime_world_ticks(self, dt)
     end
 end
 
+local function log_realtime_tuning(self)
+    print(string.format(
+        "RT TUNE | spawn_interval=%.2fs blip_speed=%.2f alien_speed=%.2f alien_step_hz=%.2f",
+        tonumber(self.realtime_blip_spawn_interval_s or 0) or 0,
+        tonumber(self.realtime_blip_move_speed_multiplier or 0) or 0,
+        tonumber(self.realtime_alien_move_speed_multiplier or 0) or 0,
+        tonumber(self.realtime_alien_step_hz or 0) or 0
+    ))
+end
+
 local function get_human_world_pos_for_cell(cell)
     local x, y = coords_to_world_pos(cell.xCell, cell.yCell)
     -- Keep feet near the floor: 10px above each cell's bottom boundary.
@@ -14253,13 +14434,11 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
     unit.current_ap = unit.current_ap - shot_ap_cost
     unit.current_ammo = unit.current_ammo - 1
     local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
-    local ranged_model = require("main.config").RANGED_HIT_MODEL
-    local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
     local range_cells = manhattan_distance_by_id(unit.cell_id, alien.cell_id)
     local range_penalty = math.max(0, (range_cells - 1) * 10)
     local role = CLASS_ROLE_HOOKS[unit.class_id]
     local class_bonus = (role and role.ranged_hit_bonus) or 0
-    local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+    local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien) or 0
     print(string.format(
         "RANGED DEBUG | manual | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
         unit.display_name or "unit",
@@ -14272,6 +14451,7 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
     ))
     local roll = math.random(1, 100)
     spawn_human_reaction_projectile(self, unit, alien, roll <= hit_chance, active_light, hit_chance, roll)
+    clear_ranged_hit_preview(self)
 
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
@@ -14966,15 +15146,79 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     if not alien then
         return false
     end
-    if self.mp_state and self.mp_state.enabled then
-        multiplayer_transport_send_command(self, "manual_shot", {
-            turn_id = self.mp_state.turn_id or 1,
-            unit_id = unit.id,
-            alien_id = alien.id
-        }, multiplayer_get_active_player_id_for_commands(self))
+    if self.realtime_rules_enabled == true or unit.cell_id == alien.cell_id then
+        clear_ranged_hit_preview(self)
+        if self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "manual_shot", {
+                turn_id = self.mp_state.turn_id or 1,
+                unit_id = unit.id,
+                alien_id = alien.id
+            }, multiplayer_get_active_player_id_for_commands(self))
+            return true
+        end
+        return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    end
+    local same_pending_target = (self.pending_manual_shot_alien_id == alien.id)
+        and (self.pending_manual_shot_unit_id == unit.id)
+        and (self.ranged_hit_preview_fading_out ~= true)
+        and ((self.ranged_hit_preview_fade_alpha or 0) > 0)
+    if same_pending_target then
+        clear_ranged_hit_preview(self)
+        if self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "manual_shot", {
+                turn_id = self.mp_state.turn_id or 1,
+                unit_id = unit.id,
+                alien_id = alien.id
+            }, multiplayer_get_active_player_id_for_commands(self))
+            return true
+        end
+        return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    end
+    local alien_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
+    if not alien_cell or alien_cell.tileID == hash("empty") then
+        print("Unable to fire: target is in VOID.")
+        dismiss_ranged_hit_preview(self)
         return true
     end
-    return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    if not has_unobstructed_human_ranged_los(self.world_grid, unit.cell_id, alien.cell_id) then
+        print("Unable to fire: no line of sight.")
+        dismiss_ranged_hit_preview(self)
+        return true
+    end
+    local shooter_cell = self.world_grid and self.world_grid[unit.cell_id] or nil
+    local target_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
+    if shooter_cell and target_cell then
+        local is_vertical_lane = (shooter_cell.xCell == target_cell.xCell) and (shooter_cell.yCell ~= target_cell.yCell)
+        if is_vertical_lane then
+            local shooter_center_x = coords_to_world_pos(shooter_cell.xCell, shooter_cell.yCell)
+            local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
+            local target_pos = alien.go_id and go.get_position(alien.go_id) or nil
+            local shooter_x = shooter_pos and shooter_pos.x or shooter_center_x
+            local target_x = target_pos and target_pos.x or target_center_x
+            local right_threshold = CELL_WIDTH * 0.15
+            local shooter_in_right_lane = shooter_x >= (shooter_center_x + right_threshold)
+            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
+            if (not shooter_in_right_lane) or (not target_in_right_lane) then
+                print("Unable to fire: vertical shot requires both shooter and target in right lane.")
+                dismiss_ranged_hit_preview(self)
+                return true
+            end
+        end
+    end
+    local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+    if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
+        print("unable to fire no ammo/ap")
+        dismiss_ranged_hit_preview(self)
+        return true
+    end
+    local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien)
+    if not hit_chance then
+        dismiss_ranged_hit_preview(self)
+        return true
+    end
+    show_ranged_hit_preview(self, unit, alien, hit_chance)
+    return true
 end
 
 local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
@@ -14985,6 +15229,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
     local clicked_unit = get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y)
     if clicked_unit then
+        clear_ranged_hit_preview(self)
         if not multiplayer_can_control_unit(self, clicked_unit.id) then
             print(string.format(
                 "MP CONTROL | blocked | acting_as=%s unit=%s",
@@ -15057,6 +15302,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         unit = get_controlled_unit(self)
     end
     if not (unit and (unit.current_health or 0) > 0) then
+        clear_ranged_hit_preview(self)
         if unit.is_selected then
             unit.is_selected = false
             update_human_visual_state(self)
@@ -15073,6 +15319,11 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             return true
         end
         if try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y) then
+            self.ui_close_on_next_non_unit_click = false
+            return true
+        end
+        if self.pending_manual_shot_alien_id and (self.ranged_hit_preview_fade_alpha or 0) > 0 then
+            dismiss_ranged_hit_preview(self)
             self.ui_close_on_next_non_unit_click = false
             return true
         end
@@ -15745,6 +15996,7 @@ function init(self)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.comms_panel_open = false
+    clear_ranged_hit_preview(self)
     self.squad_units = create_squad_units()
     self.controlled_unit_id = "sarge"
     self.spawn_human_unit_fn = spawn_human_unit
@@ -16210,6 +16462,17 @@ function update(self, dt)
     end
     tick_human_reactive_fire_cooldowns(self, dt)
     process_turret_reactive_fire(self, dt)
+    if self.pending_manual_shot_alien_id then
+        if self.ranged_hit_preview_fading_out == true then
+            local fade_s = math.max(0.001, tonumber(RANGED_HIT_PREVIEW_FADE_SECONDS or 0.22) or 0.22)
+            self.ranged_hit_preview_fade_alpha = math.max(0, (self.ranged_hit_preview_fade_alpha or 0) - (dt / fade_s))
+            if (self.ranged_hit_preview_fade_alpha or 0) <= 0 then
+                clear_ranged_hit_preview(self)
+            end
+        else
+            self.ranged_hit_preview_fade_alpha = 1
+        end
+    end
     if self.civilian_turn_waiting_for_alien
         and self.realtime_rules_enabled ~= true
         and (not any_civilian_is_moving(self))
@@ -16498,54 +16761,71 @@ function on_input(self, action_id, action)
             end
             if not self.did_drag then
                 if tutorial_try_advance_from_click(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_multiplayer_debug_player_buttons(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_multiplayer_ready_buttons(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_next_turn_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_launch_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_realtime_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_objective_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_aesthetic_ui_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_zoom_in_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_zoom_out_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_reactive_combat(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_select_level_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_advance_reactive_alien_turn(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_comms_panel(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_activate_comms_slot(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then
                     if try_close_selected_unit_ui(self, input_x, input_y) then
+                        dismiss_ranged_hit_preview(self)
                         return
                     end
+                    dismiss_ranged_hit_preview(self)
                     return
                 end
                 local mapped_action = { x = input_x, y = input_y }
@@ -16676,6 +16956,40 @@ function on_input(self, action_id, action)
             else
                 process_alien_turn(self)
             end
+        end
+    elseif action.pressed and self.realtime_rules_enabled == true and (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME then
+        if action_id == hash("rt_tune_spawn_slower") then
+            self.realtime_blip_spawn_interval_s = math.min(20.0, (tonumber(self.realtime_blip_spawn_interval_s or 2.0) or 2.0) + 0.25)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_spawn_faster") then
+            self.realtime_blip_spawn_interval_s = math.max(0.25, (tonumber(self.realtime_blip_spawn_interval_s or 2.0) or 2.0) - 0.25)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_blip_slower") then
+            self.realtime_blip_move_speed_multiplier = math.max(0.05, (tonumber(self.realtime_blip_move_speed_multiplier or 0.25) or 0.25) - 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_blip_faster") then
+            self.realtime_blip_move_speed_multiplier = math.min(1.5, (tonumber(self.realtime_blip_move_speed_multiplier or 0.25) or 0.25) + 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_aliens_slower") then
+            self.realtime_alien_move_speed_multiplier = math.max(0.2, (tonumber(self.realtime_alien_move_speed_multiplier or 0.75) or 0.75) - 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_aliens_faster") then
+            self.realtime_alien_move_speed_multiplier = math.min(1.5, (tonumber(self.realtime_alien_move_speed_multiplier or 0.75) or 0.75) + 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_step_slower") then
+            self.realtime_alien_step_hz = math.max(0.25, (tonumber(self.realtime_alien_step_hz or 1.2) or 1.2) - 0.1)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_step_faster") then
+            self.realtime_alien_step_hz = math.min(10.0, (tonumber(self.realtime_alien_step_hz or 1.2) or 1.2) + 0.1)
+            log_realtime_tuning(self)
+            return true
         end
     end
 end

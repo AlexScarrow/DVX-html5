@@ -18,6 +18,38 @@ key_trigger {
   input: KEY_ENTER
   action: "toggle_aesthetic_mode"
 }
+key_trigger {
+  input: KEY_1
+  action: "rt_tune_spawn_slower"
+}
+key_trigger {
+  input: KEY_2
+  action: "rt_tune_spawn_faster"
+}
+key_trigger {
+  input: KEY_3
+  action: "rt_tune_blip_slower"
+}
+key_trigger {
+  input: KEY_4
+  action: "rt_tune_blip_faster"
+}
+key_trigger {
+  input: KEY_5
+  action: "rt_tune_aliens_slower"
+}
+key_trigger {
+  input: KEY_6
+  action: "rt_tune_aliens_faster"
+}
+key_trigger {
+  input: KEY_7
+  action: "rt_tune_step_slower"
+}
+key_trigger {
+  input: KEY_8
+  action: "rt_tune_step_faster"
+}
 mouse_trigger {
   input: MOUSE_BUTTON_1
   action: "touch"

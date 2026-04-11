@@ -13621,6 +13621,9 @@ local function process_realtime_world_ticks(self, dt)
         or any_civilian_is_moving(self)
     if not sim_busy and self.realtime_civilian_tick_accum >= civilian_interval then
         self.realtime_civilian_tick_accum = self.realtime_civilian_tick_accum - civilian_interval
+        if LOOT_RUNTIME.process_factory_turn then
+            LOOT_RUNTIME.process_factory_turn(self)
+        end
         process_civilian_turn(self)
     end
     sim_busy = self.alien_turn_active

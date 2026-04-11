@@ -220,6 +220,7 @@ M.HAZARD_DAMAGE = {
 -- Keep disabled by default so baseline behavior remains unchanged until explicitly enabled.
 M.REALTIME_MODE = {
     enabled = false,
+    multiplayer_enabled = true,
     ap_regen_per_second = 1.0,
     alien_step_hz = 1.2,
     civilian_step_hz = 1.0,

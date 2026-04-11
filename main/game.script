@@ -255,6 +255,9 @@ PURGE_TIMER_HUD_DIGIT_SPACING_PX = 16
 PURGE_TIMER_HUD_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W
 PURGE_TIMER_HUD_DIGIT_DRAW_H = SCORE_HUD_DIGIT_DRAW_H
 PURGE_TIMER_HUD_DIGIT_COUNT = 4
+REALTIME_MP_SNAPSHOT_INTERVAL_S = 0.2
+REALTIME_MP_SNAPSHOT_HEARTBEAT_S = 0.9
+REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST = true
 FLOW_UI_OVERLAY_Z = 1.41
 FLOW_UI_PANEL_Z = 1.42
 FLOW_UI_BUTTON_Z = 1.43
@@ -3407,6 +3410,14 @@ local function spawn_spitter_projectile(self, alien, target_human)
         to = vmath.vector3(to.x, to.y + 20, 0.75),
         t = 0
     })
+    if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
+        multiplayer_transport_broadcast_event(self, "realtime_spitter_projectile", {
+            from_x = from.x,
+            from_y = from.y,
+            to_x = to.x,
+            to_y = to.y + 20
+        })
+    end
 end
 
 local function begin_spitter_attack_phase(self)
@@ -3664,6 +3675,15 @@ function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id)
                 delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY,
                 resolve_shot_id = (i == TURRET_BURST_PROJECTILE_COUNT) and resolve_shot_id or nil
             })
+            if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
+                multiplayer_transport_broadcast_event(self, "realtime_turret_projectile", {
+                    from_x = sx,
+                    from_y = sy,
+                    to_x = tx,
+                    to_y = ty,
+                    delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY
+                })
+            end
         end
     end
 end
@@ -10277,7 +10297,7 @@ function update_global_ui_buttons(self)
         launch_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
     end
     local realtime_btn_color = self.realtime_rules_enabled and vmath.vector4(0.96, 0.26, 0.26, 0.95) or vmath.vector4(0.62, 0.18, 0.18, 0.95)
-    if self.mp_state and self.mp_state.enabled then
+    if self.mp_state and self.mp_state.enabled and (self.realtime_mp_enabled ~= true or self.mp_state.local_player_id ~= self.mp_state.host_player_id) then
         realtime_btn_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
     end
     set_ui_square_transform(
@@ -11053,6 +11073,10 @@ function try_select_level_button(self, screen_x, screen_y)
                 and screen_y >= (by - half_h)
                 and screen_y <= (by + half_h)
             then
+                if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+                    print("Level restart is host-only in multiplayer.")
+                    return true
+                end
                 return request_level_load(self, level_index, "top_bar_button")
             end
         end
@@ -11522,8 +11546,17 @@ function try_toggle_reactive_combat(self, screen_x, screen_y)
     local half_w = 32
     local half_h = 16
     if screen_x >= (tx - half_w) and screen_x <= (tx + half_w) and screen_y >= (ty - half_h) and screen_y <= (ty + half_h) then
-        selected_unit.reactive_fire_enabled = not (selected_unit.reactive_fire_enabled ~= false)
-        print(string.format("%s reactive fire: %s", selected_unit.display_name or "Unit", (selected_unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
+        local new_enabled = not (selected_unit.reactive_fire_enabled ~= false)
+        if self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "set_reactive_fire", {
+                turn_id = self.mp_state.turn_id or 1,
+                unit_id = selected_unit.id,
+                reactive_fire_enabled = new_enabled
+            }, multiplayer_get_active_player_id_for_commands(self))
+        else
+            selected_unit.reactive_fire_enabled = new_enabled
+            print(string.format("%s reactive fire: %s", selected_unit.display_name or "Unit", (selected_unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
+        end
         return true
     end
     return false
@@ -12086,6 +12119,39 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "set_reactive_fire" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_reactive_fire",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local enabled = payload.reactive_fire_enabled == true
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_reactive_fire",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or (unit.current_health or 0) <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_reactive_fire",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "set_reactive_fire_applied", {
+            unit_id = unit_id,
+            reactive_fire_enabled = enabled
+        }))
+        return events
+    end
+
     if cmd_type == "resource_drag_end" then
         local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
         if expected_turn_id ~= (self.mp_state.turn_id or 1) then
@@ -12556,6 +12622,144 @@ multiplayer_transport_on_event = function(self, event)
         ))
         return
     end
+    if event.type == "realtime_state_snapshot" then
+        local sender_player_id = event.sender_player_id or nil
+        if self.mp_state.local_player_id == self.mp_state.host_player_id
+            and sender_player_id == self.mp_state.host_player_id
+        then
+            return
+        end
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local seq = tonumber(event.payload and event.payload.seq or 0) or 0
+        local last_seq = tonumber(self.mp_state.realtime_last_applied_snapshot_seq or 0) or 0
+        if seq > 0 and last_seq > 0 and seq <= last_seq then
+            return
+        end
+        local snapshot = event.payload and event.payload.snapshot or nil
+        if not multiplayer_apply_realtime_snapshot_state(self, snapshot) then
+            print("MP RT SNAPSHOT | apply_failed")
+            return
+        end
+        if seq > 0 then
+            self.mp_state.realtime_last_applied_snapshot_seq = seq
+        end
+        print(string.format("MP RT SNAPSHOT | applied | seq=%d turn_id=%d", seq, self.mp_state.turn_id or 1))
+        return
+    end
+    if event.type == "realtime_mode_changed" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        local enabled = event.payload and event.payload.enabled == true
+        self.realtime_rules_enabled = enabled
+        self.realtime_alien_tick_accum = 0
+        self.realtime_civilian_tick_accum = 0
+        self.realtime_blip_spawn_accum = 0
+        self.realtime_client_settle_timer = 0.4
+        if self.mp_state and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            self.mp_state.realtime_snapshot_accum_s = 0
+            self.mp_state.realtime_snapshot_heartbeat_accum_s = 0
+            self.mp_state.realtime_last_sent_signature = ""
+        end
+        if self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            self.mp_state.awaiting_snapshot = false
+            self.mp_state.snapshot_blocking = false
+            self.mp_state.awaiting_snapshot_timeout_s = 0
+            self.mp_state.expected_snapshot_turn_id = 0
+            self.mp_state.post_turn_snapshot_delay_s = 0
+            self.mp_state.last_snapshot_retry_turn_id = 0
+            self.mp_state.realtime_last_applied_snapshot_seq = 0
+        end
+        print(string.format("MP RT MODE | synced_from_host | %s", enabled and "ON" or "OFF"))
+        return
+    end
+    if event.type == "realtime_spitter_projectile" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        local from_x = tonumber(event.payload and event.payload.from_x or nil)
+        local from_y = tonumber(event.payload and event.payload.from_y or nil)
+        local to_x = tonumber(event.payload and event.payload.to_x or nil)
+        local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        if not (from_x and from_y and to_x and to_y) then
+            return
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
+        if not projectile_id then
+            return
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("alien_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.spitter_projectiles = self.spitter_projectiles or {}
+        table.insert(self.spitter_projectiles, {
+            kind = "alien",
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.75),
+            to = vmath.vector3(to_x, to_y, 0.75),
+            t = 0
+        })
+        return
+    end
+    if event.type == "realtime_turret_projectile" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        local from_x = tonumber(event.payload and event.payload.from_x or nil)
+        local from_y = tonumber(event.payload and event.payload.from_y or nil)
+        local to_x = tonumber(event.payload and event.payload.to_x or nil)
+        local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        local delay = tonumber(event.payload and event.payload.delay or 0) or 0
+        if not (from_x and from_y and to_x and to_y) then
+            return
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.76))
+        if not projectile_id then
+            return
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.16, SPITTER_PROJECTILE_SIZE * 0.16, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.001 or math.abs(dir_y) > 0.001 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.turret_projectiles = self.turret_projectiles or {}
+        table.insert(self.turret_projectiles, {
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.76),
+            to = vmath.vector3(to_x, to_y, 0.76),
+            t = 0,
+            delay = math.max(0, delay)
+        })
+        return
+    end
     if event.type == "turn_checksum" then
         local checksum_turn_id = tonumber(event.payload and event.payload.turn_id or 0) or 0
         local host_checksum = tostring(event.payload and event.payload.checksum or "")
@@ -12713,6 +12917,16 @@ multiplayer_transport_on_event = function(self, event)
         end
         if not multiplayer_apply_comms_command_event(self, event.payload or {}) then
             print("MP COMMAND | comms_command_applied ignored.")
+        end
+        return
+    end
+    if event.type == "set_reactive_fire_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_set_reactive_fire_event(self, event.payload or {}) then
+            print("MP COMMAND | set_reactive_fire_applied ignored.")
         end
         return
     end
@@ -13145,6 +13359,11 @@ init_multiplayer_runtime = function(self)
         last_invalid_target_snapshot_turn_id = 0,
         pending_turn_state_snapshot_turn_id = 0,
         last_turn_state_snapshot_broadcast_turn_id = 0,
+        realtime_snapshot_accum_s = 0,
+        realtime_snapshot_seq = 0,
+        realtime_last_applied_snapshot_seq = 0,
+        realtime_snapshot_heartbeat_accum_s = 0,
+        realtime_last_sent_signature = "",
         pending_events = {},
         post_turn_snapshot_delay_s = 0,
         event_seq = 0,
@@ -13313,13 +13532,25 @@ local function try_toggle_realtime_button(self, screen_x, screen_y)
         and screen_y >= (REALTIME_TOGGLE_BUTTON_Y - half_h)
         and screen_y <= (REALTIME_TOGGLE_BUTTON_Y + half_h) then
         if self.mp_state and self.mp_state.enabled then
-            print("Realtime toggle currently supports solo only.")
-            return true
+            if self.realtime_mp_enabled ~= true then
+                print("Realtime multiplayer is disabled in config.")
+                return true
+            end
+            if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+                print("Realtime toggle is host-only in multiplayer.")
+                return true
+            end
         end
         self.realtime_rules_enabled = not (self.realtime_rules_enabled == true)
         self.realtime_alien_tick_accum = 0
         self.realtime_civilian_tick_accum = 0
         self.realtime_blip_spawn_accum = 0
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            multiplayer_transport_broadcast_event(self, "realtime_mode_changed", {
+                enabled = self.realtime_rules_enabled == true,
+                turn_id = self.mp_state.turn_id or 1
+            })
+        end
         print(string.format("Realtime rules: %s", self.realtime_rules_enabled and "ON" or "OFF"))
         return true
     end
@@ -13335,6 +13566,19 @@ local function try_toggle_objective_button(self, screen_x, screen_y)
         return true
     end
     return false
+end
+
+realtime_mp_host_can_simulate = function(self)
+    if not (self and self.realtime_rules_enabled == true) then
+        return false
+    end
+    if not self.mp_state or self.mp_state.enabled ~= true then
+        return true
+    end
+    if self.realtime_mp_enabled ~= true then
+        return false
+    end
+    return self.mp_state.local_player_id == self.mp_state.host_player_id
 end
 
 function try_toggle_aesthetic_ui_button(self, screen_x, screen_y)
@@ -13545,10 +13789,10 @@ local function enforce_tutorial_infinite_ap(self)
 end
 
 local function enforce_realtime_ap_regen(self, dt)
-    if not (self and self.realtime_rules_enabled and self.squad_units) then
+    if not (self and self.squad_units) then
         return
     end
-    if self.mp_state and self.mp_state.enabled then
+    if not realtime_mp_host_can_simulate(self) then
         return
     end
     if tutorial_rules_locked and tutorial_rules_locked(self) then
@@ -13585,10 +13829,10 @@ local function enforce_realtime_ap_regen(self, dt)
 end
 
 local function process_realtime_world_ticks(self, dt)
-    if not (self and self.realtime_rules_enabled == true) then
+    if not self then
         return
     end
-    if self.mp_state and self.mp_state.enabled then
+    if not realtime_mp_host_can_simulate(self) then
         return
     end
     if tutorial_rules_locked and tutorial_rules_locked(self) then
@@ -14703,6 +14947,13 @@ multiplayer_build_snapshot_state = function(self)
         score_state = multiplayer_clone_with_string_keys(self.score_state or {})
     }
     for unit_id, unit in pairs(self.squad_units or {}) do
+        local unit_world_x = nil
+        local unit_world_y = nil
+        if unit and unit.go_path then
+            local unit_pos = go.get_position(unit.go_path)
+            unit_world_x = unit_pos and unit_pos.x or nil
+            unit_world_y = unit_pos and unit_pos.y or nil
+        end
         snapshot.units[unit_id] = {
             id = unit.id,
             cell_id = unit.cell_id,
@@ -14713,11 +14964,20 @@ multiplayer_build_snapshot_state = function(self)
             backpack_items = multiplayer_clone_simple_table(unit.backpack_items or {}),
             backpack_used = unit.backpack_used,
             carrying_corpse_id = unit.carrying_corpse_id,
-            equipment = multiplayer_clone_simple_table(unit.equipment or {})
+            equipment = multiplayer_clone_simple_table(unit.equipment or {}),
+            world_x = unit_world_x,
+            world_y = unit_world_y
         }
     end
     for _, alien in ipairs(self.aliens or {}) do
         if alien and (not alien.is_dead) then
+            local alien_world_x = nil
+            local alien_world_y = nil
+            if alien.go_id then
+                local alien_pos = go.get_position(alien.go_id)
+                alien_world_x = alien_pos and alien_pos.x or nil
+                alien_world_y = alien_pos and alien_pos.y or nil
+            end
             table.insert(snapshot.aliens, {
                 id = alien.id,
                 type = alien.type,
@@ -14729,7 +14989,9 @@ multiplayer_build_snapshot_state = function(self)
                 can_traverse_void = alien.can_traverse_void == true,
                 has_ranged = alien.has_ranged == true,
                 ranged_cells = alien.ranged_cells or 0,
-                hidden_reveal_type = alien.hidden_reveal_type
+                hidden_reveal_type = alien.hidden_reveal_type,
+                world_x = alien_world_x,
+                world_y = alien_world_y
             })
         end
     end
@@ -14758,6 +15020,372 @@ multiplayer_build_snapshot_state = function(self)
         end
     end
     return snapshot
+end
+
+multiplayer_compute_realtime_snapshot_signature = function(snapshot)
+    if type(snapshot) ~= "table" then
+        return "0"
+    end
+    local parts = {}
+    local function push(...)
+        local n = select("#", ...)
+        for i = 1, n do
+            parts[#parts + 1] = tostring(select(i, ...))
+        end
+        parts[#parts + 1] = "|"
+    end
+    local function round_px(v)
+        return math.floor((tonumber(v or 0) or 0) + 0.5)
+    end
+
+    push("t", tonumber(snapshot.turn_id or 0) or 0)
+    push("p", tonumber(snapshot.purge_deadline_epoch_ms or 0) or 0, snapshot.purge_timer_started == true and 1 or 0)
+    push("d", tonumber(snapshot.dna_analysis_progress or 0) or 0, snapshot.dna_sample_returned == true and 1 or 0)
+
+    local unit_rows = {}
+    for unit_id, unit in pairs(snapshot.units or {}) do
+        unit_rows[#unit_rows + 1] = string.format(
+            "%s|%d|%d|%d|%d|%d|%d",
+            tostring(unit_id),
+            tonumber(unit.cell_id or 0) or 0,
+            tonumber(unit.current_ap or 0) or 0,
+            tonumber(unit.current_health or 0) or 0,
+            tonumber(unit.current_ammo or 0) or 0,
+            round_px(unit.world_x),
+            round_px(unit.world_y)
+        )
+    end
+    table.sort(unit_rows)
+    for _, row in ipairs(unit_rows) do
+        push("u", row)
+    end
+
+    local alien_rows = {}
+    for _, alien in ipairs(snapshot.aliens or {}) do
+        alien_rows[#alien_rows + 1] = string.format(
+            "%d|%s|%d|%d|%d|%d",
+            tonumber(alien.id or 0) or 0,
+            tostring(alien.type or "_"),
+            tonumber(alien.cell_id or 0) or 0,
+            tonumber(alien.hp_current or 0) or 0,
+            round_px(alien.world_x),
+            round_px(alien.world_y)
+        )
+    end
+    table.sort(alien_rows)
+    for _, row in ipairs(alien_rows) do
+        push("a", row)
+    end
+
+    local civilian_rows = {}
+    for _, civilian in ipairs(snapshot.civilians or {}) do
+        civilian_rows[#civilian_rows + 1] = string.format(
+            "%d|%d|%d",
+            tonumber(civilian.id or 0) or 0,
+            tonumber(civilian.cell_id or 0) or 0,
+            tonumber(civilian.current_health or 0) or 0
+        )
+    end
+    table.sort(civilian_rows)
+    for _, row in ipairs(civilian_rows) do
+        push("c", row)
+    end
+
+    local item_rows = {}
+    for item_id, item in pairs(snapshot.world_item_instances or {}) do
+        item_rows[#item_rows + 1] = string.format(
+            "%s|%s|%d|%d|%d",
+            tostring(item_id),
+            tostring(item and (item.item_type or item.type or "_") or "_"),
+            tonumber(item and item.cell_id or 0) or 0,
+            round_px(item and item.world_x or 0),
+            round_px(item and item.world_y or 0)
+        )
+    end
+    table.sort(item_rows)
+    for _, row in ipairs(item_rows) do
+        push("wi", row)
+    end
+
+    local serial = table.concat(parts)
+    local h = 5381
+    for i = 1, #serial do
+        h = ((h * 33) + string.byte(serial, i)) % 2147483647
+    end
+    return tostring(h)
+end
+
+multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
+    if type(snapshot) ~= "table" then
+        return false
+    end
+    if not (self.world_grid and self.squad_units and self.aliens) then
+        return false
+    end
+    if self.mp_state then
+        self.mp_state.turn_id = tonumber(snapshot.turn_id or self.mp_state.turn_id or 1) or 1
+    end
+
+    self.cell_slot_assignments = multiplayer_restore_numeric_top_keys(
+        multiplayer_clone_simple_table(snapshot.cell_slot_assignments or self.cell_slot_assignments or {}) or {}
+    )
+    for _, cell in ipairs(self.world_grid) do
+        if cell then
+            cell.isOccupied = hash("empty")
+        end
+    end
+    local decouple_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+        and self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        and self.realtime_rules_enabled == true
+    for unit_id, unit in pairs(self.squad_units) do
+        local unit_snapshot = snapshot.units and snapshot.units[unit_id] or nil
+        if not decouple_motion then
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+            unit.desired_destination_cell_id = nil
+            unit.desired_destination_slot_index = nil
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            unit.counter_move_total_dist = nil
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+        elseif (unit.is_moving ~= true) then
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            unit.counter_move_total_dist = nil
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+        end
+        if unit_snapshot then
+            unit.current_ap = tonumber(unit_snapshot.current_ap or unit.current_ap or unit.max_ap) or unit.max_ap
+            unit.current_ammo = tonumber(unit_snapshot.current_ammo or unit.current_ammo or unit.max_ammo) or unit.max_ammo
+            unit.current_health = tonumber(unit_snapshot.current_health or unit.current_health or unit.max_health) or unit.max_health
+            unit.command_points = tonumber(unit_snapshot.command_points or unit.command_points or 0) or 0
+            unit.backpack_items = multiplayer_clone_simple_table(unit_snapshot.backpack_items or {}) or {}
+            unit.backpack_used = tonumber(unit_snapshot.backpack_used or #unit.backpack_items) or #unit.backpack_items
+            unit.carrying_corpse_id = unit_snapshot.carrying_corpse_id
+            unit.equipment = create_empty_equipment()
+            local snapshot_equipment = unit_snapshot.equipment or {}
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+                local equipped_item = snapshot_equipment[slot_name]
+                if type(equipped_item) == "string" then
+                    unit.equipment[slot_name] = equipped_item
+                end
+            end
+            unit.cell_id = tonumber(unit_snapshot.cell_id) or unit.cell_id
+        end
+        if unit.cell_id and self.world_grid[unit.cell_id] and (unit.current_health or 0) > 0 then
+            self.world_grid[unit.cell_id].isOccupied = unit.occupancy_hash
+            if unit.go_path then
+                local tx = tonumber(unit_snapshot and unit_snapshot.world_x or nil)
+                local ty = tonumber(unit_snapshot and unit_snapshot.world_y or nil)
+                if not (tx and ty) then
+                    tx, ty = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
+                end
+                local pos = go.get_position(unit.go_path)
+                local dx = tx - pos.x
+                local dy = ty - pos.y
+                local dist_sq = (dx * dx + dy * dy)
+                local in_settle = (self.realtime_client_settle_timer or 0) > 0
+                local decouple_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+                    and self.mp_state
+                    and self.mp_state.enabled
+                    and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+                    and self.realtime_rules_enabled == true
+                if decouple_motion then
+                    local needs_reconcile = (unit.is_moving ~= true) and (dist_sq > (CELL_WIDTH * CELL_WIDTH * 1.44))
+                    if needs_reconcile then
+                        go.cancel_animations(unit.go_path, "position")
+                        go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
+                    end
+                else
+                    if in_settle and dist_sq > 0.25 then
+                        go.cancel_animations(unit.go_path, "position")
+                        go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
+                    elseif dist_sq > 0.25 then
+                        go.cancel_animations(unit.go_path, "position")
+                        go.animate(unit.go_path, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(tx, ty, 0.5), go.EASING_LINEAR, 0.28)
+                    end
+                end
+            end
+        end
+    end
+
+    local snapshot_aliens_by_id = {}
+    for _, alien_snapshot in ipairs(snapshot.aliens or {}) do
+        local alien_id = tonumber(alien_snapshot.id or 0) or 0
+        if alien_id > 0 then
+            snapshot_aliens_by_id[alien_id] = alien_snapshot
+            local alien = find_alien_by_id(self, alien_id)
+            if not alien then
+                local alien_type = alien_snapshot.type or ALIEN_TYPE_BLIP
+                local cfg = ALIEN_TYPE_CONFIG[alien_type] or ALIEN_TYPE_CONFIG[ALIEN_TYPE_BLIP]
+                local ap_max = tonumber(alien_snapshot.ap_max or cfg.ap_per_turn) or (cfg.ap_per_turn or 1)
+                local hp_max = tonumber(alien_snapshot.hp_max or cfg.hp) or (cfg.hp or 1)
+                alien = {
+                    id = alien_id,
+                    type = alien_type,
+                    cell_id = tonumber(alien_snapshot.cell_id),
+                    ap_max = ap_max,
+                    turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or ap_max) or ap_max,
+                    hp_max = hp_max,
+                    hp_current = tonumber(alien_snapshot.hp_current or hp_max) or hp_max,
+                    can_traverse_void = (alien_snapshot.can_traverse_void == true) or (cfg.can_traverse_void == true),
+                    has_ranged = (alien_snapshot.has_ranged == true) or (cfg.has_ranged == true),
+                    ranged_cells = tonumber(alien_snapshot.ranged_cells or cfg.ranged_cells or 0) or 0,
+                    go_id = nil,
+                    is_moving = false,
+                    move_path = nil,
+                    move_path_index = 0,
+                    spitter_anim_phase = math.random() * math.pi * 2,
+                    spitter_flip = false,
+                    hidden_reveal_type = alien_snapshot.hidden_reveal_type
+                }
+                table.insert(self.aliens, alien)
+            else
+                alien.type = alien_snapshot.type or alien.type
+                alien.cell_id = tonumber(alien_snapshot.cell_id) or alien.cell_id
+                alien.ap_max = tonumber(alien_snapshot.ap_max or alien.ap_max or 1) or 1
+                alien.turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or alien.turn_ap_remaining or alien.ap_max) or alien.ap_max
+                alien.hp_max = tonumber(alien_snapshot.hp_max or alien.hp_max or 1) or 1
+                alien.hp_current = tonumber(alien_snapshot.hp_current or alien.hp_current or alien.hp_max) or alien.hp_max
+                alien.can_traverse_void = alien_snapshot.can_traverse_void == true
+                alien.has_ranged = alien_snapshot.has_ranged == true
+                alien.ranged_cells = tonumber(alien_snapshot.ranged_cells or alien.ranged_cells or 0) or 0
+                alien.hidden_reveal_type = alien_snapshot.hidden_reveal_type
+                alien.is_moving = false
+                alien.move_path = nil
+                alien.move_path_index = 0
+                alien.counter_move_total_dist = nil
+                alien.counter_shadow_offset = nil
+                alien.melee_shuffle_target_x = nil
+                alien.melee_shuffle_target_y = nil
+            end
+            ensure_alien_visual(self, alien)
+            local wanted_visual_kind = "marker"
+            if alien.type == ALIEN_TYPE_BLIP then
+                wanted_visual_kind = "blip"
+            elseif alien.type == ALIEN_TYPE_CANNON then
+                wanted_visual_kind = "cannon"
+            elseif alien.type == ALIEN_TYPE_SPITTER then
+                wanted_visual_kind = "spitter"
+            elseif alien.type == ALIEN_TYPE_SPEEDY then
+                wanted_visual_kind = "speedy"
+            elseif alien.type == ALIEN_TYPE_BRUTE then
+                wanted_visual_kind = "brute"
+            end
+            if alien.visual_kind ~= wanted_visual_kind then
+                refresh_alien_visual(self, alien)
+            end
+            if alien.go_id then
+                local ax = tonumber(alien_snapshot.world_x or nil)
+                local ay = tonumber(alien_snapshot.world_y or nil)
+                if ax and ay then
+                    local apos = go.get_position(alien.go_id)
+                    local adx = ax - apos.x
+                    local ady = ay - apos.y
+                    local dist_sq = (adx * adx + ady * ady)
+                    local snap_dist = CELL_WIDTH * 0.8
+                    local in_settle = (self.realtime_client_settle_timer or 0) > 0
+                    local decouple_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+                        and self.mp_state
+                        and self.mp_state.enabled
+                        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+                        and self.realtime_rules_enabled == true
+                    if decouple_motion then
+                        if dist_sq > (snap_dist * snap_dist * 2.25) then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        end
+                    else
+                        if in_settle and dist_sq > 0.25 then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        elseif dist_sq > (snap_dist * snap_dist) then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        elseif dist_sq > 0.25 then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(ax, ay, 0.6), go.EASING_LINEAR, 0.24)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    for i = #self.aliens, 1, -1 do
+        local alien = self.aliens[i]
+        if alien and (not snapshot_aliens_by_id[tonumber(alien.id or 0) or 0]) then
+            if alien.go_id then
+                pcall(go.delete, alien.go_id)
+            end
+            table.remove(self.aliens, i)
+        end
+    end
+    self.next_alien_id = tonumber(snapshot.next_alien_id or self.next_alien_id or 0) or 0
+
+    local old_civilians_by_id = {}
+    for _, existing in ipairs(self.civilians or {}) do
+        if existing and existing.id then
+            old_civilians_by_id[tonumber(existing.id) or 0] = existing
+        end
+    end
+    local next_civilians = multiplayer_clone_simple_table(snapshot.civilians or self.civilians or {}) or {}
+    if decouple_motion then
+        for _, civilian in ipairs(next_civilians) do
+            local existing = old_civilians_by_id[tonumber(civilian and civilian.id or 0) or 0]
+            if existing then
+                civilian.is_moving = existing.is_moving
+                civilian.move_path = existing.move_path
+                civilian.move_path_index = existing.move_path_index
+                civilian.micro_target_x = existing.micro_target_x
+                civilian.micro_target_y = existing.micro_target_y
+                civilian.micro_move_kind = existing.micro_move_kind
+                civilian.vertical_prep_done_for_index = existing.vertical_prep_done_for_index
+                civilian.entry_slot_for_index = existing.entry_slot_for_index
+                civilian.entry_slot_index = existing.entry_slot_index
+                civilian.shadow_motion_offset = existing.shadow_motion_offset
+                civilian.counter_move_total_dist = existing.counter_move_total_dist
+                civilian.anim_phase = existing.anim_phase
+            end
+        end
+    end
+    self.civilians = next_civilians
+    self.next_civilian_id = tonumber(snapshot.next_civilian_id or self.next_civilian_id or 0) or 0
+    self.world_item_instances = multiplayer_clone_simple_table(snapshot.world_item_instances or self.world_item_instances or {}) or {}
+    self.next_world_item_id = tonumber(snapshot.next_world_item_id or self.next_world_item_id or 0) or 0
+    self.dna_analysis_progress = tonumber(snapshot.dna_analysis_progress or self.dna_analysis_progress or 0) or 0
+    self.dna_analysis_complete = snapshot.dna_analysis_complete == true
+    self.dna_sample_spawned = snapshot.dna_sample_spawned == true
+    self.dna_sample_returned = snapshot.dna_sample_returned == true
+    self.purge_bomb_planted = snapshot.purge_bomb_planted == true
+    self.purge_timer_started = snapshot.purge_timer_started == true
+    self.purge_launch_pressed = snapshot.purge_launch_pressed == true
+    self.purge_time_expired = snapshot.purge_time_expired == true
+    self.purge_result_locked = snapshot.purge_result_locked == true
+    self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
+
+    if not decouple_motion then
+        multiplayer_enforce_controlled_unit(self, true)
+    end
+    refresh_civilian_visuals(self)
+    update_human_visual_state(self)
+    return true
 end
 
 multiplayer_apply_snapshot_state = function(self, snapshot)
@@ -15134,6 +15762,20 @@ multiplayer_apply_scavenge_crate_event = function(self, payload)
     local ok = LOOT_RUNTIME.try_scavenge_crate_by_ids(self, unit_id, cell_id, crate_object_id) == true
     self.mp_state.applying_remote_event = false
     return ok
+end
+
+multiplayer_apply_set_reactive_fire_event = function(self, payload)
+    if type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local unit = self.squad_units and self.squad_units[unit_id] or nil
+    if not unit or (unit.current_health or 0) <= 0 then
+        return false
+    end
+    unit.reactive_fire_enabled = (payload.reactive_fire_enabled == true)
+    print(string.format("%s reactive fire: %s", unit.display_name or "Unit", (unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
+    return true
 end
 
 local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
@@ -15899,6 +16541,7 @@ function init(self)
     self.zoom_focus_y = SCREEN_HEIGHT * 0.5
     self.zoom_smooth_speed = 12
     self.realtime_rules_enabled = REALTIME_MODE_CFG.enabled == true
+    self.realtime_mp_enabled = REALTIME_MODE_CFG.multiplayer_enabled == true
     self.realtime_ap_regen_per_second = tonumber(REALTIME_MODE_CFG.ap_regen_per_second or 1.0) or 1.0
     self.realtime_alien_step_hz = tonumber(REALTIME_MODE_CFG.alien_step_hz or 2.0) or 2.0
     self.realtime_civilian_step_hz = tonumber(REALTIME_MODE_CFG.civilian_step_hz or 1.0) or 1.0
@@ -15908,6 +16551,7 @@ function init(self)
     self.realtime_alien_tick_accum = 0
     self.realtime_civilian_tick_accum = 0
     self.realtime_blip_spawn_accum = 0
+    self.realtime_client_settle_timer = 0
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")
@@ -16102,6 +16746,28 @@ end
 function update(self, dt)
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
+    end
+    if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
+        self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
+    end
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+        if realtime_mp_host_can_simulate(self) then
+            local snapshot_interval_s = math.max(0.05, tonumber(REALTIME_MP_SNAPSHOT_INTERVAL_S or 0.2) or 0.2)
+            self.mp_state.realtime_snapshot_accum_s = (tonumber(self.mp_state.realtime_snapshot_accum_s or 0) or 0) + dt
+            while self.mp_state.realtime_snapshot_accum_s >= snapshot_interval_s do
+                self.mp_state.realtime_snapshot_accum_s = self.mp_state.realtime_snapshot_accum_s - snapshot_interval_s
+                local snapshot = multiplayer_build_snapshot_state(self)
+                self.mp_state.realtime_snapshot_seq = (tonumber(self.mp_state.realtime_snapshot_seq or 0) or 0) + 1
+                multiplayer_transport_broadcast_event(self, "realtime_state_snapshot", {
+                    seq = self.mp_state.realtime_snapshot_seq,
+                    turn_id = self.mp_state.turn_id or 1,
+                    snapshot = snapshot
+                })
+            end
+        else
+            self.mp_state.realtime_snapshot_accum_s = 0
+            self.mp_state.realtime_snapshot_heartbeat_accum_s = 0
+        end
     end
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
         local pending_turn_state_turn_id = tonumber(self.mp_state.pending_turn_state_snapshot_turn_id or 0) or 0

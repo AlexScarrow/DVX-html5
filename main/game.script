@@ -3088,6 +3088,14 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
         impact_chance = impact_chance or 0,
         impact_roll = impact_roll or 0
     })
+    if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
+        multiplayer_transport_broadcast_event(self, "realtime_human_projectile", {
+            from_x = from.x,
+            from_y = from.y + 20,
+            to_x = to.x,
+            to_y = to.y
+        })
+    end
 end
 
 local function resolve_human_reaction_fire(self, alien)
@@ -12734,6 +12742,47 @@ multiplayer_transport_on_event = function(self, event)
         })
         return
     end
+    if event.type == "realtime_human_projectile" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        local from_x = tonumber(event.payload and event.payload.from_x or nil)
+        local from_y = tonumber(event.payload and event.payload.from_y or nil)
+        local to_x = tonumber(event.payload and event.payload.to_x or nil)
+        local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        if not (from_x and from_y and to_x and to_y) then
+            return
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
+        if not projectile_id then
+            return
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.spitter_projectiles = self.spitter_projectiles or {}
+        table.insert(self.spitter_projectiles, {
+            kind = "human_remote",
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.75),
+            to = vmath.vector3(to_x, to_y, 0.75),
+            t = 0,
+            speed = SPITTER_PROJECTILE_SPEED * 1.4
+        })
+        return
+    end
     if event.type == "realtime_turret_projectile" then
         if not (self.mp_state and self.mp_state.enabled) then
             return
@@ -15156,7 +15205,8 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
         and self.realtime_rules_enabled == true
     for unit_id, unit in pairs(self.squad_units) do
         local unit_snapshot = snapshot.units and snapshot.units[unit_id] or nil
-        if not decouple_motion then
+        local decouple_unit_motion = decouple_motion and multiplayer_can_control_unit(self, unit.id)
+        if not decouple_unit_motion then
             unit.is_moving = false
             unit.move_path = nil
             unit.move_path_index = 0
@@ -15217,12 +15267,13 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                 local dy = ty - pos.y
                 local dist_sq = (dx * dx + dy * dy)
                 local in_settle = (self.realtime_client_settle_timer or 0) > 0
-                local decouple_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+                local decouple_unit_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
                     and self.mp_state
                     and self.mp_state.enabled
                     and self.mp_state.local_player_id ~= self.mp_state.host_player_id
                     and self.realtime_rules_enabled == true
-                if decouple_motion then
+                    and multiplayer_can_control_unit(self, unit.id)
+                if decouple_unit_motion then
                     local needs_reconcile = (unit.is_moving ~= true) and (dist_sq > (CELL_WIDTH * CELL_WIDTH * 1.44))
                     if needs_reconcile then
                         go.cancel_animations(unit.go_path, "position")

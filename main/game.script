@@ -2968,6 +2968,21 @@ update_spitter_idle_visual = function(self, alien, dt)
     local pulse_mul = 1 + (SPITTER_IDLE_PULSE_AMPLITUDE * pulse)
     local base_scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
     go.set_scale(vmath.vector3(base_scale * pulse_mul, base_scale * pulse_mul, 1), alien.go_id)
+
+    local decoupled_mp_client = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+        and self
+        and self.mp_state
+        and self.mp_state.enabled == true
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        and self.realtime_rules_enabled == true
+    if decoupled_mp_client then
+        -- Avoid fighting host snapshot/interpolation transforms on client.
+        alien.spitter_idle_anchor_x = nil
+        alien.spitter_idle_anchor_y = nil
+        update_spitter_bottom_sway(alien, dt)
+        return
+    end
+
     if alien.is_moving then
         alien.spitter_idle_anchor_x = nil
         alien.spitter_idle_anchor_y = nil
@@ -15275,6 +15290,10 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                 alien.counter_shadow_offset = nil
                 alien.melee_shuffle_target_x = nil
                 alien.melee_shuffle_target_y = nil
+                if alien.type == ALIEN_TYPE_SPITTER then
+                    alien.spitter_idle_anchor_x = nil
+                    alien.spitter_idle_anchor_y = nil
+                end
             end
             ensure_alien_visual(self, alien)
             local wanted_visual_kind = "marker"
@@ -15308,9 +15327,15 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                         and self.mp_state.local_player_id ~= self.mp_state.host_player_id
                         and self.realtime_rules_enabled == true
                     if decouple_motion then
+                        -- Hybrid alien sync in realtime MP:
+                        -- keep host authority for decisions, but smooth medium position deltas
+                        -- on clients so aliens do not appear frozen between snapshots.
                         if dist_sq > (snap_dist * snap_dist * 2.25) then
                             go.cancel_animations(alien.go_id, "position")
                             go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        elseif dist_sq > 4.0 then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(ax, ay, 0.6), go.EASING_LINEAR, 0.22)
                         end
                     else
                         if in_settle and dist_sq > 0.25 then

@@ -210,6 +210,8 @@ MULTIPLAYER_READY_ICON_DRAW_SIZE = 11
 MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_W = 177
 MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_H = 61
 MULTIPLAYER_REQUIRED_READY_PLAYER_IDS = { "p2", "p3", "p4" }
+TURN_BASED_MP_SNAPSHOT_INTERVAL_S = 2.5
+TURN_BASED_MP_HEARTBEAT_MISMATCH_THRESHOLD = 2
 MULTIPLAYER_DEBUG_BUTTON_X = SCREEN_WIDTH - 32
 MULTIPLAYER_DEBUG_BUTTON_START_Y = SCREEN_HEIGHT * 0.62
 MULTIPLAYER_DEBUG_BUTTON_Y_GAP = 44
@@ -8830,6 +8832,9 @@ function start_multiplayer_game_flow(self, session_config)
         self.mp_state.workshop_state_sync_signature = ""
         self.mp_state.factory_state_sync_accum_s = 0
         self.mp_state.factory_state_sync_signature = ""
+        self.mp_state.turn_based_snapshot_accum_s = 0
+        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+        self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -12755,6 +12760,58 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.turn_id or 1,
             self.current_level_index or 0
         ))
+        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+        self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
+        return
+    end
+    if event.type == "turn_state_heartbeat" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if self.realtime_rules_enabled == true then
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            return
+        end
+        local payload = event.payload or {}
+        local host_turn_id = tonumber(payload.turn_id or 0) or 0
+        local local_turn_id = tonumber(self.mp_state.turn_id or 0) or 0
+        if host_turn_id > 0 and local_turn_id > 0 and host_turn_id ~= local_turn_id then
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            return
+        end
+        local host_checksum = tostring(payload.checksum or "")
+        if host_checksum == "" then
+            return
+        end
+        local local_checksum = tostring(multiplayer_compute_turn_checksum(self))
+        if local_checksum == host_checksum then
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            return
+        end
+        self.mp_state.turn_based_heartbeat_mismatch_streak = (tonumber(self.mp_state.turn_based_heartbeat_mismatch_streak or 0) or 0) + 1
+        local mismatch_threshold = math.max(1, tonumber(TURN_BASED_MP_HEARTBEAT_MISMATCH_THRESHOLD or 2) or 2)
+        if self.mp_state.turn_based_heartbeat_mismatch_streak < mismatch_threshold then
+            return
+        end
+        local request_turn_id = host_turn_id > 0 and host_turn_id or local_turn_id
+        if self.mp_state.turn_based_heartbeat_last_request_turn_id == request_turn_id then
+            return
+        end
+        self.mp_state.turn_based_heartbeat_last_request_turn_id = request_turn_id
+        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+        multiplayer_transport_send_command(self, "request_snapshot", {
+            turn_id = request_turn_id,
+            reason = "heartbeat_checksum_mismatch",
+            expected_turn_id = request_turn_id
+        }, self.mp_state.local_player_id)
+        print(string.format("MP SNAPSHOT | requested_heartbeat_mismatch | turn_id=%d", request_turn_id))
         return
     end
     if event.type == "realtime_state_snapshot" then
@@ -13618,6 +13675,9 @@ init_multiplayer_runtime = function(self)
         realtime_snapshot_seq = 0,
         realtime_last_applied_snapshot_seq = 0,
         realtime_snapshot_heartbeat_accum_s = 0,
+        turn_based_snapshot_accum_s = 0,
+        turn_based_heartbeat_mismatch_streak = 0,
+        turn_based_heartbeat_last_request_turn_id = 0,
         realtime_last_sent_signature = "",
         workshop_state_sync_accum_s = 0,
         workshop_state_sync_signature = "",
@@ -17250,6 +17310,21 @@ function update(self, dt)
         else
             self.mp_state.realtime_snapshot_accum_s = 0
             self.mp_state.realtime_snapshot_heartbeat_accum_s = 0
+        end
+        if self.realtime_rules_enabled ~= true then
+            local turn_snapshot_interval_s = math.max(0.5, tonumber(TURN_BASED_MP_SNAPSHOT_INTERVAL_S or 2.5) or 2.5)
+            self.mp_state.turn_based_snapshot_accum_s = (tonumber(self.mp_state.turn_based_snapshot_accum_s or 0) or 0) + dt
+            if self.mp_state.turn_based_snapshot_accum_s >= turn_snapshot_interval_s then
+                self.mp_state.turn_based_snapshot_accum_s = 0
+                multiplayer_transport_broadcast_event(self, "turn_state_heartbeat", {
+                    turn_id = self.mp_state.turn_id or 1,
+                    checksum = multiplayer_compute_turn_checksum(self)
+                })
+            end
+        else
+            self.mp_state.turn_based_snapshot_accum_s = 0
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
         end
         if LOOT_RUNTIME and LOOT_RUNTIME.build_workshop_sync_state then
             local sync_interval_s = 0.2

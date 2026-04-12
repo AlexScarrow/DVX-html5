@@ -8766,6 +8766,10 @@ function start_multiplayer_game_flow(self, session_config)
             self.mp_state.seat_assignments = multiplayer_get_default_seat_assignments(self.mp_state.player_count)
         end
         self.mp_state.required_ready_player_ids = multiplayer_get_required_ready_player_ids_for_count(self.mp_state.player_count)
+        self.mp_state.workshop_state_sync_accum_s = 0
+        self.mp_state.workshop_state_sync_signature = ""
+        self.mp_state.factory_state_sync_accum_s = 0
+        self.mp_state.factory_state_sync_signature = ""
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -12702,6 +12706,58 @@ multiplayer_transport_on_event = function(self, event)
         print(string.format("MP RT MODE | synced_from_host | %s", enabled and "ON" or "OFF"))
         return
     end
+    if event.type == "workshop_state_changed" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.apply_workshop_sync_state then
+            LOOT_RUNTIME.apply_workshop_sync_state(self, event.payload and event.payload.workshop_state or {})
+            self.mp_state.workshop_state_sync_signature = workshop_state_signature(event.payload and event.payload.workshop_state or {})
+        end
+        return
+    end
+    if event.type == "factory_state_changed" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.apply_factory_sync_state then
+            LOOT_RUNTIME.apply_factory_sync_state(self, event.payload and event.payload.factory_state or {})
+            self.mp_state.factory_state_sync_signature = factory_state_signature(event.payload and event.payload.factory_state or {})
+        end
+        return
+    end
+    if event.type == "factory_token_spawned" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.spawn_factory_conveyor_token_visual then
+            local payload = multiplayer_clone_simple_table(event.payload or {}) or {}
+            payload.remote_visual_only = true
+            LOOT_RUNTIME.spawn_factory_conveyor_token_visual(self, payload)
+        end
+        return
+    end
     if event.type == "realtime_spitter_projectile" then
         if not (self.mp_state and self.mp_state.enabled) then
             return
@@ -13428,6 +13484,10 @@ init_multiplayer_runtime = function(self)
         realtime_last_applied_snapshot_seq = 0,
         realtime_snapshot_heartbeat_accum_s = 0,
         realtime_last_sent_signature = "",
+        workshop_state_sync_accum_s = 0,
+        workshop_state_sync_signature = "",
+        factory_state_sync_accum_s = 0,
+        factory_state_sync_signature = "",
         pending_events = {},
         post_turn_snapshot_delay_s = 0,
         event_seq = 0,
@@ -13442,6 +13502,61 @@ init_multiplayer_runtime = function(self)
     ))
     multiplayer_reset_ready_gate(self)
     multiplayer_transport_init(self)
+end
+
+workshop_state_signature = function(workshop_state)
+    if type(workshop_state) ~= "table" then
+        return ""
+    end
+    local tile_ids = {}
+    for tile_instance_id, _ in pairs(workshop_state) do
+        local tile_id = tonumber(tile_instance_id)
+        if tile_id then
+            table.insert(tile_ids, tile_id)
+        end
+    end
+    table.sort(tile_ids)
+    local parts = {}
+    for _, tile_id in ipairs(tile_ids) do
+        local state = workshop_state[tile_id] or workshop_state[tostring(tile_id)] or {}
+        parts[#parts + 1] = string.format(
+            "%d:%d:%d:%d:%.3f:%.3f",
+            tile_id,
+            tonumber(state.selected_slot or 0) or 0,
+            tonumber(state.paid_units or 0) or 0,
+            state.payment_locked == true and 1 or 0,
+            tonumber(state.production_time_left or 0) or 0,
+            tonumber(state.payment_confirm_flash or 0) or 0
+        )
+    end
+    return table.concat(parts, "|")
+end
+
+factory_state_signature = function(factory_state)
+    if type(factory_state) ~= "table" then
+        return ""
+    end
+    local tile_ids = {}
+    for tile_instance_id, _ in pairs(factory_state) do
+        local tile_id = tonumber(tile_instance_id)
+        if tile_id then
+            table.insert(tile_ids, tile_id)
+        end
+    end
+    table.sort(tile_ids)
+    local parts = {}
+    for _, tile_id in ipairs(tile_ids) do
+        local state = factory_state[tile_id] or factory_state[tostring(tile_id)] or {}
+        parts[#parts + 1] = string.format(
+            "%d:%d:%d:%d:%d",
+            tile_id,
+            state.powered == true and 1 or 0,
+            state.functional == true and 1 or 0,
+            tonumber(state.pending_tokens or 0) or 0,
+            tonumber(state.stock_total or 0) or 0
+        )
+    end
+    return table.concat(parts, "|")
 end
 
 multiplayer_queue_pending_event = function(self, event)
@@ -13749,6 +13864,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     end,
     mp_send_command = function(self_ref, cmd_type, payload, sender_player_id)
         multiplayer_transport_send_command(self_ref, cmd_type, payload or {}, sender_player_id)
+    end,
+    mp_emit_event = function(self_ref, event_type, payload)
+        multiplayer_transport_broadcast_event(self_ref, event_type, payload or {})
     end,
     mp_get_turn_id = function(self_ref)
         return (self_ref and self_ref.mp_state and self_ref.mp_state.turn_id) or 1
@@ -16843,6 +16961,38 @@ function update(self, dt)
         else
             self.mp_state.realtime_snapshot_accum_s = 0
             self.mp_state.realtime_snapshot_heartbeat_accum_s = 0
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.build_workshop_sync_state then
+            local sync_interval_s = 0.2
+            self.mp_state.workshop_state_sync_accum_s = (tonumber(self.mp_state.workshop_state_sync_accum_s or 0) or 0) + dt
+            if self.mp_state.workshop_state_sync_accum_s >= sync_interval_s then
+                self.mp_state.workshop_state_sync_accum_s = 0
+                local workshop_state = LOOT_RUNTIME.build_workshop_sync_state(self)
+                local signature = workshop_state_signature(workshop_state)
+                if signature ~= tostring(self.mp_state.workshop_state_sync_signature or "") then
+                    self.mp_state.workshop_state_sync_signature = signature
+                    multiplayer_transport_broadcast_event(self, "workshop_state_changed", {
+                        workshop_state = workshop_state,
+                        turn_id = self.mp_state.turn_id or 1
+                    })
+                end
+            end
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.build_factory_sync_state then
+            local sync_interval_s = 0.2
+            self.mp_state.factory_state_sync_accum_s = (tonumber(self.mp_state.factory_state_sync_accum_s or 0) or 0) + dt
+            if self.mp_state.factory_state_sync_accum_s >= sync_interval_s then
+                self.mp_state.factory_state_sync_accum_s = 0
+                local factory_state = LOOT_RUNTIME.build_factory_sync_state(self)
+                local signature = factory_state_signature(factory_state)
+                if signature ~= tostring(self.mp_state.factory_state_sync_signature or "") then
+                    self.mp_state.factory_state_sync_signature = signature
+                    multiplayer_transport_broadcast_event(self, "factory_state_changed", {
+                        factory_state = factory_state,
+                        turn_id = self.mp_state.turn_id or 1
+                    })
+                end
+            end
         end
     end
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then

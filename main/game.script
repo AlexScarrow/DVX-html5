@@ -212,6 +212,8 @@ MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_H = 61
 MULTIPLAYER_REQUIRED_READY_PLAYER_IDS = { "p2", "p3", "p4" }
 TURN_BASED_MP_SNAPSHOT_INTERVAL_S = 2.5
 TURN_BASED_MP_HEARTBEAT_MISMATCH_THRESHOLD = 2
+TEMP_HUMAN_NEW_TURN_AP_REFRESH = 10
+REALTIME_AUTO_AMMO_LOAD_FROM_BACKPACK = true
 MULTIPLAYER_DEBUG_BUTTON_X = SCREEN_WIDTH - 32
 MULTIPLAYER_DEBUG_BUTTON_START_Y = SCREEN_HEIGHT * 0.62
 MULTIPLAYER_DEBUG_BUTTON_Y_GAP = 44
@@ -3171,6 +3173,7 @@ local function resolve_human_reaction_fire(self, alien)
             end
             if chosen_target then
                 local reactive_shot_ap_cost = get_ap_cost_value("reactive_ranged_shot", 1)
+                try_realtime_auto_load_ammo_from_backpack(self, unit)
                 if unit.current_ap < reactive_shot_ap_cost and unit.current_ammo <= 0 then
                     print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, chosen_target.id))
                 elseif unit.current_ap < reactive_shot_ap_cost then
@@ -6646,6 +6649,40 @@ local function get_human_ap_refresh_cap(unit)
         return math.max(base_ap, SPEED_STIM_REFRESH_AP)
     end
     return base_ap
+end
+
+get_human_new_turn_ap_refresh = function(unit)
+    local cap = get_human_ap_refresh_cap(unit)
+    return math.max(cap, tonumber(TEMP_HUMAN_NEW_TURN_AP_REFRESH or cap) or cap)
+end
+
+try_realtime_auto_load_ammo_from_backpack = function(self, unit)
+    if REALTIME_AUTO_AMMO_LOAD_FROM_BACKPACK ~= true then
+        return false
+    end
+    if not (self and unit and self.realtime_rules_enabled == true) then
+        return false
+    end
+    if (tonumber(unit.current_ammo or 0) or 0) > 0 then
+        return false
+    end
+    local max_ammo = tonumber(unit.max_ammo or 0) or 0
+    if max_ammo <= 0 then
+        return false
+    end
+    local backpack = unit.backpack_items
+    if type(backpack) ~= "table" then
+        return false
+    end
+    for i, item_type in ipairs(backpack) do
+        if item_type == "ammo" then
+            table.remove(backpack, i)
+            unit.backpack_used = #backpack
+            unit.current_ammo = math.min(max_ammo, (tonumber(unit.current_ammo or 0) or 0) + 10)
+            return true
+        end
+    end
+    return false
 end
 
 local function get_human_armor_hit_reduction(unit)
@@ -14264,7 +14301,7 @@ local function next_turn_reset_human_ap(self)
 
     for _, unit in pairs(self.squad_units) do
         if unit and (unit.current_health or 0) > 0 then
-            unit.current_ap = get_human_ap_refresh_cap(unit)
+            unit.current_ap = get_human_new_turn_ap_refresh(unit)
         else
             unit.current_ap = 0
             unit.is_moving = false
@@ -15195,6 +15232,7 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_out
     end
 
     local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+    try_realtime_auto_load_ammo_from_backpack(self, unit)
     if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
         print("unable to fire no ammo/ap")
         return false

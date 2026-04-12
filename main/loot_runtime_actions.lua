@@ -3950,7 +3950,7 @@ function M.extend(runtime, ctx)
                 print("Ammo already full.")
                 return false
             end
-            unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 5)
+            unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 10)
             return true
         end
 

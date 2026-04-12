@@ -222,6 +222,8 @@ REALTIME_TOGGLE_BUTTON_X = LAUNCH_BUTTON_X
 REALTIME_TOGGLE_BUTTON_Y = LAUNCH_BUTTON_Y + 72
 REALTIME_TOGGLE_BUTTON_W = 180
 REALTIME_TOGGLE_BUTTON_H = 54
+REALTIME_TOGGLE_BUTTON_DRAW_W = 44.25
+REALTIME_TOGGLE_BUTTON_DRAW_H = 30.5
 LAUNCH_BUTTON_Z = 0.845
 SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
 SCORE_HUD_Y = SCREEN_HEIGHT - 20
@@ -7469,6 +7471,16 @@ create_ui_marker_sprite = function(anim_id, z)
     return id
 end
 
+update_realtime_toggle_button_visual = function(self)
+    if not (self and self.ui and self.ui.realtime_toggle_button) then
+        return
+    end
+    local anim_id = (self.realtime_rules_enabled == true) and hash("realtime_button_on") or hash("realtime_button_off")
+    pcall(msg.post, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "play_animation", { id = anim_id })
+    pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+end
+
 local function create_outro_marker_sprite(anim_id, z)
     local id = factory.create("/outro_marker_factory#outro_marker_factory", vmath.vector3(-9999, -9999, z or FLOW_UI_BUTTON_Z))
     if id and anim_id then
@@ -8210,7 +8222,8 @@ local function initialize_unit_ui(self)
         end
     end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
-    self.ui.realtime_toggle_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.9, 0.2, 0.2, 0.95), REALTIME_TOGGLE_BUTTON_W, REALTIME_TOGGLE_BUTTON_H)
+    self.ui.realtime_toggle_button = create_ui_marker_sprite(hash("realtime_button_off"), LAUNCH_BUTTON_Z)
+    update_realtime_toggle_button_visual(self)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     self.ui.zoom_out_button = create_ui_square(0, 0, ZOOM_OUT_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
@@ -8358,7 +8371,7 @@ local function set_ui_hidden(self)
         end
     end
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
-    set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_W, REALTIME_TOGGLE_BUTTON_H)
+    set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
@@ -10230,7 +10243,7 @@ function update_global_ui_buttons(self)
             end
         end
         set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
-        set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_W, REALTIME_TOGGLE_BUTTON_H)
+        set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
@@ -10351,10 +10364,8 @@ function update_global_ui_buttons(self)
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         launch_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
     end
-    local realtime_btn_color = self.realtime_rules_enabled and vmath.vector4(0.96, 0.26, 0.26, 0.95) or vmath.vector4(0.62, 0.18, 0.18, 0.95)
-    if self.mp_state and self.mp_state.enabled and (self.realtime_mp_enabled ~= true or self.mp_state.local_player_id ~= self.mp_state.host_player_id) then
-        realtime_btn_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
-    end
+    local realtime_btn_color = vmath.vector4(1, 1, 1, 1)
+    update_realtime_toggle_button_visual(self)
     set_ui_square_transform(
         self,
         self.ui.launch_button,
@@ -10372,8 +10383,8 @@ function update_global_ui_buttons(self)
         REALTIME_TOGGLE_BUTTON_Y,
         LAUNCH_BUTTON_Z,
         realtime_btn_color,
-        REALTIME_TOGGLE_BUTTON_W,
-        REALTIME_TOGGLE_BUTTON_H
+        REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021,
+        REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021
     )
     local aesthetic_color = self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME
         and vmath.vector4(0.45, 0.35, 0.75, 0.95)
@@ -12713,6 +12724,7 @@ multiplayer_transport_on_event = function(self, event)
         end
         local enabled = event.payload and event.payload.enabled == true
         self.realtime_rules_enabled = enabled
+        update_realtime_toggle_button_visual(self)
         self.realtime_alien_tick_accum = 0
         self.realtime_civilian_tick_accum = 0
         self.realtime_blip_spawn_accum = 0
@@ -13893,6 +13905,7 @@ local function try_toggle_realtime_button(self, screen_x, screen_y)
             end
         end
         self.realtime_rules_enabled = not (self.realtime_rules_enabled == true)
+        update_realtime_toggle_button_visual(self)
         self.realtime_alien_tick_accum = 0
         self.realtime_civilian_tick_accum = 0
         self.realtime_blip_spawn_accum = 0

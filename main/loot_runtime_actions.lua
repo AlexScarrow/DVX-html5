@@ -947,7 +947,9 @@ function M.extend(runtime, ctx)
         local sync_state = {}
         local instances = {}
         if self and self.world_grid then
-            instances = get_factory_instances(self)
+            if runtime.get_factory_instances then
+                instances = runtime.get_factory_instances(self)
+            end
         end
         for tile_instance_id, instance in pairs(instances or {}) do
             local tile_id = tonumber(tile_instance_id)
@@ -1185,6 +1187,10 @@ function M.extend(runtime, ctx)
             instance.functional = (instance.powered == true) and deps_ok
         end
         return instances
+    end
+
+    runtime.get_factory_instances = function(self)
+        return get_factory_instances(self)
     end
 
     local function get_workshop_instances(self)

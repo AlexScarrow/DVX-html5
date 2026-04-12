@@ -2891,16 +2891,13 @@ function M.extend(runtime, ctx)
         return best
     end
 
-    runtime.try_store_dead_human_corpse_selected_unit = function(self, screen_x, screen_y)
-        local unit = ctx.get_selected_unit(self)
-        if not unit or not unit.cell_id then
+    runtime.try_store_dead_human_corpse_by_ids = function(self, unit_id, corpse_ref)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local dead_unit = get_dead_corpse_by_ref(self, corpse_ref)
+        if not unit or not unit.cell_id or not dead_unit then
             return false
         end
-        local dead_unit = runtime.find_dead_human_at_screen_point(self, screen_x, screen_y)
-        if not dead_unit then
-            return false
-        end
-        if dead_unit.id == unit.id then
+        if dead_unit.id == unit.id and dead_unit.target_kind ~= "civilian" then
             return true
         end
         if dead_unit.cell_id ~= unit.cell_id then
@@ -2930,6 +2927,28 @@ function M.extend(runtime, ctx)
         end
         print(string.format("%s moved %s corpse into backpack. (AP -%d)", unit.display_name, dead_unit.display_name, medbay_store_ap_cost))
         return true
+    end
+
+    runtime.try_store_dead_human_corpse_selected_unit = function(self, screen_x, screen_y)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local dead_unit = runtime.find_dead_human_at_screen_point(self, screen_x, screen_y)
+        if not dead_unit then
+            return false
+        end
+        local corpse_ref = get_corpse_ref_for_unit(dead_unit)
+        if not corpse_ref then
+            return false
+        end
+        if send_mp_resource_command(self, "pickup_corpse", {
+            unit_id = unit.id,
+            corpse_ref = corpse_ref
+        }) then
+            return true
+        end
+        return runtime.try_store_dead_human_corpse_by_ids(self, unit.id, corpse_ref)
     end
 
     runtime.find_fix_object_drop_target = function(self, world_x, world_y, cell_id, required_component)

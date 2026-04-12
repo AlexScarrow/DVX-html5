@@ -12318,6 +12318,39 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "pickup_corpse" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local corpse_ref = payload.corpse_ref
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or not unit.cell_id or corpse_ref == nil then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_corpse_applied", {
+            unit_id = unit_id,
+            corpse_ref = tostring(corpse_ref)
+        }))
+        return events
+    end
+
     if cmd_type == "pickup_turret" then
         local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
         if expected_turn_id ~= (self.mp_state.turn_id or 1) then
@@ -13166,6 +13199,16 @@ multiplayer_transport_on_event = function(self, event)
         end
         if not multiplayer_apply_pickup_obstacle_event(self, event.payload or {}) then
             print("MP COMMAND | pickup_obstacle_applied ignored.")
+        end
+        return
+    end
+    if event.type == "pickup_corpse_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_pickup_corpse_event(self, event.payload or {}) then
+            print("MP COMMAND | pickup_corpse_applied ignored.")
         end
         return
     end
@@ -16075,6 +16118,21 @@ multiplayer_apply_pickup_obstacle_event = function(self, payload)
     end
     self.mp_state.applying_remote_event = true
     local ok = LOOT_RUNTIME.try_pickup_obstacle_by_ids(self, unit_id, cell_id, world_x, world_y) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_pickup_corpse_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local corpse_ref = payload.corpse_ref
+    if not (unit_id and corpse_ref) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_store_dead_human_corpse_by_ids(self, unit_id, corpse_ref) == true
     self.mp_state.applying_remote_event = false
     return ok
 end

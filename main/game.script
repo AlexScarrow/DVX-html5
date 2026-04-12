@@ -207,6 +207,8 @@ MULTIPLAYER_READY_BUTTON_GAP = 22
 MULTIPLAYER_READY_BUTTON_Y = NEW_TURN_BUTTON_Y
 MULTIPLAYER_READY_BUTTON_Z = NEW_TURN_BUTTON_Z
 MULTIPLAYER_READY_ICON_DRAW_SIZE = 11
+MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_W = 177
+MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_H = 61
 MULTIPLAYER_REQUIRED_READY_PLAYER_IDS = { "p2", "p3", "p4" }
 MULTIPLAYER_DEBUG_BUTTON_X = SCREEN_WIDTH - 32
 MULTIPLAYER_DEBUG_BUTTON_START_Y = SCREEN_HEIGHT * 0.62
@@ -479,7 +481,6 @@ UNIT_CLASS_SARGE = "sarge"
 UNIT_CLASS_TECHIE = "techie"
 UNIT_CLASS_MEDIC = "medic"
 UNIT_CLASS_GUNNER = "gunner"
-MULTIPLAYER_READY_SLOT_ANIMS = { hash("human_techie"), hash("human_medic"), hash("human_gunner") }
 ALIEN_TYPE_BLIP = "blip"
 ALIEN_TYPE_CANNON = "cannon_fodder"
 ALIEN_TYPE_SPEEDY = "speedy"
@@ -7481,6 +7482,25 @@ update_realtime_toggle_button_visual = function(self)
     pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
 end
 
+update_multiplayer_new_turn_button_visual = function(self)
+    if not (self and self.ui and self.ui.new_turn_button) then
+        return
+    end
+    local anim_id = hash("button_newTurn")
+    local tint = vmath.vector4(1, 1, 1, 1)
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        anim_id = hash("ready_button")
+        local local_player_id = self.mp_state.local_player_id
+        local local_ready = self.mp_state.ready_by_player_id and self.mp_state.ready_by_player_id[local_player_id] == true
+        if not local_ready then
+            tint = vmath.vector4(1, 0.25, 0.25, 1)
+        end
+    end
+    pcall(msg.post, msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = anim_id })
+    pcall(go.set, msg.url(nil, self.ui.new_turn_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, self.ui.new_turn_button, "sprite"), "tint", tint)
+end
+
 local function create_outro_marker_sprite(anim_id, z)
     local id = factory.create("/outro_marker_factory#outro_marker_factory", vmath.vector3(-9999, -9999, z or FLOW_UI_BUTTON_Z))
     if id and anim_id then
@@ -8208,13 +8228,12 @@ local function initialize_unit_ui(self)
     end
     self.ui.new_turn_button = create_ui_square_alpha(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     if self.ui.new_turn_button then
-        msg.post(msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = hash("button_newTurn") })
+        update_multiplayer_new_turn_button_visual(self)
     end
     for i = 1, 3 do
         self.ui.ready_buttons[i] = factory.create("/ui_ready_icon_factory#ui_ready_icon_factory", vmath.vector3(0, 0, MULTIPLAYER_READY_BUTTON_Z))
         if self.ui.ready_buttons[i] then
-            msg.post(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "play_animation", { id = MULTIPLAYER_READY_SLOT_ANIMS[i] or hash("human_medic") })
-            go.set(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "tint", vmath.vector4(0.75, 0.2, 0.2, 0.95))
+            go.set(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
         end
         self.ui.mp_debug_player_buttons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z))
         if self.ui.mp_debug_player_buttons[i] then
@@ -10268,6 +10287,7 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_W,
             NEW_TURN_BUTTON_H
         )
+        update_multiplayer_new_turn_button_visual(self)
     elseif tutorial_locked then
         set_ui_square_transform(
             self,
@@ -10279,6 +10299,7 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_VISUAL_SCALE,
             NEW_TURN_BUTTON_VISUAL_SCALE
         )
+        update_multiplayer_new_turn_button_visual(self)
     elseif alien_cycle_active then
         set_ui_square_transform(
             self,
@@ -10290,7 +10311,14 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_W,
             NEW_TURN_BUTTON_H
         )
+        update_multiplayer_new_turn_button_visual(self)
     else
+        local new_turn_button_w = NEW_TURN_BUTTON_VISUAL_SCALE
+        local new_turn_button_h = NEW_TURN_BUTTON_VISUAL_SCALE
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            new_turn_button_w = 1.0
+            new_turn_button_h = 0.8
+        end
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
@@ -10298,13 +10326,14 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_Y,
             NEW_TURN_BUTTON_Z,
             vmath.vector4(1, 1, 1, 1),
-            NEW_TURN_BUTTON_VISUAL_SCALE,
-            NEW_TURN_BUTTON_VISUAL_SCALE
+            new_turn_button_w,
+            new_turn_button_h
         )
+        update_multiplayer_new_turn_button_visual(self)
     end
     if self.ui.ready_buttons then
         local hidden = vmath.vector4(0, 0, 0, 0)
-        if self.mp_state and self.mp_state.enabled and self.mp_state.required_ready_player_ids then
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id and self.mp_state.required_ready_player_ids then
             for i, btn in ipairs(self.ui.ready_buttons) do
                 local player_id = self.mp_state.required_ready_player_ids[i]
                 if player_id then
@@ -13801,27 +13830,23 @@ can_advance_next_turn = function(self, emit_log)
 end
 
 try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
-    if not (self.mp_state and self.mp_state.enabled and self.ui and self.ui.ready_buttons) then
+    if not (self.mp_state and self.mp_state.enabled) then
         return false
     end
-    for i, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
-        local bx = get_multiplayer_ready_button_x(i)
-        if is_point_in_screen_rect(screen_x, screen_y, bx, MULTIPLAYER_READY_BUTTON_Y, MULTIPLAYER_READY_BUTTON_W, MULTIPLAYER_READY_BUTTON_H) then
-            local active_player = self.mp_state.debug_active_player_id
-            if active_player and player_id ~= active_player then
-                print(string.format("MP READY | blocked | acting_as=%s clicked=%s", tostring(active_player), tostring(player_id)))
-                return true
-            end
-            local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
-            multiplayer_transport_send_command(self, "set_ready", {
-                player_id = player_id,
-                ready = ready_on,
-                turn_id = self.mp_state.turn_id or 1
-            }, active_player or self.mp_state.local_player_id)
-            return true
-        end
+    if self.mp_state.local_player_id == self.mp_state.host_player_id then
+        return false
     end
-    return false
+    if not is_point_in_screen_rect(screen_x, screen_y, NEW_TURN_BUTTON_X, NEW_TURN_BUTTON_Y, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H) then
+        return false
+    end
+    local player_id = self.mp_state.local_player_id
+    local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
+    multiplayer_transport_send_command(self, "set_ready", {
+        player_id = player_id,
+        ready = ready_on,
+        turn_id = self.mp_state.turn_id or 1
+    }, player_id)
+    return true
 end
 
 try_multiplayer_debug_player_buttons = function(self, screen_x, screen_y)

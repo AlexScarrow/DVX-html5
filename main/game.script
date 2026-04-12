@@ -12167,9 +12167,16 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien) or 0
+        hit_chance = math.max(0, math.min(100, tonumber(hit_chance) or 0))
+        local roll = math.random(1, 100)
+        local impact_hit = roll <= hit_chance
         table.insert(events, multiplayer_transport_emit_event(self, "manual_shot_applied", {
             unit_id = unit_id,
-            alien_id = alien_id
+            alien_id = alien_id,
+            hit_chance = hit_chance,
+            roll = roll,
+            impact_hit = impact_hit
         }))
         return events
     end
@@ -15007,7 +15014,7 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
     return nil
 end
 
-multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
+multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_outcome)
     if not unit then
         return false
     end
@@ -15081,6 +15088,10 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
     local role = CLASS_ROLE_HOOKS[unit.class_id]
     local class_bonus = (role and role.ranged_hit_bonus) or 0
     local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien) or 0
+    if shot_outcome and shot_outcome.hit_chance ~= nil then
+        hit_chance = tonumber(shot_outcome.hit_chance) or hit_chance
+    end
+    hit_chance = math.max(0, math.min(100, tonumber(hit_chance) or 0))
     print(string.format(
         "RANGED DEBUG | manual | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
         unit.display_name or "unit",
@@ -15092,7 +15103,14 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
         hit_chance or 0
     ))
     local roll = math.random(1, 100)
-    spawn_human_reaction_projectile(self, unit, alien, roll <= hit_chance, active_light, hit_chance, roll)
+    if shot_outcome and shot_outcome.roll ~= nil then
+        roll = math.max(1, math.min(100, tonumber(shot_outcome.roll) or roll))
+    end
+    local impact_hit = roll <= hit_chance
+    if shot_outcome and shot_outcome.impact_hit ~= nil then
+        impact_hit = (shot_outcome.impact_hit == true)
+    end
+    spawn_human_reaction_projectile(self, unit, alien, impact_hit, active_light, hit_chance, roll)
     clear_ranged_hit_preview(self)
 
     update_human_visual_state(self)
@@ -15196,7 +15214,7 @@ multiplayer_apply_manual_shot_event = function(self, payload)
     if not unit or not alien then
         return false
     end
-    return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    return multiplayer_attempt_manual_shot_on_target(self, unit, alien, payload)
 end
 
 multiplayer_apply_comms_command_event = function(self, payload)

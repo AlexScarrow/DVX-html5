@@ -1667,26 +1667,37 @@ multiplayer_apply_toggle_door_event = function(self, payload)
     local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
     local object_id = tonumber(payload.object_id)
     local owner_cell, door_obj = get_door_by_object_id(self.world_grid, object_id)
+    if (not owner_cell or not door_obj) and payload.owner_cell_id then
+        local fallback_cell = self.world_grid and self.world_grid[tonumber(payload.owner_cell_id)] or nil
+        if fallback_cell then
+            local fallback_door = get_door_object_on_cell(fallback_cell)
+            if fallback_door then
+                owner_cell = fallback_cell
+                door_obj = fallback_door
+            end
+        end
+    end
     if not unit or not owner_cell or not door_obj then
         return false
     end
-    if not can_unit_reach_door_toggle(unit, owner_cell.idNumber) then
-        return false
-    end
-    local ap_cost = get_ap_cost_value("door_toggle", 1)
-    if unit.current_ap < ap_cost then
-        return false
-    end
-    if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
-        return false
-    end
+    local ap_before = tonumber(unit.current_ap or 0) or 0
     local desired_open = (payload.is_open == true)
     door_obj.isOpen = desired_open
-    unit.current_ap = unit.current_ap - ap_cost
+    local ap_after = tonumber(payload.ap_after)
+    if ap_after ~= nil then
+        unit.current_ap = math.max(0, ap_after)
+    else
+        local ap_cost = tonumber(payload.ap_cost)
+        if ap_cost == nil then
+            ap_cost = get_ap_cost_value("door_toggle", 1)
+        end
+        unit.current_ap = math.max(0, ap_before - math.max(0, ap_cost))
+    end
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
-    print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
+    local spent_ap = math.max(0, ap_before - (tonumber(unit.current_ap or 0) or 0))
+    print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, spent_ap))
     return true
 end
 
@@ -12613,10 +12624,16 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        local desired_open = payload.is_open == true
+        door_obj.isOpen = desired_open
+        local ap_after = math.max(0, (tonumber(unit.current_ap or 0) or 0) - door_ap_cost)
         table.insert(events, multiplayer_transport_emit_event(self, "toggle_door_applied", {
             unit_id = unit_id,
             object_id = object_id,
-            is_open = payload.is_open == true
+            owner_cell_id = owner_cell.idNumber,
+            is_open = desired_open,
+            ap_cost = door_ap_cost,
+            ap_after = ap_after
         }))
         return events
     end

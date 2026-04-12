@@ -3500,6 +3500,11 @@ local function update_spitter_projectiles(self, dt)
                         target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
                         if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
                             target.brute_damage_flash_timer = 0.24
+                            multiplayer_emit_combat_fx_event(self, {
+                                fx_type = "brute_damage_flash",
+                                alien_id = target.id,
+                                duration_s = 0.24
+                            })
                         end
                         if target.hp_current <= 0 then
                             if target.type == ALIEN_TYPE_BRUTE and target.go_id then
@@ -3752,6 +3757,11 @@ local function resolve_turret_pending_shot(self, shot_id)
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
                 if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
                     target_alien.brute_damage_flash_timer = 0.24
+                    multiplayer_emit_combat_fx_event(self, {
+                        fx_type = "brute_damage_flash",
+                        alien_id = target_alien.id,
+                        duration_s = 0.24
+                    })
                 end
                 if target_alien.hp_current <= 0 then
                     if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.go_id then
@@ -6766,6 +6776,15 @@ local function apply_start_of_turn_environment_damage(self)
                 unit.hazard_flash_active = true
                 unit.hazard_flash_token = (unit.hazard_flash_token or 0) + 1
                 local flash_token = unit.hazard_flash_token
+                multiplayer_emit_combat_fx_event(self, {
+                    fx_type = "hazard_flash",
+                    target_kind = "human",
+                    target_id = unit.id,
+                    tint_r = hazard_flash_tint.x,
+                    tint_g = hazard_flash_tint.y,
+                    tint_b = hazard_flash_tint.z,
+                    duration_s = 0.75
+                })
                 timer.delay(0.75, false, function()
                     if unit and unit.hazard_flash_token == flash_token then
                         unit.hazard_flash_active = false
@@ -6809,6 +6828,15 @@ local function apply_start_of_turn_environment_damage(self)
                 civilian.hazard_flash_active = true
                 civilian.hazard_flash_token = (civilian.hazard_flash_token or 0) + 1
                 local civilian_flash_token = civilian.hazard_flash_token
+                multiplayer_emit_combat_fx_event(self, {
+                    fx_type = "hazard_flash",
+                    target_kind = "civilian",
+                    target_id = civilian.id,
+                    tint_r = civilian.hazard_flash_tint.x,
+                    tint_g = civilian.hazard_flash_tint.y,
+                    tint_b = civilian.hazard_flash_tint.z,
+                    duration_s = 0.75
+                })
                 timer.delay(0.75, false, function()
                     if civilian and civilian.hazard_flash_token == civilian_flash_token then
                         civilian.hazard_flash_active = false
@@ -12758,6 +12786,22 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "combat_fx" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        self.mp_state.applying_remote_event = true
+        multiplayer_apply_combat_fx_event(self, event.payload or {})
+        self.mp_state.applying_remote_event = false
+        return
+    end
     if event.type == "realtime_spitter_projectile" then
         if not (self.mp_state and self.mp_state.enabled) then
             return
@@ -13559,6 +13603,134 @@ factory_state_signature = function(factory_state)
     return table.concat(parts, "|")
 end
 
+multiplayer_get_civilian_by_id = function(self, civilian_id)
+    if not (self and self.civilians and civilian_id) then
+        return nil
+    end
+    local wanted_id = tonumber(civilian_id)
+    if not wanted_id then
+        return nil
+    end
+    for _, civilian in ipairs(self.civilians) do
+        if civilian and tonumber(civilian.id or 0) == wanted_id then
+            return civilian
+        end
+    end
+    return nil
+end
+
+multiplayer_emit_combat_fx_event = function(self, payload)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return
+    end
+    if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        return
+    end
+    if self.mp_state.applying_remote_event == true then
+        return
+    end
+    if type(payload) ~= "table" then
+        return
+    end
+    multiplayer_transport_broadcast_event(self, "combat_fx", payload)
+end
+
+multiplayer_apply_combat_fx_event = function(self, payload)
+    if type(payload) ~= "table" then
+        return false
+    end
+    local fx_type = tostring(payload.fx_type or "")
+    if fx_type == "alien_blood" then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
+        if alien and (not alien.is_dead) and MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
+            MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, alien)
+            return true
+        end
+        return false
+    elseif fx_type == "human_blood" then
+        local target_kind = tostring(payload.target_kind or "human")
+        local target = nil
+        if target_kind == "civilian" then
+            target = multiplayer_get_civilian_by_id(self, payload.target_id)
+            if target then
+                target.target_kind = "civilian"
+            end
+        else
+            target = self.squad_units and self.squad_units[payload.target_id] or nil
+            if target then
+                target.target_kind = "human"
+            end
+        end
+        if target and MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
+            MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
+            return true
+        end
+        return false
+    elseif fx_type == "alien_red_flash" then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
+        if alien and (not alien.is_dead) and MELEE_RUNTIME and MELEE_RUNTIME.play_target_red_flash then
+            MELEE_RUNTIME.play_target_red_flash(self, alien)
+            return true
+        end
+        return false
+    elseif fx_type == "alien_melee_swipe" then
+        local target_kind = tostring(payload.target_kind or "human")
+        local target = nil
+        if target_kind == "civilian" then
+            target = multiplayer_get_civilian_by_id(self, payload.target_id)
+            if target then
+                target.target_kind = "civilian"
+            end
+        else
+            target = self.squad_units and self.squad_units[payload.target_id] or nil
+            if target then
+                target.target_kind = "human"
+            end
+        end
+        if target and MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_melee_swipe_fx then
+            MELEE_RUNTIME.spawn_alien_melee_swipe_fx(self, target)
+            return true
+        end
+        return false
+    elseif fx_type == "hazard_flash" then
+        local target_kind = tostring(payload.target_kind or "human")
+        local target = nil
+        if target_kind == "civilian" then
+            target = multiplayer_get_civilian_by_id(self, payload.target_id)
+        else
+            target = self.squad_units and self.squad_units[payload.target_id] or nil
+        end
+        if not target then
+            return false
+        end
+        local tint = vmath.vector4(
+            tonumber(payload.tint_r or 1) or 1,
+            tonumber(payload.tint_g or 1) or 1,
+            tonumber(payload.tint_b or 1) or 1,
+            1
+        )
+        target.hazard_flash_tint = tint
+        target.hazard_flash_active = true
+        target.hazard_flash_token = (target.hazard_flash_token or 0) + 1
+        local token = target.hazard_flash_token
+        local duration_s = math.max(0.05, tonumber(payload.duration_s or 0.75) or 0.75)
+        timer.delay(duration_s, false, function()
+            if target and target.hazard_flash_token == token then
+                target.hazard_flash_active = false
+            end
+        end)
+        return true
+    elseif fx_type == "brute_damage_flash" then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
+        if alien and (not alien.is_dead) then
+            alien.brute_damage_flash_timer = math.max(0.05, tonumber(payload.duration_s or 0.24) or 0.24)
+            return true
+        end
+        return false
+    end
+    return false
+end
+
 multiplayer_queue_pending_event = function(self, event)
     if not (self and self.mp_state and event and type(event) == "table") then
         return
@@ -13893,6 +14065,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     record_alien_kill = score_record_alien_kill,
     record_alien_melee_spend = function(self_ref, alien_id, amount)
         record_alien_turn_ap_spend(self_ref, alien_id, "melee_spent", amount)
+    end,
+    emit_combat_fx_event = function(self_ref, payload)
+        multiplayer_emit_combat_fx_event(self_ref, payload)
     end,
     handle_human_death_loot_drop = function(self_ref, unit)
         handle_human_death_loot_drop(self_ref, unit, "alien_melee")

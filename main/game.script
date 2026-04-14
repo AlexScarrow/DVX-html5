@@ -305,6 +305,7 @@ SFX_CANNONFODDER_DIES_URL = "main:/sfx_cannonfodder_dies#sound"
 SFX_SPEEDY_DIES_URL = "main:/sfx_speedy_dies#sound"
 SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
 SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
+SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -3573,6 +3574,7 @@ local function update_spitter_projectiles(self, dt)
                         end
                         target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
                         if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
+                            play_brute_damage_sfx(self)
                             target.brute_damage_flash_timer = 0.24
                             multiplayer_emit_combat_fx_event(self, {
                                 fx_type = "brute_damage_flash",
@@ -3831,6 +3833,7 @@ local function resolve_turret_pending_shot(self, shot_id)
             if target_alien and (not target_alien.is_dead) then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
                 if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
+                    play_brute_damage_sfx(self)
                     target_alien.brute_damage_flash_timer = 0.24
                     multiplayer_emit_combat_fx_event(self, {
                         fx_type = "brute_damage_flash",
@@ -8928,6 +8931,10 @@ play_alien_death_sfx = function(self, alien_type)
     elseif alien_type == ALIEN_TYPE_SPITTER then
         play_sfx_one_shot(self, "spitter_dies")
     end
+end
+
+play_brute_damage_sfx = function(self)
+    play_sfx_one_shot(self, "brute_damage")
 end
 
 is_directional_move_sfx_allowed = function(self)
@@ -17628,6 +17635,7 @@ function init(self)
             speedy_dies = true,
             brute_dies = true,
             spitter_dies = true,
+            brute_damage = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -17642,6 +17650,7 @@ function init(self)
         speedy_dies = { url = msg.url(SFX_SPEEDY_DIES_URL), playing = false },
         brute_dies = { url = msg.url(SFX_BRUTE_DIES_URL), playing = false },
         spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
+        brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),

@@ -155,6 +155,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_brute_damage"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/brute_damage.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

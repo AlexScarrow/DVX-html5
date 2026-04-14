@@ -504,6 +504,9 @@ function M.create(ctx)
         local max_hit = tonumber(ctx.BUFF_HIT_CHANCE_MAX or ctx.MELEE_MODEL.max_hit_chance) or ctx.MELEE_MODEL.max_hit_chance
         local hit_chance = clamp((ctx.MELEE_MODEL.human_base_hit_chance or 0) + melee_bonus, min_hit, max_hit)
         local roll = math.random(1, 100)
+        if ctx and ctx.play_melee_hit_alien_sfx then
+            ctx.play_melee_hit_alien_sfx(self)
+        end
         if roll <= hit_chance then
             spawn_alien_blood_splatter_fx(self, target_alien)
             if target_alien.type == ctx.ALIEN_TYPE_BRUTE then
@@ -564,6 +567,9 @@ function M.create(ctx)
         play_alien_melee_lurch(self, alien, target)
 
         if roll <= hit_chance then
+            if ctx and ctx.play_melee_hit_human_sfx then
+                ctx.play_melee_hit_human_sfx(self)
+            end
             local damage = get_alien_melee_damage(alien and alien.type)
             target.current_health = math.max(0, (target.current_health or 0) - damage)
             mark_target_hit(self, target)

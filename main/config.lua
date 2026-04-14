@@ -160,7 +160,7 @@ M.ALIEN_BALANCE = {
             marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0)
         },
         cannon_fodder = {
-            ap_per_turn = 3,
+            ap_per_turn = 4,
             hp = 1,
             melee_damage = 1,
             can_traverse_void = false,
@@ -168,7 +168,7 @@ M.ALIEN_BALANCE = {
             marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0)
         },
         speedy = {
-            ap_per_turn = 4,
+            ap_per_turn = 5,
             hp = 1,
             melee_damage = 2,
             can_traverse_void = false,
@@ -176,7 +176,7 @@ M.ALIEN_BALANCE = {
             marker_tint = vmath.vector4(1.0, 0.2, 0.5, 1.0)
         },
         spitter = {
-            ap_per_turn = 2,
+            ap_per_turn = 3,
             hp = 1,
             melee_damage = 1,
             can_traverse_void = false,

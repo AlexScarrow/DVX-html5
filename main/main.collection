@@ -163,6 +163,54 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_melee_hit_alien"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/melee_hit_alien.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_melee_hit_human"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/melee_hit_human.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_sarge_alien_alert"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/sarge_alien_alert.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_techie_alien_alert"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/techie_alien_alert.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_medic_alien_alert"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/medic_alien_alert.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_gunner_alien_alert"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/gunner_alien_alert.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

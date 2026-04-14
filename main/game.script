@@ -312,6 +312,10 @@ SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
 SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
 SFX_MEDIC_ALIEN_ALERT_URL = "main:/sfx_medic_alien_alert#sound"
 SFX_GUNNER_ALIEN_ALERT_URL = "main:/sfx_gunner_alien_alert#sound"
+SFX_SARGE_CONFIRM_SELECT_URL = "main:/sfx_sarge_confirm_select#sound"
+SFX_TECHIE_CONFIRM_SELECT_URL = "main:/sfx_techie_confirm_select#sound"
+SFX_MEDIC_CONFIRM_SELECT_URL = "main:/sfx_medic_confirm_select#sound"
+SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -8967,6 +8971,19 @@ play_human_alien_alert_sfx = function(self, unit)
     end
 end
 
+play_human_confirm_select_sfx = function(self, unit)
+    local class_id = tostring(unit and unit.class_id or "")
+    if class_id == UNIT_CLASS_SARGE then
+        play_sfx_one_shot(self, "sarge_confirm_select")
+    elseif class_id == UNIT_CLASS_TECHIE then
+        play_sfx_one_shot(self, "techie_confirm_select")
+    elseif class_id == UNIT_CLASS_MEDIC then
+        play_sfx_one_shot(self, "medic_confirm_select")
+    elseif class_id == UNIT_CLASS_GUNNER then
+        play_sfx_one_shot(self, "gunner_confirm_select")
+    end
+end
+
 is_directional_move_sfx_allowed = function(self)
     return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
 end
@@ -16952,6 +16969,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.controlled_unit_id = clicked_unit.id
             deselect_all_units(self)
             clicked_unit.is_selected = true
+            play_human_confirm_select_sfx(self, clicked_unit)
             print(clicked_unit.display_name .. " selected. Click destination cell.")
         end
         self.ui_close_on_next_non_unit_click = false
@@ -17678,6 +17696,10 @@ function init(self)
             techie_alien_alert = true,
             medic_alien_alert = true,
             gunner_alien_alert = true,
+            sarge_confirm_select = true,
+            techie_confirm_select = true,
+            medic_confirm_select = true,
+            gunner_confirm_select = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -17699,6 +17721,10 @@ function init(self)
         techie_alien_alert = { url = msg.url(SFX_TECHIE_ALIEN_ALERT_URL), playing = false },
         medic_alien_alert = { url = msg.url(SFX_MEDIC_ALIEN_ALERT_URL), playing = false },
         gunner_alien_alert = { url = msg.url(SFX_GUNNER_ALIEN_ALERT_URL), playing = false },
+        sarge_confirm_select = { url = msg.url(SFX_SARGE_CONFIRM_SELECT_URL), playing = false },
+        techie_confirm_select = { url = msg.url(SFX_TECHIE_CONFIRM_SELECT_URL), playing = false },
+        medic_confirm_select = { url = msg.url(SFX_MEDIC_CONFIRM_SELECT_URL), playing = false },
+        gunner_confirm_select = { url = msg.url(SFX_GUNNER_CONFIRM_SELECT_URL), playing = false },
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),

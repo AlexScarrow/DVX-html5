@@ -211,6 +211,38 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_sarge_confirm_select"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/sarge_confirm_select.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_techie_confirm_select"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/techie_confirm_select.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_medic_confirm_select"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/medic_confirm_select.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_gunner_confirm_select"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/gunner_confirm_select.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

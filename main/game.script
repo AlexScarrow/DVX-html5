@@ -293,6 +293,11 @@ FLOW_STATE_SCORE = "score"
 FLOW_STATE_MP_SETUP = "mp_setup"
 FLOW_STATE_SOLO_SETUP = "solo_setup"
 EXIT_TEST_STASH_ENABLED = true
+SFX_TITLE_URL = "main:/sfx_title_screen#sound"
+SFX_PLANET_URL = "main:/sfx_planet_surface#sound"
+SFX_HUMAN_VERTICAL_URL = "main:/sfx_human_vertical_move#sound"
+SFX_HUMAN_HORIZONTAL_URL = "main:/sfx_human_horizontal_move#sound"
+SFX_UNIT_TILE_BUMP_URL = "main:/sfx_unit_tile_bump#sound"
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
@@ -4637,6 +4642,11 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
                     end
                     alien.cell_id = target_cell_id
+                    if alien.type == ALIEN_TYPE_BLIP then
+                        trigger_unit_tile_bump_sfx(self, "blip")
+                    else
+                        trigger_unit_tile_bump_sfx(self, "alien")
+                    end
                     local continue_after_step = true
                     local step_has_fire = get_cell_hazard_flags(to_cell)
                     if step_has_fire then
@@ -6056,7 +6066,10 @@ local function update_civilian_movement(self, dt)
     local right_lane_offset = (CELL_SLOT_OFFSETS_X[right_lane_slot] or 0) * HUMAN_STACK_SPACING_X
     for _, civilian in ipairs(self.civilians or {}) do
         if civilian and civilian.is_dead ~= true and civilian.is_moving and civilian.move_path then
+            local civilian_sfx_key = "civ_" .. tostring(civilian.id or 0)
             local function stop_civilian_motion()
+                update_vertical_move_sfx_for_actor(self, civilian_sfx_key, false)
+                update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, false)
                 civilian.is_moving = false
                 civilian.move_path = nil
                 civilian.move_path_index = 0
@@ -6077,6 +6090,10 @@ local function update_civilian_movement(self, dt)
                 local pos = go.get_position(go_id)
                 local dx = civilian.micro_target_x - pos.x
                 local dy = civilian.micro_target_y - pos.y
+                local is_vertical_now = math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.01
+                local is_horizontal_now = math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.01
+                update_vertical_move_sfx_for_actor(self, civilian_sfx_key, is_vertical_now)
+                update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, is_horizontal_now)
                 local dist = math.sqrt((dx * dx) + (dy * dy))
                 local step = move_speed * (dt or 0)
                 civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
@@ -6127,11 +6144,14 @@ local function update_civilian_movement(self, dt)
                 else
                     local cell = self.world_grid[target_cell_id]
                     if not (go_id and cell) then
+                        update_vertical_move_sfx_for_actor(self, civilian_sfx_key, false)
+                        update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, false)
                         if civilian.cell_id and civilian.cell_id ~= target_cell_id then
                             clear_civilian_cell_slot_assignment(self, civilian, civilian.cell_id)
                         end
                         civilian.cell_id = target_cell_id or civilian.cell_id
                         ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+                        trigger_unit_tile_bump_sfx(self, "civ")
                         civilian.move_path_index = (civilian.move_path_index or 0) + 1
                     else
                         local target_x, target_y, target_slot = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
@@ -6160,6 +6180,9 @@ local function update_civilian_movement(self, dt)
                         local pos = go.get_position(go_id)
                         local dx = target_x - pos.x
                         local dy = target_y - pos.y
+                        local is_horizontal_step = not is_vertical_step
+                        update_vertical_move_sfx_for_actor(self, civilian_sfx_key, is_vertical_step)
+                        update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, is_horizontal_step)
                         local dist = math.sqrt((dx * dx) + (dy * dy))
                         local step = move_speed * (dt or 0)
                         civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
@@ -6200,6 +6223,7 @@ local function update_civilian_movement(self, dt)
                                 end
                                 civilian.cell_id = target_cell_id
                                 ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                trigger_unit_tile_bump_sfx(self, "civ")
                                 if (not counter_move_enabled) and is_vertical_step then
                                     local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
                                     if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
@@ -8783,6 +8807,189 @@ function enter_flow_state(self, next_state)
     self.flow_submit_done = false
 end
 
+set_sound_loop_state = function(self, key, should_play)
+    if not self or not self.sfx_state then
+        return
+    end
+    if self.sfx_state.loops ~= true then
+        return
+    end
+    if self.sfx_state.enabled_by_key and self.sfx_state.enabled_by_key[key] ~= true then
+        return
+    end
+    local entry = self.sfx_state[key]
+    if not entry or not entry.url then
+        return
+    end
+    if should_play and not entry.playing then
+        entry.playing = true
+        print(string.format("SFX TRACE | play %s", tostring(key)))
+        pcall(msg.post, entry.url, "play_sound")
+    elseif (not should_play) and entry.playing then
+        entry.playing = false
+        print(string.format("SFX TRACE | stop %s", tostring(key)))
+        pcall(msg.post, entry.url, "stop_sound")
+    end
+end
+
+play_sfx_one_shot = function(self, key)
+    if not self or not self.sfx_state then
+        return
+    end
+    if self.sfx_state.loops ~= true then
+        return
+    end
+    if self.sfx_state.enabled_by_key and self.sfx_state.enabled_by_key[key] ~= true then
+        return
+    end
+    local entry = self.sfx_state[key]
+    if not entry or not entry.url then
+        return
+    end
+    print(string.format("SFX TRACE | oneshot %s", tostring(key)))
+    pcall(msg.post, entry.url, "play_sound")
+end
+
+local function is_directional_move_sfx_allowed(self)
+    return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
+end
+
+trigger_unit_tile_bump_sfx = function(self, unit_kind)
+    if not self or not self.sfx_state then
+        return
+    end
+    if self.aesthetic_mode ~= AESTHETIC_MODE_BOARDGAME then
+        return
+    end
+    if unit_kind == "blip" then
+        return
+    end
+    play_sfx_one_shot(self, "unit_tile_bump")
+end
+
+refresh_ambient_sfx_state = function(self)
+    if not self or not self.sfx_state then
+        return
+    end
+    local state = self.game_flow_state or FLOW_STATE_GAME
+    if self.sfx_state.last_flow_state == state then
+        return
+    end
+    self.sfx_state.last_flow_state = state
+    local in_gameplay = state == FLOW_STATE_GAME
+    local directional_move_sfx_allowed = is_directional_move_sfx_allowed(self)
+    local is_title_outro = (state == FLOW_STATE_OUTRO) and tostring(self.end_outro_sequence_id or "") == "title"
+    local in_title_like = (state == FLOW_STATE_TITLE)
+        or (state == FLOW_STATE_SOLO_SETUP)
+        or (state == FLOW_STATE_MP_SETUP)
+        or (state == FLOW_STATE_SCORE)
+        or is_title_outro
+    set_sound_loop_state(self, "planet", in_gameplay)
+    set_sound_loop_state(self, "title", in_title_like)
+    if (not in_gameplay) or (not directional_move_sfx_allowed) then
+        self.sfx_state.vertical_active_by_unit = {}
+        self.sfx_state.vertical_active_count = 0
+        set_sound_loop_state(self, "human_vertical", false)
+        self.sfx_state.horizontal_active_by_actor = {}
+        self.sfx_state.horizontal_active_count = 0
+        set_sound_loop_state(self, "human_horizontal", false)
+    end
+end
+
+update_vertical_move_sfx_for_unit = function(self, unit, is_vertical_now)
+    if not (self and self.sfx_state and unit and unit.id) then
+        return
+    end
+    local actor_key = tostring(unit.id)
+    local by_unit = self.sfx_state.vertical_active_by_unit
+    if not is_directional_move_sfx_allowed(self) then
+        if by_unit[actor_key] == true then
+            by_unit[actor_key] = nil
+            self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+        end
+        if (self.sfx_state.vertical_active_count or 0) <= 0 then
+            self.sfx_state.vertical_active_count = 0
+            set_sound_loop_state(self, "human_vertical", false)
+        end
+        return
+    end
+    local was_active = by_unit[actor_key] == true
+    local now_active = is_vertical_now == true
+    if was_active == now_active then
+        return
+    end
+    if now_active then
+        by_unit[actor_key] = true
+        self.sfx_state.vertical_active_count = (self.sfx_state.vertical_active_count or 0) + 1
+    else
+        by_unit[actor_key] = nil
+        self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+    end
+    set_sound_loop_state(self, "human_vertical", (self.sfx_state.vertical_active_count or 0) > 0)
+end
+
+update_vertical_move_sfx_for_actor = function(self, actor_key, is_vertical_now)
+    if not (self and self.sfx_state and actor_key) then
+        return
+    end
+    local by_unit = self.sfx_state.vertical_active_by_unit
+    if not is_directional_move_sfx_allowed(self) then
+        if by_unit[actor_key] == true then
+            by_unit[actor_key] = nil
+            self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+        end
+        if (self.sfx_state.vertical_active_count or 0) <= 0 then
+            self.sfx_state.vertical_active_count = 0
+            set_sound_loop_state(self, "human_vertical", false)
+        end
+        return
+    end
+    local was_active = by_unit[actor_key] == true
+    local now_active = is_vertical_now == true
+    if was_active == now_active then
+        return
+    end
+    if now_active then
+        by_unit[actor_key] = true
+        self.sfx_state.vertical_active_count = (self.sfx_state.vertical_active_count or 0) + 1
+    else
+        by_unit[actor_key] = nil
+        self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+    end
+    set_sound_loop_state(self, "human_vertical", (self.sfx_state.vertical_active_count or 0) > 0)
+end
+
+update_horizontal_move_sfx_for_actor = function(self, actor_key, is_horizontal_now)
+    if not (self and self.sfx_state and actor_key) then
+        return
+    end
+    local by_actor = self.sfx_state.horizontal_active_by_actor
+    if not is_directional_move_sfx_allowed(self) then
+        if by_actor[actor_key] == true then
+            by_actor[actor_key] = nil
+            self.sfx_state.horizontal_active_count = math.max(0, (self.sfx_state.horizontal_active_count or 0) - 1)
+        end
+        if (self.sfx_state.horizontal_active_count or 0) <= 0 then
+            self.sfx_state.horizontal_active_count = 0
+            set_sound_loop_state(self, "human_horizontal", false)
+        end
+        return
+    end
+    local was_active = by_actor[actor_key] == true
+    local now_active = is_horizontal_now == true
+    if was_active == now_active then
+        return
+    end
+    if now_active then
+        by_actor[actor_key] = true
+        self.sfx_state.horizontal_active_count = (self.sfx_state.horizontal_active_count or 0) + 1
+    else
+        by_actor[actor_key] = nil
+        self.sfx_state.horizontal_active_count = math.max(0, (self.sfx_state.horizontal_active_count or 0) - 1)
+    end
+    set_sound_loop_state(self, "human_horizontal", (self.sfx_state.horizontal_active_count or 0) > 0)
+end
+
 local function spawn_exit_test_stash(self)
     if EXIT_TEST_STASH_ENABLED ~= true then
         return
@@ -10028,6 +10235,14 @@ function reset_and_load_level(self, level_index)
     self.current_mission_type = multiplayer_normalize_mission_type(
         self.selected_mission_type or (self.mp_state and self.mp_state.mission_type) or level_mission
     )
+    if self and self.sfx_state then
+        self.sfx_state.vertical_active_by_unit = {}
+        self.sfx_state.vertical_active_count = 0
+        self.sfx_state.horizontal_active_by_actor = {}
+        self.sfx_state.horizontal_active_count = 0
+        set_sound_loop_state(self, "human_vertical", false)
+        set_sound_loop_state(self, "human_horizontal", false)
+    end
     if self.mp_state and self.mp_state.enabled then
         self.mp_state.mission_type = self.current_mission_type
     end
@@ -14754,9 +14969,15 @@ end
 
 local function update_single_unit_movement(self, unit, dt)
     if not unit or not unit.is_moving or not unit.move_path then
+        if unit then
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
+        end
         return
     end
     if not (unit and (unit.current_health or 0) > 0) then
+        update_vertical_move_sfx_for_unit(self, unit, false)
+        update_horizontal_move_sfx_for_actor(self, unit.id, false)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -14779,6 +15000,10 @@ local function update_single_unit_movement(self, unit, dt)
         local current_pos = go.get_position(unit.go_path)
         local dx = unit.micro_target_x - current_pos.x
         local dy = unit.micro_target_y - current_pos.y
+        local is_vertical_now = math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.01
+        local is_horizontal_now = math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.01
+        update_vertical_move_sfx_for_unit(self, unit, is_vertical_now)
+        update_horizontal_move_sfx_for_actor(self, unit.id, is_horizontal_now)
         local distance = math.sqrt(dx * dx + dy * dy)
         local step = HUMAN_MOVE_SPEED * dt
         unit.anim_phase = (unit.anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
@@ -14817,6 +15042,8 @@ local function update_single_unit_movement(self, unit, dt)
             local snap_z = (unit.micro_move_kind == "settle_end") and 0.5 or move_z
             go.set_position(vmath.vector3(unit.micro_target_x, unit.micro_target_y, snap_z), unit.go_path)
             if unit.micro_move_kind == "settle_end" then
+                update_vertical_move_sfx_for_unit(self, unit, false)
+                update_horizontal_move_sfx_for_actor(self, unit.id, false)
                 unit.is_moving = false
                 unit.move_path = nil
                 unit.move_path_index = 0
@@ -14837,6 +15064,8 @@ local function update_single_unit_movement(self, unit, dt)
             unit.micro_target_y = nil
             unit.micro_move_kind = nil
             unit.counter_move_total_dist = nil
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
             return
         end
         local nx = current_pos.x + (dx / distance) * step
@@ -14847,6 +15076,8 @@ local function update_single_unit_movement(self, unit, dt)
 
     local target_cell_id = unit.move_path[unit.move_path_index]
     if not target_cell_id then
+        update_vertical_move_sfx_for_unit(self, unit, false)
+        update_horizontal_move_sfx_for_actor(self, unit.id, false)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -14952,6 +15183,8 @@ local function update_single_unit_movement(self, unit, dt)
     target_x = clamp_world_x_to_cell(target_cell, target_x)
     local target_cost = get_step_move_cost(self.world_grid, unit.cell_id, target_cell_id)
     if target_cost > unit.current_ap then
+        update_vertical_move_sfx_for_unit(self, unit, false)
+        update_horizontal_move_sfx_for_actor(self, unit.id, false)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -14979,6 +15212,8 @@ local function update_single_unit_movement(self, unit, dt)
     local current_pos = go.get_position(unit.go_path)
     local dx = target_x - current_pos.x
     local dy = target_y - current_pos.y
+    update_vertical_move_sfx_for_unit(self, unit, is_vertical_step)
+    update_horizontal_move_sfx_for_actor(self, unit.id, not is_vertical_step)
     local distance = math.sqrt(dx * dx + dy * dy)
     local move_speed_mul = get_obstacle_move_speed_multiplier(target_cost)
     local step = (HUMAN_MOVE_SPEED * move_speed_mul) * dt
@@ -15029,6 +15264,7 @@ local function update_single_unit_movement(self, unit, dt)
         local from_cell_id = unit.cell_id
         move_human_to_cell(self, unit, target_cell_id)
         trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_id)
+        trigger_unit_tile_bump_sfx(self, "human")
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.vertical_prep_done_for_index = nil
@@ -15087,6 +15323,8 @@ local function update_single_unit_movement(self, unit, dt)
                     return
                 end
             end
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
             unit.is_moving = false
             unit.move_path = nil
             unit.move_path_index = 0
@@ -17231,6 +17469,32 @@ function init(self)
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
     self.table_sweep_shadow_pause_timer = nil
+    local sfx_title_url = msg.url(SFX_TITLE_URL)
+    local sfx_planet_url = msg.url(SFX_PLANET_URL)
+    local sfx_human_vertical_url = msg.url(SFX_HUMAN_VERTICAL_URL)
+    local sfx_human_horizontal_url = msg.url(SFX_HUMAN_HORIZONTAL_URL)
+    local sfx_unit_tile_bump_url = msg.url(SFX_UNIT_TILE_BUMP_URL)
+    self.sfx_state = {
+        loops = true, -- enabled with flow-state-change gate
+        boot_deferred = false,
+        last_flow_state = nil,
+        enabled_by_key = {
+            title = true,
+            planet = true,
+            human_vertical = true,
+            human_horizontal = true,
+            unit_tile_bump = true
+        },
+        title = { url = sfx_title_url, playing = false },
+        planet = { url = sfx_planet_url, playing = false },
+        human_vertical = { url = sfx_human_vertical_url, playing = false },
+        human_horizontal = { url = sfx_human_horizontal_url, playing = false },
+        unit_tile_bump = { url = sfx_unit_tile_bump_url, playing = false },
+        vertical_active_by_unit = {},
+        vertical_active_count = 0,
+        horizontal_active_by_actor = {},
+        horizontal_active_count = 0
+    }
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
@@ -17344,6 +17608,10 @@ end
 function update(self, dt)
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
+    end
+    if self.sfx_state and self.sfx_state.boot_deferred ~= true then
+        self.sfx_state.boot_deferred = true
+        refresh_ambient_sfx_state(self)
     end
     if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
@@ -17837,6 +18105,7 @@ function update(self, dt)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
     update_flow_ui(self, dt)
+    refresh_ambient_sfx_state(self)
     update_outro_slideshow_runtime(self, dt)
     update_tutorial_overlay_ui(self)
     LOOT_RUNTIME.update_drag_visual(self)
@@ -18350,5 +18619,18 @@ function on_message(self, message_id, message, sender)
         else
             process_alien_turn(self)
         end
+    end
+end
+
+function final(self)
+    if self and self.sfx_state then
+        self.sfx_state.vertical_active_by_unit = {}
+        self.sfx_state.vertical_active_count = 0
+        self.sfx_state.horizontal_active_by_actor = {}
+        self.sfx_state.horizontal_active_count = 0
+        set_sound_loop_state(self, "human_vertical", false)
+        set_sound_loop_state(self, "human_horizontal", false)
+        set_sound_loop_state(self, "planet", false)
+        set_sound_loop_state(self, "title", false)
     end
 end

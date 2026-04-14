@@ -27,6 +27,46 @@ embedded_instances {
   }
 }
 embedded_instances {
+  id: "sfx_title_screen"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/titleScreen.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_planet_surface"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/planetSurface1.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_human_vertical_move"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/humanVerticalMove.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_human_horizontal_move"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/humanHorizontalMove.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_unit_tile_bump"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/unit_tile_bump.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

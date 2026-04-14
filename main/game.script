@@ -299,6 +299,8 @@ SFX_HUMAN_VERTICAL_URL = "main:/sfx_human_vertical_move#sound"
 SFX_HUMAN_HORIZONTAL_URL = "main:/sfx_human_horizontal_move#sound"
 SFX_UNIT_TILE_BUMP_URL = "main:/sfx_unit_tile_bump#sound"
 SFX_HUMAN_SHOOT_URL = "main:/sfx_human_shoot#sound"
+SFX_HUMAN_SHOOT_2_URL = "main:/sfx_human_shoot_2#sound"
+SFX_TURRET_GUN_URL = "main:/sfx_turret_gun#sound"
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -3998,6 +4000,7 @@ function process_turret_reactive_fire(self, dt)
                                 self.turret_pending_shots = self.turret_pending_shots or {}
                                 self.next_turret_shot_id = (self.next_turret_shot_id or 0) + 1
                                 local shot_id = self.next_turret_shot_id
+                                play_turret_gun_sfx(self)
                                 spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
                                 local gun_markers = self.turret_gun_objects or {}
                                 local gun_go = gun_markers[turret_cell_id]
@@ -8897,7 +8900,16 @@ play_sfx_one_shot = function(self, key)
 end
 
 play_human_shoot_sfx = function(self)
-    play_sfx_one_shot(self, "human_shoot")
+    local roll = math.random(1, 2)
+    if roll == 2 then
+        play_sfx_one_shot(self, "human_shoot_2")
+    else
+        play_sfx_one_shot(self, "human_shoot")
+    end
+end
+
+play_turret_gun_sfx = function(self)
+    play_sfx_one_shot(self, "turret_gun")
 end
 
 is_directional_move_sfx_allowed = function(self)
@@ -17589,6 +17601,8 @@ function init(self)
             human_horizontal = true,
             unit_tile_bump = true,
             human_shoot = true,
+            human_shoot_2 = true,
+            turret_gun = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -17597,6 +17611,8 @@ function init(self)
         human_horizontal = { url = msg.url(SFX_HUMAN_HORIZONTAL_URL), playing = false },
         unit_tile_bump = { url = msg.url(SFX_UNIT_TILE_BUMP_URL), playing = false },
         human_shoot = { url = msg.url(SFX_HUMAN_SHOOT_URL), playing = false },
+        human_shoot_2 = { url = msg.url(SFX_HUMAN_SHOOT_2_URL), playing = false },
+        turret_gun = { url = msg.url(SFX_TURRET_GUN_URL), playing = false },
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),

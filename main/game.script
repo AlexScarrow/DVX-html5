@@ -298,6 +298,11 @@ SFX_PLANET_URL = "main:/sfx_planet_surface#sound"
 SFX_HUMAN_VERTICAL_URL = "main:/sfx_human_vertical_move#sound"
 SFX_HUMAN_HORIZONTAL_URL = "main:/sfx_human_horizontal_move#sound"
 SFX_UNIT_TILE_BUMP_URL = "main:/sfx_unit_tile_bump#sound"
+SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
+SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
+SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
+SFX_SPEEDY_MOVE_URL_4 = "main:/sfx_speedy_move_4#sound"
+SFX_SPEEDY_MOVE_MAX_STACK_VOICES = 4
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
@@ -611,6 +616,7 @@ ALIEN_REVEAL_WEIGHT_CANNON = tonumber(ALIEN_REVEAL_WEIGHTS.cannon_fodder or 10) 
 ALIEN_REVEAL_WEIGHT_SPEEDY = tonumber(ALIEN_REVEAL_WEIGHTS.speedy or 2) or 2
 ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
+SFX_TEST_FAVOR_SPEEDY_REVEAL = true
 TILE_OPACITY = 1
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
@@ -2272,11 +2278,19 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
 end
 
 local function pick_weighted_blip_reveal_type()
+    local speedy_weight = ALIEN_REVEAL_WEIGHT_SPEEDY
+    local cannon_weight = ALIEN_REVEAL_WEIGHT_CANNON
+    local spitter_weight = ALIEN_REVEAL_WEIGHT_SPITTER
+    local brute_weight = ALIEN_REVEAL_WEIGHT_BRUTE
+    if SFX_TEST_FAVOR_SPEEDY_REVEAL == true then
+        -- TEMP TEST TWEAK: bias reveals toward speedies for movement SFX validation.
+        speedy_weight = math.max(speedy_weight, cannon_weight + spitter_weight + brute_weight)
+    end
     local weighted = {
-        { type = ALIEN_TYPE_CANNON, w = ALIEN_REVEAL_WEIGHT_CANNON },
-        { type = ALIEN_TYPE_SPEEDY, w = ALIEN_REVEAL_WEIGHT_SPEEDY },
-        { type = ALIEN_TYPE_SPITTER, w = ALIEN_REVEAL_WEIGHT_SPITTER },
-        { type = ALIEN_TYPE_BRUTE, w = ALIEN_REVEAL_WEIGHT_BRUTE }
+        { type = ALIEN_TYPE_CANNON, w = cannon_weight },
+        { type = ALIEN_TYPE_SPEEDY, w = speedy_weight },
+        { type = ALIEN_TYPE_SPITTER, w = spitter_weight },
+        { type = ALIEN_TYPE_BRUTE, w = brute_weight }
     }
 
     local total = 0
@@ -4262,6 +4276,7 @@ local get_cell_hazard_flags
 
 local function update_alien_movement(self, dt)
     if not self.aliens then
+        update_speedy_move_sfx(self)
         return
     end
 
@@ -4810,6 +4825,7 @@ local function update_alien_movement(self, dt)
     end
 
     remove_dead_aliens(self)
+    update_speedy_move_sfx(self)
 end
 
 local any_civilian_is_moving
@@ -8850,7 +8866,7 @@ play_sfx_one_shot = function(self, key)
     pcall(msg.post, entry.url, "play_sound")
 end
 
-local function is_directional_move_sfx_allowed(self)
+is_directional_move_sfx_allowed = function(self)
     return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
 end
 
@@ -8893,6 +8909,8 @@ refresh_ambient_sfx_state = function(self)
         self.sfx_state.horizontal_active_by_actor = {}
         self.sfx_state.horizontal_active_count = 0
         set_sound_loop_state(self, "human_horizontal", false)
+        self.sfx_state.speedy_active_count = 0
+        stop_speedy_move_sfx(self)
     end
 end
 
@@ -8988,6 +9006,60 @@ update_horizontal_move_sfx_for_actor = function(self, actor_key, is_horizontal_n
         self.sfx_state.horizontal_active_count = math.max(0, (self.sfx_state.horizontal_active_count or 0) - 1)
     end
     set_sound_loop_state(self, "human_horizontal", (self.sfx_state.horizontal_active_count or 0) > 0)
+end
+
+stop_speedy_move_sfx = function(self)
+    if not (self and self.sfx_state and self.sfx_state.speedy_playing_by_voice and self.sfx_state.speedy_voice_urls) then
+        return
+    end
+    for i = 1, #self.sfx_state.speedy_playing_by_voice do
+        if self.sfx_state.speedy_playing_by_voice[i] == true then
+            self.sfx_state.speedy_playing_by_voice[i] = false
+            pcall(msg.post, self.sfx_state.speedy_voice_urls[i], "stop_sound")
+        end
+    end
+end
+
+update_speedy_move_sfx = function(self)
+    if not (self and self.sfx_state and self.aliens) then
+        if self and self.sfx_state then
+            self.sfx_state.speedy_active_count = 0
+            stop_speedy_move_sfx(self)
+        end
+        return
+    end
+    if not is_directional_move_sfx_allowed(self) then
+        self.sfx_state.speedy_active_count = 0
+        stop_speedy_move_sfx(self)
+        return
+    end
+    local moving_speedy_count = 0
+    for _, alien in ipairs(self.aliens) do
+        if alien
+            and alien.is_dead ~= true
+            and alien.type == ALIEN_TYPE_SPEEDY
+            and alien.is_moving == true
+            and alien.go_id
+        then
+            moving_speedy_count = moving_speedy_count + 1
+        end
+    end
+    self.sfx_state.speedy_active_count = moving_speedy_count
+    local max_voices = math.max(1, tonumber(SFX_SPEEDY_MOVE_MAX_STACK_VOICES or 4) or 4)
+    local target_voices = math.min(max_voices, moving_speedy_count)
+    local playing = self.sfx_state.speedy_playing_by_voice or {}
+    local urls = self.sfx_state.speedy_voice_urls or {}
+    for i = 1, max_voices do
+        local should_play = i <= target_voices
+        if should_play and playing[i] ~= true then
+            playing[i] = true
+            pcall(msg.post, urls[i], "play_sound")
+        elseif (not should_play) and playing[i] == true then
+            playing[i] = false
+            pcall(msg.post, urls[i], "stop_sound")
+        end
+    end
+    self.sfx_state.speedy_playing_by_voice = playing
 end
 
 local function spawn_exit_test_stash(self)
@@ -10240,8 +10312,10 @@ function reset_and_load_level(self, level_index)
         self.sfx_state.vertical_active_count = 0
         self.sfx_state.horizontal_active_by_actor = {}
         self.sfx_state.horizontal_active_count = 0
+        self.sfx_state.speedy_active_count = 0
         set_sound_loop_state(self, "human_vertical", false)
         set_sound_loop_state(self, "human_horizontal", false)
+        stop_speedy_move_sfx(self)
     end
     if self.mp_state and self.mp_state.enabled then
         self.mp_state.mission_type = self.current_mission_type
@@ -17469,11 +17543,6 @@ function init(self)
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
     self.table_sweep_shadow_pause_timer = nil
-    local sfx_title_url = msg.url(SFX_TITLE_URL)
-    local sfx_planet_url = msg.url(SFX_PLANET_URL)
-    local sfx_human_vertical_url = msg.url(SFX_HUMAN_VERTICAL_URL)
-    local sfx_human_horizontal_url = msg.url(SFX_HUMAN_HORIZONTAL_URL)
-    local sfx_unit_tile_bump_url = msg.url(SFX_UNIT_TILE_BUMP_URL)
     self.sfx_state = {
         loops = true, -- enabled with flow-state-change gate
         boot_deferred = false,
@@ -17483,17 +17552,26 @@ function init(self)
             planet = true,
             human_vertical = true,
             human_horizontal = true,
-            unit_tile_bump = true
+            unit_tile_bump = true,
+            speedy_move = true
         },
-        title = { url = sfx_title_url, playing = false },
-        planet = { url = sfx_planet_url, playing = false },
-        human_vertical = { url = sfx_human_vertical_url, playing = false },
-        human_horizontal = { url = sfx_human_horizontal_url, playing = false },
-        unit_tile_bump = { url = sfx_unit_tile_bump_url, playing = false },
+        title = { url = msg.url(SFX_TITLE_URL), playing = false },
+        planet = { url = msg.url(SFX_PLANET_URL), playing = false },
+        human_vertical = { url = msg.url(SFX_HUMAN_VERTICAL_URL), playing = false },
+        human_horizontal = { url = msg.url(SFX_HUMAN_HORIZONTAL_URL), playing = false },
+        unit_tile_bump = { url = msg.url(SFX_UNIT_TILE_BUMP_URL), playing = false },
+        speedy_voice_urls = {
+            msg.url(SFX_SPEEDY_MOVE_URL_1),
+            msg.url(SFX_SPEEDY_MOVE_URL_2),
+            msg.url(SFX_SPEEDY_MOVE_URL_3),
+            msg.url(SFX_SPEEDY_MOVE_URL_4)
+        },
+        speedy_playing_by_voice = { false, false, false, false },
         vertical_active_by_unit = {},
         vertical_active_count = 0,
         horizontal_active_by_actor = {},
-        horizontal_active_count = 0
+        horizontal_active_count = 0,
+        speedy_active_count = 0
     }
 
     -- SPAWN VISUALS (add this line)
@@ -18628,8 +18706,10 @@ function final(self)
         self.sfx_state.vertical_active_count = 0
         self.sfx_state.horizontal_active_by_actor = {}
         self.sfx_state.horizontal_active_count = 0
+        self.sfx_state.speedy_active_count = 0
         set_sound_loop_state(self, "human_vertical", false)
         set_sound_loop_state(self, "human_horizontal", false)
+        stop_speedy_move_sfx(self)
         set_sound_loop_state(self, "planet", false)
         set_sound_loop_state(self, "title", false)
     end

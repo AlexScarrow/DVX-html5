@@ -298,6 +298,7 @@ SFX_PLANET_URL = "main:/sfx_planet_surface#sound"
 SFX_HUMAN_VERTICAL_URL = "main:/sfx_human_vertical_move#sound"
 SFX_HUMAN_HORIZONTAL_URL = "main:/sfx_human_horizontal_move#sound"
 SFX_UNIT_TILE_BUMP_URL = "main:/sfx_unit_tile_bump#sound"
+SFX_HUMAN_SHOOT_URL = "main:/sfx_human_shoot#sound"
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -523,6 +524,8 @@ INITIAL_BLIP_COUNT = 3
 ALIEN_MARKER_SIZE = 20
 ALIEN_MOVE_SPEED = 320
 HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS = 0.4
+HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S = 0.0
+HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S = 1.0
 SPITTER_MAX_RANGE_CELLS = tonumber((ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter and ALIEN_BALANCE.TYPES.spitter.ranged_cells) or 4) or 4
 SPITTER_SHOT_AP_COST = tonumber(ALIEN_ACTION_COSTS.ranged_attack or 1) or 1
 SPITTER_SHOT_INTERVAL_SECONDS = 0.5
@@ -3101,6 +3104,7 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
     if not projectile_id then
         return
     end
+    play_human_shoot_sfx(self)
 
     go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
     msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
@@ -3144,12 +3148,17 @@ local function resolve_human_reaction_fire(self, alien)
     end
 
     self.human_reactive_fire_cooldown_by_unit_id = self.human_reactive_fire_cooldown_by_unit_id or {}
+    self.human_reactive_pending_delay_by_unit_id = self.human_reactive_pending_delay_by_unit_id or {}
 
     local reaction_order = { "sarge", "techie", "medic", "gunner" }
     for _, unit_id in ipairs(reaction_order) do
         local unit = self.squad_units and self.squad_units[unit_id]
         local unit_cooldown = self.human_reactive_fire_cooldown_by_unit_id[unit_id]
+        local unit_pending_delay = self.human_reactive_pending_delay_by_unit_id[unit_id]
         if unit and unit.cell_id and unit.reactive_fire_enabled ~= false and ((not unit_cooldown) or unit_cooldown <= 0) then
+            if self.realtime_rules_enabled == true and unit_pending_delay and unit_pending_delay > 0 then
+                goto continue_reactive_unit
+            end
             local nearest_dist = math.huge
             local tied_targets = {}
             if self.aliens then
@@ -3200,6 +3209,17 @@ local function resolve_human_reaction_fire(self, alien)
                 elseif unit.current_ammo <= 0 then
                     print(string.format("%s cannot fire at alien #%d (no ammo)", unit.display_name, chosen_target.id))
                 else
+                    if self.realtime_rules_enabled == true then
+                        if unit_pending_delay == nil then
+                            local jitter_min = math.max(0, tonumber(HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S or 0) or 0)
+                            local jitter_max = math.max(jitter_min, tonumber(HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S or jitter_min) or jitter_min)
+                            self.human_reactive_pending_delay_by_unit_id[unit_id] = jitter_min + (math.random() * (jitter_max - jitter_min))
+                            goto continue_reactive_unit
+                        elseif unit_pending_delay > 0 then
+                            goto continue_reactive_unit
+                        end
+                    end
+                    self.human_reactive_pending_delay_by_unit_id[unit_id] = nil
                     unit.current_ap = unit.current_ap - reactive_shot_ap_cost
                     unit.current_ammo = unit.current_ammo - 1
                     local target_cell = self.world_grid[chosen_target.cell_id]
@@ -3227,6 +3247,7 @@ local function resolve_human_reaction_fire(self, alien)
                 end
             end
         end
+        ::continue_reactive_unit::
     end
 
     return false
@@ -3240,6 +3261,15 @@ local function tick_human_reactive_fire_cooldowns(self, dt)
             self.human_reactive_fire_cooldown_by_unit_id[unit_id] = nil
         else
             self.human_reactive_fire_cooldown_by_unit_id[unit_id] = cooldown
+        end
+    end
+    self.human_reactive_pending_delay_by_unit_id = self.human_reactive_pending_delay_by_unit_id or {}
+    for unit_id, delay_s in pairs(self.human_reactive_pending_delay_by_unit_id) do
+        local next_delay = (tonumber(delay_s or 0) or 0) - (tonumber(dt or 0) or 0)
+        if next_delay <= 0 then
+            self.human_reactive_pending_delay_by_unit_id[unit_id] = 0
+        else
+            self.human_reactive_pending_delay_by_unit_id[unit_id] = next_delay
         end
     end
 end
@@ -8866,6 +8896,10 @@ play_sfx_one_shot = function(self, key)
     pcall(msg.post, entry.url, "play_sound")
 end
 
+play_human_shoot_sfx = function(self)
+    play_sfx_one_shot(self, "human_shoot")
+end
+
 is_directional_move_sfx_allowed = function(self)
     return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
 end
@@ -10485,6 +10519,7 @@ function reset_and_load_level(self, level_index)
     self.turret_fire_cooldown_by_object_id = {}
     self.turret_fired_this_alien_turn_by_object_id = {}
     self.human_reactive_fire_cooldown_by_unit_id = {}
+    self.human_reactive_pending_delay_by_unit_id = {}
     self.loot_pickup_blips = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
@@ -17553,6 +17588,7 @@ function init(self)
             human_vertical = true,
             human_horizontal = true,
             unit_tile_bump = true,
+            human_shoot = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -17560,6 +17596,7 @@ function init(self)
         human_vertical = { url = msg.url(SFX_HUMAN_VERTICAL_URL), playing = false },
         human_horizontal = { url = msg.url(SFX_HUMAN_HORIZONTAL_URL), playing = false },
         unit_tile_bump = { url = msg.url(SFX_UNIT_TILE_BUMP_URL), playing = false },
+        human_shoot = { url = msg.url(SFX_HUMAN_SHOOT_URL), playing = false },
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),
@@ -17608,6 +17645,7 @@ function init(self)
     self.turret_fire_cooldown_by_object_id = {}
     self.turret_fired_this_alien_turn_by_object_id = {}
     self.human_reactive_fire_cooldown_by_unit_id = {}
+    self.human_reactive_pending_delay_by_unit_id = {}
     self.pending_melee_attack_phase = false
     self.melee_attack_started = false
     self.melee_attack_timer = 0

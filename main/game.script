@@ -301,6 +301,10 @@ SFX_UNIT_TILE_BUMP_URL = "main:/sfx_unit_tile_bump#sound"
 SFX_HUMAN_SHOOT_URL = "main:/sfx_human_shoot#sound"
 SFX_HUMAN_SHOOT_2_URL = "main:/sfx_human_shoot_2#sound"
 SFX_TURRET_GUN_URL = "main:/sfx_turret_gun#sound"
+SFX_CANNONFODDER_DIES_URL = "main:/sfx_cannonfodder_dies#sound"
+SFX_SPEEDY_DIES_URL = "main:/sfx_speedy_dies#sound"
+SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
+SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -621,7 +625,7 @@ ALIEN_REVEAL_WEIGHT_CANNON = tonumber(ALIEN_REVEAL_WEIGHTS.cannon_fodder or 10) 
 ALIEN_REVEAL_WEIGHT_SPEEDY = tonumber(ALIEN_REVEAL_WEIGHTS.speedy or 2) or 2
 ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
-SFX_TEST_FAVOR_SPEEDY_REVEAL = true
+SFX_TEST_FAVOR_SPEEDY_REVEAL = false
 TILE_OPACITY = 1
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
@@ -3591,6 +3595,7 @@ local function update_spitter_projectiles(self, dt)
                             target.is_moving = false
                             target.move_path = nil
                             target.move_path_index = 0
+                            play_alien_death_sfx(self, target.type)
                             score_record_alien_kill(self, target.type)
                             remove_dead_aliens(self)
                         else
@@ -3844,6 +3849,7 @@ local function resolve_turret_pending_shot(self, shot_id)
                     target_alien.is_moving = false
                     target_alien.move_path = nil
                     target_alien.move_path_index = 0
+                    play_alien_death_sfx(self, target_alien.type)
                     score_record_alien_kill(self, target_alien.type)
                     if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
                         MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target_alien)
@@ -8910,6 +8916,18 @@ end
 
 play_turret_gun_sfx = function(self)
     play_sfx_one_shot(self, "turret_gun")
+end
+
+play_alien_death_sfx = function(self, alien_type)
+    if alien_type == ALIEN_TYPE_CANNON then
+        play_sfx_one_shot(self, "cannonfodder_dies")
+    elseif alien_type == ALIEN_TYPE_SPEEDY then
+        play_sfx_one_shot(self, "speedy_dies")
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        play_sfx_one_shot(self, "brute_dies")
+    elseif alien_type == ALIEN_TYPE_SPITTER then
+        play_sfx_one_shot(self, "spitter_dies")
+    end
 end
 
 is_directional_move_sfx_allowed = function(self)
@@ -14607,6 +14625,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     emit_combat_fx_event = function(self_ref, payload)
         multiplayer_emit_combat_fx_event(self_ref, payload)
     end,
+    play_alien_death_sfx = function(self_ref, alien_type)
+        play_alien_death_sfx(self_ref, alien_type)
+    end,
     handle_human_death_loot_drop = function(self_ref, unit)
         handle_human_death_loot_drop(self_ref, unit, "alien_melee")
     end
@@ -17603,6 +17624,10 @@ function init(self)
             human_shoot = true,
             human_shoot_2 = true,
             turret_gun = true,
+            cannonfodder_dies = true,
+            speedy_dies = true,
+            brute_dies = true,
+            spitter_dies = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -17613,6 +17638,10 @@ function init(self)
         human_shoot = { url = msg.url(SFX_HUMAN_SHOOT_URL), playing = false },
         human_shoot_2 = { url = msg.url(SFX_HUMAN_SHOOT_2_URL), playing = false },
         turret_gun = { url = msg.url(SFX_TURRET_GUN_URL), playing = false },
+        cannonfodder_dies = { url = msg.url(SFX_CANNONFODDER_DIES_URL), playing = false },
+        speedy_dies = { url = msg.url(SFX_SPEEDY_DIES_URL), playing = false },
+        brute_dies = { url = msg.url(SFX_BRUTE_DIES_URL), playing = false },
+        spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),

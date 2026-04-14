@@ -255,6 +255,9 @@ function M.create(ctx)
         alien.is_moving = false
         alien.move_path = nil
         alien.move_path_index = 0
+        if ctx and ctx.play_alien_death_sfx then
+            ctx.play_alien_death_sfx(self, alien.type)
+        end
         record_alien_kill(self, alien)
     end
 

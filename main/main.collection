@@ -123,6 +123,38 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_cannonfodder_dies"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/cannonFodder_dies.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_speedy_dies"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/speedy_dies.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_brute_dies"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/brute_dies.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_spitter_dies"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/spitter_dies.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

@@ -64,11 +64,8 @@ function M.extend(runtime, ctx)
     local WORKSHOP_PRODUCT_BY_SLOT = {
         [1] = { item_type = ctx.COMPONENT_UI.component_wiring_straight, price = 1, label = "wiring" },
         [2] = { item_type = ctx.COMPONENT_UI.component_fuse, price = 1, label = "fuse" },
-        [3] = { item_type = "obstacle1", price = 2, label = "obstacle1" },
-        [4] = { item_type = "obstacle2", price = 2, label = "obstacle2" },
-        [5] = { item_type = "obstacle3", price = 2, label = "obstacle3" },
-        [6] = { item_type = "obstacle4", price = 2, label = "obstacle4" },
-        [7] = { item_type = "obstacle5", price = 2, label = "obstacle5" },
+        [3] = { item_type = OBSTACLE_ITEM, price = 2, label = "obstacle" },
+        [4] = { item_type = ctx.COMPONENT_UI.component_plate, price = 2, label = "plate" },
         [8] = { item_type = "power", price = 5, label = "power" }
     }
     local MEDBAY_TILE_ID = hash("medbay")
@@ -388,6 +385,8 @@ function M.extend(runtime, ctx)
             return hash("ammo_unit")
         elseif item_type == "power" then
             return hash("power_unit")
+        elseif item_type == ctx.COMPONENT_UI.component_plate then
+            return hash("plate")
         elseif item_type == DNA_SAMPLE_ITEM_TYPE then
             return hash("dna_sample")
         elseif item_type == PURGE_BOMB_ITEM_TYPE then
@@ -2311,6 +2310,10 @@ function M.extend(runtime, ctx)
                     local output_cell = instance.cell_by_local[2]
                     local pending = count_workshop_pending_tokens(self, tile_instance_id)
                     if selected and source_cell and output_cell then
+                        local produced_item_type = selected.item_type
+                        if produced_item_type == OBSTACLE_ITEM then
+                            produced_item_type = "obstacle" .. tostring(math.random(1, 5))
+                        end
                         local all_items = runtime.get_world_items_on_cell(self, output_cell.idNumber)
                         if (#all_items + pending) >= WORKSHOP_OUTPUT_MAX_STOCK then
                             print("Workshop output cell is full.")
@@ -2319,11 +2322,11 @@ function M.extend(runtime, ctx)
                             local c2x, c2y = ctx.coords_to_world_pos(output_cell.xCell, output_cell.yCell)
                             local token_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c1x - 98, c1y - 36, WORKSHOP_CONVEYOR_TOKEN_Z))
                             if token_id then
-                                local anim = get_world_item_animation(selected.item_type)
+                                local anim = get_world_item_animation(produced_item_type)
                                 if anim then
                                     msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = anim })
                                 end
-                                local token_scale = get_world_item_draw_scale(selected.item_type)
+                                local token_scale = get_world_item_draw_scale(produced_item_type)
                                 go.set_scale(vmath.vector3(token_scale, token_scale, 1), token_id)
                                 go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.98))
                                 spawn_impact_ring(self, c1x - 98, c1y - 36, vmath.vector4(0.2, 1.0, 0.25, 1), 0.7)
@@ -2331,7 +2334,7 @@ function M.extend(runtime, ctx)
                                     go_id = token_id,
                                     tile_instance_id = tile_instance_id,
                                     output_cell_id = output_cell.idNumber,
-                                    item_type = selected.item_type,
+                                    item_type = produced_item_type,
                                     label = selected.label,
                                     start_x = c1x - 98,
                                     start_y = c1y - 26,

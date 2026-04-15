@@ -5335,6 +5335,9 @@ function M.extend(runtime, ctx)
                                         drop_cell.barricade_brightness = math.max(0.25, math.min(1.0, (drop_cell.barricade_brightness or 1.0) * 1.33))
                                         drop_cell.barricade_scale_pulse = 0.1
                                         drop_cell.barricade_scale_pulse_timer = 0.22
+                                        if ctx and ctx.play_build_barricade_sfx then
+                                            ctx.play_build_barricade_sfx(self)
+                                        end
                                         consumed = true
                                         runtime.refresh_fix_markers(self)
                                         runtime.refresh_world_item_visuals(self)
@@ -5408,6 +5411,9 @@ function M.extend(runtime, ctx)
                                                         OBSTACLE_STACK_CAP,
                                                         obstacle_drop_ap_cost
                                                     ))
+                                                end
+                                                if ctx and ctx.play_build_barricade_sfx then
+                                                    ctx.play_build_barricade_sfx(self)
                                                 end
                                                 consumed = true
                                                 runtime.refresh_fix_markers(self)

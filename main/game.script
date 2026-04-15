@@ -320,6 +320,7 @@ SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
 SFX_POWER_NODE_OFF_URL = "main:/sfx_power_node_off#sound"
 SFX_DRAG_ITEM_URL = "main:/sfx_drag_item#sound"
 SFX_BREAK_BARRICADE_URL = "main:/sfx_break_barricade#sound"
+SFX_BUILD_BARRICADE_URL = "main:/sfx_build_barricade#sound"
 SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
 SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
 SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
@@ -9039,6 +9040,10 @@ play_break_barricade_sfx = function(self)
     play_sfx_one_shot(self, "break_barricade")
 end
 
+play_build_barricade_sfx = function(self)
+    play_sfx_one_shot(self, "build_barricade")
+end
+
 play_door_toggle_sfx = function(self)
     play_sfx_one_shot(self, "door_toggle")
 end
@@ -14827,6 +14832,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_break_barricade_sfx = function(self_ref)
         play_break_barricade_sfx(self_ref)
     end,
+    play_build_barricade_sfx = function(self_ref)
+        play_build_barricade_sfx(self_ref)
+    end,
     play_human_item_recieve_sfx = function(self_ref, unit)
         play_human_item_recieve_sfx(self_ref, unit)
     end,
@@ -17911,6 +17919,7 @@ function init(self)
             power_node_off = true,
             drag_item = true,
             break_barricade = true,
+            build_barricade = true,
             door_toggle = true,
             escape_pod_ready = true,
             factory_produce = true,
@@ -17951,6 +17960,7 @@ function init(self)
         power_node_off = { url = msg.url(SFX_POWER_NODE_OFF_URL), playing = false },
         drag_item = { url = msg.url(SFX_DRAG_ITEM_URL), playing = false },
         break_barricade = { url = msg.url(SFX_BREAK_BARRICADE_URL), playing = false },
+        build_barricade = { url = msg.url(SFX_BUILD_BARRICADE_URL), playing = false },
         door_toggle = { url = msg.url(SFX_DOOR_TOGGLE_URL), playing = false },
         escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
         factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },

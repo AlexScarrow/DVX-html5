@@ -2815,7 +2815,10 @@ function M.extend(runtime, ctx)
                         if item.meta and item.meta.impact_ring_on_spawn == true then
                             local ring_tint = vmath.vector4(0.2, 1.0, 0.25, 1)
                             if item.item_type == DNA_SAMPLE_ITEM_TYPE then
-                                ring_tint = vmath.vector4(0.72, 0.35, 1.0, 1)
+                                ring_tint = vmath.vector4(0.85, 0.65, 1.0, 1)
+                                if ctx and ctx.play_task_done_sfx then
+                                    ctx.play_task_done_sfx(self)
+                                end
                             end
                             spawn_impact_ring(self, wx, wy, ring_tint, 0.7)
                             item.meta.impact_ring_on_spawn = false

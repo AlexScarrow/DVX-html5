@@ -319,6 +319,8 @@ SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
 SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
 SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
 SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
+SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
+SFX_FABRICATOR_WORKING_URL = "main:/sfx_fabricator_working#sound"
 SFX_SARGE_ITEM_RECIEVE_URL = "main:/sfx_sarge_item_recieve#sound"
 SFX_TECHIE_ITEM_RECIEVE_URL = "main:/sfx_techie_item_recieve#sound"
 SFX_MEDIC_ITEM_RECIEVE_URL = "main:/sfx_medic_item_recieve#sound"
@@ -9021,6 +9023,14 @@ play_escape_pod_ready_sfx = function(self)
     play_sfx_one_shot(self, "escape_pod_ready")
 end
 
+play_factory_produce_sfx = function(self)
+    play_sfx_one_shot(self, "factory_produce")
+end
+
+play_fabricator_working_sfx = function(self)
+    play_sfx_one_shot(self, "fabricator_working")
+end
+
 play_human_item_recieve_sfx = function(self, unit)
     local class_id = tostring(unit and unit.class_id or "")
     if class_id == UNIT_CLASS_SARGE then
@@ -14716,6 +14726,12 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     end,
     play_human_item_recieve_sfx = function(self_ref, unit)
         play_human_item_recieve_sfx(self_ref, unit)
+    end,
+    play_factory_produce_sfx = function(self_ref)
+        play_factory_produce_sfx(self_ref)
+    end,
+    play_fabricator_working_sfx = function(self_ref)
+        play_fabricator_working_sfx(self_ref)
     end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
@@ -17763,6 +17779,8 @@ function init(self)
             power_node_on = true,
             door_toggle = true,
             escape_pod_ready = true,
+            factory_produce = true,
+            fabricator_working = true,
             sarge_item_recieve = true,
             techie_item_recieve = true,
             medic_item_recieve = true,
@@ -17795,6 +17813,8 @@ function init(self)
         power_node_on = { url = msg.url(SFX_POWER_NODE_ON_URL), playing = false },
         door_toggle = { url = msg.url(SFX_DOOR_TOGGLE_URL), playing = false },
         escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
+        factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },
+        fabricator_working = { url = msg.url(SFX_FABRICATOR_WORKING_URL), playing = false },
         sarge_item_recieve = { url = msg.url(SFX_SARGE_ITEM_RECIEVE_URL), playing = false },
         techie_item_recieve = { url = msg.url(SFX_TECHIE_ITEM_RECIEVE_URL), playing = false },
         medic_item_recieve = { url = msg.url(SFX_MEDIC_ITEM_RECIEVE_URL), playing = false },

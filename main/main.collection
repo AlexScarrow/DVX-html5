@@ -299,6 +299,22 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_factory_produce"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/factory_produce.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_fabricator_working"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/fabricator_working.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

@@ -2139,6 +2139,9 @@ function M.extend(runtime, ctx)
         local instances = get_factory_instances(self)
         self.factory_instance_cache = instances
         for tile_instance_id, instance in pairs(instances) do
+            if self.realtime_rules_enabled ~= true and instance and instance.powered and ctx and ctx.play_factory_produce_sfx then
+                ctx.play_factory_produce_sfx(self)
+            end
             local pending = count_factory_pending_tokens(self, tile_instance_id)
             local conveyor_cell = instance.cell_by_local[2]
             local output_cell = instance.cell_by_local[3]
@@ -5058,6 +5061,9 @@ function M.extend(runtime, ctx)
                                             state.payment_locked = true
                                             state.production_time_left = WORKSHOP_PRODUCTION_DURATION
                                             state.payment_confirm_flash = WORKSHOP_PAY_CONFIRM_FLASH_SECONDS
+                                            if ctx and ctx.play_fabricator_working_sfx then
+                                                ctx.play_fabricator_working_sfx(self)
+                                            end
                                             print(string.format("Workshop production started for %s.", selected.label))
                                         end
                                         consumed = true

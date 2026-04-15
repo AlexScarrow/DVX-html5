@@ -371,6 +371,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_medibay_revive"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/medibay_revive.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "human"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

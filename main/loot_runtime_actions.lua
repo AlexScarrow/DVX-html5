@@ -2698,6 +2698,9 @@ function M.extend(runtime, ctx)
         state.corpse_unit_id = corpse_id
         state.progress = 0
         state.bob_phase = 0
+        if ctx and ctx.play_medibay_revive_sfx then
+            ctx.play_medibay_revive_sfx(self)
+        end
         print(string.format("%s placed %s into medbay revival chamber. (AP -%d)", source_unit.display_name, corpse_unit.display_name, medbay_insert_ap_cost))
         return true, true, false
     end

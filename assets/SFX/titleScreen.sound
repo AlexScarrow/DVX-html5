@@ -1,4 +1,4 @@
-sound: "/assets/SFX/audio_titleScreen.wav"
+sound: "/assets/SFX/audio_titleScreen.ogg"
 looping: 1
 group: "master"
 gain: 1.0

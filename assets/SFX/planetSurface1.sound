@@ -1,4 +1,4 @@
-sound: "/assets/SFX/audio_planetSurface1.wav"
+sound: "/assets/SFX/audio_planetSurface1.ogg"
 looping: 1
 group: "master"
 gain: 1.0

@@ -317,6 +317,8 @@ SFX_TECHIE_CONFIRM_SELECT_URL = "main:/sfx_techie_confirm_select#sound"
 SFX_MEDIC_CONFIRM_SELECT_URL = "main:/sfx_medic_confirm_select#sound"
 SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
 SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
+SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
+SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
 SFX_SARGE_ITEM_RECIEVE_URL = "main:/sfx_sarge_item_recieve#sound"
 SFX_TECHIE_ITEM_RECIEVE_URL = "main:/sfx_techie_item_recieve#sound"
 SFX_MEDIC_ITEM_RECIEVE_URL = "main:/sfx_medic_item_recieve#sound"
@@ -1720,6 +1722,7 @@ multiplayer_apply_toggle_door_event = function(self, payload)
     end
     local ap_before = tonumber(unit.current_ap or 0) or 0
     local desired_open = (payload.is_open == true)
+    local was_open = door_obj.isOpen == true
     door_obj.isOpen = desired_open
     local ap_after = tonumber(payload.ap_after)
     if ap_after ~= nil then
@@ -1733,6 +1736,9 @@ multiplayer_apply_toggle_door_event = function(self, payload)
     end
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
+    end
+    if was_open ~= desired_open then
+        play_door_toggle_sfx(self)
     end
     local spent_ap = math.max(0, ap_before - (tonumber(unit.current_ap or 0) or 0))
     print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, spent_ap))
@@ -1774,6 +1780,7 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
+    play_door_toggle_sfx(self)
     print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
     return true
 end
@@ -8843,6 +8850,19 @@ function score_record_civilian_escorted(self, civilian_id)
     score_log_snapshot(self, "civilian_escorted")
 end
 
+local function update_escape_pod_ready_sfx(self)
+    if not self then
+        return
+    end
+    local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
+    local is_ready = launch_status and launch_status.can_launch == true
+    local was_ready = self.escape_pod_ready_prev_state == true
+    if is_ready and (not was_ready) then
+        play_escape_pod_ready_sfx(self)
+    end
+    self.escape_pod_ready_prev_state = is_ready == true
+end
+
 function compute_placeholder_score_breakdown(self)
     local state = ensure_score_state(self)
     local result = SCORE_RUNTIME.compute_score(state)
@@ -8991,6 +9011,14 @@ end
 
 play_power_node_on_sfx = function(self)
     play_sfx_one_shot(self, "power_node_on")
+end
+
+play_door_toggle_sfx = function(self)
+    play_sfx_one_shot(self, "door_toggle")
+end
+
+play_escape_pod_ready_sfx = function(self)
+    play_sfx_one_shot(self, "escape_pod_ready")
 end
 
 play_human_item_recieve_sfx = function(self, unit)
@@ -13092,7 +13120,11 @@ multiplayer_transport_handle_command = function(self, command)
             return events
         end
         local desired_open = payload.is_open == true
+        local was_open = door_obj.isOpen == true
         door_obj.isOpen = desired_open
+        if was_open ~= desired_open then
+            play_door_toggle_sfx(self)
+        end
         local ap_after = math.max(0, (tonumber(unit.current_ap or 0) or 0) - door_ap_cost)
         table.insert(events, multiplayer_transport_emit_event(self, "toggle_door_applied", {
             unit_id = unit_id,
@@ -17729,6 +17761,8 @@ function init(self)
             medic_confirm_select = true,
             gunner_confirm_select = true,
             power_node_on = true,
+            door_toggle = true,
+            escape_pod_ready = true,
             sarge_item_recieve = true,
             techie_item_recieve = true,
             medic_item_recieve = true,
@@ -17759,6 +17793,8 @@ function init(self)
         medic_confirm_select = { url = msg.url(SFX_MEDIC_CONFIRM_SELECT_URL), playing = false },
         gunner_confirm_select = { url = msg.url(SFX_GUNNER_CONFIRM_SELECT_URL), playing = false },
         power_node_on = { url = msg.url(SFX_POWER_NODE_ON_URL), playing = false },
+        door_toggle = { url = msg.url(SFX_DOOR_TOGGLE_URL), playing = false },
+        escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
         sarge_item_recieve = { url = msg.url(SFX_SARGE_ITEM_RECIEVE_URL), playing = false },
         techie_item_recieve = { url = msg.url(SFX_TECHIE_ITEM_RECIEVE_URL), playing = false },
         medic_item_recieve = { url = msg.url(SFX_MEDIC_ITEM_RECIEVE_URL), playing = false },
@@ -17895,6 +17931,7 @@ function update(self, dt)
         self.sfx_state.boot_deferred = true
         refresh_ambient_sfx_state(self)
     end
+    update_escape_pod_ready_sfx(self)
     if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
     end

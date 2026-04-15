@@ -600,8 +600,9 @@ function M.create(ctx)
 
         if self.reactive_combat_enabled then
             local retaliators = get_living_humans_on_cell(self, alien.cell_id)
+            local melee_ap_cost = get_melee_ap_cost()
             for _, human in ipairs(retaliators) do
-                if human.current_ap > 0 then
+                if human.reactive_fire_enabled ~= false and (human.current_ap or 0) >= melee_ap_cost then
                     table.insert(self.melee_action_queue, {
                         kind = "human_react",
                         human_id = human.id,
@@ -728,7 +729,13 @@ function M.create(ctx)
             end
         elseif action.kind == "human_react" then
             local human = get_human_by_id(self, action.human_id)
-            if human and (human.current_health or 0) > 0 and human.current_ap > 0 and human.cell_id == action.cell_id then
+            local melee_ap_cost = get_melee_ap_cost()
+            if human
+                and human.reactive_fire_enabled ~= false
+                and (human.current_health or 0) > 0
+                and (human.current_ap or 0) >= melee_ap_cost
+                and human.cell_id == action.cell_id
+            then
                 local target = nil
                 local preferred = find_alien_by_id(self, action.preferred_alien_id)
                 if preferred and (not preferred.is_dead) and preferred.cell_id == human.cell_id then

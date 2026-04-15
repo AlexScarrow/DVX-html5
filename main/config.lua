@@ -115,7 +115,7 @@ M.AP_COSTS = {
     -- Core combat/movement
     manual_ranged_shot = 1,
     reactive_ranged_shot = 1,
-    melee_attack = 1,
+    melee_attack = 2,
     -- Movement path step costs are computed elsewhere from board/path rules.
     -- Keep these keys for visibility/future tuning hooks.
     move_step_floor = 1,

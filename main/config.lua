@@ -115,7 +115,7 @@ M.AP_COSTS = {
     -- Core combat/movement
     manual_ranged_shot = 1,
     reactive_ranged_shot = 1,
-    melee_attack = 1,
+    melee_attack = 2,
     -- Movement path step costs are computed elsewhere from board/path rules.
     -- Keep these keys for visibility/future tuning hooks.
     move_step_floor = 1,
@@ -160,7 +160,7 @@ M.ALIEN_BALANCE = {
             marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0)
         },
         cannon_fodder = {
-            ap_per_turn = 5,
+            ap_per_turn = 4,
             hp = 1,
             melee_damage = 1,
             can_traverse_void = false,
@@ -168,7 +168,7 @@ M.ALIEN_BALANCE = {
             marker_tint = vmath.vector4(1.0, 0.5, 0.3, 1.0)
         },
         speedy = {
-            ap_per_turn = 10,
+            ap_per_turn = 5,
             hp = 1,
             melee_damage = 2,
             can_traverse_void = false,
@@ -185,7 +185,7 @@ M.ALIEN_BALANCE = {
             marker_tint = vmath.vector4(0.4, 1.0, 0.4, 1.0)
         },
         brute = {
-            ap_per_turn = 3,
+            ap_per_turn = 2,
             hp = 5,
             melee_damage = 3,
             can_traverse_void = false,
@@ -214,6 +214,19 @@ M.HAZARD_DAMAGE = {
     outside_per_turn = 2,
     fire_per_turn = 1,
     gas_per_turn = 1
+}
+
+-- Realtime mode scaffold (Phase 0):
+-- Keep disabled by default so baseline behavior remains unchanged until explicitly enabled.
+M.REALTIME_MODE = {
+    enabled = false,
+    multiplayer_enabled = true,
+    ap_regen_per_second = 1.0,
+    alien_step_hz = 1.2,
+    civilian_step_hz = 1.0,
+    blip_spawn_interval_s = 2.0,
+    alien_move_speed_multiplier = 0.75,
+    blip_move_speed_multiplier = 0.25
 }
 
 -- Buff registry (Phase 0 scaffold). Item ids are backpack/world ids.

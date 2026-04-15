@@ -68,7 +68,7 @@ COLOR_DEFAULT = vmath.vector4(1, 1, 1, 0)
 COLOR_PATH = vmath.vector4(1, 1, 0.35, 0)
 COLOR_START = vmath.vector4(0.3, 1, 0.3, 0)
 COLOR_END = vmath.vector4(1, 0.35, 0.35, 0)
-CAMERA_EDGE_PADDING_X = CELL_WIDTH * 1.2
+CAMERA_EDGE_PADDING_X = CELL_WIDTH * 6.0
 CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
 HUMAN_MOVE_SPEED = 250
 HUMAN_VISUAL_SCALE = 0.35
@@ -199,7 +199,7 @@ MULTIPLAYER_ENABLED = true
 MULTIPLAYER_HOST_PLAYER_ID = "p1"
 MULTIPLAYER_LOCAL_PLAYER_ID = "p1"
 MULTIPLAYER_TRANSPORT_MODE = "websocket"--loopback" -- "loopback" (default) or "websocket"
-MULTIPLAYER_TRANSPORT_WS_URL = "ws://127.0.0.1:8080/ws"
+MULTIPLAYER_TRANSPORT_WS_URL = "ws://192.168.0.74:8080/ws"
 MULTIPLAYER_TRANSPORT_ROOM_ID = "dvx_local_room"
 MULTIPLAYER_READY_BUTTON_W = 28
 MULTIPLAYER_READY_BUTTON_H = 28
@@ -207,7 +207,13 @@ MULTIPLAYER_READY_BUTTON_GAP = 22
 MULTIPLAYER_READY_BUTTON_Y = NEW_TURN_BUTTON_Y
 MULTIPLAYER_READY_BUTTON_Z = NEW_TURN_BUTTON_Z
 MULTIPLAYER_READY_ICON_DRAW_SIZE = 11
+MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_W = 177
+MULTIPLAYER_READY_CLIENT_BUTTON_DRAW_H = 61
 MULTIPLAYER_REQUIRED_READY_PLAYER_IDS = { "p2", "p3", "p4" }
+TURN_BASED_MP_SNAPSHOT_INTERVAL_S = 2.5
+TURN_BASED_MP_HEARTBEAT_MISMATCH_THRESHOLD = 2
+TEMP_HUMAN_NEW_TURN_AP_REFRESH = 10
+REALTIME_AUTO_AMMO_LOAD_FROM_BACKPACK = true
 MULTIPLAYER_DEBUG_BUTTON_X = SCREEN_WIDTH - 32
 MULTIPLAYER_DEBUG_BUTTON_START_Y = SCREEN_HEIGHT * 0.62
 MULTIPLAYER_DEBUG_BUTTON_Y_GAP = 44
@@ -218,6 +224,12 @@ LAUNCH_BUTTON_X = SCREEN_WIDTH - 140
 LAUNCH_BUTTON_Y = 64
 LAUNCH_BUTTON_W = 180
 LAUNCH_BUTTON_H = 64
+REALTIME_TOGGLE_BUTTON_X = LAUNCH_BUTTON_X
+REALTIME_TOGGLE_BUTTON_Y = LAUNCH_BUTTON_Y + 72
+REALTIME_TOGGLE_BUTTON_W = 180
+REALTIME_TOGGLE_BUTTON_H = 54
+REALTIME_TOGGLE_BUTTON_DRAW_W = 44.25
+REALTIME_TOGGLE_BUTTON_DRAW_H = 30.5
 LAUNCH_BUTTON_Z = 0.845
 SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
 SCORE_HUD_Y = SCREEN_HEIGHT - 20
@@ -226,6 +238,14 @@ SCORE_HUD_MAX_DIGITS = 8
 SCORE_HUD_DIGIT_SPACING_PX = 16
 SCORE_HUD_DIGIT_DRAW_W = 20.25
 SCORE_HUD_DIGIT_DRAW_H = 23.625
+RANGED_HIT_PREVIEW_Z = 0.77
+RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
+RANGED_HIT_PREVIEW_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W * 0.66
+RANGED_HIT_PREVIEW_DIGIT_DRAW_H = SCORE_HUD_DIGIT_DRAW_H * 0.66
+RANGED_HIT_PREVIEW_PERCENT_DRAW_W = RANGED_HIT_PREVIEW_DIGIT_DRAW_W
+RANGED_HIT_PREVIEW_PERCENT_DRAW_H = RANGED_HIT_PREVIEW_DIGIT_DRAW_H
+RANGED_HIT_PREVIEW_OFFSET_Y = 56
+RANGED_HIT_PREVIEW_FADE_SECONDS = 0.22
 OBJECTIVE_BUTTON_W = 180
 OBJECTIVE_BUTTON_H = 64
 OBJECTIVE_BUTTON_X = SCORE_HUD_CENTER_X + 220
@@ -243,6 +263,9 @@ PURGE_TIMER_HUD_DIGIT_SPACING_PX = 16
 PURGE_TIMER_HUD_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W
 PURGE_TIMER_HUD_DIGIT_DRAW_H = SCORE_HUD_DIGIT_DRAW_H
 PURGE_TIMER_HUD_DIGIT_COUNT = 4
+REALTIME_MP_SNAPSHOT_INTERVAL_S = 0.2
+REALTIME_MP_SNAPSHOT_HEARTBEAT_S = 0.9
+REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST = true
 FLOW_UI_OVERLAY_Z = 1.41
 FLOW_UI_PANEL_Z = 1.42
 FLOW_UI_BUTTON_Z = 1.43
@@ -270,6 +293,53 @@ FLOW_STATE_SCORE = "score"
 FLOW_STATE_MP_SETUP = "mp_setup"
 FLOW_STATE_SOLO_SETUP = "solo_setup"
 EXIT_TEST_STASH_ENABLED = true
+SFX_TITLE_URL = "main:/sfx_title_screen#sound"
+SFX_PLANET_URL = "main:/sfx_planet_surface#sound"
+SFX_HUMAN_VERTICAL_URL = "main:/sfx_human_vertical_move#sound"
+SFX_HUMAN_HORIZONTAL_URL = "main:/sfx_human_horizontal_move#sound"
+SFX_UNIT_TILE_BUMP_URL = "main:/sfx_unit_tile_bump#sound"
+SFX_HUMAN_SHOOT_URL = "main:/sfx_human_shoot#sound"
+SFX_HUMAN_SHOOT_2_URL = "main:/sfx_human_shoot_2#sound"
+SFX_TURRET_GUN_URL = "main:/sfx_turret_gun#sound"
+SFX_CANNONFODDER_DIES_URL = "main:/sfx_cannonfodder_dies#sound"
+SFX_SPEEDY_DIES_URL = "main:/sfx_speedy_dies#sound"
+SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
+SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
+SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
+SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
+SFX_MELEE_HIT_HUMAN_URL = "main:/sfx_melee_hit_human#sound"
+SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
+SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
+SFX_MEDIC_ALIEN_ALERT_URL = "main:/sfx_medic_alien_alert#sound"
+SFX_GUNNER_ALIEN_ALERT_URL = "main:/sfx_gunner_alien_alert#sound"
+SFX_SARGE_CONFIRM_SELECT_URL = "main:/sfx_sarge_confirm_select#sound"
+SFX_TECHIE_CONFIRM_SELECT_URL = "main:/sfx_techie_confirm_select#sound"
+SFX_MEDIC_CONFIRM_SELECT_URL = "main:/sfx_medic_confirm_select#sound"
+SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
+SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
+SFX_POWER_NODE_OFF_URL = "main:/sfx_power_node_off#sound"
+SFX_DRAG_ITEM_URL = "main:/sfx_drag_item#sound"
+SFX_BREAK_BARRICADE_URL = "main:/sfx_break_barricade#sound"
+SFX_BUILD_BARRICADE_URL = "main:/sfx_build_barricade#sound"
+SFX_MEDIBAY_REVIVE_URL = "main:/sfx_medibay_revive#sound"
+SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
+SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
+SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
+SFX_FABRICATOR_WORKING_URL = "main:/sfx_fabricator_working#sound"
+SFX_SPARKING_WIRE_URL = "main:/sfx_sparking_wire#sound"
+SFX_WELDING_URL = "main:/sfx_welding#sound"
+SFX_TASK_DONE_URL = "main:/sfx_task_done#sound"
+SFX_SARGE_ITEM_RECIEVE_URL = "main:/sfx_sarge_item_recieve#sound"
+SFX_TECHIE_ITEM_RECIEVE_URL = "main:/sfx_techie_item_recieve#sound"
+SFX_MEDIC_ITEM_RECIEVE_URL = "main:/sfx_medic_item_recieve#sound"
+SFX_GUNNER_ITEM_RECIEVE_URL = "main:/sfx_gunner_item_recieve#sound"
+SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
+SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
+SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
+SFX_SPEEDY_MOVE_URL_4 = "main:/sfx_speedy_move_4#sound"
+SFX_SPEEDY_MOVE_MAX_STACK_VOICES = 4
+SPARKING_WIRE_MIN_INTERVAL_S = 1.2
+SPARKING_WIRE_MAX_INTERVAL_S = 2.8
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
@@ -369,6 +439,7 @@ local function read_debug_outro_preview_settings()
 end
 AP_COSTS = require("main.config").AP_COSTS or {}
 ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
+REALTIME_MODE_CFG = require("main.config").REALTIME_MODE or {}
 BUFFS = require("main.config").BUFFS or {}
 BUFF_SLOT_ORDER = require("main.config").BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
 BUFF_ARMOR_HIT_REDUCTION = tonumber(require("main.config").BUFF_ARMOR_HIT_REDUCTION or 15) or 15
@@ -461,7 +532,6 @@ UNIT_CLASS_SARGE = "sarge"
 UNIT_CLASS_TECHIE = "techie"
 UNIT_CLASS_MEDIC = "medic"
 UNIT_CLASS_GUNNER = "gunner"
-MULTIPLAYER_READY_SLOT_ANIMS = { hash("human_techie"), hash("human_medic"), hash("human_gunner") }
 ALIEN_TYPE_BLIP = "blip"
 ALIEN_TYPE_CANNON = "cannon_fodder"
 ALIEN_TYPE_SPEEDY = "speedy"
@@ -490,6 +560,8 @@ INITIAL_BLIP_COUNT = 3
 ALIEN_MARKER_SIZE = 20
 ALIEN_MOVE_SPEED = 320
 HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS = 0.4
+HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S = 0.0
+HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S = 1.0
 SPITTER_MAX_RANGE_CELLS = tonumber((ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter and ALIEN_BALANCE.TYPES.spitter.ranged_cells) or 4) or 4
 SPITTER_SHOT_AP_COST = tonumber(ALIEN_ACTION_COSTS.ranged_attack or 1) or 1
 SPITTER_SHOT_INTERVAL_SECONDS = 0.5
@@ -548,6 +620,7 @@ AESTHETIC_PROFILES = {
         backdrop_anim = "backdrop_boardgame",
         backdrop_tiled = true,
         backdrop_tile_cols = 18,
+        backdrop_tile_right_extra_cols = 2,
         backdrop_tile_rows = 15,
         backdrop_tile_art_w = 256,
         backdrop_tile_art_h = 256,
@@ -583,6 +656,7 @@ ALIEN_REVEAL_WEIGHT_CANNON = tonumber(ALIEN_REVEAL_WEIGHTS.cannon_fodder or 10) 
 ALIEN_REVEAL_WEIGHT_SPEEDY = tonumber(ALIEN_REVEAL_WEIGHTS.speedy or 2) or 2
 ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
+SFX_TEST_FAVOR_SPEEDY_REVEAL = false
 TILE_OPACITY = 1
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
@@ -1475,6 +1549,7 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
             end
         end)
     end
+    play_break_barricade_sfx(self)
 
     if hp <= 0 then
         reset_runtime_object_slot_to_empty(door_obj)
@@ -1646,26 +1721,41 @@ multiplayer_apply_toggle_door_event = function(self, payload)
     local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
     local object_id = tonumber(payload.object_id)
     local owner_cell, door_obj = get_door_by_object_id(self.world_grid, object_id)
+    if (not owner_cell or not door_obj) and payload.owner_cell_id then
+        local fallback_cell = self.world_grid and self.world_grid[tonumber(payload.owner_cell_id)] or nil
+        if fallback_cell then
+            local fallback_door = get_door_object_on_cell(fallback_cell)
+            if fallback_door then
+                owner_cell = fallback_cell
+                door_obj = fallback_door
+            end
+        end
+    end
     if not unit or not owner_cell or not door_obj then
         return false
     end
-    if not can_unit_reach_door_toggle(unit, owner_cell.idNumber) then
-        return false
-    end
-    local ap_cost = get_ap_cost_value("door_toggle", 1)
-    if unit.current_ap < ap_cost then
-        return false
-    end
-    if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
-        return false
-    end
+    local ap_before = tonumber(unit.current_ap or 0) or 0
     local desired_open = (payload.is_open == true)
+    local was_open = door_obj.isOpen == true
     door_obj.isOpen = desired_open
-    unit.current_ap = unit.current_ap - ap_cost
+    local ap_after = tonumber(payload.ap_after)
+    if ap_after ~= nil then
+        unit.current_ap = math.max(0, ap_after)
+    else
+        local ap_cost = tonumber(payload.ap_cost)
+        if ap_cost == nil then
+            ap_cost = get_ap_cost_value("door_toggle", 1)
+        end
+        unit.current_ap = math.max(0, ap_before - math.max(0, ap_cost))
+    end
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
-    print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
+    if was_open ~= desired_open then
+        play_door_toggle_sfx(self)
+    end
+    local spent_ap = math.max(0, ap_before - (tonumber(unit.current_ap or 0) or 0))
+    print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, spent_ap))
     return true
 end
 
@@ -1704,6 +1794,7 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
+    play_door_toggle_sfx(self)
     print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
     return true
 end
@@ -2233,11 +2324,19 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
 end
 
 local function pick_weighted_blip_reveal_type()
+    local speedy_weight = ALIEN_REVEAL_WEIGHT_SPEEDY
+    local cannon_weight = ALIEN_REVEAL_WEIGHT_CANNON
+    local spitter_weight = ALIEN_REVEAL_WEIGHT_SPITTER
+    local brute_weight = ALIEN_REVEAL_WEIGHT_BRUTE
+    if SFX_TEST_FAVOR_SPEEDY_REVEAL == true then
+        -- TEMP TEST TWEAK: bias reveals toward speedies for movement SFX validation.
+        speedy_weight = math.max(speedy_weight, cannon_weight + spitter_weight + brute_weight)
+    end
     local weighted = {
-        { type = ALIEN_TYPE_CANNON, w = ALIEN_REVEAL_WEIGHT_CANNON },
-        { type = ALIEN_TYPE_SPEEDY, w = ALIEN_REVEAL_WEIGHT_SPEEDY },
-        { type = ALIEN_TYPE_SPITTER, w = ALIEN_REVEAL_WEIGHT_SPITTER },
-        { type = ALIEN_TYPE_BRUTE, w = ALIEN_REVEAL_WEIGHT_BRUTE }
+        { type = ALIEN_TYPE_CANNON, w = cannon_weight },
+        { type = ALIEN_TYPE_SPEEDY, w = speedy_weight },
+        { type = ALIEN_TYPE_SPITTER, w = spitter_weight },
+        { type = ALIEN_TYPE_BRUTE, w = brute_weight }
     }
 
     local total = 0
@@ -2491,6 +2590,24 @@ local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
         current_id = next_id
     end
     return true
+end
+
+compute_manual_ranged_hit_chance = function(self, unit, alien)
+    if not (self and self.world_grid and unit and alien) then
+        return nil
+    end
+    local alien_cell = self.world_grid[alien.cell_id]
+    if not alien_cell then
+        return nil
+    end
+    local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
+    local ranged_model = require("main.config").RANGED_HIT_MODEL
+    local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
+    local range_cells = manhattan_distance_by_id(unit.cell_id, alien.cell_id)
+    local range_penalty = math.max(0, (range_cells - 1) * 10)
+    local role = CLASS_ROLE_HOOKS[unit.class_id]
+    local class_bonus = (role and role.ranged_hit_bonus) or 0
+    return math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
 end
 
 local function get_edge_spawn_cell_ids(world_grid)
@@ -2934,6 +3051,21 @@ update_spitter_idle_visual = function(self, alien, dt)
     local pulse_mul = 1 + (SPITTER_IDLE_PULSE_AMPLITUDE * pulse)
     local base_scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
     go.set_scale(vmath.vector3(base_scale * pulse_mul, base_scale * pulse_mul, 1), alien.go_id)
+
+    local decoupled_mp_client = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+        and self
+        and self.mp_state
+        and self.mp_state.enabled == true
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        and self.realtime_rules_enabled == true
+    if decoupled_mp_client then
+        -- Avoid fighting host snapshot/interpolation transforms on client.
+        alien.spitter_idle_anchor_x = nil
+        alien.spitter_idle_anchor_y = nil
+        update_spitter_bottom_sway(alien, dt)
+        return
+    end
+
     if alien.is_moving then
         alien.spitter_idle_anchor_x = nil
         alien.spitter_idle_anchor_y = nil
@@ -3015,6 +3147,7 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
     if not projectile_id then
         return
     end
+    play_human_shoot_sfx(self)
 
     go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
     msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
@@ -3039,6 +3172,14 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
         impact_chance = impact_chance or 0,
         impact_roll = impact_roll or 0
     })
+    if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
+        multiplayer_transport_broadcast_event(self, "realtime_human_projectile", {
+            from_x = from.x,
+            from_y = from.y + 20,
+            to_x = to.x,
+            to_y = to.y
+        })
+    end
 end
 
 local function resolve_human_reaction_fire(self, alien)
@@ -3050,12 +3191,16 @@ local function resolve_human_reaction_fire(self, alien)
     end
 
     self.human_reactive_fire_cooldown_by_unit_id = self.human_reactive_fire_cooldown_by_unit_id or {}
+    self.human_reactive_pending_delay_by_unit_id = self.human_reactive_pending_delay_by_unit_id or {}
 
     local reaction_order = { "sarge", "techie", "medic", "gunner" }
     for _, unit_id in ipairs(reaction_order) do
         local unit = self.squad_units and self.squad_units[unit_id]
         local unit_cooldown = self.human_reactive_fire_cooldown_by_unit_id[unit_id]
+        local unit_pending_delay = self.human_reactive_pending_delay_by_unit_id[unit_id]
         if unit and unit.cell_id and unit.reactive_fire_enabled ~= false and ((not unit_cooldown) or unit_cooldown <= 0) then
+            local skip_reactive_unit = (self.realtime_rules_enabled == true and unit_pending_delay and unit_pending_delay > 0)
+            if not skip_reactive_unit then
             local nearest_dist = math.huge
             local tied_targets = {}
             if self.aliens then
@@ -3098,6 +3243,7 @@ local function resolve_human_reaction_fire(self, alien)
             end
             if chosen_target then
                 local reactive_shot_ap_cost = get_ap_cost_value("reactive_ranged_shot", 1)
+                try_realtime_auto_load_ammo_from_backpack(self, unit)
                 if unit.current_ap < reactive_shot_ap_cost and unit.current_ammo <= 0 then
                     print(string.format("%s cannot fire at alien #%d (no AP and no ammo)", unit.display_name, chosen_target.id))
                 elseif unit.current_ap < reactive_shot_ap_cost then
@@ -3105,31 +3251,46 @@ local function resolve_human_reaction_fire(self, alien)
                 elseif unit.current_ammo <= 0 then
                     print(string.format("%s cannot fire at alien #%d (no ammo)", unit.display_name, chosen_target.id))
                 else
-                    unit.current_ap = unit.current_ap - reactive_shot_ap_cost
-                    unit.current_ammo = unit.current_ammo - 1
-                    local target_cell = self.world_grid[chosen_target.cell_id]
-                    local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
-                    local ranged_model = require("main.config").RANGED_HIT_MODEL
-                    local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
-                    local range_cells = nearest_dist
-                    local range_penalty = math.max(0, (range_cells - 1) * 10)
-                    local role = CLASS_ROLE_HOOKS[unit.class_id]
-                    local class_bonus = (role and role.ranged_hit_bonus) or 0
-                    local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
-                    print(string.format(
-                        "RANGED DEBUG | reactive | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
-                        unit.display_name or "unit",
-                        chosen_target.id or 0,
-                        range_cells or 0,
-                        range_penalty or 0,
-                        active_light or 0,
-                        class_bonus or 0,
-                        hit_chance or 0
-                    ))
-                    local roll = math.random(1, 100)
-                    spawn_human_reaction_projectile(self, unit, chosen_target, roll <= hit_chance, active_light, hit_chance, roll)
-                    self.human_reactive_fire_cooldown_by_unit_id[unit_id] = HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS
+                    local defer_reactive_shot = false
+                    if self.realtime_rules_enabled == true then
+                        if unit_pending_delay == nil then
+                            local jitter_min = math.max(0, tonumber(HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S or 0) or 0)
+                            local jitter_max = math.max(jitter_min, tonumber(HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S or jitter_min) or jitter_min)
+                            self.human_reactive_pending_delay_by_unit_id[unit_id] = jitter_min + (math.random() * (jitter_max - jitter_min))
+                            defer_reactive_shot = true
+                        elseif unit_pending_delay > 0 then
+                            defer_reactive_shot = true
+                        end
+                    end
+                    if not defer_reactive_shot then
+                        self.human_reactive_pending_delay_by_unit_id[unit_id] = nil
+                        unit.current_ap = unit.current_ap - reactive_shot_ap_cost
+                        unit.current_ammo = unit.current_ammo - 1
+                        local target_cell = self.world_grid[chosen_target.cell_id]
+                        local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
+                        local ranged_model = require("main.config").RANGED_HIT_MODEL
+                        local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
+                        local range_cells = nearest_dist
+                        local range_penalty = math.max(0, (range_cells - 1) * 10)
+                        local role = CLASS_ROLE_HOOKS[unit.class_id]
+                        local class_bonus = (role and role.ranged_hit_bonus) or 0
+                        local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+                        print(string.format(
+                            "RANGED DEBUG | reactive | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
+                            unit.display_name or "unit",
+                            chosen_target.id or 0,
+                            range_cells or 0,
+                            range_penalty or 0,
+                            active_light or 0,
+                            class_bonus or 0,
+                            hit_chance or 0
+                        ))
+                        local roll = math.random(1, 100)
+                        spawn_human_reaction_projectile(self, unit, chosen_target, roll <= hit_chance, active_light, hit_chance, roll)
+                        self.human_reactive_fire_cooldown_by_unit_id[unit_id] = HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS
+                    end
                 end
+            end
             end
         end
     end
@@ -3145,6 +3306,15 @@ local function tick_human_reactive_fire_cooldowns(self, dt)
             self.human_reactive_fire_cooldown_by_unit_id[unit_id] = nil
         else
             self.human_reactive_fire_cooldown_by_unit_id[unit_id] = cooldown
+        end
+    end
+    self.human_reactive_pending_delay_by_unit_id = self.human_reactive_pending_delay_by_unit_id or {}
+    for unit_id, delay_s in pairs(self.human_reactive_pending_delay_by_unit_id) do
+        local next_delay = (tonumber(delay_s or 0) or 0) - (tonumber(dt or 0) or 0)
+        if next_delay <= 0 then
+            self.human_reactive_pending_delay_by_unit_id[unit_id] = 0
+        else
+            self.human_reactive_pending_delay_by_unit_id[unit_id] = next_delay
         end
     end
 end
@@ -3376,6 +3546,14 @@ local function spawn_spitter_projectile(self, alien, target_human)
         to = vmath.vector3(to.x, to.y + 20, 0.75),
         t = 0
     })
+    if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
+        multiplayer_transport_broadcast_event(self, "realtime_spitter_projectile", {
+            from_x = from.x,
+            from_y = from.y,
+            to_x = to.x,
+            to_y = to.y + 20
+        })
+    end
 end
 
 local function begin_spitter_attack_phase(self)
@@ -3434,7 +3612,13 @@ local function update_spitter_projectiles(self, dt)
                         end
                         target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
                         if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
+                            play_brute_damage_sfx(self)
                             target.brute_damage_flash_timer = 0.24
+                            multiplayer_emit_combat_fx_event(self, {
+                                fx_type = "brute_damage_flash",
+                                alien_id = target.id,
+                                duration_s = 0.24
+                            })
                         end
                         if target.hp_current <= 0 then
                             if target.type == ALIEN_TYPE_BRUTE and target.go_id then
@@ -3451,6 +3635,7 @@ local function update_spitter_projectiles(self, dt)
                             target.is_moving = false
                             target.move_path = nil
                             target.move_path_index = 0
+                            play_alien_death_sfx(self, target.type)
                             score_record_alien_kill(self, target.type)
                             remove_dead_aliens(self)
                         else
@@ -3633,6 +3818,15 @@ function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id)
                 delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY,
                 resolve_shot_id = (i == TURRET_BURST_PROJECTILE_COUNT) and resolve_shot_id or nil
             })
+            if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
+                multiplayer_transport_broadcast_event(self, "realtime_turret_projectile", {
+                    from_x = sx,
+                    from_y = sy,
+                    to_x = tx,
+                    to_y = ty,
+                    delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY
+                })
+            end
         end
     end
 end
@@ -3677,7 +3871,13 @@ local function resolve_turret_pending_shot(self, shot_id)
             if target_alien and (not target_alien.is_dead) then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
                 if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
+                    play_brute_damage_sfx(self)
                     target_alien.brute_damage_flash_timer = 0.24
+                    multiplayer_emit_combat_fx_event(self, {
+                        fx_type = "brute_damage_flash",
+                        alien_id = target_alien.id,
+                        duration_s = 0.24
+                    })
                 end
                 if target_alien.hp_current <= 0 then
                     if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.go_id then
@@ -3690,6 +3890,7 @@ local function resolve_turret_pending_shot(self, shot_id)
                     target_alien.is_moving = false
                     target_alien.move_path = nil
                     target_alien.move_path_index = 0
+                    play_alien_death_sfx(self, target_alien.type)
                     score_record_alien_kill(self, target_alien.type)
                     if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
                         MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target_alien)
@@ -3846,6 +4047,7 @@ function process_turret_reactive_fire(self, dt)
                                 self.turret_pending_shots = self.turret_pending_shots or {}
                                 self.next_turret_shot_id = (self.next_turret_shot_id or 0) + 1
                                 local shot_id = self.next_turret_shot_id
+                                play_turret_gun_sfx(self)
                                 spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
                                 local gun_markers = self.turret_gun_objects or {}
                                 local gun_go = gun_markers[turret_cell_id]
@@ -4154,6 +4356,7 @@ local get_cell_hazard_flags
 
 local function update_alien_movement(self, dt)
     if not self.aliens then
+        update_speedy_move_sfx(self)
         return
     end
 
@@ -4178,6 +4381,15 @@ local function update_alien_movement(self, dt)
                         alien_move_speed = ALIEN_MOVE_SPEED * SPITTER_MOVE_SPEED_MULTIPLIER
                     elseif alien.type == ALIEN_TYPE_BRUTE then
                         alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                    elseif alien.type == ALIEN_TYPE_BLIP then
+                        if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                            alien_move_speed = ALIEN_MOVE_SPEED * (tonumber(self.realtime_blip_move_speed_multiplier or 0.35) or 0.35)
+                        else
+                            alien_move_speed = ALIEN_MOVE_SPEED * 0.35
+                        end
+                    end
+                    if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                        alien_move_speed = alien_move_speed * (tonumber(self.realtime_alien_move_speed_multiplier or 1.0) or 1.0)
                     end
                     local sstep = alien_move_speed * dt
                     local profile = get_aesthetic_profile(self)
@@ -4386,6 +4598,15 @@ local function update_alien_movement(self, dt)
                     alien_move_speed = ALIEN_MOVE_SPEED * SPITTER_MOVE_SPEED_MULTIPLIER
                 elseif alien.type == ALIEN_TYPE_BRUTE then
                     alien_move_speed = ALIEN_MOVE_SPEED * 0.5
+                elseif alien.type == ALIEN_TYPE_BLIP then
+                    if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                        alien_move_speed = ALIEN_MOVE_SPEED * (tonumber(self.realtime_blip_move_speed_multiplier or 0.35) or 0.35)
+                    else
+                        alien_move_speed = ALIEN_MOVE_SPEED * 0.35
+                    end
+                end
+                if self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled) then
+                    alien_move_speed = alien_move_speed * (tonumber(self.realtime_alien_move_speed_multiplier or 1.0) or 1.0)
                 end
                 local step = alien_move_speed * dt
                 local profile = get_aesthetic_profile(self)
@@ -4516,6 +4737,11 @@ local function update_alien_movement(self, dt)
                         go.set_position(vmath.vector3(tx, ty, 0.6), alien.go_id)
                     end
                     alien.cell_id = target_cell_id
+                    if alien.type == ALIEN_TYPE_BLIP then
+                        trigger_unit_tile_bump_sfx(self, "blip")
+                    else
+                        trigger_unit_tile_bump_sfx(self, "alien")
+                    end
                     local continue_after_step = true
                     local step_has_fire = get_cell_hazard_flags(to_cell)
                     if step_has_fire then
@@ -4679,6 +4905,7 @@ local function update_alien_movement(self, dt)
     end
 
     remove_dead_aliens(self)
+    update_speedy_move_sfx(self)
 end
 
 local any_civilian_is_moving
@@ -4700,14 +4927,16 @@ local function process_alien_turn(self)
     end
 
     if not self.alien_turn_active then
-        -- Temporary turn rule: spawn one new blip every new turn.
-        local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
-        if #edge_cells > 0 then
-            local idx = math.random(1, #edge_cells)
-            spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
-            print("Turn event: spawned 1 new blip")
-        else
-            print("Turn event: no eligible unpowered blip spawn cells.")
+        if not (self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled)) then
+            -- Temporary turn rule: spawn one new blip every new turn.
+            local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
+            if #edge_cells > 0 then
+                local idx = math.random(1, #edge_cells)
+                spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+                print("Turn event: spawned 1 new blip")
+            else
+                print("Turn event: no eligible unpowered blip spawn cells.")
+            end
         end
         self.alien_turn_active = true
         self.alien_turn_waiting_for_advance = false
@@ -5933,7 +6162,10 @@ local function update_civilian_movement(self, dt)
     local right_lane_offset = (CELL_SLOT_OFFSETS_X[right_lane_slot] or 0) * HUMAN_STACK_SPACING_X
     for _, civilian in ipairs(self.civilians or {}) do
         if civilian and civilian.is_dead ~= true and civilian.is_moving and civilian.move_path then
+            local civilian_sfx_key = "civ_" .. tostring(civilian.id or 0)
             local function stop_civilian_motion()
+                update_vertical_move_sfx_for_actor(self, civilian_sfx_key, false)
+                update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, false)
                 civilian.is_moving = false
                 civilian.move_path = nil
                 civilian.move_path_index = 0
@@ -5954,6 +6186,10 @@ local function update_civilian_movement(self, dt)
                 local pos = go.get_position(go_id)
                 local dx = civilian.micro_target_x - pos.x
                 local dy = civilian.micro_target_y - pos.y
+                local is_vertical_now = math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.01
+                local is_horizontal_now = math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.01
+                update_vertical_move_sfx_for_actor(self, civilian_sfx_key, is_vertical_now)
+                update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, is_horizontal_now)
                 local dist = math.sqrt((dx * dx) + (dy * dy))
                 local step = move_speed * (dt or 0)
                 civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
@@ -6004,11 +6240,14 @@ local function update_civilian_movement(self, dt)
                 else
                     local cell = self.world_grid[target_cell_id]
                     if not (go_id and cell) then
+                        update_vertical_move_sfx_for_actor(self, civilian_sfx_key, false)
+                        update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, false)
                         if civilian.cell_id and civilian.cell_id ~= target_cell_id then
                             clear_civilian_cell_slot_assignment(self, civilian, civilian.cell_id)
                         end
                         civilian.cell_id = target_cell_id or civilian.cell_id
                         ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+                        trigger_unit_tile_bump_sfx(self, "civ")
                         civilian.move_path_index = (civilian.move_path_index or 0) + 1
                     else
                         local target_x, target_y, target_slot = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
@@ -6037,6 +6276,9 @@ local function update_civilian_movement(self, dt)
                         local pos = go.get_position(go_id)
                         local dx = target_x - pos.x
                         local dy = target_y - pos.y
+                        local is_horizontal_step = not is_vertical_step
+                        update_vertical_move_sfx_for_actor(self, civilian_sfx_key, is_vertical_step)
+                        update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, is_horizontal_step)
                         local dist = math.sqrt((dx * dx) + (dy * dy))
                         local step = move_speed * (dt or 0)
                         civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
@@ -6077,6 +6319,7 @@ local function update_civilian_movement(self, dt)
                                 end
                                 civilian.cell_id = target_cell_id
                                 ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                trigger_unit_tile_bump_sfx(self, "civ")
                                 if (not counter_move_enabled) and is_vertical_step then
                                     local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
                                     if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
@@ -6180,7 +6423,10 @@ function update_derple_feedback_triggers(self, dt)
             end
             local had_spot_los = self.derple_feedback_spot_state[unit_id] == true
             if has_spot_los and (not had_spot_los) then
-                LOOT_RUNTIME.emit_derple_feedback(self, unit_id, "SPOT_ALIEN")
+                local emitted = LOOT_RUNTIME.emit_derple_feedback(self, unit_id, "SPOT_ALIEN")
+                if emitted == true then
+                    play_human_alien_alert_sfx(self, unit)
+                end
             end
             self.derple_feedback_spot_state[unit_id] = has_spot_los
         else
@@ -6427,7 +6673,7 @@ local function get_camera_clamped_pos(camera_pos, zoom)
     local clamped_y = camera_pos.y
 
     if min_x > max_x then
-        clamped_x = world_w * 0.5
+        clamped_x = clamp(camera_pos.x, max_x, min_x)
     else
         clamped_x = clamp(camera_pos.x, min_x, max_x)
     end
@@ -6526,6 +6772,40 @@ local function get_human_ap_refresh_cap(unit)
         return math.max(base_ap, SPEED_STIM_REFRESH_AP)
     end
     return base_ap
+end
+
+get_human_new_turn_ap_refresh = function(unit)
+    local cap = get_human_ap_refresh_cap(unit)
+    return math.max(cap, tonumber(TEMP_HUMAN_NEW_TURN_AP_REFRESH or cap) or cap)
+end
+
+try_realtime_auto_load_ammo_from_backpack = function(self, unit)
+    if REALTIME_AUTO_AMMO_LOAD_FROM_BACKPACK ~= true then
+        return false
+    end
+    if not (self and unit and self.realtime_rules_enabled == true) then
+        return false
+    end
+    if (tonumber(unit.current_ammo or 0) or 0) > 0 then
+        return false
+    end
+    local max_ammo = tonumber(unit.max_ammo or 0) or 0
+    if max_ammo <= 0 then
+        return false
+    end
+    local backpack = unit.backpack_items
+    if type(backpack) ~= "table" then
+        return false
+    end
+    for i, item_type in ipairs(backpack) do
+        if item_type == "ammo" then
+            table.remove(backpack, i)
+            unit.backpack_used = #backpack
+            unit.current_ammo = math.min(max_ammo, (tonumber(unit.current_ammo or 0) or 0) + 10)
+            return true
+        end
+    end
+    return false
 end
 
 local function get_human_armor_hit_reduction(unit)
@@ -6672,6 +6952,15 @@ local function apply_start_of_turn_environment_damage(self)
                 unit.hazard_flash_active = true
                 unit.hazard_flash_token = (unit.hazard_flash_token or 0) + 1
                 local flash_token = unit.hazard_flash_token
+                multiplayer_emit_combat_fx_event(self, {
+                    fx_type = "hazard_flash",
+                    target_kind = "human",
+                    target_id = unit.id,
+                    tint_r = hazard_flash_tint.x,
+                    tint_g = hazard_flash_tint.y,
+                    tint_b = hazard_flash_tint.z,
+                    duration_s = 0.75
+                })
                 timer.delay(0.75, false, function()
                     if unit and unit.hazard_flash_token == flash_token then
                         unit.hazard_flash_active = false
@@ -6715,6 +7004,15 @@ local function apply_start_of_turn_environment_damage(self)
                 civilian.hazard_flash_active = true
                 civilian.hazard_flash_token = (civilian.hazard_flash_token or 0) + 1
                 local civilian_flash_token = civilian.hazard_flash_token
+                multiplayer_emit_combat_fx_event(self, {
+                    fx_type = "hazard_flash",
+                    target_kind = "civilian",
+                    target_id = civilian.id,
+                    tint_r = civilian.hazard_flash_tint.x,
+                    tint_g = civilian.hazard_flash_tint.y,
+                    tint_b = civilian.hazard_flash_tint.z,
+                    duration_s = 0.75
+                })
                 timer.delay(0.75, false, function()
                     if civilian and civilian.hazard_flash_token == civilian_flash_token then
                         civilian.hazard_flash_active = false
@@ -7347,12 +7645,150 @@ create_ui_marker_sprite = function(anim_id, z)
     return id
 end
 
+update_realtime_toggle_button_visual = function(self)
+    if not (self and self.ui and self.ui.realtime_toggle_button) then
+        return
+    end
+    local anim_id = (self.realtime_rules_enabled == true) and hash("realtime_button_on") or hash("realtime_button_off")
+    pcall(msg.post, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "play_animation", { id = anim_id })
+    pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+end
+
+update_multiplayer_new_turn_button_visual = function(self)
+    if not (self and self.ui and self.ui.new_turn_button) then
+        return
+    end
+    local anim_id = hash("button_newTurn")
+    local tint = vmath.vector4(1, 1, 1, 1)
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        anim_id = hash("ready_button")
+        local local_player_id = self.mp_state.local_player_id
+        local local_ready = self.mp_state.ready_by_player_id and self.mp_state.ready_by_player_id[local_player_id] == true
+        if not local_ready then
+            tint = vmath.vector4(1, 0.25, 0.25, 1)
+        end
+    end
+    pcall(msg.post, msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = anim_id })
+    pcall(go.set, msg.url(nil, self.ui.new_turn_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, self.ui.new_turn_button, "sprite"), "tint", tint)
+end
+
 local function create_outro_marker_sprite(anim_id, z)
     local id = factory.create("/outro_marker_factory#outro_marker_factory", vmath.vector3(-9999, -9999, z or FLOW_UI_BUTTON_Z))
     if id and anim_id then
         msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = anim_id })
     end
     return id
+end
+
+clear_ranged_hit_preview = function(self)
+    if not self then
+        return
+    end
+    self.pending_manual_shot_alien_id = nil
+    self.pending_manual_shot_unit_id = nil
+    self.pending_manual_shot_cell_id = nil
+    self.pending_manual_shot_chance = nil
+    self.ranged_hit_preview_fading_out = false
+    self.ranged_hit_preview_fade_alpha = 0
+end
+
+dismiss_ranged_hit_preview = function(self)
+    if not self then
+        return
+    end
+    if self.pending_manual_shot_alien_id and (self.ranged_hit_preview_fade_alpha or 0) > 0 then
+        self.ranged_hit_preview_fading_out = true
+    else
+        clear_ranged_hit_preview(self)
+    end
+end
+
+show_ranged_hit_preview = function(self, unit, alien, hit_chance)
+    if not (self and unit and alien) then
+        return
+    end
+    self.pending_manual_shot_alien_id = alien.id
+    self.pending_manual_shot_unit_id = unit.id
+    self.pending_manual_shot_cell_id = alien.cell_id
+    self.pending_manual_shot_chance = math.max(0, math.min(99, math.floor((tonumber(hit_chance) or 0) + 0.5)))
+    self.ranged_hit_preview_fading_out = false
+    self.ranged_hit_preview_fade_alpha = 1
+end
+
+update_ranged_hit_preview_hud = function(self, visible)
+    if not self or not self.ui then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if not (self.ui.ranged_hit_preview_digits and self.ui.ranged_hit_preview_percent) then
+        return
+    end
+    if visible ~= true
+        or not self.pending_manual_shot_alien_id
+        or not self.pending_manual_shot_chance
+        or (self.ranged_hit_preview_fade_alpha or 0) <= 0
+    then
+        local function hide_marker(go_id, draw_w, draw_h)
+            if not go_id then
+                return
+            end
+            go.set_position(vmath.vector3(-9999, -9999, RANGED_HIT_PREVIEW_Z), go_id)
+            go.set_scale(vmath.vector3((draw_w * 0.021) / math.max(0.001, self.camera_zoom or 1), (draw_h * 0.021) / math.max(0.001, self.camera_zoom or 1), 1), go_id)
+            go.set(msg.url(nil, go_id, "sprite"), "tint", hidden)
+        end
+        for _, digit_id in ipairs(self.ui.ranged_hit_preview_digits) do
+            hide_marker(digit_id, RANGED_HIT_PREVIEW_DIGIT_DRAW_W, RANGED_HIT_PREVIEW_DIGIT_DRAW_H)
+        end
+        hide_marker(self.ui.ranged_hit_preview_percent, RANGED_HIT_PREVIEW_PERCENT_DRAW_W, RANGED_HIT_PREVIEW_PERCENT_DRAW_H)
+        return
+    end
+    local alien = find_alien_by_id(self, tonumber(self.pending_manual_shot_alien_id))
+    if not alien or alien.is_dead or not alien.go_id then
+        clear_ranged_hit_preview(self)
+        return
+    end
+    local pos = go.get_position(alien.go_id)
+    local screen_x = ((pos.x - self.camera_pos.x) * self.camera_zoom) + (SCREEN_WIDTH * 0.5)
+    local screen_y = ((pos.y - self.camera_pos.y) * self.camera_zoom) + (SCREEN_HEIGHT * 0.5) + (RANGED_HIT_PREVIEW_OFFSET_Y * self.camera_zoom)
+    local chance = math.max(0, math.min(99, math.floor((tonumber(self.pending_manual_shot_chance) or 0) + 0.5)))
+    local text = string.format("%02d", chance)
+    local alpha = math.max(0, math.min(1, tonumber(self.ranged_hit_preview_fade_alpha or 0) or 0))
+    local tint = vmath.vector4(1, 1, 1, alpha)
+    local digit_count = #text
+    local total_count = digit_count + 1
+    local start_x = screen_x - (((total_count - 1) * RANGED_HIT_PREVIEW_DIGIT_SPACING_PX) * 0.5)
+    local function show_marker(go_id, sx, sy, draw_w, draw_h, marker_tint)
+        if not go_id then
+            return
+        end
+        local wx, wy = screen_to_world(sx, sy, self.camera_pos, self.camera_zoom)
+        go.set_position(vmath.vector3(wx, wy, RANGED_HIT_PREVIEW_Z), go_id)
+        go.set_scale(vmath.vector3((draw_w * 0.021) / math.max(0.001, self.camera_zoom or 1), (draw_h * 0.021) / math.max(0.001, self.camera_zoom or 1), 1), go_id)
+        go.set(msg.url(nil, go_id, "sprite"), "tint", marker_tint)
+    end
+    local function hide_marker(go_id, draw_w, draw_h)
+        show_marker(go_id, -9999, -9999, draw_w, draw_h, hidden)
+    end
+    for i, digit_id in ipairs(self.ui.ranged_hit_preview_digits) do
+        if i <= digit_count then
+            local ch = string.sub(text, i, i)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            local dx = start_x + ((i - 1) * RANGED_HIT_PREVIEW_DIGIT_SPACING_PX)
+            show_marker(digit_id, dx, screen_y, RANGED_HIT_PREVIEW_DIGIT_DRAW_W, RANGED_HIT_PREVIEW_DIGIT_DRAW_H, tint)
+        else
+            hide_marker(digit_id, RANGED_HIT_PREVIEW_DIGIT_DRAW_W, RANGED_HIT_PREVIEW_DIGIT_DRAW_H)
+        end
+    end
+    show_marker(
+        self.ui.ranged_hit_preview_percent,
+        start_x + (digit_count * RANGED_HIT_PREVIEW_DIGIT_SPACING_PX),
+        screen_y,
+        RANGED_HIT_PREVIEW_PERCENT_DRAW_W,
+        RANGED_HIT_PREVIEW_PERCENT_DRAW_H,
+        tint
+    )
 end
 
 local function ui_is_button_node(self, go_id)
@@ -7367,6 +7803,7 @@ local function ui_is_button_node(self, go_id)
         or go_id == self.ui.close_button
         or go_id == self.ui.new_turn_button
         or go_id == self.ui.launch_button
+        or go_id == self.ui.realtime_toggle_button
         or go_id == self.ui.aesthetic_toggle_button
         or go_id == self.ui.zoom_in_button
         or go_id == self.ui.zoom_out_button
@@ -7860,6 +8297,8 @@ local function initialize_unit_ui(self)
         not_enough_ap_icon = nil,
         level_buttons = {},
         score_digit_icons = {},
+        ranged_hit_preview_digits = {},
+        ranged_hit_preview_percent = nil,
         objective_button = nil,
         objective_reminder = nil,
         purge_timer_digit_icons = {},
@@ -7945,6 +8384,13 @@ local function initialize_unit_ui(self)
             msg.post(msg.url(nil, self.ui.score_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
         end
     end
+    for i = 1, 2 do
+        self.ui.ranged_hit_preview_digits[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, RANGED_HIT_PREVIEW_Z))
+        if self.ui.ranged_hit_preview_digits[i] then
+            msg.post(msg.url(nil, self.ui.ranged_hit_preview_digits[i], "sprite"), "play_animation", { id = hash("score_0") })
+        end
+    end
+    self.ui.ranged_hit_preview_percent = create_ui_marker_sprite(hash("score_percent"), RANGED_HIT_PREVIEW_Z)
     self.ui.objective_button = create_ui_marker_sprite(hash("objective_button"), OBJECTIVE_BUTTON_Z)
     self.ui.objective_reminder = create_ui_marker_sprite(hash("objective_escape"), OBJECTIVE_REMINDER_Z)
     for i = 1, PURGE_TIMER_HUD_DIGIT_COUNT do
@@ -7955,13 +8401,12 @@ local function initialize_unit_ui(self)
     end
     self.ui.new_turn_button = create_ui_square_alpha(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     if self.ui.new_turn_button then
-        msg.post(msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = hash("button_newTurn") })
+        update_multiplayer_new_turn_button_visual(self)
     end
     for i = 1, 3 do
         self.ui.ready_buttons[i] = factory.create("/ui_ready_icon_factory#ui_ready_icon_factory", vmath.vector3(0, 0, MULTIPLAYER_READY_BUTTON_Z))
         if self.ui.ready_buttons[i] then
-            msg.post(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "play_animation", { id = MULTIPLAYER_READY_SLOT_ANIMS[i] or hash("human_medic") })
-            go.set(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "tint", vmath.vector4(0.75, 0.2, 0.2, 0.95))
+            go.set(msg.url(nil, self.ui.ready_buttons[i], "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
         end
         self.ui.mp_debug_player_buttons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z))
         if self.ui.mp_debug_player_buttons[i] then
@@ -7969,6 +8414,8 @@ local function initialize_unit_ui(self)
         end
     end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+    self.ui.realtime_toggle_button = create_ui_marker_sprite(hash("realtime_button_off"), LAUNCH_BUTTON_Z)
+    update_realtime_toggle_button_visual(self)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     self.ui.zoom_out_button = create_ui_square(0, 0, ZOOM_OUT_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
@@ -8071,6 +8518,32 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
     end
+    if self.ui.ranged_hit_preview_digits then
+        for _, digit_id in ipairs(self.ui.ranged_hit_preview_digits) do
+            set_ui_square_transform(
+                self,
+                digit_id,
+                -9999,
+                -9999,
+                RANGED_HIT_PREVIEW_Z,
+                hidden,
+                RANGED_HIT_PREVIEW_DIGIT_DRAW_W * 0.021,
+                RANGED_HIT_PREVIEW_DIGIT_DRAW_H * 0.021
+            )
+        end
+    end
+    if self.ui.ranged_hit_preview_percent then
+        set_ui_square_transform(
+            self,
+            self.ui.ranged_hit_preview_percent,
+            -9999,
+            -9999,
+            RANGED_HIT_PREVIEW_Z,
+            hidden,
+            RANGED_HIT_PREVIEW_PERCENT_DRAW_W * 0.021,
+            RANGED_HIT_PREVIEW_PERCENT_DRAW_H * 0.021
+        )
+    end
     set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, 1, 1)
     if self.ui.purge_timer_digit_icons then
@@ -8090,6 +8563,7 @@ local function set_ui_hidden(self)
         end
     end
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+    set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
@@ -8190,6 +8664,7 @@ function update_score_hud(self, visible)
         for _, digit_id in ipairs(self.ui.score_digit_icons) do
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
+        update_ranged_hit_preview_hud(self, false)
         return
     end
 
@@ -8218,6 +8693,7 @@ function update_score_hud(self, visible)
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
     end
+    update_ranged_hit_preview_hud(self, true)
 end
 
 local function get_purge_timer_display_text(self)
@@ -8390,6 +8866,19 @@ function score_record_civilian_escorted(self, civilian_id)
     score_log_snapshot(self, "civilian_escorted")
 end
 
+local function update_escape_pod_ready_sfx(self)
+    if not self then
+        return
+    end
+    local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
+    local is_ready = launch_status and launch_status.can_launch == true
+    local was_ready = self.escape_pod_ready_prev_state == true
+    if is_ready and (not was_ready) then
+        play_escape_pod_ready_sfx(self)
+    end
+    self.escape_pod_ready_prev_state = is_ready == true
+end
+
 function compute_placeholder_score_breakdown(self)
     local state = ensure_score_state(self)
     local result = SCORE_RUNTIME.compute_score(state)
@@ -8428,6 +8917,424 @@ function enter_flow_state(self, next_state)
     self.game_flow_state = next_state or FLOW_STATE_GAME
     self.flow_overlay_phase = 0
     self.flow_submit_done = false
+end
+
+set_sound_loop_state = function(self, key, should_play)
+    if not self or not self.sfx_state then
+        return
+    end
+    if self.sfx_state.loops ~= true then
+        return
+    end
+    if self.sfx_state.enabled_by_key and self.sfx_state.enabled_by_key[key] ~= true then
+        return
+    end
+    local entry = self.sfx_state[key]
+    if not entry or not entry.url then
+        return
+    end
+    if should_play and not entry.playing then
+        entry.playing = true
+        print(string.format("SFX TRACE | play %s", tostring(key)))
+        pcall(msg.post, entry.url, "play_sound")
+    elseif (not should_play) and entry.playing then
+        entry.playing = false
+        print(string.format("SFX TRACE | stop %s", tostring(key)))
+        pcall(msg.post, entry.url, "stop_sound")
+    end
+end
+
+play_sfx_one_shot = function(self, key)
+    if not self or not self.sfx_state then
+        return
+    end
+    if self.sfx_state.loops ~= true then
+        return
+    end
+    if self.sfx_state.enabled_by_key and self.sfx_state.enabled_by_key[key] ~= true then
+        return
+    end
+    local entry = self.sfx_state[key]
+    if not entry or not entry.url then
+        return
+    end
+    print(string.format("SFX TRACE | oneshot %s", tostring(key)))
+    pcall(msg.post, entry.url, "play_sound")
+end
+
+play_human_shoot_sfx = function(self)
+    local roll = math.random(1, 2)
+    if roll == 2 then
+        play_sfx_one_shot(self, "human_shoot_2")
+    else
+        play_sfx_one_shot(self, "human_shoot")
+    end
+end
+
+play_turret_gun_sfx = function(self)
+    play_sfx_one_shot(self, "turret_gun")
+end
+
+play_alien_death_sfx = function(self, alien_type)
+    if alien_type == ALIEN_TYPE_CANNON then
+        play_sfx_one_shot(self, "cannonfodder_dies")
+    elseif alien_type == ALIEN_TYPE_SPEEDY then
+        play_sfx_one_shot(self, "speedy_dies")
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        play_sfx_one_shot(self, "brute_dies")
+    elseif alien_type == ALIEN_TYPE_SPITTER then
+        play_sfx_one_shot(self, "spitter_dies")
+    end
+end
+
+play_brute_damage_sfx = function(self)
+    play_sfx_one_shot(self, "brute_damage")
+end
+
+play_melee_hit_alien_sfx = function(self)
+    play_sfx_one_shot(self, "melee_hit_alien")
+end
+
+play_melee_hit_human_sfx = function(self)
+    play_sfx_one_shot(self, "melee_hit_human")
+end
+
+play_human_alien_alert_sfx = function(self, unit)
+    local class_id = tostring(unit and unit.class_id or "")
+    if class_id == UNIT_CLASS_SARGE then
+        play_sfx_one_shot(self, "sarge_alien_alert")
+    elseif class_id == UNIT_CLASS_TECHIE then
+        play_sfx_one_shot(self, "techie_alien_alert")
+    elseif class_id == UNIT_CLASS_MEDIC then
+        play_sfx_one_shot(self, "medic_alien_alert")
+    elseif class_id == UNIT_CLASS_GUNNER then
+        play_sfx_one_shot(self, "gunner_alien_alert")
+    end
+end
+
+play_human_confirm_select_sfx = function(self, unit)
+    local class_id = tostring(unit and unit.class_id or "")
+    if class_id == UNIT_CLASS_SARGE then
+        play_sfx_one_shot(self, "sarge_confirm_select")
+    elseif class_id == UNIT_CLASS_TECHIE then
+        play_sfx_one_shot(self, "techie_confirm_select")
+    elseif class_id == UNIT_CLASS_MEDIC then
+        play_sfx_one_shot(self, "medic_confirm_select")
+    elseif class_id == UNIT_CLASS_GUNNER then
+        play_sfx_one_shot(self, "gunner_confirm_select")
+    end
+end
+
+play_power_node_on_sfx = function(self)
+    play_sfx_one_shot(self, "power_node_on")
+end
+
+play_power_node_off_sfx = function(self)
+    play_sfx_one_shot(self, "power_node_off")
+end
+
+play_drag_item_sfx = function(self)
+    play_sfx_one_shot(self, "drag_item")
+end
+
+play_break_barricade_sfx = function(self)
+    play_sfx_one_shot(self, "break_barricade")
+end
+
+play_build_barricade_sfx = function(self)
+    play_sfx_one_shot(self, "build_barricade")
+end
+
+play_medibay_revive_sfx = function(self)
+    play_sfx_one_shot(self, "medibay_revive")
+end
+
+play_door_toggle_sfx = function(self)
+    play_sfx_one_shot(self, "door_toggle")
+end
+
+play_escape_pod_ready_sfx = function(self)
+    play_sfx_one_shot(self, "escape_pod_ready")
+end
+
+play_factory_produce_sfx = function(self)
+    play_sfx_one_shot(self, "factory_produce")
+end
+
+play_fabricator_working_sfx = function(self)
+    play_sfx_one_shot(self, "fabricator_working")
+end
+
+play_sparking_wire_sfx = function(self)
+    play_sfx_one_shot(self, "sparking_wire")
+end
+
+play_welding_sfx = function(self)
+    play_sfx_one_shot(self, "welding")
+end
+
+play_task_done_sfx = function(self)
+    play_sfx_one_shot(self, "task_done")
+end
+
+has_powered_wiregap_object = function(self)
+    if not self or not self.world_grid then
+        return false
+    end
+    for _, cell in ipairs(self.world_grid) do
+        if cell and cell.isPowered == true and cell.tileID ~= hash("empty") then
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objects) do
+                if obj and obj.name and obj.isFixed ~= true then
+                    if obj.name == hash("wiregap")
+                        or obj.name == hash("wireGap")
+                        or obj.name == hash("wiregap_straight")
+                        or obj.name == hash("wireGap_straight")
+                        or obj.name == hash("wiregap_corner")
+                        or obj.name == hash("wireGap_corner")
+                    then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+update_sparking_wire_ambient_sfx = function(self, dt)
+    if not self or (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return
+    end
+    if self.realtime_rules_enabled ~= true and self.alien_turn_active then
+        -- Keep timing stable during heavy turn-phase transitions.
+        return
+    end
+    local has_powered_wiregap = has_powered_wiregap_object(self)
+    if not has_powered_wiregap then
+        self.sparking_wire_timer_s = nil
+        return
+    end
+    local min_i = math.max(0.2, tonumber(SPARKING_WIRE_MIN_INTERVAL_S or 1.2) or 1.2)
+    local max_i = math.max(min_i, tonumber(SPARKING_WIRE_MAX_INTERVAL_S or min_i) or min_i)
+    if self.sparking_wire_timer_s == nil then
+        self.sparking_wire_timer_s = min_i + (math.random() * (max_i - min_i))
+        return
+    end
+    self.sparking_wire_timer_s = (tonumber(self.sparking_wire_timer_s or 0) or 0) - (tonumber(dt or 0) or 0)
+    if self.sparking_wire_timer_s <= 0 then
+        play_sparking_wire_sfx(self)
+        self.sparking_wire_timer_s = min_i + (math.random() * (max_i - min_i))
+    end
+end
+
+play_human_item_recieve_sfx = function(self, unit)
+    local class_id = tostring(unit and unit.class_id or "")
+    if class_id == UNIT_CLASS_SARGE then
+        play_sfx_one_shot(self, "sarge_item_recieve")
+    elseif class_id == UNIT_CLASS_TECHIE then
+        play_sfx_one_shot(self, "techie_item_recieve")
+    elseif class_id == UNIT_CLASS_MEDIC then
+        play_sfx_one_shot(self, "medic_item_recieve")
+    elseif class_id == UNIT_CLASS_GUNNER then
+        play_sfx_one_shot(self, "gunner_item_recieve")
+    end
+end
+
+is_directional_move_sfx_allowed = function(self)
+    return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
+end
+
+trigger_unit_tile_bump_sfx = function(self, unit_kind)
+    if not self or not self.sfx_state then
+        return
+    end
+    if self.aesthetic_mode ~= AESTHETIC_MODE_BOARDGAME then
+        return
+    end
+    if unit_kind == "blip" then
+        return
+    end
+    play_sfx_one_shot(self, "unit_tile_bump")
+end
+
+refresh_ambient_sfx_state = function(self)
+    if not self or not self.sfx_state then
+        return
+    end
+    local state = self.game_flow_state or FLOW_STATE_GAME
+    if self.sfx_state.last_flow_state == state then
+        return
+    end
+    self.sfx_state.last_flow_state = state
+    local in_gameplay = state == FLOW_STATE_GAME
+    local directional_move_sfx_allowed = is_directional_move_sfx_allowed(self)
+    local is_title_outro = (state == FLOW_STATE_OUTRO) and tostring(self.end_outro_sequence_id or "") == "title"
+    local in_title_like = (state == FLOW_STATE_TITLE)
+        or (state == FLOW_STATE_SOLO_SETUP)
+        or (state == FLOW_STATE_MP_SETUP)
+        or (state == FLOW_STATE_SCORE)
+        or is_title_outro
+    set_sound_loop_state(self, "planet", in_gameplay)
+    set_sound_loop_state(self, "title", in_title_like)
+    if (not in_gameplay) or (not directional_move_sfx_allowed) then
+        self.sfx_state.vertical_active_by_unit = {}
+        self.sfx_state.vertical_active_count = 0
+        set_sound_loop_state(self, "human_vertical", false)
+        self.sfx_state.horizontal_active_by_actor = {}
+        self.sfx_state.horizontal_active_count = 0
+        set_sound_loop_state(self, "human_horizontal", false)
+        self.sfx_state.speedy_active_count = 0
+        stop_speedy_move_sfx(self)
+    end
+end
+
+update_vertical_move_sfx_for_unit = function(self, unit, is_vertical_now)
+    if not (self and self.sfx_state and unit and unit.id) then
+        return
+    end
+    local actor_key = tostring(unit.id)
+    local by_unit = self.sfx_state.vertical_active_by_unit
+    if not is_directional_move_sfx_allowed(self) then
+        if by_unit[actor_key] == true then
+            by_unit[actor_key] = nil
+            self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+        end
+        if (self.sfx_state.vertical_active_count or 0) <= 0 then
+            self.sfx_state.vertical_active_count = 0
+            set_sound_loop_state(self, "human_vertical", false)
+        end
+        return
+    end
+    local was_active = by_unit[actor_key] == true
+    local now_active = is_vertical_now == true
+    if was_active == now_active then
+        return
+    end
+    if now_active then
+        by_unit[actor_key] = true
+        self.sfx_state.vertical_active_count = (self.sfx_state.vertical_active_count or 0) + 1
+    else
+        by_unit[actor_key] = nil
+        self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+    end
+    set_sound_loop_state(self, "human_vertical", (self.sfx_state.vertical_active_count or 0) > 0)
+end
+
+update_vertical_move_sfx_for_actor = function(self, actor_key, is_vertical_now)
+    if not (self and self.sfx_state and actor_key) then
+        return
+    end
+    local by_unit = self.sfx_state.vertical_active_by_unit
+    if not is_directional_move_sfx_allowed(self) then
+        if by_unit[actor_key] == true then
+            by_unit[actor_key] = nil
+            self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+        end
+        if (self.sfx_state.vertical_active_count or 0) <= 0 then
+            self.sfx_state.vertical_active_count = 0
+            set_sound_loop_state(self, "human_vertical", false)
+        end
+        return
+    end
+    local was_active = by_unit[actor_key] == true
+    local now_active = is_vertical_now == true
+    if was_active == now_active then
+        return
+    end
+    if now_active then
+        by_unit[actor_key] = true
+        self.sfx_state.vertical_active_count = (self.sfx_state.vertical_active_count or 0) + 1
+    else
+        by_unit[actor_key] = nil
+        self.sfx_state.vertical_active_count = math.max(0, (self.sfx_state.vertical_active_count or 0) - 1)
+    end
+    set_sound_loop_state(self, "human_vertical", (self.sfx_state.vertical_active_count or 0) > 0)
+end
+
+update_horizontal_move_sfx_for_actor = function(self, actor_key, is_horizontal_now)
+    if not (self and self.sfx_state and actor_key) then
+        return
+    end
+    local by_actor = self.sfx_state.horizontal_active_by_actor
+    if not is_directional_move_sfx_allowed(self) then
+        if by_actor[actor_key] == true then
+            by_actor[actor_key] = nil
+            self.sfx_state.horizontal_active_count = math.max(0, (self.sfx_state.horizontal_active_count or 0) - 1)
+        end
+        if (self.sfx_state.horizontal_active_count or 0) <= 0 then
+            self.sfx_state.horizontal_active_count = 0
+            set_sound_loop_state(self, "human_horizontal", false)
+        end
+        return
+    end
+    local was_active = by_actor[actor_key] == true
+    local now_active = is_horizontal_now == true
+    if was_active == now_active then
+        return
+    end
+    if now_active then
+        by_actor[actor_key] = true
+        self.sfx_state.horizontal_active_count = (self.sfx_state.horizontal_active_count or 0) + 1
+    else
+        by_actor[actor_key] = nil
+        self.sfx_state.horizontal_active_count = math.max(0, (self.sfx_state.horizontal_active_count or 0) - 1)
+    end
+    set_sound_loop_state(self, "human_horizontal", (self.sfx_state.horizontal_active_count or 0) > 0)
+end
+
+stop_speedy_move_sfx = function(self)
+    if not (self and self.sfx_state and self.sfx_state.speedy_playing_by_voice and self.sfx_state.speedy_voice_urls) then
+        return
+    end
+    for i = 1, #self.sfx_state.speedy_playing_by_voice do
+        if self.sfx_state.speedy_playing_by_voice[i] == true then
+            self.sfx_state.speedy_playing_by_voice[i] = false
+            pcall(msg.post, self.sfx_state.speedy_voice_urls[i], "stop_sound")
+        end
+    end
+end
+
+update_speedy_move_sfx = function(self)
+    if not (self and self.sfx_state and self.aliens) then
+        if self and self.sfx_state then
+            self.sfx_state.speedy_active_count = 0
+            stop_speedy_move_sfx(self)
+        end
+        return
+    end
+    if not is_directional_move_sfx_allowed(self) then
+        self.sfx_state.speedy_active_count = 0
+        stop_speedy_move_sfx(self)
+        return
+    end
+    local moving_speedy_count = 0
+    for _, alien in ipairs(self.aliens) do
+        if alien
+            and alien.is_dead ~= true
+            and alien.type == ALIEN_TYPE_SPEEDY
+            and alien.is_moving == true
+            and alien.go_id
+        then
+            moving_speedy_count = moving_speedy_count + 1
+        end
+    end
+    self.sfx_state.speedy_active_count = moving_speedy_count
+    local max_voices = math.max(1, tonumber(SFX_SPEEDY_MOVE_MAX_STACK_VOICES or 4) or 4)
+    local target_voices = math.min(max_voices, moving_speedy_count)
+    local playing = self.sfx_state.speedy_playing_by_voice or {}
+    local urls = self.sfx_state.speedy_voice_urls or {}
+    for i = 1, max_voices do
+        local should_play = i <= target_voices
+        if should_play and playing[i] ~= true then
+            playing[i] = true
+            pcall(msg.post, urls[i], "play_sound")
+        elseif (not should_play) and playing[i] == true then
+            playing[i] = false
+            pcall(msg.post, urls[i], "stop_sound")
+        end
+    end
+    self.sfx_state.speedy_playing_by_voice = playing
 end
 
 local function spawn_exit_test_stash(self)
@@ -8523,6 +9430,13 @@ function start_multiplayer_game_flow(self, session_config)
             self.mp_state.seat_assignments = multiplayer_get_default_seat_assignments(self.mp_state.player_count)
         end
         self.mp_state.required_ready_player_ids = multiplayer_get_required_ready_player_ids_for_count(self.mp_state.player_count)
+        self.mp_state.workshop_state_sync_accum_s = 0
+        self.mp_state.workshop_state_sync_signature = ""
+        self.mp_state.factory_state_sync_accum_s = 0
+        self.mp_state.factory_state_sync_signature = ""
+        self.mp_state.turn_based_snapshot_accum_s = 0
+        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+        self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -8863,6 +9777,7 @@ local function start_outro_slideshow_runtime(self)
         on_complete = function(done_reason, state)
             self.outro_slideshow_state = nil
             self.outro_slide_anim_id = nil
+            stop_outro_slideshow_runtime(self, "completed")
             if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
                 if tostring(self.end_outro_sequence_id or "") == "title" then
                     enter_flow_state(self, FLOW_STATE_TITLE)
@@ -8992,6 +9907,7 @@ local function update_outro_slideshow_runtime(self, dt)
     else
         self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
         if (self.flow_outro_timer or 0) >= 8.0 then
+            stop_outro_slideshow_runtime(self, "timeout")
             if tostring(self.end_outro_sequence_id or "") == "title" then
                 enter_flow_state(self, FLOW_STATE_TITLE)
             else
@@ -9668,6 +10584,16 @@ function reset_and_load_level(self, level_index)
     self.current_mission_type = multiplayer_normalize_mission_type(
         self.selected_mission_type or (self.mp_state and self.mp_state.mission_type) or level_mission
     )
+    if self and self.sfx_state then
+        self.sfx_state.vertical_active_by_unit = {}
+        self.sfx_state.vertical_active_count = 0
+        self.sfx_state.horizontal_active_by_actor = {}
+        self.sfx_state.horizontal_active_count = 0
+        self.sfx_state.speedy_active_count = 0
+        set_sound_loop_state(self, "human_vertical", false)
+        set_sound_loop_state(self, "human_horizontal", false)
+        stop_speedy_move_sfx(self)
+    end
     if self.mp_state and self.mp_state.enabled then
         self.mp_state.mission_type = self.current_mission_type
     end
@@ -9677,6 +10603,7 @@ function reset_and_load_level(self, level_index)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
+    clear_ranged_hit_preview(self)
 
     local function safe_delete(go_id)
         if go_id then
@@ -9835,6 +10762,7 @@ function reset_and_load_level(self, level_index)
     self.turret_fire_cooldown_by_object_id = {}
     self.turret_fired_this_alien_turn_by_object_id = {}
     self.human_reactive_fire_cooldown_by_unit_id = {}
+    self.human_reactive_pending_delay_by_unit_id = {}
     self.loot_pickup_blips = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
@@ -9954,6 +10882,7 @@ function update_global_ui_buttons(self)
             end
         end
         set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+        set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
@@ -9967,7 +10896,19 @@ function update_global_ui_buttons(self)
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase
         or any_alien_is_moving(self)
-    if tutorial_locked then
+    if self.realtime_rules_enabled == true then
+        set_ui_square_transform(
+            self,
+            self.ui.new_turn_button,
+            -9999,
+            -9999,
+            NEW_TURN_BUTTON_Z,
+            vmath.vector4(0, 0, 0, 0),
+            NEW_TURN_BUTTON_W,
+            NEW_TURN_BUTTON_H
+        )
+        update_multiplayer_new_turn_button_visual(self)
+    elseif tutorial_locked then
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
@@ -9978,6 +10919,7 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_VISUAL_SCALE,
             NEW_TURN_BUTTON_VISUAL_SCALE
         )
+        update_multiplayer_new_turn_button_visual(self)
     elseif alien_cycle_active then
         set_ui_square_transform(
             self,
@@ -9989,7 +10931,14 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_W,
             NEW_TURN_BUTTON_H
         )
+        update_multiplayer_new_turn_button_visual(self)
     else
+        local new_turn_button_w = NEW_TURN_BUTTON_VISUAL_SCALE
+        local new_turn_button_h = NEW_TURN_BUTTON_VISUAL_SCALE
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            new_turn_button_w = 1.0
+            new_turn_button_h = 0.8
+        end
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
@@ -9997,13 +10946,14 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_Y,
             NEW_TURN_BUTTON_Z,
             vmath.vector4(1, 1, 1, 1),
-            NEW_TURN_BUTTON_VISUAL_SCALE,
-            NEW_TURN_BUTTON_VISUAL_SCALE
+            new_turn_button_w,
+            new_turn_button_h
         )
+        update_multiplayer_new_turn_button_visual(self)
     end
     if self.ui.ready_buttons then
         local hidden = vmath.vector4(0, 0, 0, 0)
-        if self.mp_state and self.mp_state.enabled and self.mp_state.required_ready_player_ids then
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id and self.mp_state.required_ready_player_ids then
             for i, btn in ipairs(self.ui.ready_buttons) do
                 local player_id = self.mp_state.required_ready_player_ids[i]
                 if player_id then
@@ -10063,6 +11013,8 @@ function update_global_ui_buttons(self)
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         launch_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
     end
+    local realtime_btn_color = vmath.vector4(1, 1, 1, 1)
+    update_realtime_toggle_button_visual(self)
     set_ui_square_transform(
         self,
         self.ui.launch_button,
@@ -10072,6 +11024,16 @@ function update_global_ui_buttons(self)
         launch_color,
         LAUNCH_BUTTON_W,
         LAUNCH_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.realtime_toggle_button,
+        REALTIME_TOGGLE_BUTTON_X,
+        REALTIME_TOGGLE_BUTTON_Y,
+        LAUNCH_BUTTON_Z,
+        realtime_btn_color,
+        REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021,
+        REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021
     )
     local aesthetic_color = self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME
         and vmath.vector4(0.45, 0.35, 0.75, 0.95)
@@ -10476,7 +11438,9 @@ apply_aesthetic_mode = function(self)
                 go.delete(self.world_backdrop)
                 self.world_backdrop = nil
             end
-            local cols = (profile and profile.backdrop_tile_cols) or 5
+            local base_cols = (profile and profile.backdrop_tile_cols) or 5
+            local right_extra_cols = math.max(0, math.floor((profile and profile.backdrop_tile_right_extra_cols) or 0))
+            local cols = base_cols + right_extra_cols
             local rows = (profile and profile.backdrop_tile_rows) or 5
             local needed = math.max(1, cols * rows)
             self.world_backdrop_tiles = self.world_backdrop_tiles or {}
@@ -10826,6 +11790,10 @@ function try_select_level_button(self, screen_x, screen_y)
                 and screen_y >= (by - half_h)
                 and screen_y <= (by + half_h)
             then
+                if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+                    print("Level restart is host-only in multiplayer.")
+                    return true
+                end
                 return request_level_load(self, level_index, "top_bar_button")
             end
         end
@@ -11295,8 +12263,17 @@ function try_toggle_reactive_combat(self, screen_x, screen_y)
     local half_w = 32
     local half_h = 16
     if screen_x >= (tx - half_w) and screen_x <= (tx + half_w) and screen_y >= (ty - half_h) and screen_y <= (ty + half_h) then
-        selected_unit.reactive_fire_enabled = not (selected_unit.reactive_fire_enabled ~= false)
-        print(string.format("%s reactive fire: %s", selected_unit.display_name or "Unit", (selected_unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
+        local new_enabled = not (selected_unit.reactive_fire_enabled ~= false)
+        if self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "set_reactive_fire", {
+                turn_id = self.mp_state.turn_id or 1,
+                unit_id = selected_unit.id,
+                reactive_fire_enabled = new_enabled
+            }, multiplayer_get_active_player_id_for_commands(self))
+        else
+            selected_unit.reactive_fire_enabled = new_enabled
+            print(string.format("%s reactive fire: %s", selected_unit.display_name or "Unit", (selected_unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
+        end
         return true
     end
     return false
@@ -11326,6 +12303,9 @@ function try_advance_reactive_alien_turn(self, screen_x, screen_y)
 end
 
 function try_next_turn_button(self, screen_x, screen_y)
+    if self.realtime_rules_enabled == true then
+        return false
+    end
     if self.alien_turn_active
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase
@@ -11809,9 +12789,16 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien) or 0
+        hit_chance = math.max(0, math.min(100, tonumber(hit_chance) or 0))
+        local roll = math.random(1, 100)
+        local impact_hit = roll <= hit_chance
         table.insert(events, multiplayer_transport_emit_event(self, "manual_shot_applied", {
             unit_id = unit_id,
-            alien_id = alien_id
+            alien_id = alien_id,
+            hit_chance = hit_chance,
+            roll = roll,
+            impact_hit = impact_hit
         }))
         return events
     end
@@ -11852,6 +12839,39 @@ multiplayer_transport_handle_command = function(self, command)
         table.insert(events, multiplayer_transport_emit_event(self, "comms_command_applied", {
             unit_id = unit_id,
             comms_event_type = event_type
+        }))
+        return events
+    end
+
+    if cmd_type == "set_reactive_fire" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_reactive_fire",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local enabled = payload.reactive_fire_enabled == true
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_reactive_fire",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or (unit.current_health or 0) <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "set_reactive_fire",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "set_reactive_fire_applied", {
+            unit_id = unit_id,
+            reactive_fire_enabled = enabled
         }))
         return events
     end
@@ -11916,6 +12936,39 @@ multiplayer_transport_handle_command = function(self, command)
             cell_id = cell_id,
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y)
+        }))
+        return events
+    end
+
+    if cmd_type == "pickup_corpse" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local corpse_ref = payload.corpse_ref
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or not unit.cell_id or corpse_ref == nil then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_corpse_applied", {
+            unit_id = unit_id,
+            corpse_ref = tostring(corpse_ref)
         }))
         return events
     end
@@ -12177,10 +13230,20 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        local desired_open = payload.is_open == true
+        local was_open = door_obj.isOpen == true
+        door_obj.isOpen = desired_open
+        if was_open ~= desired_open then
+            play_door_toggle_sfx(self)
+        end
+        local ap_after = math.max(0, (tonumber(unit.current_ap or 0) or 0) - door_ap_cost)
         table.insert(events, multiplayer_transport_emit_event(self, "toggle_door_applied", {
             unit_id = unit_id,
             object_id = object_id,
-            is_open = payload.is_open == true
+            owner_cell_id = owner_cell.idNumber,
+            is_open = desired_open,
+            ap_cost = door_ap_cost,
+            ap_after = ap_after
         }))
         return events
     end
@@ -12324,6 +13387,306 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.turn_id or 1,
             self.current_level_index or 0
         ))
+        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+        self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
+        return
+    end
+    if event.type == "turn_state_heartbeat" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if self.realtime_rules_enabled == true then
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            return
+        end
+        local payload = event.payload or {}
+        local host_turn_id = tonumber(payload.turn_id or 0) or 0
+        local local_turn_id = tonumber(self.mp_state.turn_id or 0) or 0
+        if host_turn_id > 0 and local_turn_id > 0 and host_turn_id ~= local_turn_id then
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            return
+        end
+        local host_checksum = tostring(payload.checksum or "")
+        if host_checksum == "" then
+            return
+        end
+        local local_checksum = tostring(multiplayer_compute_turn_checksum(self))
+        if local_checksum == host_checksum then
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            return
+        end
+        self.mp_state.turn_based_heartbeat_mismatch_streak = (tonumber(self.mp_state.turn_based_heartbeat_mismatch_streak or 0) or 0) + 1
+        local mismatch_threshold = math.max(1, tonumber(TURN_BASED_MP_HEARTBEAT_MISMATCH_THRESHOLD or 2) or 2)
+        if self.mp_state.turn_based_heartbeat_mismatch_streak < mismatch_threshold then
+            return
+        end
+        local request_turn_id = host_turn_id > 0 and host_turn_id or local_turn_id
+        if self.mp_state.turn_based_heartbeat_last_request_turn_id == request_turn_id then
+            return
+        end
+        self.mp_state.turn_based_heartbeat_last_request_turn_id = request_turn_id
+        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+        multiplayer_transport_send_command(self, "request_snapshot", {
+            turn_id = request_turn_id,
+            reason = "heartbeat_checksum_mismatch",
+            expected_turn_id = request_turn_id
+        }, self.mp_state.local_player_id)
+        print(string.format("MP SNAPSHOT | requested_heartbeat_mismatch | turn_id=%d", request_turn_id))
+        return
+    end
+    if event.type == "realtime_state_snapshot" then
+        local sender_player_id = event.sender_player_id or nil
+        if self.mp_state.local_player_id == self.mp_state.host_player_id
+            and sender_player_id == self.mp_state.host_player_id
+        then
+            return
+        end
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local seq = tonumber(event.payload and event.payload.seq or 0) or 0
+        local last_seq = tonumber(self.mp_state.realtime_last_applied_snapshot_seq or 0) or 0
+        if seq > 0 and last_seq > 0 and seq <= last_seq then
+            return
+        end
+        local snapshot = event.payload and event.payload.snapshot or nil
+        if not multiplayer_apply_realtime_snapshot_state(self, snapshot) then
+            print("MP RT SNAPSHOT | apply_failed")
+            return
+        end
+        if seq > 0 then
+            self.mp_state.realtime_last_applied_snapshot_seq = seq
+        end
+        print(string.format("MP RT SNAPSHOT | applied | seq=%d turn_id=%d", seq, self.mp_state.turn_id or 1))
+        return
+    end
+    if event.type == "realtime_mode_changed" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        local enabled = event.payload and event.payload.enabled == true
+        self.realtime_rules_enabled = enabled
+        update_realtime_toggle_button_visual(self)
+        self.realtime_alien_tick_accum = 0
+        self.realtime_civilian_tick_accum = 0
+        self.realtime_blip_spawn_accum = 0
+        self.realtime_client_settle_timer = 0.4
+        if self.mp_state and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            self.mp_state.realtime_snapshot_accum_s = 0
+            self.mp_state.realtime_snapshot_heartbeat_accum_s = 0
+            self.mp_state.realtime_last_sent_signature = ""
+        end
+        if self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            self.mp_state.awaiting_snapshot = false
+            self.mp_state.snapshot_blocking = false
+            self.mp_state.awaiting_snapshot_timeout_s = 0
+            self.mp_state.expected_snapshot_turn_id = 0
+            self.mp_state.post_turn_snapshot_delay_s = 0
+            self.mp_state.last_snapshot_retry_turn_id = 0
+            self.mp_state.realtime_last_applied_snapshot_seq = 0
+        end
+        print(string.format("MP RT MODE | synced_from_host | %s", enabled and "ON" or "OFF"))
+        return
+    end
+    if event.type == "workshop_state_changed" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.apply_workshop_sync_state then
+            LOOT_RUNTIME.apply_workshop_sync_state(self, event.payload and event.payload.workshop_state or {})
+            self.mp_state.workshop_state_sync_signature = workshop_state_signature(event.payload and event.payload.workshop_state or {})
+        end
+        return
+    end
+    if event.type == "factory_state_changed" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.apply_factory_sync_state then
+            LOOT_RUNTIME.apply_factory_sync_state(self, event.payload and event.payload.factory_state or {})
+            self.mp_state.factory_state_sync_signature = factory_state_signature(event.payload and event.payload.factory_state or {})
+        end
+        return
+    end
+    if event.type == "factory_token_spawned" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.spawn_factory_conveyor_token_visual then
+            local payload = multiplayer_clone_simple_table(event.payload or {}) or {}
+            payload.remote_visual_only = true
+            LOOT_RUNTIME.spawn_factory_conveyor_token_visual(self, payload)
+        end
+        return
+    end
+    if event.type == "combat_fx" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        self.mp_state.applying_remote_event = true
+        multiplayer_apply_combat_fx_event(self, event.payload or {})
+        self.mp_state.applying_remote_event = false
+        return
+    end
+    if event.type == "realtime_spitter_projectile" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        local from_x = tonumber(event.payload and event.payload.from_x or nil)
+        local from_y = tonumber(event.payload and event.payload.from_y or nil)
+        local to_x = tonumber(event.payload and event.payload.to_x or nil)
+        local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        if not (from_x and from_y and to_x and to_y) then
+            return
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
+        if not projectile_id then
+            return
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("alien_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.spitter_projectiles = self.spitter_projectiles or {}
+        table.insert(self.spitter_projectiles, {
+            kind = "alien",
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.75),
+            to = vmath.vector3(to_x, to_y, 0.75),
+            t = 0
+        })
+        return
+    end
+    if event.type == "realtime_human_projectile" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        local from_x = tonumber(event.payload and event.payload.from_x or nil)
+        local from_y = tonumber(event.payload and event.payload.from_y or nil)
+        local to_x = tonumber(event.payload and event.payload.to_x or nil)
+        local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        if not (from_x and from_y and to_x and to_y) then
+            return
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
+        if not projectile_id then
+            return
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.spitter_projectiles = self.spitter_projectiles or {}
+        table.insert(self.spitter_projectiles, {
+            kind = "human_remote",
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.75),
+            to = vmath.vector3(to_x, to_y, 0.75),
+            t = 0,
+            speed = SPITTER_PROJECTILE_SPEED * 1.4
+        })
+        return
+    end
+    if event.type == "realtime_turret_projectile" then
+        if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        local sender_player_id = event.sender_player_id or nil
+        if sender_player_id ~= self.mp_state.host_player_id then
+            return
+        end
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        local from_x = tonumber(event.payload and event.payload.from_x or nil)
+        local from_y = tonumber(event.payload and event.payload.from_y or nil)
+        local to_x = tonumber(event.payload and event.payload.to_x or nil)
+        local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        local delay = tonumber(event.payload and event.payload.delay or 0) or 0
+        if not (from_x and from_y and to_x and to_y) then
+            return
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.76))
+        if not projectile_id then
+            return
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.16, SPITTER_PROJECTILE_SIZE * 0.16, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.001 or math.abs(dir_y) > 0.001 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.turret_projectiles = self.turret_projectiles or {}
+        table.insert(self.turret_projectiles, {
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.76),
+            to = vmath.vector3(to_x, to_y, 0.76),
+            t = 0,
+            delay = math.max(0, delay)
+        })
         return
     end
     if event.type == "turn_checksum" then
@@ -12486,6 +13849,16 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "set_reactive_fire_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_set_reactive_fire_event(self, event.payload or {}) then
+            print("MP COMMAND | set_reactive_fire_applied ignored.")
+        end
+        return
+    end
     if event.type == "resource_drag_applied" then
         if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
             multiplayer_queue_pending_event(self, event)
@@ -12510,6 +13883,16 @@ multiplayer_transport_on_event = function(self, event)
         end
         if not multiplayer_apply_pickup_obstacle_event(self, event.payload or {}) then
             print("MP COMMAND | pickup_obstacle_applied ignored.")
+        end
+        return
+    end
+    if event.type == "pickup_corpse_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_pickup_corpse_event(self, event.payload or {}) then
+            print("MP COMMAND | pickup_corpse_applied ignored.")
         end
         return
     end
@@ -12915,6 +14298,18 @@ init_multiplayer_runtime = function(self)
         last_invalid_target_snapshot_turn_id = 0,
         pending_turn_state_snapshot_turn_id = 0,
         last_turn_state_snapshot_broadcast_turn_id = 0,
+        realtime_snapshot_accum_s = 0,
+        realtime_snapshot_seq = 0,
+        realtime_last_applied_snapshot_seq = 0,
+        realtime_snapshot_heartbeat_accum_s = 0,
+        turn_based_snapshot_accum_s = 0,
+        turn_based_heartbeat_mismatch_streak = 0,
+        turn_based_heartbeat_last_request_turn_id = 0,
+        realtime_last_sent_signature = "",
+        workshop_state_sync_accum_s = 0,
+        workshop_state_sync_signature = "",
+        factory_state_sync_accum_s = 0,
+        factory_state_sync_signature = "",
         pending_events = {},
         post_turn_snapshot_delay_s = 0,
         event_seq = 0,
@@ -12929,6 +14324,189 @@ init_multiplayer_runtime = function(self)
     ))
     multiplayer_reset_ready_gate(self)
     multiplayer_transport_init(self)
+end
+
+workshop_state_signature = function(workshop_state)
+    if type(workshop_state) ~= "table" then
+        return ""
+    end
+    local tile_ids = {}
+    for tile_instance_id, _ in pairs(workshop_state) do
+        local tile_id = tonumber(tile_instance_id)
+        if tile_id then
+            table.insert(tile_ids, tile_id)
+        end
+    end
+    table.sort(tile_ids)
+    local parts = {}
+    for _, tile_id in ipairs(tile_ids) do
+        local state = workshop_state[tile_id] or workshop_state[tostring(tile_id)] or {}
+        parts[#parts + 1] = string.format(
+            "%d:%d:%d:%d:%.3f:%.3f",
+            tile_id,
+            tonumber(state.selected_slot or 0) or 0,
+            tonumber(state.paid_units or 0) or 0,
+            state.payment_locked == true and 1 or 0,
+            tonumber(state.production_time_left or 0) or 0,
+            tonumber(state.payment_confirm_flash or 0) or 0
+        )
+    end
+    return table.concat(parts, "|")
+end
+
+factory_state_signature = function(factory_state)
+    if type(factory_state) ~= "table" then
+        return ""
+    end
+    local tile_ids = {}
+    for tile_instance_id, _ in pairs(factory_state) do
+        local tile_id = tonumber(tile_instance_id)
+        if tile_id then
+            table.insert(tile_ids, tile_id)
+        end
+    end
+    table.sort(tile_ids)
+    local parts = {}
+    for _, tile_id in ipairs(tile_ids) do
+        local state = factory_state[tile_id] or factory_state[tostring(tile_id)] or {}
+        parts[#parts + 1] = string.format(
+            "%d:%d:%d:%d:%d",
+            tile_id,
+            state.powered == true and 1 or 0,
+            state.functional == true and 1 or 0,
+            tonumber(state.pending_tokens or 0) or 0,
+            tonumber(state.stock_total or 0) or 0
+        )
+    end
+    return table.concat(parts, "|")
+end
+
+multiplayer_get_civilian_by_id = function(self, civilian_id)
+    if not (self and self.civilians and civilian_id) then
+        return nil
+    end
+    local wanted_id = tonumber(civilian_id)
+    if not wanted_id then
+        return nil
+    end
+    for _, civilian in ipairs(self.civilians) do
+        if civilian and tonumber(civilian.id or 0) == wanted_id then
+            return civilian
+        end
+    end
+    return nil
+end
+
+multiplayer_emit_combat_fx_event = function(self, payload)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return
+    end
+    if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        return
+    end
+    if self.mp_state.applying_remote_event == true then
+        return
+    end
+    if type(payload) ~= "table" then
+        return
+    end
+    multiplayer_transport_broadcast_event(self, "combat_fx", payload)
+end
+
+multiplayer_apply_combat_fx_event = function(self, payload)
+    if type(payload) ~= "table" then
+        return false
+    end
+    local fx_type = tostring(payload.fx_type or "")
+    if fx_type == "alien_blood" then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
+        if alien and (not alien.is_dead) and MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
+            MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, alien)
+            return true
+        end
+        return false
+    elseif fx_type == "human_blood" then
+        local target_kind = tostring(payload.target_kind or "human")
+        local target = nil
+        if target_kind == "civilian" then
+            target = multiplayer_get_civilian_by_id(self, payload.target_id)
+            if target then
+                target.target_kind = "civilian"
+            end
+        else
+            target = self.squad_units and self.squad_units[payload.target_id] or nil
+            if target then
+                target.target_kind = "human"
+            end
+        end
+        if target and MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
+            MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
+            return true
+        end
+        return false
+    elseif fx_type == "alien_red_flash" then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
+        if alien and (not alien.is_dead) and MELEE_RUNTIME and MELEE_RUNTIME.play_target_red_flash then
+            MELEE_RUNTIME.play_target_red_flash(self, alien)
+            return true
+        end
+        return false
+    elseif fx_type == "alien_melee_swipe" then
+        local target_kind = tostring(payload.target_kind or "human")
+        local target = nil
+        if target_kind == "civilian" then
+            target = multiplayer_get_civilian_by_id(self, payload.target_id)
+            if target then
+                target.target_kind = "civilian"
+            end
+        else
+            target = self.squad_units and self.squad_units[payload.target_id] or nil
+            if target then
+                target.target_kind = "human"
+            end
+        end
+        if target and MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_melee_swipe_fx then
+            MELEE_RUNTIME.spawn_alien_melee_swipe_fx(self, target)
+            return true
+        end
+        return false
+    elseif fx_type == "hazard_flash" then
+        local target_kind = tostring(payload.target_kind or "human")
+        local target = nil
+        if target_kind == "civilian" then
+            target = multiplayer_get_civilian_by_id(self, payload.target_id)
+        else
+            target = self.squad_units and self.squad_units[payload.target_id] or nil
+        end
+        if not target then
+            return false
+        end
+        local tint = vmath.vector4(
+            tonumber(payload.tint_r or 1) or 1,
+            tonumber(payload.tint_g or 1) or 1,
+            tonumber(payload.tint_b or 1) or 1,
+            1
+        )
+        target.hazard_flash_tint = tint
+        target.hazard_flash_active = true
+        target.hazard_flash_token = (target.hazard_flash_token or 0) + 1
+        local token = target.hazard_flash_token
+        local duration_s = math.max(0.05, tonumber(payload.duration_s or 0.75) or 0.75)
+        timer.delay(duration_s, false, function()
+            if target and target.hazard_flash_token == token then
+                target.hazard_flash_active = false
+            end
+        end)
+        return true
+    elseif fx_type == "brute_damage_flash" then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
+        if alien and (not alien.is_dead) then
+            alien.brute_damage_flash_timer = math.max(0.05, tonumber(payload.duration_s or 0.24) or 0.24)
+            return true
+        end
+        return false
+    end
+    return false
 end
 
 multiplayer_queue_pending_event = function(self, event)
@@ -12989,27 +14567,23 @@ can_advance_next_turn = function(self, emit_log)
 end
 
 try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
-    if not (self.mp_state and self.mp_state.enabled and self.ui and self.ui.ready_buttons) then
+    if not (self.mp_state and self.mp_state.enabled) then
         return false
     end
-    for i, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
-        local bx = get_multiplayer_ready_button_x(i)
-        if is_point_in_screen_rect(screen_x, screen_y, bx, MULTIPLAYER_READY_BUTTON_Y, MULTIPLAYER_READY_BUTTON_W, MULTIPLAYER_READY_BUTTON_H) then
-            local active_player = self.mp_state.debug_active_player_id
-            if active_player and player_id ~= active_player then
-                print(string.format("MP READY | blocked | acting_as=%s clicked=%s", tostring(active_player), tostring(player_id)))
-                return true
-            end
-            local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
-            multiplayer_transport_send_command(self, "set_ready", {
-                player_id = player_id,
-                ready = ready_on,
-                turn_id = self.mp_state.turn_id or 1
-            }, active_player or self.mp_state.local_player_id)
-            return true
-        end
+    if self.mp_state.local_player_id == self.mp_state.host_player_id then
+        return false
     end
-    return false
+    if not is_point_in_screen_rect(screen_x, screen_y, NEW_TURN_BUTTON_X, NEW_TURN_BUTTON_Y, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H) then
+        return false
+    end
+    local player_id = self.mp_state.local_player_id
+    local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
+    multiplayer_transport_send_command(self, "set_ready", {
+        player_id = player_id,
+        ready = ready_on,
+        turn_id = self.mp_state.turn_id or 1
+    }, player_id)
+    return true
 end
 
 try_multiplayer_debug_player_buttons = function(self, screen_x, screen_y)
@@ -13072,6 +14646,43 @@ function try_launch_button(self, screen_x, screen_y)
     return false
 end
 
+local function try_toggle_realtime_button(self, screen_x, screen_y)
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return false
+    end
+    local half_w = REALTIME_TOGGLE_BUTTON_W * 0.5
+    local half_h = REALTIME_TOGGLE_BUTTON_H * 0.5
+    if screen_x >= (REALTIME_TOGGLE_BUTTON_X - half_w)
+        and screen_x <= (REALTIME_TOGGLE_BUTTON_X + half_w)
+        and screen_y >= (REALTIME_TOGGLE_BUTTON_Y - half_h)
+        and screen_y <= (REALTIME_TOGGLE_BUTTON_Y + half_h) then
+        if self.mp_state and self.mp_state.enabled then
+            if self.realtime_mp_enabled ~= true then
+                print("Realtime multiplayer is disabled in config.")
+                return true
+            end
+            if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+                print("Realtime toggle is host-only in multiplayer.")
+                return true
+            end
+        end
+        self.realtime_rules_enabled = not (self.realtime_rules_enabled == true)
+        update_realtime_toggle_button_visual(self)
+        self.realtime_alien_tick_accum = 0
+        self.realtime_civilian_tick_accum = 0
+        self.realtime_blip_spawn_accum = 0
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            multiplayer_transport_broadcast_event(self, "realtime_mode_changed", {
+                enabled = self.realtime_rules_enabled == true,
+                turn_id = self.mp_state.turn_id or 1
+            })
+        end
+        print(string.format("Realtime rules: %s", self.realtime_rules_enabled and "ON" or "OFF"))
+        return true
+    end
+    return false
+end
+
 local function try_toggle_objective_button(self, screen_x, screen_y)
     if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
         return false
@@ -13081,6 +14692,19 @@ local function try_toggle_objective_button(self, screen_x, screen_y)
         return true
     end
     return false
+end
+
+realtime_mp_host_can_simulate = function(self)
+    if not (self and self.realtime_rules_enabled == true) then
+        return false
+    end
+    if not self.mp_state or self.mp_state.enabled ~= true then
+        return true
+    end
+    if self.realtime_mp_enabled ~= true then
+        return false
+    end
+    return self.mp_state.local_player_id == self.mp_state.host_player_id
 end
 
 function try_toggle_aesthetic_ui_button(self, screen_x, screen_y)
@@ -13141,6 +14765,9 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     get_turret_gun_objects = function(self_ref)
         self_ref.turret_gun_objects = self_ref.turret_gun_objects or {}
         return self_ref.turret_gun_objects
+    end,
+    play_break_barricade_sfx = function(self_ref)
+        play_break_barricade_sfx(self_ref)
     end
 })
 LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
@@ -13188,12 +14815,51 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     mp_send_command = function(self_ref, cmd_type, payload, sender_player_id)
         multiplayer_transport_send_command(self_ref, cmd_type, payload or {}, sender_player_id)
     end,
+    mp_emit_event = function(self_ref, event_type, payload)
+        multiplayer_transport_broadcast_event(self_ref, event_type, payload or {})
+    end,
     mp_get_turn_id = function(self_ref)
         return (self_ref and self_ref.mp_state and self_ref.mp_state.turn_id) or 1
     end,
     AP_COSTS = AP_COSTS,
     mp_get_active_player_id = function(self_ref)
         return multiplayer_get_active_player_id_for_commands(self_ref)
+    end,
+    play_power_node_on_sfx = function(self_ref)
+        play_power_node_on_sfx(self_ref)
+    end,
+    play_power_node_off_sfx = function(self_ref)
+        play_power_node_off_sfx(self_ref)
+    end,
+    play_drag_item_sfx = function(self_ref)
+        play_drag_item_sfx(self_ref)
+    end,
+    play_break_barricade_sfx = function(self_ref)
+        play_break_barricade_sfx(self_ref)
+    end,
+    play_build_barricade_sfx = function(self_ref)
+        play_build_barricade_sfx(self_ref)
+    end,
+    play_medibay_revive_sfx = function(self_ref)
+        play_medibay_revive_sfx(self_ref)
+    end,
+    play_human_item_recieve_sfx = function(self_ref, unit)
+        play_human_item_recieve_sfx(self_ref, unit)
+    end,
+    play_factory_produce_sfx = function(self_ref)
+        play_factory_produce_sfx(self_ref)
+    end,
+    play_fabricator_working_sfx = function(self_ref)
+        play_fabricator_working_sfx(self_ref)
+    end,
+    play_sparking_wire_sfx = function(self_ref)
+        play_sparking_wire_sfx(self_ref)
+    end,
+    play_welding_sfx = function(self_ref)
+        play_welding_sfx(self_ref)
+    end,
+    play_task_done_sfx = function(self_ref)
+        play_task_done_sfx(self_ref)
     end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
@@ -13214,6 +14880,18 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     record_alien_melee_spend = function(self_ref, alien_id, amount)
         record_alien_turn_ap_spend(self_ref, alien_id, "melee_spent", amount)
     end,
+    emit_combat_fx_event = function(self_ref, payload)
+        multiplayer_emit_combat_fx_event(self_ref, payload)
+    end,
+    play_alien_death_sfx = function(self_ref, alien_type)
+        play_alien_death_sfx(self_ref, alien_type)
+    end,
+    play_melee_hit_alien_sfx = function(self_ref)
+        play_melee_hit_alien_sfx(self_ref)
+    end,
+    play_melee_hit_human_sfx = function(self_ref)
+        play_melee_hit_human_sfx(self_ref)
+    end,
     handle_human_death_loot_drop = function(self_ref, unit)
         handle_human_death_loot_drop(self_ref, unit, "alien_melee")
     end
@@ -13227,7 +14905,9 @@ local function update_human_ap_debug_label(self)
 
     self.last_debug_ap_by_unit = self.last_debug_ap_by_unit or {}
     if self.last_debug_ap_by_unit[unit.id] ~= unit.current_ap then
-        print(string.format("UI DEBUG | %s AP: %d/%d", unit.display_name, unit.current_ap, unit.max_ap))
+        local ap_now = math.floor((tonumber(unit.current_ap or 0) or 0) + 0.0001)
+        local ap_max = math.floor((tonumber(unit.max_ap or 0) or 0) + 0.0001)
+        print(string.format("UI DEBUG | %s AP: %d/%d", unit.display_name, ap_now, ap_max))
         self.last_debug_ap_by_unit[unit.id] = unit.current_ap
     end
 end
@@ -13242,7 +14922,7 @@ local function next_turn_reset_human_ap(self)
 
     for _, unit in pairs(self.squad_units) do
         if unit and (unit.current_health or 0) > 0 then
-            unit.current_ap = get_human_ap_refresh_cap(unit)
+            unit.current_ap = get_human_new_turn_ap_refresh(unit)
         else
             unit.current_ap = 0
             unit.is_moving = false
@@ -13286,6 +14966,125 @@ local function enforce_tutorial_infinite_ap(self)
             end
         end
     end
+end
+
+local function enforce_realtime_ap_regen(self, dt)
+    if not (self and self.squad_units) then
+        return
+    end
+    if not realtime_mp_host_can_simulate(self) then
+        return
+    end
+    if tutorial_rules_locked and tutorial_rules_locked(self) then
+        return
+    end
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return
+    end
+    local regen_rate = tonumber(self.realtime_ap_regen_per_second or 0) or 0
+    if regen_rate <= 0 then
+        return
+    end
+    for _, unit in pairs(self.squad_units) do
+        if unit then
+            if (unit.current_health or 0) > 0 then
+                local cap = get_human_ap_refresh_cap(unit)
+                local current_ap = tonumber(unit.current_ap or 0) or 0
+                if current_ap < cap then
+                    unit.realtime_ap_regen_accum = (tonumber(unit.realtime_ap_regen_accum or 0) or 0) + (dt * regen_rate)
+                    local grant = math.floor(unit.realtime_ap_regen_accum)
+                    if grant > 0 then
+                        unit.current_ap = math.min(cap, current_ap + grant)
+                        unit.realtime_ap_regen_accum = unit.realtime_ap_regen_accum - grant
+                    end
+                else
+                    unit.realtime_ap_regen_accum = 0
+                end
+            else
+                unit.current_ap = 0
+                unit.realtime_ap_regen_accum = 0
+            end
+        end
+    end
+end
+
+local function process_realtime_world_ticks(self, dt)
+    if not self then
+        return
+    end
+    if not realtime_mp_host_can_simulate(self) then
+        return
+    end
+    if tutorial_rules_locked and tutorial_rules_locked(self) then
+        return
+    end
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return
+    end
+    self.realtime_alien_tick_accum = (tonumber(self.realtime_alien_tick_accum or 0) or 0) + dt
+    self.realtime_civilian_tick_accum = (tonumber(self.realtime_civilian_tick_accum or 0) or 0) + dt
+    self.realtime_blip_spawn_accum = (tonumber(self.realtime_blip_spawn_accum or 0) or 0) + dt
+    local alien_hz = tonumber(self.realtime_alien_step_hz or 2.0) or 2.0
+    local civilian_hz = tonumber(self.realtime_civilian_step_hz or 1.0) or 1.0
+    local blip_spawn_interval_s = tonumber(self.realtime_blip_spawn_interval_s or 8.0) or 8.0
+    if alien_hz <= 0 then
+        alien_hz = 2.0
+    end
+    if civilian_hz <= 0 then
+        civilian_hz = 1.0
+    end
+    if blip_spawn_interval_s <= 0 then
+        blip_spawn_interval_s = 8.0
+    end
+    local alien_interval = 1.0 / alien_hz
+    local civilian_interval = 1.0 / civilian_hz
+    local sim_busy = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+    if not sim_busy and self.realtime_civilian_tick_accum >= civilian_interval then
+        self.realtime_civilian_tick_accum = self.realtime_civilian_tick_accum - civilian_interval
+        if LOOT_RUNTIME.process_factory_turn then
+            LOOT_RUNTIME.process_factory_turn(self)
+        end
+        process_civilian_turn(self)
+    end
+    sim_busy = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+    if not sim_busy and self.realtime_blip_spawn_accum >= blip_spawn_interval_s then
+        self.realtime_blip_spawn_accum = self.realtime_blip_spawn_accum - blip_spawn_interval_s
+        local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
+        if #edge_cells > 0 then
+            local idx = math.random(1, #edge_cells)
+            spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+            print("Realtime event: spawned 1 new blip")
+        else
+            print("Realtime event: no eligible unpowered blip spawn cells.")
+        end
+    end
+    sim_busy = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+    if not sim_busy and self.realtime_alien_tick_accum >= alien_interval then
+        self.realtime_alien_tick_accum = self.realtime_alien_tick_accum - alien_interval
+        process_alien_turn(self)
+    end
+end
+
+local function log_realtime_tuning(self)
+    print(string.format(
+        "RT TUNE | spawn_interval=%.2fs blip_speed=%.2f alien_speed=%.2f alien_step_hz=%.2f",
+        tonumber(self.realtime_blip_spawn_interval_s or 0) or 0,
+        tonumber(self.realtime_blip_move_speed_multiplier or 0) or 0,
+        tonumber(self.realtime_alien_move_speed_multiplier or 0) or 0,
+        tonumber(self.realtime_alien_step_hz or 0) or 0
+    ))
 end
 
 local function get_human_world_pos_for_cell(cell)
@@ -13576,9 +15375,15 @@ end
 
 local function update_single_unit_movement(self, unit, dt)
     if not unit or not unit.is_moving or not unit.move_path then
+        if unit then
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
+        end
         return
     end
     if not (unit and (unit.current_health or 0) > 0) then
+        update_vertical_move_sfx_for_unit(self, unit, false)
+        update_horizontal_move_sfx_for_actor(self, unit.id, false)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -13601,6 +15406,10 @@ local function update_single_unit_movement(self, unit, dt)
         local current_pos = go.get_position(unit.go_path)
         local dx = unit.micro_target_x - current_pos.x
         local dy = unit.micro_target_y - current_pos.y
+        local is_vertical_now = math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.01
+        local is_horizontal_now = math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.01
+        update_vertical_move_sfx_for_unit(self, unit, is_vertical_now)
+        update_horizontal_move_sfx_for_actor(self, unit.id, is_horizontal_now)
         local distance = math.sqrt(dx * dx + dy * dy)
         local step = HUMAN_MOVE_SPEED * dt
         unit.anim_phase = (unit.anim_phase or 0) + (dt * HUMAN_PINGPONG_SPEED * math.pi * 2)
@@ -13639,6 +15448,8 @@ local function update_single_unit_movement(self, unit, dt)
             local snap_z = (unit.micro_move_kind == "settle_end") and 0.5 or move_z
             go.set_position(vmath.vector3(unit.micro_target_x, unit.micro_target_y, snap_z), unit.go_path)
             if unit.micro_move_kind == "settle_end" then
+                update_vertical_move_sfx_for_unit(self, unit, false)
+                update_horizontal_move_sfx_for_actor(self, unit.id, false)
                 unit.is_moving = false
                 unit.move_path = nil
                 unit.move_path_index = 0
@@ -13659,6 +15470,8 @@ local function update_single_unit_movement(self, unit, dt)
             unit.micro_target_y = nil
             unit.micro_move_kind = nil
             unit.counter_move_total_dist = nil
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
             return
         end
         local nx = current_pos.x + (dx / distance) * step
@@ -13669,6 +15482,8 @@ local function update_single_unit_movement(self, unit, dt)
 
     local target_cell_id = unit.move_path[unit.move_path_index]
     if not target_cell_id then
+        update_vertical_move_sfx_for_unit(self, unit, false)
+        update_horizontal_move_sfx_for_actor(self, unit.id, false)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -13774,6 +15589,8 @@ local function update_single_unit_movement(self, unit, dt)
     target_x = clamp_world_x_to_cell(target_cell, target_x)
     local target_cost = get_step_move_cost(self.world_grid, unit.cell_id, target_cell_id)
     if target_cost > unit.current_ap then
+        update_vertical_move_sfx_for_unit(self, unit, false)
+        update_horizontal_move_sfx_for_actor(self, unit.id, false)
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -13801,6 +15618,8 @@ local function update_single_unit_movement(self, unit, dt)
     local current_pos = go.get_position(unit.go_path)
     local dx = target_x - current_pos.x
     local dy = target_y - current_pos.y
+    update_vertical_move_sfx_for_unit(self, unit, is_vertical_step)
+    update_horizontal_move_sfx_for_actor(self, unit.id, not is_vertical_step)
     local distance = math.sqrt(dx * dx + dy * dy)
     local move_speed_mul = get_obstacle_move_speed_multiplier(target_cost)
     local step = (HUMAN_MOVE_SPEED * move_speed_mul) * dt
@@ -13851,6 +15670,7 @@ local function update_single_unit_movement(self, unit, dt)
         local from_cell_id = unit.cell_id
         move_human_to_cell(self, unit, target_cell_id)
         trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_id)
+        trigger_unit_tile_bump_sfx(self, "human")
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.vertical_prep_done_for_index = nil
@@ -13909,6 +15729,8 @@ local function update_single_unit_movement(self, unit, dt)
                     return
                 end
             end
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
             unit.is_moving = false
             unit.move_path = nil
             unit.move_path_index = 0
@@ -13993,7 +15815,7 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
     return nil
 end
 
-multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
+multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_outcome)
     if not unit then
         return false
     end
@@ -14005,8 +15827,12 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
         return false
     end
 
-    -- Keep this command on the human side of the turn boundary.
-    if (any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase) and (not self.alien_turn_waiting_for_advance) then
+    -- Turn-based boundary gate: in realtime mode we allow responsive human attacks during alien activity.
+    local block_for_turn_boundary = self.realtime_rules_enabled ~= true
+    if block_for_turn_boundary
+        and (any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase)
+        and (not self.alien_turn_waiting_for_advance)
+    then
         print("Unable to fire: alien turn in progress.")
         return true
     end
@@ -14050,6 +15876,7 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
     end
 
     local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+    try_realtime_auto_load_ammo_from_backpack(self, unit)
     if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
         print("unable to fire no ammo/ap")
         return false
@@ -14058,13 +15885,15 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
     unit.current_ap = unit.current_ap - shot_ap_cost
     unit.current_ammo = unit.current_ammo - 1
     local active_light = (alien_cell.isPowered and math.max(0, math.min(3, alien_cell.lightValue or 0))) or 0
-    local ranged_model = require("main.config").RANGED_HIT_MODEL
-    local base_hit_chance = ranged_model.base_hit_chance + (active_light * ranged_model.per_light_level_bonus)
     local range_cells = manhattan_distance_by_id(unit.cell_id, alien.cell_id)
     local range_penalty = math.max(0, (range_cells - 1) * 10)
     local role = CLASS_ROLE_HOOKS[unit.class_id]
     local class_bonus = (role and role.ranged_hit_bonus) or 0
-    local hit_chance = math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
+    local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien) or 0
+    if shot_outcome and shot_outcome.hit_chance ~= nil then
+        hit_chance = tonumber(shot_outcome.hit_chance) or hit_chance
+    end
+    hit_chance = math.max(0, math.min(100, tonumber(hit_chance) or 0))
     print(string.format(
         "RANGED DEBUG | manual | shooter=%s targetAlien=%d range=%d penalty=%d light=%d classBonus=%d chance=%d",
         unit.display_name or "unit",
@@ -14076,7 +15905,15 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien)
         hit_chance or 0
     ))
     local roll = math.random(1, 100)
-    spawn_human_reaction_projectile(self, unit, alien, roll <= hit_chance, active_light, hit_chance, roll)
+    if shot_outcome and shot_outcome.roll ~= nil then
+        roll = math.max(1, math.min(100, tonumber(shot_outcome.roll) or roll))
+    end
+    local impact_hit = roll <= hit_chance
+    if shot_outcome and shot_outcome.impact_hit ~= nil then
+        impact_hit = (shot_outcome.impact_hit == true)
+    end
+    spawn_human_reaction_projectile(self, unit, alien, impact_hit, active_light, hit_chance, roll)
+    clear_ranged_hit_preview(self)
 
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
@@ -14179,7 +16016,7 @@ multiplayer_apply_manual_shot_event = function(self, payload)
     if not unit or not alien then
         return false
     end
-    return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    return multiplayer_attempt_manual_shot_on_target(self, unit, alien, payload)
 end
 
 multiplayer_apply_comms_command_event = function(self, payload)
@@ -14325,6 +16162,13 @@ multiplayer_build_snapshot_state = function(self)
         score_state = multiplayer_clone_with_string_keys(self.score_state or {})
     }
     for unit_id, unit in pairs(self.squad_units or {}) do
+        local unit_world_x = nil
+        local unit_world_y = nil
+        if unit and unit.go_path then
+            local unit_pos = go.get_position(unit.go_path)
+            unit_world_x = unit_pos and unit_pos.x or nil
+            unit_world_y = unit_pos and unit_pos.y or nil
+        end
         snapshot.units[unit_id] = {
             id = unit.id,
             cell_id = unit.cell_id,
@@ -14335,11 +16179,20 @@ multiplayer_build_snapshot_state = function(self)
             backpack_items = multiplayer_clone_simple_table(unit.backpack_items or {}),
             backpack_used = unit.backpack_used,
             carrying_corpse_id = unit.carrying_corpse_id,
-            equipment = multiplayer_clone_simple_table(unit.equipment or {})
+            equipment = multiplayer_clone_simple_table(unit.equipment or {}),
+            world_x = unit_world_x,
+            world_y = unit_world_y
         }
     end
     for _, alien in ipairs(self.aliens or {}) do
         if alien and (not alien.is_dead) then
+            local alien_world_x = nil
+            local alien_world_y = nil
+            if alien.go_id then
+                local alien_pos = go.get_position(alien.go_id)
+                alien_world_x = alien_pos and alien_pos.x or nil
+                alien_world_y = alien_pos and alien_pos.y or nil
+            end
             table.insert(snapshot.aliens, {
                 id = alien.id,
                 type = alien.type,
@@ -14351,7 +16204,9 @@ multiplayer_build_snapshot_state = function(self)
                 can_traverse_void = alien.can_traverse_void == true,
                 has_ranged = alien.has_ranged == true,
                 ranged_cells = alien.ranged_cells or 0,
-                hidden_reveal_type = alien.hidden_reveal_type
+                hidden_reveal_type = alien.hidden_reveal_type,
+                world_x = alien_world_x,
+                world_y = alien_world_y
             })
         end
     end
@@ -14380,6 +16235,384 @@ multiplayer_build_snapshot_state = function(self)
         end
     end
     return snapshot
+end
+
+multiplayer_compute_realtime_snapshot_signature = function(snapshot)
+    if type(snapshot) ~= "table" then
+        return "0"
+    end
+    local parts = {}
+    local function push(...)
+        local n = select("#", ...)
+        for i = 1, n do
+            parts[#parts + 1] = tostring(select(i, ...))
+        end
+        parts[#parts + 1] = "|"
+    end
+    local function round_px(v)
+        return math.floor((tonumber(v or 0) or 0) + 0.5)
+    end
+
+    push("t", tonumber(snapshot.turn_id or 0) or 0)
+    push("p", tonumber(snapshot.purge_deadline_epoch_ms or 0) or 0, snapshot.purge_timer_started == true and 1 or 0)
+    push("d", tonumber(snapshot.dna_analysis_progress or 0) or 0, snapshot.dna_sample_returned == true and 1 or 0)
+
+    local unit_rows = {}
+    for unit_id, unit in pairs(snapshot.units or {}) do
+        unit_rows[#unit_rows + 1] = string.format(
+            "%s|%d|%d|%d|%d|%d|%d",
+            tostring(unit_id),
+            tonumber(unit.cell_id or 0) or 0,
+            tonumber(unit.current_ap or 0) or 0,
+            tonumber(unit.current_health or 0) or 0,
+            tonumber(unit.current_ammo or 0) or 0,
+            round_px(unit.world_x),
+            round_px(unit.world_y)
+        )
+    end
+    table.sort(unit_rows)
+    for _, row in ipairs(unit_rows) do
+        push("u", row)
+    end
+
+    local alien_rows = {}
+    for _, alien in ipairs(snapshot.aliens or {}) do
+        alien_rows[#alien_rows + 1] = string.format(
+            "%d|%s|%d|%d|%d|%d",
+            tonumber(alien.id or 0) or 0,
+            tostring(alien.type or "_"),
+            tonumber(alien.cell_id or 0) or 0,
+            tonumber(alien.hp_current or 0) or 0,
+            round_px(alien.world_x),
+            round_px(alien.world_y)
+        )
+    end
+    table.sort(alien_rows)
+    for _, row in ipairs(alien_rows) do
+        push("a", row)
+    end
+
+    local civilian_rows = {}
+    for _, civilian in ipairs(snapshot.civilians or {}) do
+        civilian_rows[#civilian_rows + 1] = string.format(
+            "%d|%d|%d",
+            tonumber(civilian.id or 0) or 0,
+            tonumber(civilian.cell_id or 0) or 0,
+            tonumber(civilian.current_health or 0) or 0
+        )
+    end
+    table.sort(civilian_rows)
+    for _, row in ipairs(civilian_rows) do
+        push("c", row)
+    end
+
+    local item_rows = {}
+    for item_id, item in pairs(snapshot.world_item_instances or {}) do
+        item_rows[#item_rows + 1] = string.format(
+            "%s|%s|%d|%d|%d",
+            tostring(item_id),
+            tostring(item and (item.item_type or item.type or "_") or "_"),
+            tonumber(item and item.cell_id or 0) or 0,
+            round_px(item and item.world_x or 0),
+            round_px(item and item.world_y or 0)
+        )
+    end
+    table.sort(item_rows)
+    for _, row in ipairs(item_rows) do
+        push("wi", row)
+    end
+
+    local serial = table.concat(parts)
+    local h = 5381
+    for i = 1, #serial do
+        h = ((h * 33) + string.byte(serial, i)) % 2147483647
+    end
+    return tostring(h)
+end
+
+multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
+    if type(snapshot) ~= "table" then
+        return false
+    end
+    if not (self.world_grid and self.squad_units and self.aliens) then
+        return false
+    end
+    if self.mp_state then
+        self.mp_state.turn_id = tonumber(snapshot.turn_id or self.mp_state.turn_id or 1) or 1
+    end
+
+    self.cell_slot_assignments = multiplayer_restore_numeric_top_keys(
+        multiplayer_clone_simple_table(snapshot.cell_slot_assignments or self.cell_slot_assignments or {}) or {}
+    )
+    for _, cell in ipairs(self.world_grid) do
+        if cell then
+            cell.isOccupied = hash("empty")
+        end
+    end
+    local decouple_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+        and self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        and self.realtime_rules_enabled == true
+    for unit_id, unit in pairs(self.squad_units) do
+        local unit_snapshot = snapshot.units and snapshot.units[unit_id] or nil
+        local decouple_unit_motion = decouple_motion and multiplayer_can_control_unit(self, unit.id)
+        if not decouple_unit_motion then
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+            unit.desired_destination_cell_id = nil
+            unit.desired_destination_slot_index = nil
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            unit.counter_move_total_dist = nil
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+        elseif (unit.is_moving ~= true) then
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            unit.counter_move_total_dist = nil
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+        end
+        if unit_snapshot then
+            unit.current_ap = tonumber(unit_snapshot.current_ap or unit.current_ap or unit.max_ap) or unit.max_ap
+            unit.current_ammo = tonumber(unit_snapshot.current_ammo or unit.current_ammo or unit.max_ammo) or unit.max_ammo
+            unit.current_health = tonumber(unit_snapshot.current_health or unit.current_health or unit.max_health) or unit.max_health
+            unit.command_points = tonumber(unit_snapshot.command_points or unit.command_points or 0) or 0
+            unit.backpack_items = multiplayer_clone_simple_table(unit_snapshot.backpack_items or {}) or {}
+            unit.backpack_used = tonumber(unit_snapshot.backpack_used or #unit.backpack_items) or #unit.backpack_items
+            unit.carrying_corpse_id = unit_snapshot.carrying_corpse_id
+            unit.equipment = create_empty_equipment()
+            local snapshot_equipment = unit_snapshot.equipment or {}
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+                local equipped_item = snapshot_equipment[slot_name]
+                if type(equipped_item) == "string" then
+                    unit.equipment[slot_name] = equipped_item
+                end
+            end
+            unit.cell_id = tonumber(unit_snapshot.cell_id) or unit.cell_id
+        end
+        if unit.cell_id and self.world_grid[unit.cell_id] and (unit.current_health or 0) > 0 then
+            self.world_grid[unit.cell_id].isOccupied = unit.occupancy_hash
+            if unit.go_path then
+                local tx = tonumber(unit_snapshot and unit_snapshot.world_x or nil)
+                local ty = tonumber(unit_snapshot and unit_snapshot.world_y or nil)
+                if not (tx and ty) then
+                    tx, ty = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
+                end
+                local pos = go.get_position(unit.go_path)
+                local dx = tx - pos.x
+                local dy = ty - pos.y
+                local dist_sq = (dx * dx + dy * dy)
+                local in_settle = (self.realtime_client_settle_timer or 0) > 0
+                local decouple_unit_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+                    and self.mp_state
+                    and self.mp_state.enabled
+                    and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+                    and self.realtime_rules_enabled == true
+                    and multiplayer_can_control_unit(self, unit.id)
+                if decouple_unit_motion then
+                    local needs_reconcile = (unit.is_moving ~= true) and (dist_sq > (CELL_WIDTH * CELL_WIDTH * 1.44))
+                    if needs_reconcile then
+                        go.cancel_animations(unit.go_path, "position")
+                        go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
+                    end
+                else
+                    if in_settle and dist_sq > 0.25 then
+                        go.cancel_animations(unit.go_path, "position")
+                        go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
+                    elseif dist_sq > 0.25 then
+                        go.cancel_animations(unit.go_path, "position")
+                        go.animate(unit.go_path, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(tx, ty, 0.5), go.EASING_LINEAR, 0.28)
+                    end
+                end
+            end
+        end
+    end
+
+    local snapshot_aliens_by_id = {}
+    for _, alien_snapshot in ipairs(snapshot.aliens or {}) do
+        local alien_id = tonumber(alien_snapshot.id or 0) or 0
+        if alien_id > 0 then
+            snapshot_aliens_by_id[alien_id] = alien_snapshot
+            local alien = find_alien_by_id(self, alien_id)
+            if not alien then
+                local alien_type = alien_snapshot.type or ALIEN_TYPE_BLIP
+                local cfg = ALIEN_TYPE_CONFIG[alien_type] or ALIEN_TYPE_CONFIG[ALIEN_TYPE_BLIP]
+                local ap_max = tonumber(alien_snapshot.ap_max or cfg.ap_per_turn) or (cfg.ap_per_turn or 1)
+                local hp_max = tonumber(alien_snapshot.hp_max or cfg.hp) or (cfg.hp or 1)
+                alien = {
+                    id = alien_id,
+                    type = alien_type,
+                    cell_id = tonumber(alien_snapshot.cell_id),
+                    ap_max = ap_max,
+                    turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or ap_max) or ap_max,
+                    hp_max = hp_max,
+                    hp_current = tonumber(alien_snapshot.hp_current or hp_max) or hp_max,
+                    can_traverse_void = (alien_snapshot.can_traverse_void == true) or (cfg.can_traverse_void == true),
+                    has_ranged = (alien_snapshot.has_ranged == true) or (cfg.has_ranged == true),
+                    ranged_cells = tonumber(alien_snapshot.ranged_cells or cfg.ranged_cells or 0) or 0,
+                    go_id = nil,
+                    is_moving = false,
+                    move_path = nil,
+                    move_path_index = 0,
+                    spitter_anim_phase = math.random() * math.pi * 2,
+                    spitter_flip = false,
+                    hidden_reveal_type = alien_snapshot.hidden_reveal_type
+                }
+                table.insert(self.aliens, alien)
+            else
+                alien.type = alien_snapshot.type or alien.type
+                alien.cell_id = tonumber(alien_snapshot.cell_id) or alien.cell_id
+                alien.ap_max = tonumber(alien_snapshot.ap_max or alien.ap_max or 1) or 1
+                alien.turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or alien.turn_ap_remaining or alien.ap_max) or alien.ap_max
+                alien.hp_max = tonumber(alien_snapshot.hp_max or alien.hp_max or 1) or 1
+                alien.hp_current = tonumber(alien_snapshot.hp_current or alien.hp_current or alien.hp_max) or alien.hp_max
+                alien.can_traverse_void = alien_snapshot.can_traverse_void == true
+                alien.has_ranged = alien_snapshot.has_ranged == true
+                alien.ranged_cells = tonumber(alien_snapshot.ranged_cells or alien.ranged_cells or 0) or 0
+                alien.hidden_reveal_type = alien_snapshot.hidden_reveal_type
+                alien.is_moving = false
+                alien.move_path = nil
+                alien.move_path_index = 0
+                alien.counter_move_total_dist = nil
+                alien.counter_shadow_offset = nil
+                alien.melee_shuffle_target_x = nil
+                alien.melee_shuffle_target_y = nil
+                if alien.type == ALIEN_TYPE_SPITTER then
+                    alien.spitter_idle_anchor_x = nil
+                    alien.spitter_idle_anchor_y = nil
+                end
+            end
+            ensure_alien_visual(self, alien)
+            local wanted_visual_kind = "marker"
+            if alien.type == ALIEN_TYPE_BLIP then
+                wanted_visual_kind = "blip"
+            elseif alien.type == ALIEN_TYPE_CANNON then
+                wanted_visual_kind = "cannon"
+            elseif alien.type == ALIEN_TYPE_SPITTER then
+                wanted_visual_kind = "spitter"
+            elseif alien.type == ALIEN_TYPE_SPEEDY then
+                wanted_visual_kind = "speedy"
+            elseif alien.type == ALIEN_TYPE_BRUTE then
+                wanted_visual_kind = "brute"
+            end
+            if alien.visual_kind ~= wanted_visual_kind then
+                refresh_alien_visual(self, alien)
+            end
+            if alien.go_id then
+                local ax = tonumber(alien_snapshot.world_x or nil)
+                local ay = tonumber(alien_snapshot.world_y or nil)
+                if ax and ay then
+                    local apos = go.get_position(alien.go_id)
+                    local adx = ax - apos.x
+                    local ady = ay - apos.y
+                    local dist_sq = (adx * adx + ady * ady)
+                    local snap_dist = CELL_WIDTH * 0.8
+                    local in_settle = (self.realtime_client_settle_timer or 0) > 0
+                    local decouple_motion = (REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST == true)
+                        and self.mp_state
+                        and self.mp_state.enabled
+                        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+                        and self.realtime_rules_enabled == true
+                    if decouple_motion then
+                        -- Hybrid alien sync in realtime MP:
+                        -- keep host authority for decisions, but smooth medium position deltas
+                        -- on clients so aliens do not appear frozen between snapshots.
+                        if dist_sq > (snap_dist * snap_dist * 2.25) then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        elseif dist_sq > 4.0 then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(ax, ay, 0.6), go.EASING_LINEAR, 0.22)
+                        end
+                    else
+                        if in_settle and dist_sq > 0.25 then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        elseif dist_sq > (snap_dist * snap_dist) then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
+                        elseif dist_sq > 0.25 then
+                            go.cancel_animations(alien.go_id, "position")
+                            go.animate(alien.go_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(ax, ay, 0.6), go.EASING_LINEAR, 0.24)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    for i = #self.aliens, 1, -1 do
+        local alien = self.aliens[i]
+        if alien and (not snapshot_aliens_by_id[tonumber(alien.id or 0) or 0]) then
+            if alien.go_id then
+                pcall(go.delete, alien.go_id)
+            end
+            table.remove(self.aliens, i)
+        end
+    end
+    self.next_alien_id = tonumber(snapshot.next_alien_id or self.next_alien_id or 0) or 0
+
+    local old_civilians_by_id = {}
+    for _, existing in ipairs(self.civilians or {}) do
+        if existing and existing.id then
+            old_civilians_by_id[tonumber(existing.id) or 0] = existing
+        end
+    end
+    local next_civilians = multiplayer_clone_simple_table(snapshot.civilians or self.civilians or {}) or {}
+    if decouple_motion then
+        for _, civilian in ipairs(next_civilians) do
+            local existing = old_civilians_by_id[tonumber(civilian and civilian.id or 0) or 0]
+            if existing then
+                civilian.is_moving = existing.is_moving
+                civilian.move_path = existing.move_path
+                civilian.move_path_index = existing.move_path_index
+                civilian.micro_target_x = existing.micro_target_x
+                civilian.micro_target_y = existing.micro_target_y
+                civilian.micro_move_kind = existing.micro_move_kind
+                civilian.vertical_prep_done_for_index = existing.vertical_prep_done_for_index
+                civilian.entry_slot_for_index = existing.entry_slot_for_index
+                civilian.entry_slot_index = existing.entry_slot_index
+                civilian.shadow_motion_offset = existing.shadow_motion_offset
+                civilian.counter_move_total_dist = existing.counter_move_total_dist
+                civilian.anim_phase = existing.anim_phase
+            end
+        end
+    end
+    self.civilians = next_civilians
+    self.next_civilian_id = tonumber(snapshot.next_civilian_id or self.next_civilian_id or 0) or 0
+    self.world_item_instances = multiplayer_clone_simple_table(snapshot.world_item_instances or self.world_item_instances or {}) or {}
+    self.next_world_item_id = tonumber(snapshot.next_world_item_id or self.next_world_item_id or 0) or 0
+    self.dna_analysis_progress = tonumber(snapshot.dna_analysis_progress or self.dna_analysis_progress or 0) or 0
+    self.dna_analysis_complete = snapshot.dna_analysis_complete == true
+    self.dna_sample_spawned = snapshot.dna_sample_spawned == true
+    self.dna_sample_returned = snapshot.dna_sample_returned == true
+    self.purge_bomb_planted = snapshot.purge_bomb_planted == true
+    self.purge_timer_started = snapshot.purge_timer_started == true
+    self.purge_launch_pressed = snapshot.purge_launch_pressed == true
+    self.purge_time_expired = snapshot.purge_time_expired == true
+    self.purge_result_locked = snapshot.purge_result_locked == true
+    self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
+
+    if not decouple_motion then
+        multiplayer_enforce_controlled_unit(self, true)
+    end
+    refresh_civilian_visuals(self)
+    update_human_visual_state(self)
+    return true
 end
 
 multiplayer_apply_snapshot_state = function(self, snapshot)
@@ -14648,6 +16881,21 @@ multiplayer_apply_pickup_obstacle_event = function(self, payload)
     return ok
 end
 
+multiplayer_apply_pickup_corpse_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local corpse_ref = payload.corpse_ref
+    if not (unit_id and corpse_ref) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_store_dead_human_corpse_by_ids(self, unit_id, corpse_ref) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
 multiplayer_apply_pickup_turret_event = function(self, payload)
     if not payload or type(payload) ~= "table" then
         return false
@@ -14758,6 +17006,20 @@ multiplayer_apply_scavenge_crate_event = function(self, payload)
     return ok
 end
 
+multiplayer_apply_set_reactive_fire_event = function(self, payload)
+    if type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local unit = self.squad_units and self.squad_units[unit_id] or nil
+    if not unit or (unit.current_health or 0) <= 0 then
+        return false
+    end
+    unit.reactive_fire_enabled = (payload.reactive_fire_enabled == true)
+    print(string.format("%s reactive fire: %s", unit.display_name or "Unit", (unit.reactive_fire_enabled ~= false) and "ON" or "OFF"))
+    return true
+end
+
 local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
     if not unit or not unit.is_selected then
         return false
@@ -14771,15 +17033,79 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     if not alien then
         return false
     end
-    if self.mp_state and self.mp_state.enabled then
-        multiplayer_transport_send_command(self, "manual_shot", {
-            turn_id = self.mp_state.turn_id or 1,
-            unit_id = unit.id,
-            alien_id = alien.id
-        }, multiplayer_get_active_player_id_for_commands(self))
+    if self.realtime_rules_enabled == true or unit.cell_id == alien.cell_id then
+        clear_ranged_hit_preview(self)
+        if self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "manual_shot", {
+                turn_id = self.mp_state.turn_id or 1,
+                unit_id = unit.id,
+                alien_id = alien.id
+            }, multiplayer_get_active_player_id_for_commands(self))
+            return true
+        end
+        return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    end
+    local same_pending_target = (self.pending_manual_shot_alien_id == alien.id)
+        and (self.pending_manual_shot_unit_id == unit.id)
+        and (self.ranged_hit_preview_fading_out ~= true)
+        and ((self.ranged_hit_preview_fade_alpha or 0) > 0)
+    if same_pending_target then
+        clear_ranged_hit_preview(self)
+        if self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "manual_shot", {
+                turn_id = self.mp_state.turn_id or 1,
+                unit_id = unit.id,
+                alien_id = alien.id
+            }, multiplayer_get_active_player_id_for_commands(self))
+            return true
+        end
+        return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    end
+    local alien_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
+    if not alien_cell or alien_cell.tileID == hash("empty") then
+        print("Unable to fire: target is in VOID.")
+        dismiss_ranged_hit_preview(self)
         return true
     end
-    return multiplayer_attempt_manual_shot_on_target(self, unit, alien)
+    if not has_unobstructed_human_ranged_los(self.world_grid, unit.cell_id, alien.cell_id) then
+        print("Unable to fire: no line of sight.")
+        dismiss_ranged_hit_preview(self)
+        return true
+    end
+    local shooter_cell = self.world_grid and self.world_grid[unit.cell_id] or nil
+    local target_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
+    if shooter_cell and target_cell then
+        local is_vertical_lane = (shooter_cell.xCell == target_cell.xCell) and (shooter_cell.yCell ~= target_cell.yCell)
+        if is_vertical_lane then
+            local shooter_center_x = coords_to_world_pos(shooter_cell.xCell, shooter_cell.yCell)
+            local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
+            local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
+            local target_pos = alien.go_id and go.get_position(alien.go_id) or nil
+            local shooter_x = shooter_pos and shooter_pos.x or shooter_center_x
+            local target_x = target_pos and target_pos.x or target_center_x
+            local right_threshold = CELL_WIDTH * 0.15
+            local shooter_in_right_lane = shooter_x >= (shooter_center_x + right_threshold)
+            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
+            if (not shooter_in_right_lane) or (not target_in_right_lane) then
+                print("Unable to fire: vertical shot requires both shooter and target in right lane.")
+                dismiss_ranged_hit_preview(self)
+                return true
+            end
+        end
+    end
+    local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+    if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
+        print("unable to fire no ammo/ap")
+        dismiss_ranged_hit_preview(self)
+        return true
+    end
+    local hit_chance = compute_manual_ranged_hit_chance(self, unit, alien)
+    if not hit_chance then
+        dismiss_ranged_hit_preview(self)
+        return true
+    end
+    show_ranged_hit_preview(self, unit, alien, hit_chance)
+    return true
 end
 
 local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
@@ -14790,6 +17116,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
     local clicked_unit = get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y)
     if clicked_unit then
+        clear_ranged_hit_preview(self)
         if not multiplayer_can_control_unit(self, clicked_unit.id) then
             print(string.format(
                 "MP CONTROL | blocked | acting_as=%s unit=%s",
@@ -14846,6 +17173,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.controlled_unit_id = clicked_unit.id
             deselect_all_units(self)
             clicked_unit.is_selected = true
+            play_human_confirm_select_sfx(self, clicked_unit)
             print(clicked_unit.display_name .. " selected. Click destination cell.")
         end
         self.ui_close_on_next_non_unit_click = false
@@ -14862,6 +17190,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         unit = get_controlled_unit(self)
     end
     if not (unit and (unit.current_health or 0) > 0) then
+        clear_ranged_hit_preview(self)
         if unit.is_selected then
             unit.is_selected = false
             update_human_visual_state(self)
@@ -14881,7 +17210,12 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.ui_close_on_next_non_unit_click = false
             return true
         end
-        if self.alien_turn_active then
+        if self.pending_manual_shot_alien_id and (self.ranged_hit_preview_fade_alpha or 0) > 0 then
+            dismiss_ranged_hit_preview(self)
+            self.ui_close_on_next_non_unit_click = false
+            return true
+        end
+        if self.alien_turn_active and self.realtime_rules_enabled ~= true then
             print("Alien turn paused: select humans and fire, or press advance.")
             return true
         end
@@ -15192,9 +17526,10 @@ end
 
             if placement.tile ~= "entry" and (not is_rescue_entry_tile_name(placement.tile)) then
                 -- Exterior details are only for truly exposed silhouettes:
-                -- roof: no overlapping tile anywhere above; left wall: no overlapping tile anywhere to the left.
+                -- roof: no overlapping tile anywhere above; walls: no overlapping tile anywhere to each side.
                 local has_tile_above = false
                 local has_tile_left = false
+                local has_tile_right = false
                 local p_left = placement.x - 1
                 local p_right = placement.x + 1
                 local p_bottom = placement.y - 1
@@ -15213,7 +17548,10 @@ end
                         if (not has_tile_left) and overlaps_y and scan.x < placement.x then
                             has_tile_left = true
                         end
-                        if has_tile_above and has_tile_left then
+                        if (not has_tile_right) and overlaps_y and scan.x > placement.x then
+                            has_tile_right = true
+                        end
+                        if has_tile_above and has_tile_left and has_tile_right then
                             break
                         end
                     end
@@ -15246,6 +17584,21 @@ end
                         go.set(msg.url(nil, left_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         table.insert(tile_objects, left_wall_id)
                         table.insert(self.exterior_detail_objects, left_wall_id)
+                    end
+                end
+                if not has_tile_right then
+                    local right_wall_id = factory.create(
+                        "/tile_factory#tile_factory",
+                        vmath.vector3(center_x + (CELL_WIDTH * 3), center_y, 0.02),
+                        nil,
+                        {},
+                        vmath.vector3(visual_scale, visual_scale, 1)
+                    )
+                    if right_wall_id then
+                        msg.post(msg.url(nil, right_wall_id, "sprite"), "play_animation", { id = hash("exterior_rightWall1") })
+                        go.set(msg.url(nil, right_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        table.insert(tile_objects, right_wall_id)
+                        table.insert(self.exterior_detail_objects, right_wall_id)
                     end
                 end
             end
@@ -15449,12 +17802,27 @@ function init(self)
     self.zoom_focus_x = SCREEN_WIDTH * 0.5
     self.zoom_focus_y = SCREEN_HEIGHT * 0.5
     self.zoom_smooth_speed = 12
+    self.realtime_rules_enabled = REALTIME_MODE_CFG.enabled == true
+    self.realtime_mp_enabled = REALTIME_MODE_CFG.multiplayer_enabled == true
+    self.realtime_ap_regen_per_second = tonumber(REALTIME_MODE_CFG.ap_regen_per_second or 1.0) or 1.0
+    self.realtime_alien_step_hz = tonumber(REALTIME_MODE_CFG.alien_step_hz or 2.0) or 2.0
+    self.realtime_civilian_step_hz = tonumber(REALTIME_MODE_CFG.civilian_step_hz or 1.0) or 1.0
+    self.realtime_blip_spawn_interval_s = tonumber(REALTIME_MODE_CFG.blip_spawn_interval_s or 8.0) or 8.0
+    self.realtime_alien_move_speed_multiplier = tonumber(REALTIME_MODE_CFG.alien_move_speed_multiplier or 1.0) or 1.0
+    self.realtime_blip_move_speed_multiplier = tonumber(REALTIME_MODE_CFG.blip_move_speed_multiplier or 0.35) or 0.35
+    self.realtime_alien_tick_accum = 0
+    self.realtime_civilian_tick_accum = 0
+    self.realtime_blip_spawn_accum = 0
+    self.realtime_client_settle_timer = 0
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")
 
     -- Keep camera position/zoom and click conversion in the same space
     apply_camera_transform(self)
+    if self.realtime_rules_enabled then
+        print("Realtime rules flag is enabled (scaffold only; no behavior change yet).")
+    end
 
     -- Enable input
     msg.post(".", "acquire_input_focus")
@@ -15472,7 +17840,7 @@ function init(self)
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0
     self.sheen_offset_y = 100
-    self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_BOARDGAME
+    self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_COMPUTER
     self.world_backdrop = nil
     self.world_backdrop_tiles = nil
     self.world_backdrop_anim = nil
@@ -15527,6 +17895,106 @@ function init(self)
     self.table_sweep_shadow_pan_x = nil
     self.table_sweep_shadow_pan_y = 0
     self.table_sweep_shadow_pause_timer = nil
+    self.sfx_state = {
+        loops = true, -- enabled with flow-state-change gate
+        boot_deferred = false,
+        last_flow_state = nil,
+        enabled_by_key = {
+            title = true,
+            planet = true,
+            human_vertical = true,
+            human_horizontal = true,
+            unit_tile_bump = true,
+            human_shoot = true,
+            human_shoot_2 = true,
+            turret_gun = true,
+            cannonfodder_dies = true,
+            speedy_dies = true,
+            brute_dies = true,
+            spitter_dies = true,
+            brute_damage = true,
+            melee_hit_alien = true,
+            melee_hit_human = true,
+            sarge_alien_alert = true,
+            techie_alien_alert = true,
+            medic_alien_alert = true,
+            gunner_alien_alert = true,
+            sarge_confirm_select = true,
+            techie_confirm_select = true,
+            medic_confirm_select = true,
+            gunner_confirm_select = true,
+            power_node_on = true,
+            power_node_off = true,
+            drag_item = true,
+            break_barricade = true,
+            build_barricade = true,
+            medibay_revive = true,
+            door_toggle = true,
+            escape_pod_ready = true,
+            factory_produce = true,
+            fabricator_working = true,
+            sparking_wire = true,
+            welding = true,
+            task_done = true,
+            sarge_item_recieve = true,
+            techie_item_recieve = true,
+            medic_item_recieve = true,
+            gunner_item_recieve = true,
+            speedy_move = true
+        },
+        title = { url = msg.url(SFX_TITLE_URL), playing = false },
+        planet = { url = msg.url(SFX_PLANET_URL), playing = false },
+        human_vertical = { url = msg.url(SFX_HUMAN_VERTICAL_URL), playing = false },
+        human_horizontal = { url = msg.url(SFX_HUMAN_HORIZONTAL_URL), playing = false },
+        unit_tile_bump = { url = msg.url(SFX_UNIT_TILE_BUMP_URL), playing = false },
+        human_shoot = { url = msg.url(SFX_HUMAN_SHOOT_URL), playing = false },
+        human_shoot_2 = { url = msg.url(SFX_HUMAN_SHOOT_2_URL), playing = false },
+        turret_gun = { url = msg.url(SFX_TURRET_GUN_URL), playing = false },
+        cannonfodder_dies = { url = msg.url(SFX_CANNONFODDER_DIES_URL), playing = false },
+        speedy_dies = { url = msg.url(SFX_SPEEDY_DIES_URL), playing = false },
+        brute_dies = { url = msg.url(SFX_BRUTE_DIES_URL), playing = false },
+        spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
+        brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
+        melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },
+        melee_hit_human = { url = msg.url(SFX_MELEE_HIT_HUMAN_URL), playing = false },
+        sarge_alien_alert = { url = msg.url(SFX_SARGE_ALIEN_ALERT_URL), playing = false },
+        techie_alien_alert = { url = msg.url(SFX_TECHIE_ALIEN_ALERT_URL), playing = false },
+        medic_alien_alert = { url = msg.url(SFX_MEDIC_ALIEN_ALERT_URL), playing = false },
+        gunner_alien_alert = { url = msg.url(SFX_GUNNER_ALIEN_ALERT_URL), playing = false },
+        sarge_confirm_select = { url = msg.url(SFX_SARGE_CONFIRM_SELECT_URL), playing = false },
+        techie_confirm_select = { url = msg.url(SFX_TECHIE_CONFIRM_SELECT_URL), playing = false },
+        medic_confirm_select = { url = msg.url(SFX_MEDIC_CONFIRM_SELECT_URL), playing = false },
+        gunner_confirm_select = { url = msg.url(SFX_GUNNER_CONFIRM_SELECT_URL), playing = false },
+        power_node_on = { url = msg.url(SFX_POWER_NODE_ON_URL), playing = false },
+        power_node_off = { url = msg.url(SFX_POWER_NODE_OFF_URL), playing = false },
+        drag_item = { url = msg.url(SFX_DRAG_ITEM_URL), playing = false },
+        break_barricade = { url = msg.url(SFX_BREAK_BARRICADE_URL), playing = false },
+        build_barricade = { url = msg.url(SFX_BUILD_BARRICADE_URL), playing = false },
+        medibay_revive = { url = msg.url(SFX_MEDIBAY_REVIVE_URL), playing = false },
+        door_toggle = { url = msg.url(SFX_DOOR_TOGGLE_URL), playing = false },
+        escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
+        factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },
+        fabricator_working = { url = msg.url(SFX_FABRICATOR_WORKING_URL), playing = false },
+        sparking_wire = { url = msg.url(SFX_SPARKING_WIRE_URL), playing = false },
+        welding = { url = msg.url(SFX_WELDING_URL), playing = false },
+        task_done = { url = msg.url(SFX_TASK_DONE_URL), playing = false },
+        sarge_item_recieve = { url = msg.url(SFX_SARGE_ITEM_RECIEVE_URL), playing = false },
+        techie_item_recieve = { url = msg.url(SFX_TECHIE_ITEM_RECIEVE_URL), playing = false },
+        medic_item_recieve = { url = msg.url(SFX_MEDIC_ITEM_RECIEVE_URL), playing = false },
+        gunner_item_recieve = { url = msg.url(SFX_GUNNER_ITEM_RECIEVE_URL), playing = false },
+        speedy_voice_urls = {
+            msg.url(SFX_SPEEDY_MOVE_URL_1),
+            msg.url(SFX_SPEEDY_MOVE_URL_2),
+            msg.url(SFX_SPEEDY_MOVE_URL_3),
+            msg.url(SFX_SPEEDY_MOVE_URL_4)
+        },
+        speedy_playing_by_voice = { false, false, false, false },
+        vertical_active_by_unit = {},
+        vertical_active_count = 0,
+        horizontal_active_by_actor = {},
+        horizontal_active_count = 0,
+        speedy_active_count = 0
+    }
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)
@@ -15537,6 +18005,7 @@ function init(self)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.comms_panel_open = false
+    clear_ranged_hit_preview(self)
     self.squad_units = create_squad_units()
     self.controlled_unit_id = "sarge"
     self.spawn_human_unit_fn = spawn_human_unit
@@ -15561,6 +18030,7 @@ function init(self)
     self.turret_fire_cooldown_by_object_id = {}
     self.turret_fired_this_alien_turn_by_object_id = {}
     self.human_reactive_fire_cooldown_by_unit_id = {}
+    self.human_reactive_pending_delay_by_unit_id = {}
     self.pending_melee_attack_phase = false
     self.melee_attack_started = false
     self.melee_attack_timer = 0
@@ -15639,6 +18109,81 @@ end
 function update(self, dt)
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
+    end
+    if self.sfx_state and self.sfx_state.boot_deferred ~= true then
+        self.sfx_state.boot_deferred = true
+        refresh_ambient_sfx_state(self)
+    end
+    update_escape_pod_ready_sfx(self)
+    update_sparking_wire_ambient_sfx(self, dt)
+    if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
+        self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
+    end
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+        if realtime_mp_host_can_simulate(self) then
+            local snapshot_interval_s = math.max(0.05, tonumber(REALTIME_MP_SNAPSHOT_INTERVAL_S or 0.2) or 0.2)
+            self.mp_state.realtime_snapshot_accum_s = (tonumber(self.mp_state.realtime_snapshot_accum_s or 0) or 0) + dt
+            while self.mp_state.realtime_snapshot_accum_s >= snapshot_interval_s do
+                self.mp_state.realtime_snapshot_accum_s = self.mp_state.realtime_snapshot_accum_s - snapshot_interval_s
+                local snapshot = multiplayer_build_snapshot_state(self)
+                self.mp_state.realtime_snapshot_seq = (tonumber(self.mp_state.realtime_snapshot_seq or 0) or 0) + 1
+                multiplayer_transport_broadcast_event(self, "realtime_state_snapshot", {
+                    seq = self.mp_state.realtime_snapshot_seq,
+                    turn_id = self.mp_state.turn_id or 1,
+                    snapshot = snapshot
+                })
+            end
+        else
+            self.mp_state.realtime_snapshot_accum_s = 0
+            self.mp_state.realtime_snapshot_heartbeat_accum_s = 0
+        end
+        if self.realtime_rules_enabled ~= true then
+            local turn_snapshot_interval_s = math.max(0.5, tonumber(TURN_BASED_MP_SNAPSHOT_INTERVAL_S or 2.5) or 2.5)
+            self.mp_state.turn_based_snapshot_accum_s = (tonumber(self.mp_state.turn_based_snapshot_accum_s or 0) or 0) + dt
+            if self.mp_state.turn_based_snapshot_accum_s >= turn_snapshot_interval_s then
+                self.mp_state.turn_based_snapshot_accum_s = 0
+                multiplayer_transport_broadcast_event(self, "turn_state_heartbeat", {
+                    turn_id = self.mp_state.turn_id or 1,
+                    checksum = multiplayer_compute_turn_checksum(self)
+                })
+            end
+        else
+            self.mp_state.turn_based_snapshot_accum_s = 0
+            self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+            self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.build_workshop_sync_state then
+            local sync_interval_s = 0.2
+            self.mp_state.workshop_state_sync_accum_s = (tonumber(self.mp_state.workshop_state_sync_accum_s or 0) or 0) + dt
+            if self.mp_state.workshop_state_sync_accum_s >= sync_interval_s then
+                self.mp_state.workshop_state_sync_accum_s = 0
+                local workshop_state = LOOT_RUNTIME.build_workshop_sync_state(self)
+                local signature = workshop_state_signature(workshop_state)
+                if signature ~= tostring(self.mp_state.workshop_state_sync_signature or "") then
+                    self.mp_state.workshop_state_sync_signature = signature
+                    multiplayer_transport_broadcast_event(self, "workshop_state_changed", {
+                        workshop_state = workshop_state,
+                        turn_id = self.mp_state.turn_id or 1
+                    })
+                end
+            end
+        end
+        if LOOT_RUNTIME and LOOT_RUNTIME.build_factory_sync_state then
+            local sync_interval_s = 0.2
+            self.mp_state.factory_state_sync_accum_s = (tonumber(self.mp_state.factory_state_sync_accum_s or 0) or 0) + dt
+            if self.mp_state.factory_state_sync_accum_s >= sync_interval_s then
+                self.mp_state.factory_state_sync_accum_s = 0
+                local factory_state = LOOT_RUNTIME.build_factory_sync_state(self)
+                local signature = factory_state_signature(factory_state)
+                if signature ~= tostring(self.mp_state.factory_state_sync_signature or "") then
+                    self.mp_state.factory_state_sync_signature = signature
+                    multiplayer_transport_broadcast_event(self, "factory_state_changed", {
+                        factory_state = factory_state,
+                        turn_id = self.mp_state.turn_id or 1
+                    })
+                end
+            end
+        end
     end
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
         local pending_turn_state_turn_id = tonumber(self.mp_state.pending_turn_state_snapshot_turn_id or 0) or 0
@@ -16002,7 +18547,19 @@ function update(self, dt)
     end
     tick_human_reactive_fire_cooldowns(self, dt)
     process_turret_reactive_fire(self, dt)
+    if self.pending_manual_shot_alien_id then
+        if self.ranged_hit_preview_fading_out == true then
+            local fade_s = math.max(0.001, tonumber(RANGED_HIT_PREVIEW_FADE_SECONDS or 0.22) or 0.22)
+            self.ranged_hit_preview_fade_alpha = math.max(0, (self.ranged_hit_preview_fade_alpha or 0) - (dt / fade_s))
+            if (self.ranged_hit_preview_fade_alpha or 0) <= 0 then
+                clear_ranged_hit_preview(self)
+            end
+        else
+            self.ranged_hit_preview_fade_alpha = 1
+        end
+    end
     if self.civilian_turn_waiting_for_alien
+        and self.realtime_rules_enabled ~= true
         and (not any_civilian_is_moving(self))
         and (not self.alien_turn_active)
         and (not self.pending_spitter_attack_phase)
@@ -16023,6 +18580,8 @@ function update(self, dt)
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
     enforce_tutorial_infinite_ap(self)
+    enforce_realtime_ap_regen(self, dt)
+    process_realtime_world_ticks(self, dt)
     if (not in_outro_flow) and LOOT_RUNTIME.update_hazard_fx_visibility then
         LOOT_RUNTIME.update_hazard_fx_visibility(self)
     end
@@ -16049,6 +18608,7 @@ function update(self, dt)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
     update_flow_ui(self, dt)
+    refresh_ambient_sfx_state(self)
     update_outro_slideshow_runtime(self, dt)
     update_tutorial_overlay_ui(self)
     LOOT_RUNTIME.update_drag_visual(self)
@@ -16130,7 +18690,9 @@ function update(self, dt)
             apply_backdrop_emissive_tint(self, dt, profile)
         end
         if self.world_backdrop_tiles and #self.world_backdrop_tiles > 0 then
-            local cols = (profile and profile.backdrop_tile_cols) or 5
+            local base_cols = (profile and profile.backdrop_tile_cols) or 5
+            local right_extra_cols = math.max(0, math.floor((profile and profile.backdrop_tile_right_extra_cols) or 0))
+            local cols = base_cols + right_extra_cols
             local rows = (profile and profile.backdrop_tile_rows) or 5
             local tile_art_w = (profile and profile.backdrop_tile_art_w) or 256
             local tile_art_h = (profile and profile.backdrop_tile_art_h) or 256
@@ -16139,7 +18701,7 @@ function update(self, dt)
             local tile_scale_y = tile_scale_base
             local tile_span_x = tile_art_w * tile_scale_x
             local tile_span_y = tile_art_h * tile_scale_y
-            local x0 = bx - (((cols - 1) * tile_span_x) * 0.5)
+            local x0 = bx - (((base_cols - 1) * tile_span_x) * 0.5)
             local y0 = by - (((rows - 1) * tile_span_y) * 0.5)
             local tile_i = 1
             for row = 1, rows do
@@ -16287,51 +18849,71 @@ function on_input(self, action_id, action)
             end
             if not self.did_drag then
                 if tutorial_try_advance_from_click(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_multiplayer_debug_player_buttons(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_multiplayer_ready_buttons(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_next_turn_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_launch_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    return true
+                end
+                if try_toggle_realtime_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_objective_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_aesthetic_ui_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_zoom_in_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_zoom_out_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_reactive_combat(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_select_level_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_advance_reactive_alien_turn(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_toggle_comms_panel(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if try_activate_comms_slot(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
                     return true
                 end
                 if get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then
                     if try_close_selected_unit_ui(self, input_x, input_y) then
+                        dismiss_ranged_hit_preview(self)
                         return
                     end
+                    dismiss_ranged_hit_preview(self)
                     return
                 end
                 local mapped_action = { x = input_x, y = input_y }
@@ -16430,6 +19012,9 @@ function on_input(self, action_id, action)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
+        if self.realtime_rules_enabled == true then
+            return true
+        end
         if tutorial_rules_locked and tutorial_rules_locked(self) then
             return true
         end
@@ -16460,6 +19045,40 @@ function on_input(self, action_id, action)
                 process_alien_turn(self)
             end
         end
+    elseif action.pressed and self.realtime_rules_enabled == true and (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME then
+        if action_id == hash("rt_tune_spawn_slower") then
+            self.realtime_blip_spawn_interval_s = math.min(20.0, (tonumber(self.realtime_blip_spawn_interval_s or 2.0) or 2.0) + 0.25)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_spawn_faster") then
+            self.realtime_blip_spawn_interval_s = math.max(0.25, (tonumber(self.realtime_blip_spawn_interval_s or 2.0) or 2.0) - 0.25)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_blip_slower") then
+            self.realtime_blip_move_speed_multiplier = math.max(0.05, (tonumber(self.realtime_blip_move_speed_multiplier or 0.25) or 0.25) - 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_blip_faster") then
+            self.realtime_blip_move_speed_multiplier = math.min(1.5, (tonumber(self.realtime_blip_move_speed_multiplier or 0.25) or 0.25) + 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_aliens_slower") then
+            self.realtime_alien_move_speed_multiplier = math.max(0.2, (tonumber(self.realtime_alien_move_speed_multiplier or 0.75) or 0.75) - 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_aliens_faster") then
+            self.realtime_alien_move_speed_multiplier = math.min(1.5, (tonumber(self.realtime_alien_move_speed_multiplier or 0.75) or 0.75) + 0.05)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_step_slower") then
+            self.realtime_alien_step_hz = math.max(0.25, (tonumber(self.realtime_alien_step_hz or 1.2) or 1.2) - 0.1)
+            log_realtime_tuning(self)
+            return true
+        elseif action_id == hash("rt_tune_step_faster") then
+            self.realtime_alien_step_hz = math.min(10.0, (tonumber(self.realtime_alien_step_hz or 1.2) or 1.2) + 0.1)
+            log_realtime_tuning(self)
+            return true
+        end
     end
 end
 
@@ -16470,6 +19089,9 @@ end
 function on_message(self, message_id, message, sender)
     if message_id == hash("next_turn") then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return
+        end
+        if self.realtime_rules_enabled == true then
             return
         end
         if tutorial_rules_locked and tutorial_rules_locked(self) then
@@ -16502,5 +19124,20 @@ function on_message(self, message_id, message, sender)
         else
             process_alien_turn(self)
         end
+    end
+end
+
+function final(self)
+    if self and self.sfx_state then
+        self.sfx_state.vertical_active_by_unit = {}
+        self.sfx_state.vertical_active_count = 0
+        self.sfx_state.horizontal_active_by_actor = {}
+        self.sfx_state.horizontal_active_count = 0
+        self.sfx_state.speedy_active_count = 0
+        set_sound_loop_state(self, "human_vertical", false)
+        set_sound_loop_state(self, "human_horizontal", false)
+        stop_speedy_move_sfx(self)
+        set_sound_loop_state(self, "planet", false)
+        set_sound_loop_state(self, "title", false)
     end
 end

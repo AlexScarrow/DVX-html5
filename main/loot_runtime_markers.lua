@@ -691,6 +691,9 @@ function M.extend(runtime, ctx)
 
     -- Hook for future barricade impact FX integration.
     runtime.play_barricade_hit_fx = function(self, cell_id, destroyed)
+        if ctx and ctx.play_break_barricade_sfx then
+            ctx.play_break_barricade_sfx(self)
+        end
         return false
     end
 

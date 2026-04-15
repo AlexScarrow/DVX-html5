@@ -31,6 +31,9 @@ shared_state = 1
 [sprite]
 max_count = 2500
 
+[sound]
+max_component_count = 128
+
 [collection]
 max_instances = 2048
 

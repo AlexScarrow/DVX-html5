@@ -64,11 +64,8 @@ function M.extend(runtime, ctx)
     local WORKSHOP_PRODUCT_BY_SLOT = {
         [1] = { item_type = ctx.COMPONENT_UI.component_wiring_straight, price = 1, label = "wiring" },
         [2] = { item_type = ctx.COMPONENT_UI.component_fuse, price = 1, label = "fuse" },
-        [3] = { item_type = "obstacle1", price = 2, label = "obstacle1" },
-        [4] = { item_type = "obstacle2", price = 2, label = "obstacle2" },
-        [5] = { item_type = "obstacle3", price = 2, label = "obstacle3" },
-        [6] = { item_type = "obstacle4", price = 2, label = "obstacle4" },
-        [7] = { item_type = "obstacle5", price = 2, label = "obstacle5" },
+        [3] = { item_type = OBSTACLE_ITEM, price = 2, label = "obstacle" },
+        [4] = { item_type = ctx.COMPONENT_UI.component_plate, price = 2, label = "plate" },
         [8] = { item_type = "power", price = 5, label = "power" }
     }
     local MEDBAY_TILE_ID = hash("medbay")
@@ -293,6 +290,9 @@ function M.extend(runtime, ctx)
         if runtime.emit_derple_feedback and unit and unit.id then
             runtime.emit_derple_feedback(self, unit.id, "RECEIVE_ITEM")
         end
+        if ctx and ctx.play_human_item_recieve_sfx and unit then
+            ctx.play_human_item_recieve_sfx(self, unit)
+        end
     end
 
     local function get_buff_info_event_type(item_type)
@@ -385,6 +385,8 @@ function M.extend(runtime, ctx)
             return hash("ammo_unit")
         elseif item_type == "power" then
             return hash("power_unit")
+        elseif item_type == ctx.COMPONENT_UI.component_plate then
+            return hash("plate")
         elseif item_type == DNA_SAMPLE_ITEM_TYPE then
             return hash("dna_sample")
         elseif item_type == PURGE_BOMB_ITEM_TYPE then
@@ -927,6 +929,7 @@ function M.extend(runtime, ctx)
         self.next_world_item_id = self.next_world_item_id or 0
         self.factory_underlay_visuals = self.factory_underlay_visuals or {}
         self.factory_conveyor_tokens = self.factory_conveyor_tokens or {}
+        self.factory_sync_state_override = self.factory_sync_state_override or {}
         self.factory_underlay_clock = self.factory_underlay_clock or 0
         self.factory_debug_cell_markers = self.factory_debug_cell_markers or {}
         self.workshop_underlay_visuals = self.workshop_underlay_visuals or {}
@@ -939,6 +942,101 @@ function M.extend(runtime, ctx)
         self.derple_feedback_cooldowns = self.derple_feedback_cooldowns or {}
         self.derple_feedback_clock = self.derple_feedback_clock or 0
         self.impact_ring_entries = self.impact_ring_entries or {}
+    end
+
+    runtime.build_factory_sync_state = function(self)
+        runtime.ensure_item_runtime_state(self)
+        local sync_state = {}
+        local instances = {}
+        if self and self.world_grid then
+            if runtime.get_factory_instances then
+                instances = runtime.get_factory_instances(self)
+            end
+        end
+        for tile_instance_id, instance in pairs(instances or {}) do
+            local tile_id = tonumber(tile_instance_id)
+            if tile_id and instance then
+                local pending_tokens = 0
+                for _, token in ipairs(self.factory_conveyor_tokens or {}) do
+                    if token and tonumber(token.tile_instance_id or 0) == tile_id then
+                        pending_tokens = pending_tokens + 1
+                    end
+                end
+                local stock_total = 0
+                for _, item in ipairs(self.world_item_instances or {}) do
+                    local meta = item and item.meta or nil
+                    if item
+                        and item.item_type == "material"
+                        and meta
+                        and meta.factory_stock == true
+                        and tonumber(meta.factory_tile_instance_id or 0) == tile_id
+                    then
+                        stock_total = stock_total + 1
+                    end
+                end
+                sync_state[tile_id] = {
+                    powered = instance.powered == true,
+                    functional = instance.functional == true,
+                    pending_tokens = pending_tokens,
+                    stock_total = stock_total
+                }
+            end
+        end
+        return sync_state
+    end
+
+    runtime.apply_factory_sync_state = function(self, sync_state)
+        runtime.ensure_item_runtime_state(self)
+        local incoming = sync_state or {}
+        local next_state = {}
+        for tile_instance_id, payload in pairs(incoming) do
+            local tile_id = tonumber(tile_instance_id)
+            if tile_id and type(payload) == "table" then
+                next_state[tile_id] = {
+                    powered = payload.powered == true,
+                    functional = payload.functional == true,
+                    pending_tokens = tonumber(payload.pending_tokens or 0) or 0,
+                    stock_total = tonumber(payload.stock_total or 0) or 0
+                }
+            end
+        end
+        self.factory_sync_state_override = next_state
+    end
+
+    runtime.spawn_factory_conveyor_token_visual = function(self, payload)
+        runtime.ensure_item_runtime_state(self)
+        if type(payload) ~= "table" then
+            return false
+        end
+        local start_x = tonumber(payload.start_x)
+        local start_y = tonumber(payload.start_y)
+        local end_x = tonumber(payload.end_x)
+        local end_y = tonumber(payload.end_y)
+        local tile_instance_id = tonumber(payload.tile_instance_id)
+        local output_cell_id = tonumber(payload.output_cell_id)
+        if not (start_x and start_y and end_x and end_y and tile_instance_id and output_cell_id) then
+            return false
+        end
+        local token_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(start_x, start_y, FACTORY_CONVEYOR_TOKEN_Z))
+        if not token_id then
+            return false
+        end
+        msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = hash("material_unit") })
+        go.set_scale(vmath.vector3(0.85, 0.85, 1), token_id)
+        go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.96))
+        table.insert(self.factory_conveyor_tokens, {
+            go_id = token_id,
+            tile_instance_id = tile_instance_id,
+            output_cell_id = output_cell_id,
+            start_x = start_x,
+            start_y = start_y,
+            end_x = end_x,
+            end_y = end_y,
+            t = 0,
+            duration = math.max(0.05, tonumber(payload.duration or (1 / FACTORY_BELT_PAN_RATE)) or (1 / FACTORY_BELT_PAN_RATE)),
+            remote_visual_only = payload.remote_visual_only == true
+        })
+        return true
     end
 
     local function spawn_impact_ring(self, world_x, world_y, tint, duration_s)
@@ -1093,6 +1191,10 @@ function M.extend(runtime, ctx)
         return instances
     end
 
+    runtime.get_factory_instances = function(self)
+        return get_factory_instances(self)
+    end
+
     local function get_workshop_instances(self)
         local instances = {}
         if not self or not self.world_grid then
@@ -1163,6 +1265,44 @@ function M.extend(runtime, ctx)
             payment_confirm_flash = 0
         }
         return self.workshop_states[tile_instance_id]
+    end
+
+    runtime.build_workshop_sync_state = function(self)
+        runtime.ensure_item_runtime_state(self)
+        local sync_state = {}
+        for tile_instance_id, state in pairs(self.workshop_states or {}) do
+            local tile_id = tonumber(tile_instance_id)
+            if tile_id and state then
+                sync_state[tile_id] = {
+                    selected_slot = tonumber(state.selected_slot or 0) or 0,
+                    paid_units = tonumber(state.paid_units or 0) or 0,
+                    payment_locked = state.payment_locked == true,
+                    production_time_left = tonumber(state.production_time_left or 0) or 0,
+                    payment_confirm_flash = tonumber(state.payment_confirm_flash or 0) or 0
+                }
+            end
+        end
+        return sync_state
+    end
+
+    runtime.apply_workshop_sync_state = function(self, sync_state)
+        runtime.ensure_item_runtime_state(self)
+        self.workshop_states = self.workshop_states or {}
+        local incoming = sync_state or {}
+        local next_states = {}
+        for tile_instance_id, payload in pairs(incoming) do
+            local tile_id = tonumber(tile_instance_id)
+            if tile_id and type(payload) == "table" then
+                next_states[tile_id] = {
+                    selected_slot = tonumber(payload.selected_slot or 0) or 0,
+                    paid_units = tonumber(payload.paid_units or 0) or 0,
+                    payment_locked = payload.payment_locked == true,
+                    production_time_left = tonumber(payload.production_time_left or 0) or 0,
+                    payment_confirm_flash = tonumber(payload.payment_confirm_flash or 0) or 0
+                }
+            end
+        end
+        self.workshop_states = next_states
     end
 
     local function get_medbay_instances(self)
@@ -1998,6 +2138,9 @@ function M.extend(runtime, ctx)
         local instances = get_factory_instances(self)
         self.factory_instance_cache = instances
         for tile_instance_id, instance in pairs(instances) do
+            if self.realtime_rules_enabled ~= true and instance and instance.powered and ctx and ctx.play_factory_produce_sfx then
+                ctx.play_factory_produce_sfx(self)
+            end
             local pending = count_factory_pending_tokens(self, tile_instance_id)
             local conveyor_cell = instance.cell_by_local[2]
             local output_cell = instance.cell_by_local[3]
@@ -2022,6 +2165,19 @@ function M.extend(runtime, ctx)
                             t = 0,
                             duration = 1 / FACTORY_BELT_PAN_RATE
                         })
+                        if ctx.mp_is_enabled and ctx.mp_is_enabled(self) and (not (ctx.mp_is_applying_event and ctx.mp_is_applying_event(self))) then
+                            if ctx.mp_emit_event then
+                                ctx.mp_emit_event(self, "factory_token_spawned", {
+                                    tile_instance_id = tile_instance_id,
+                                    output_cell_id = output_cell.idNumber,
+                                    start_x = cx - ((ctx.CELL_WIDTH or 250) * 0.5) + 25,
+                                    start_y = cy - 30,
+                                    end_x = cx + ((ctx.CELL_WIDTH or 250) * 0.5),
+                                    end_y = cy - 30,
+                                    duration = 1 / FACTORY_BELT_PAN_RATE
+                                })
+                            end
+                        end
                     end
                 end
             end
@@ -2037,9 +2193,10 @@ function M.extend(runtime, ctx)
         self.factory_underlay_clock = (self.factory_underlay_clock or 0) + dt
         for tile_instance_id, entry in pairs(self.factory_underlay_visuals) do
             local instance = instances[tile_instance_id]
-            local functional = instance and instance.functional == true
+            local sync_override = self.factory_sync_state_override and self.factory_sync_state_override[tile_instance_id]
+            local functional = (sync_override and sync_override.functional == true) or (instance and instance.functional == true)
             local speed_mul = functional and 1.0 or 0.22
-            local powered = instance and instance.powered == true
+            local powered = (sync_override and sync_override.powered == true) or (instance and instance.powered == true)
             local tint = functional and vmath.vector4(1, 1, 1, 0.92)
                 or (powered and vmath.vector4(0.34, 0.34, 0.34, 0.85) or vmath.vector4(1, 1, 1, 0))
             set_factory_underlay_tint(entry, tint)
@@ -2104,24 +2261,26 @@ function M.extend(runtime, ctx)
                 pcall(go.set_position, vmath.vector3(px, py, FACTORY_CONVEYOR_TOKEN_Z), token.go_id)
                 if token.t >= 1 then
                     pcall(go.delete, token.go_id)
-                    local instances = self.factory_instance_cache or get_factory_instances(self)
-                    local instance = instances[token.tile_instance_id]
-                    if instance then
-                        local output_cell = instance.cell_by_local[3]
-                        local pending = count_factory_pending_tokens(self, token.tile_instance_id)
-                        local stored_total = output_cell and count_material_items_on_cell(self, output_cell.idNumber) or 0
-                        local slot_order = get_next_factory_free_slot(self, token.tile_instance_id)
-                        if instance.functional
-                            and (stored_total + math.max(0, pending - 1)) < FACTORY_MAX_STOCK
-                            and slot_order
-                            and output_cell
-                        then
-                            runtime.create_world_item_instance(self, "material", output_cell.idNumber, nil, {
-                                factory_stock = true,
-                                factory_tile_instance_id = token.tile_instance_id,
-                                factory_slot_order = slot_order
-                            })
-                            needs_world_item_refresh = true
+                    if token.remote_visual_only ~= true then
+                        local instances = self.factory_instance_cache or get_factory_instances(self)
+                        local instance = instances[token.tile_instance_id]
+                        if instance then
+                            local output_cell = instance.cell_by_local[3]
+                            local pending = count_factory_pending_tokens(self, token.tile_instance_id)
+                            local stored_total = output_cell and count_material_items_on_cell(self, output_cell.idNumber) or 0
+                            local slot_order = get_next_factory_free_slot(self, token.tile_instance_id)
+                            if instance.functional
+                                and (stored_total + math.max(0, pending - 1)) < FACTORY_MAX_STOCK
+                                and slot_order
+                                and output_cell
+                            then
+                                runtime.create_world_item_instance(self, "material", output_cell.idNumber, nil, {
+                                    factory_stock = true,
+                                    factory_tile_instance_id = token.tile_instance_id,
+                                    factory_slot_order = slot_order
+                                })
+                                needs_world_item_refresh = true
+                            end
                         end
                     end
                     table.remove(self.factory_conveyor_tokens, i)
@@ -2151,6 +2310,10 @@ function M.extend(runtime, ctx)
                     local output_cell = instance.cell_by_local[2]
                     local pending = count_workshop_pending_tokens(self, tile_instance_id)
                     if selected and source_cell and output_cell then
+                        local produced_item_type = selected.item_type
+                        if produced_item_type == OBSTACLE_ITEM then
+                            produced_item_type = "obstacle" .. tostring(math.random(1, 5))
+                        end
                         local all_items = runtime.get_world_items_on_cell(self, output_cell.idNumber)
                         if (#all_items + pending) >= WORKSHOP_OUTPUT_MAX_STOCK then
                             print("Workshop output cell is full.")
@@ -2159,11 +2322,11 @@ function M.extend(runtime, ctx)
                             local c2x, c2y = ctx.coords_to_world_pos(output_cell.xCell, output_cell.yCell)
                             local token_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(c1x - 98, c1y - 36, WORKSHOP_CONVEYOR_TOKEN_Z))
                             if token_id then
-                                local anim = get_world_item_animation(selected.item_type)
+                                local anim = get_world_item_animation(produced_item_type)
                                 if anim then
                                     msg.post(msg.url(nil, token_id, "sprite"), "play_animation", { id = anim })
                                 end
-                                local token_scale = get_world_item_draw_scale(selected.item_type)
+                                local token_scale = get_world_item_draw_scale(produced_item_type)
                                 go.set_scale(vmath.vector3(token_scale, token_scale, 1), token_id)
                                 go.set(msg.url(nil, token_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.98))
                                 spawn_impact_ring(self, c1x - 98, c1y - 36, vmath.vector4(0.2, 1.0, 0.25, 1), 0.7)
@@ -2171,7 +2334,7 @@ function M.extend(runtime, ctx)
                                     go_id = token_id,
                                     tile_instance_id = tile_instance_id,
                                     output_cell_id = output_cell.idNumber,
-                                    item_type = selected.item_type,
+                                    item_type = produced_item_type,
                                     label = selected.label,
                                     start_x = c1x - 98,
                                     start_y = c1y - 26,
@@ -2535,6 +2698,9 @@ function M.extend(runtime, ctx)
         state.corpse_unit_id = corpse_id
         state.progress = 0
         state.bob_phase = 0
+        if ctx and ctx.play_medibay_revive_sfx then
+            ctx.play_medibay_revive_sfx(self)
+        end
         print(string.format("%s placed %s into medbay revival chamber. (AP -%d)", source_unit.display_name, corpse_unit.display_name, medbay_insert_ap_cost))
         return true, true, false
     end
@@ -2649,7 +2815,10 @@ function M.extend(runtime, ctx)
                         if item.meta and item.meta.impact_ring_on_spawn == true then
                             local ring_tint = vmath.vector4(0.2, 1.0, 0.25, 1)
                             if item.item_type == DNA_SAMPLE_ITEM_TYPE then
-                                ring_tint = vmath.vector4(0.72, 0.35, 1.0, 1)
+                                ring_tint = vmath.vector4(0.85, 0.65, 1.0, 1)
+                                if ctx and ctx.play_task_done_sfx then
+                                    ctx.play_task_done_sfx(self)
+                                end
                             end
                             spawn_impact_ring(self, wx, wy, ring_tint, 0.7)
                             item.meta.impact_ring_on_spawn = false
@@ -2743,16 +2912,13 @@ function M.extend(runtime, ctx)
         return best
     end
 
-    runtime.try_store_dead_human_corpse_selected_unit = function(self, screen_x, screen_y)
-        local unit = ctx.get_selected_unit(self)
-        if not unit or not unit.cell_id then
+    runtime.try_store_dead_human_corpse_by_ids = function(self, unit_id, corpse_ref)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local dead_unit = get_dead_corpse_by_ref(self, corpse_ref)
+        if not unit or not unit.cell_id or not dead_unit then
             return false
         end
-        local dead_unit = runtime.find_dead_human_at_screen_point(self, screen_x, screen_y)
-        if not dead_unit then
-            return false
-        end
-        if dead_unit.id == unit.id then
+        if dead_unit.id == unit.id and dead_unit.target_kind ~= "civilian" then
             return true
         end
         if dead_unit.cell_id ~= unit.cell_id then
@@ -2782,6 +2948,28 @@ function M.extend(runtime, ctx)
         end
         print(string.format("%s moved %s corpse into backpack. (AP -%d)", unit.display_name, dead_unit.display_name, medbay_store_ap_cost))
         return true
+    end
+
+    runtime.try_store_dead_human_corpse_selected_unit = function(self, screen_x, screen_y)
+        local unit = ctx.get_selected_unit(self)
+        if not unit or not unit.cell_id then
+            return false
+        end
+        local dead_unit = runtime.find_dead_human_at_screen_point(self, screen_x, screen_y)
+        if not dead_unit then
+            return false
+        end
+        local corpse_ref = get_corpse_ref_for_unit(dead_unit)
+        if not corpse_ref then
+            return false
+        end
+        if send_mp_resource_command(self, "pickup_corpse", {
+            unit_id = unit.id,
+            corpse_ref = corpse_ref
+        }) then
+            return true
+        end
+        return runtime.try_store_dead_human_corpse_by_ids(self, unit.id, corpse_ref)
     end
 
     runtime.find_fix_object_drop_target = function(self, world_x, world_y, cell_id, required_component)
@@ -2862,7 +3050,9 @@ function M.extend(runtime, ctx)
     end
 
     runtime.play_power_node_activation_sound = function(self, cell, power_node)
-        -- FUTURE HOOK: trigger power-node activation SFX when audio assets are ready.
+        if ctx and ctx.play_power_node_on_sfx then
+            ctx.play_power_node_on_sfx(self)
+        end
     end
 
     runtime.stop_power_node_fx_for_cell = function(self, cell_id)
@@ -3662,6 +3852,9 @@ function M.extend(runtime, ctx)
             cell.isPowered = false
             runtime.stop_power_node_fx_for_cell(self, cell.idNumber)
         end
+        if ctx and ctx.play_power_node_off_sfx then
+            ctx.play_power_node_off_sfx(self)
+        end
 
         print(string.format("%s retrieved a power unit from the node. Tile is now unpowered.", unit.display_name))
         runtime.refresh_loot_markers(self)
@@ -3753,6 +3946,9 @@ function M.extend(runtime, ctx)
             screen_x = screen_x,
             screen_y = screen_y
         }
+        if ctx and ctx.play_drag_item_sfx then
+            ctx.play_drag_item_sfx(self)
+        end
         return true
     end
 
@@ -3777,7 +3973,7 @@ function M.extend(runtime, ctx)
                 print("Ammo already full.")
                 return false
             end
-            unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 5)
+            unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 10)
             return true
         end
 
@@ -4222,6 +4418,9 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             nav_obj.hasNavData = false
             nav_obj.isFixed = false
+            if ctx and ctx.play_task_done_sfx then
+                ctx.play_task_done_sfx(self)
+            end
             spawn_impact_ring_for_object(self, cell, nav_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
@@ -4322,6 +4521,9 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             loader_obj.hasFood = false
             loader_obj.isFixed = false
+            if ctx and ctx.play_task_done_sfx then
+                ctx.play_task_done_sfx(self)
+            end
             -- For exit objective loader, only successful deploy should trigger the green ring.
             if loader_obj.contributesToExitObjective ~= true then
                 spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
@@ -4420,6 +4622,9 @@ function M.extend(runtime, ctx)
         state.paid_units = 0
         state.payment_locked = false
         state.payment_confirm_flash = 0
+        if ctx and ctx.play_task_done_sfx then
+            ctx.play_task_done_sfx(self)
+        end
         print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
         return true
     end
@@ -4762,6 +4967,7 @@ function M.extend(runtime, ctx)
                                 end
                                 remove_source_item()
                                 target_unit.current_health = target_unit.max_health
+                                emit_receive_item_feedback(self, target_unit)
                                 trigger_receive_pulse(target_unit)
                                 local pos = target_unit.go_path and go.get_position(target_unit.go_path) or nil
                                 if pos then
@@ -4879,6 +5085,9 @@ function M.extend(runtime, ctx)
                                             state.payment_locked = true
                                             state.production_time_left = WORKSHOP_PRODUCTION_DURATION
                                             state.payment_confirm_flash = WORKSHOP_PAY_CONFIRM_FLASH_SECONDS
+                                            if ctx and ctx.play_fabricator_working_sfx then
+                                                ctx.play_fabricator_working_sfx(self)
+                                            end
                                             print(string.format("Workshop production started for %s.", selected.label))
                                         end
                                         consumed = true
@@ -4972,6 +5181,9 @@ function M.extend(runtime, ctx)
                                 end
                                 remove_source_item()
                                 target_socket_obj.powerLoaded = math.min(required, loaded + 1)
+                                if ctx and ctx.play_task_done_sfx then
+                                    ctx.play_task_done_sfx(self)
+                                end
                                 consumed = true
                                 runtime.refresh_power_node_markers(self)
                                 runtime.refresh_exit_objective_state(self)
@@ -5129,6 +5341,9 @@ function M.extend(runtime, ctx)
                                         drop_cell.barricade_brightness = math.max(0.25, math.min(1.0, (drop_cell.barricade_brightness or 1.0) * 1.33))
                                         drop_cell.barricade_scale_pulse = 0.1
                                         drop_cell.barricade_scale_pulse_timer = 0.22
+                                        if ctx and ctx.play_build_barricade_sfx then
+                                            ctx.play_build_barricade_sfx(self)
+                                        end
                                         consumed = true
                                         runtime.refresh_fix_markers(self)
                                         runtime.refresh_world_item_visuals(self)
@@ -5203,6 +5418,9 @@ function M.extend(runtime, ctx)
                                                         obstacle_drop_ap_cost
                                                     ))
                                                 end
+                                                if ctx and ctx.play_build_barricade_sfx then
+                                                    ctx.play_build_barricade_sfx(self)
+                                                end
                                                 consumed = true
                                                 runtime.refresh_fix_markers(self)
                                                 runtime.refresh_world_item_visuals(self)
@@ -5256,6 +5474,9 @@ function M.extend(runtime, ctx)
                                     local weld_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                     print(string.format("WELD FX CALLSITE: triggering overlay on cell %d", drop_cell_id or 0))
                                     runtime.spawn_vent_weld_fx(self, weld_cell, vent_target)
+                                    if ctx and ctx.play_welding_sfx then
+                                        ctx.play_welding_sfx(self)
+                                    end
                                     print(string.format(
                                         "%s welded vent object #%d using 1 %s. (AP -%d)",
                                         source_unit.display_name,
@@ -5380,6 +5601,13 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_workshop_underlay_visuals(self)
                                     runtime.refresh_exit_objective_state(self)
                                     runtime.refresh_world_item_visuals(self)
+                                    if component_target.name == hash("wiregap")
+                                        and source_item == ctx.COMPONENT_UI.component_wiring_straight
+                                    then
+                                        if ctx and ctx.play_task_done_sfx then
+                                            ctx.play_task_done_sfx(self)
+                                        end
+                                    end
                                     if source_item == ctx.COMPONENT_UI.component_wiring_straight
                                         or source_item == ctx.COMPONENT_UI.component_wiring_corner
                                         or source_item == ctx.COMPONENT_UI.component_fuse
@@ -5392,6 +5620,9 @@ function M.extend(runtime, ctx)
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data
                                     then
+                                        if ctx and ctx.play_task_done_sfx then
+                                            ctx.play_task_done_sfx(self)
+                                        end
                                         local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                         if target_cell then
                                             spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.1, 0.3, 1.0, 1))
@@ -5400,6 +5631,9 @@ function M.extend(runtime, ctx)
                                     if component_target.name == hash("supply_loader")
                                         and source_item == ctx.COMPONENT_UI.component_food_supplies
                                     then
+                                        if ctx and ctx.play_task_done_sfx then
+                                            ctx.play_task_done_sfx(self)
+                                        end
                                         local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                         if target_cell then
                                             spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.2, 1.0, 0.25, 1))
@@ -5430,6 +5664,17 @@ function M.extend(runtime, ctx)
                                                 if menu_cell and menu_obj then
                                                     spawn_impact_ring_for_object(self, menu_cell, menu_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
                                                 end
+                                            end
+                                        end
+                                    end
+                                    if source_item == ctx.COMPONENT_UI.component_wiring_straight then
+                                        if component_target.name == hash("wiregap")
+                                            or component_target.name == hash("wireGap")
+                                            or component_target.name == hash("wiregap_straight")
+                                            or component_target.name == hash("wireGap_straight")
+                                        then
+                                            if ctx and ctx.play_sparking_wire_sfx then
+                                                ctx.play_sparking_wire_sfx(self)
                                             end
                                         end
                                     end

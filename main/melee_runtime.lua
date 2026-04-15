@@ -255,6 +255,9 @@ function M.create(ctx)
         alien.is_moving = false
         alien.move_path = nil
         alien.move_path_index = 0
+        if ctx and ctx.play_alien_death_sfx then
+            ctx.play_alien_death_sfx(self, alien.type)
+        end
         record_alien_kill(self, alien)
     end
 
@@ -292,9 +295,16 @@ function M.create(ctx)
             duration = 0.35,
             spins = 1.5
         })
+        if ctx and ctx.emit_combat_fx_event then
+            ctx.emit_combat_fx_event(self, {
+                fx_type = "alien_melee_swipe",
+                target_kind = target and target.target_kind or nil,
+                target_id = target and target.id or nil
+            })
+        end
     end
 
-    local function spawn_alien_blood_splatter_fx(target_alien)
+    local function spawn_alien_blood_splatter_fx(self, target_alien)
         if not target_alien or not target_alien.go_id then
             return
         end
@@ -314,6 +324,12 @@ function M.create(ctx)
                 go.delete(fx_id)
             end
         end)
+        if ctx and ctx.emit_combat_fx_event then
+            ctx.emit_combat_fx_event(self, {
+                fx_type = "alien_blood",
+                alien_id = target_alien.id
+            })
+        end
     end
 
     local function spawn_human_blood_splatter_fx(self, target_human)
@@ -337,9 +353,16 @@ function M.create(ctx)
                 go.delete(fx_id)
             end
         end)
+        if ctx and ctx.emit_combat_fx_event then
+            ctx.emit_combat_fx_event(self, {
+                fx_type = "human_blood",
+                target_kind = target_human and target_human.target_kind or "human",
+                target_id = target_human and target_human.id or nil
+            })
+        end
     end
 
-    local function play_target_red_flash(target_alien)
+    local function play_target_red_flash(self, target_alien)
         if not target_alien or not target_alien.go_id then
             return
         end
@@ -356,6 +379,12 @@ function M.create(ctx)
             target_alien.melee_flash_active = false
             pcall(go.set, sprite_url, "tint", base_tint)
         end)
+        if ctx and ctx.emit_combat_fx_event then
+            ctx.emit_combat_fx_event(self, {
+                fx_type = "alien_red_flash",
+                alien_id = target_alien.id
+            })
+        end
     end
 
     local function play_human_melee_lurch(human, target_alien)
@@ -468,15 +497,18 @@ function M.create(ctx)
         end
 
         play_human_melee_lurch(human, target_alien)
-        play_target_red_flash(target_alien)
+        play_target_red_flash(self, target_alien)
         human.current_ap = human.current_ap - melee_ap_cost
         local melee_bonus = get_human_melee_hit_bonus(human)
         local min_hit = tonumber(ctx.BUFF_HIT_CHANCE_MIN or ctx.MELEE_MODEL.min_hit_chance) or ctx.MELEE_MODEL.min_hit_chance
         local max_hit = tonumber(ctx.BUFF_HIT_CHANCE_MAX or ctx.MELEE_MODEL.max_hit_chance) or ctx.MELEE_MODEL.max_hit_chance
         local hit_chance = clamp((ctx.MELEE_MODEL.human_base_hit_chance or 0) + melee_bonus, min_hit, max_hit)
         local roll = math.random(1, 100)
+        if ctx and ctx.play_melee_hit_alien_sfx then
+            ctx.play_melee_hit_alien_sfx(self)
+        end
         if roll <= hit_chance then
-            spawn_alien_blood_splatter_fx(target_alien)
+            spawn_alien_blood_splatter_fx(self, target_alien)
             if target_alien.type == ctx.ALIEN_TYPE_BRUTE then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
                 if target_alien.hp_current > 0 then
@@ -535,6 +567,9 @@ function M.create(ctx)
         play_alien_melee_lurch(self, alien, target)
 
         if roll <= hit_chance then
+            if ctx and ctx.play_melee_hit_human_sfx then
+                ctx.play_melee_hit_human_sfx(self)
+            end
             local damage = get_alien_melee_damage(alien and alien.type)
             target.current_health = math.max(0, (target.current_health or 0) - damage)
             mark_target_hit(self, target)
@@ -565,8 +600,9 @@ function M.create(ctx)
 
         if self.reactive_combat_enabled then
             local retaliators = get_living_humans_on_cell(self, alien.cell_id)
+            local melee_ap_cost = get_melee_ap_cost()
             for _, human in ipairs(retaliators) do
-                if human.current_ap > 0 then
+                if human.reactive_fire_enabled ~= false and (human.current_ap or 0) >= melee_ap_cost then
                     table.insert(self.melee_action_queue, {
                         kind = "human_react",
                         human_id = human.id,
@@ -628,11 +664,19 @@ function M.create(ctx)
     end
 
     runtime.spawn_alien_blood_splatter_fx = function(self, alien)
-        spawn_alien_blood_splatter_fx(alien)
+        spawn_alien_blood_splatter_fx(self, alien)
     end
 
     runtime.spawn_human_blood_splatter_fx = function(self, human)
         spawn_human_blood_splatter_fx(self, human)
+    end
+
+    runtime.spawn_alien_melee_swipe_fx = function(self, target)
+        spawn_alien_melee_swipe_fx(self, target)
+    end
+
+    runtime.play_target_red_flash = function(self, alien)
+        play_target_red_flash(self, alien)
     end
 
     runtime.update_phase = function(self, dt)
@@ -685,7 +729,13 @@ function M.create(ctx)
             end
         elseif action.kind == "human_react" then
             local human = get_human_by_id(self, action.human_id)
-            if human and (human.current_health or 0) > 0 and human.current_ap > 0 and human.cell_id == action.cell_id then
+            local melee_ap_cost = get_melee_ap_cost()
+            if human
+                and human.reactive_fire_enabled ~= false
+                and (human.current_health or 0) > 0
+                and (human.current_ap or 0) >= melee_ap_cost
+                and human.cell_id == action.cell_id
+            then
                 local target = nil
                 local preferred = find_alien_by_id(self, action.preferred_alien_id)
                 if preferred and (not preferred.is_dead) and preferred.cell_id == human.cell_id then

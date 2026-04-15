@@ -311,6 +311,9 @@ images {
   image: "/assets/images/exterior_leftWall1.png"
 }
 images {
+  image: "/assets/images/exterior_rightWall1.png"
+}
+images {
   image: "/assets/images/exterior_roof1.png"
 }
 images {
@@ -571,6 +574,15 @@ images {
 }
 images {
   image: "/assets/images/ladder.png"
+}
+images {
+  image: "/assets/images/score_percent.png"
+}
+images {
+  image: "/assets/images/realtime_button_on.png"
+}
+images {
+  image: "/assets/images/realtime_button_off.png"
 }
 margin: 2
 extrude_borders: 2

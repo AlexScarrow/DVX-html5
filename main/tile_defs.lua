@@ -275,7 +275,7 @@ coms.cells[4].object2 = {
 
 coms.cells[5].object1 = {
     name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
-    offsetX = 80, offsetY = -5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    offsetX = 80, offsetY = -10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
 }
 
 coms.cells[5].object2 = {
@@ -358,6 +358,13 @@ canteen.cells[3].object1 = {
     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
 }
+canteen.cells[1].object1 = {
+    name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+    offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+    lootItems = { "plate", "power", "material", "material","material","ammo", COMPONENT_UI.component_fuse }
+}
+
+
 --canteen.cells[3].hazard_type = "gas"
 canteen.cells[4].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
@@ -368,12 +375,12 @@ canteen.cells[4].object1 = {
         "wiring_straight",
         "ammo",
         "meds",
-        "material"
+        --"material"
         -- "buff_armour",
         -- "buff_hazmat",
         -- "buff_oxygen_mask",
         -- "buff_speed_stims",
-        -- "buff_night_vision",
+        "buff_night_vision",
         -- "buff_melee_left",
         -- "buff_melee_right"
     }
@@ -574,7 +581,7 @@ library["canteen"] = canteen
     armoury.cells[1].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
         offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "material", "material", "material", "material","power","material", COMPONENT_UI.component_fuse }
+        lootItems = { "material", "material", "material", "material","power","material","plate", COMPONENT_UI.component_fuse }
     }
     armoury.cells[2].object1 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
@@ -595,7 +602,7 @@ library["canteen"] = canteen
     armoury.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "material","plate", "material","power" ,COMPONENT_UI.component_fuse }
+        lootItems = { "ammo", "ammo", "material","plate", "material","power","plate" ,COMPONENT_UI.component_fuse }
     }
     armoury.cells[7].object1 = {
         name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
@@ -609,10 +616,10 @@ library["canteen"] = canteen
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
         offsetX = 98, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
     }
-    armoury.cells[8].object2 = {
-        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
-        offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-    }
+    -- armoury.cells[8].object2 = {
+    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+    --     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    -- }
     -- armoury.cells[8].object3 = {
     --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 803,
     --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil

@@ -412,6 +412,16 @@ PURGE_BOMB_TILE_NAME = "portal"
 PURGE_BOMB_LOCAL_CELL = 6
 PURGE_RESCUE_RETURN_LOCAL_CELL = 4
 PURGE_COUNTDOWN_SECONDS = 300
+DIFFICULTY_PRESSURE_BY_TIER = {
+    [0] = { spawn_delta = 0, strong_multiplier = 1.00, burst_chance = 0.00 },
+    [1] = { spawn_delta = 1, strong_multiplier = 1.20, burst_chance = 0.10 },
+    [2] = { spawn_delta = 2, strong_multiplier = 1.45, burst_chance = 0.25 },
+    [3] = { spawn_delta = 3, strong_multiplier = 1.75, burst_chance = 0.40 }
+}
+DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER = {
+    [2] = 1
+}
+DIFFICULTY_ALL_TILE_LOCAL_CELLS = { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
 do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
     MP_SYNC_TRACE_ENABLED = (sync_trace_cfg == "1" or sync_trace_cfg == "true" or sync_trace_cfg == "on")
@@ -2323,11 +2333,19 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
     return nil
 end
 
-local function pick_weighted_blip_reveal_type()
+local function pick_weighted_blip_reveal_type(self)
     local speedy_weight = ALIEN_REVEAL_WEIGHT_SPEEDY
     local cannon_weight = ALIEN_REVEAL_WEIGHT_CANNON
     local spitter_weight = ALIEN_REVEAL_WEIGHT_SPITTER
     local brute_weight = ALIEN_REVEAL_WEIGHT_BRUTE
+    local pressure = get_spawn_pressure_profile and get_spawn_pressure_profile(self) or nil
+    local strong_multiplier = tonumber(pressure and pressure.strong_multiplier or 1.0) or 1.0
+    if strong_multiplier < 1.0 then
+        strong_multiplier = 1.0
+    end
+    speedy_weight = math.max(1, math.floor((speedy_weight * strong_multiplier) + 0.5))
+    spitter_weight = math.max(1, math.floor((spitter_weight * strong_multiplier) + 0.5))
+    brute_weight = math.max(1, math.floor((brute_weight * strong_multiplier) + 0.5))
     if SFX_TEST_FAVOR_SPEEDY_REVEAL == true then
         -- TEMP TEST TWEAK: bias reveals toward speedies for movement SFX validation.
         speedy_weight = math.max(speedy_weight, cannon_weight + spitter_weight + brute_weight)
@@ -2947,7 +2965,7 @@ local function spawn_alien(self, alien_type, cell_id)
         spitter_flip = false
     }
     if alien_type == ALIEN_TYPE_BLIP then
-        alien.hidden_reveal_type = pick_weighted_blip_reveal_type()
+        alien.hidden_reveal_type = pick_weighted_blip_reveal_type(self)
     end
 
     table.insert(self.aliens, alien)
@@ -2970,7 +2988,7 @@ local function maybe_reveal_blip(self, alien)
 
     for _, human_cell_id in ipairs(get_human_cell_ids(self)) do
         if has_unobstructed_los(self.world_grid, alien.cell_id, human_cell_id) then
-            local revealed_type = alien.hidden_reveal_type or pick_weighted_blip_reveal_type()
+            local revealed_type = alien.hidden_reveal_type or pick_weighted_blip_reveal_type(self)
             local cfg = ALIEN_TYPE_CONFIG[revealed_type]
             alien.type = revealed_type
             alien.ap_max = cfg.ap_per_turn
@@ -4928,15 +4946,7 @@ local function process_alien_turn(self)
 
     if not self.alien_turn_active then
         if not (self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled)) then
-            -- Temporary turn rule: spawn one new blip every new turn.
-            local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
-            if #edge_cells > 0 then
-                local idx = math.random(1, #edge_cells)
-                spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
-                print("Turn event: spawned 1 new blip")
-            else
-                print("Turn event: no eligible unpowered blip spawn cells.")
-            end
+            spawn_blip_wave_for_pressure(self, "Turn event")
         end
         self.alien_turn_active = true
         self.alien_turn_waiting_for_advance = false
@@ -5424,9 +5434,18 @@ local function tick_dna_progress_for_new_human_turn(self)
         refresh_dna_marker_runtime(self)
         return
     end
+    local lab_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DIFFICULTY_ALL_TILE_LOCAL_CELLS)
+    local lab_powered = false
+    for _, cell_id in ipairs(lab_cells or {}) do
+        local cell = self.world_grid and self.world_grid[cell_id] or nil
+        if cell and cell.isPowered == true then
+            lab_powered = true
+            break
+        end
+    end
     local brute_target_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DNA_BRUTE_LOCAL_CELLS)
     local has_brute = has_alive_brute_on_any_cell(self, build_cell_lookup(brute_target_cells))
-    if has_brute then
+    if lab_powered and has_brute then
         self.dna_analysis_progress = math.min(DNA_PROGRESS_TARGET, self.dna_analysis_progress + 1)
         if self.dna_analysis_progress >= DNA_PROGRESS_TARGET then
             self.dna_analysis_complete = true
@@ -5470,6 +5489,166 @@ end
 
 local function purge_is_active_mission(self)
     return tostring(get_current_mission_type(self) or "") == MISSION_TYPE_PURGE
+end
+
+get_spawn_pressure_tier = function(self)
+    if not self then
+        return 0
+    end
+    local mission_type = tostring(get_current_mission_type(self) or "")
+    if mission_type == MISSION_TYPE_ESCAPE then
+        local status = LOOT_RUNTIME and LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
+        local satisfied = 0
+        if status and status.supplies_ready == true then
+            satisfied = satisfied + 1
+        end
+        if status and status.nav_ready == true then
+            satisfied = satisfied + 1
+        end
+        if status and (tonumber(status.power_loaded or 0) or 0) >= 9 then
+            satisfied = satisfied + 1
+        end
+        return math.max(0, math.min(3, satisfied))
+    end
+    if mission_type == MISSION_TYPE_DNA_SAMPLE then
+        local tier = 0
+        local lab_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DIFFICULTY_ALL_TILE_LOCAL_CELLS)
+        for _, cell_id in ipairs(lab_cells or {}) do
+            local cell = self.world_grid and self.world_grid[cell_id] or nil
+            if cell and cell.isPowered == true then
+                tier = 1
+                break
+            end
+        end
+        local brute_target_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DNA_BRUTE_LOCAL_CELLS)
+        if has_alive_brute_on_any_cell(self, build_cell_lookup(brute_target_cells)) then
+            tier = math.max(tier, 2)
+        end
+        if self.dna_sample_spawned == true or self.dna_sample_returned == true then
+            tier = 3
+        end
+        return tier
+    end
+    if mission_type == MISSION_TYPE_RESCUE then
+        local living_total = 0
+        local awake_total = 0
+        local any_adjacent = false
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian and civilian.is_dead ~= true then
+                living_total = living_total + 1
+                if civilian.is_awake == true then
+                    awake_total = awake_total + 1
+                end
+                local civ_cell = self.world_grid and self.world_grid[tonumber(civilian.cell_id or 0) or 0] or nil
+                if civ_cell then
+                    local c1 = coords_to_id(civ_cell.xCell + 1, civ_cell.yCell)
+                    local c2 = coords_to_id(civ_cell.xCell - 1, civ_cell.yCell)
+                    local c3 = coords_to_id(civ_cell.xCell, civ_cell.yCell + 1)
+                    local c4 = coords_to_id(civ_cell.xCell, civ_cell.yCell - 1)
+                    if is_cell_in_any_rescue_entry_tile(self, c1)
+                        or is_cell_in_any_rescue_entry_tile(self, c2)
+                        or is_cell_in_any_rescue_entry_tile(self, c3)
+                        or is_cell_in_any_rescue_entry_tile(self, c4)
+                    then
+                        any_adjacent = true
+                    end
+                end
+            end
+        end
+        if any_adjacent then
+            return 3
+        end
+        if living_total > 0 and awake_total >= living_total then
+            return 2
+        end
+        if awake_total > 0 then
+            return 1
+        end
+        return 0
+    end
+    if mission_type == MISSION_TYPE_PURGE then
+        local portal_lookup = build_cell_lookup(get_world_cell_ids_for_tile_local_cells(self, PURGE_BOMB_TILE_NAME, DIFFICULTY_ALL_TILE_LOCAL_CELLS))
+        local one_step_away = false
+        local on_portal = false
+        for _, unit in pairs(self.squad_units or {}) do
+            if unit and (tonumber(unit.current_health or 0) or 0) > 0 and unit.in_shuttle ~= true then
+                local cell_id = tonumber(unit.cell_id or 0) or 0
+                if portal_lookup[cell_id] == true then
+                    on_portal = true
+                    break
+                end
+                local cell = self.world_grid and self.world_grid[cell_id] or nil
+                if cell then
+                    local c1 = coords_to_id(cell.xCell + 1, cell.yCell)
+                    local c2 = coords_to_id(cell.xCell - 1, cell.yCell)
+                    local c3 = coords_to_id(cell.xCell, cell.yCell + 1)
+                    local c4 = coords_to_id(cell.xCell, cell.yCell - 1)
+                    if portal_lookup[c1] == true
+                        or portal_lookup[c2] == true
+                        or portal_lookup[c3] == true
+                        or portal_lookup[c4] == true
+                    then
+                        one_step_away = true
+                    end
+                end
+            end
+        end
+        if self.purge_bomb_planted == true then
+            return 3
+        end
+        if on_portal then
+            return 2
+        end
+        if one_step_away then
+            return 1
+        end
+        return 0
+    end
+    return 0
+end
+
+get_spawn_pressure_profile = function(self)
+    local tier = tonumber(get_spawn_pressure_tier and get_spawn_pressure_tier(self) or 0) or 0
+    tier = math.max(0, math.min(3, tier))
+    local profile = DIFFICULTY_PRESSURE_BY_TIER[tier] or DIFFICULTY_PRESSURE_BY_TIER[0]
+    local mission_type = tostring(get_current_mission_type(self) or "")
+    local extra_spawn = 0
+    if mission_type == MISSION_TYPE_ESCAPE then
+        extra_spawn = tonumber(DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER[tier] or 0) or 0
+    end
+    return {
+        tier = tier,
+        spawn_delta = (tonumber(profile and profile.spawn_delta or 0) or 0) + extra_spawn,
+        strong_multiplier = tonumber(profile and profile.strong_multiplier or 1.0) or 1.0,
+        burst_chance = tonumber(profile and profile.burst_chance or 0.0) or 0.0
+    }
+end
+
+spawn_blip_wave_for_pressure = function(self, reason_tag)
+    local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
+    if #edge_cells <= 0 then
+        print(string.format("%s: no eligible unpowered blip spawn cells.", tostring(reason_tag or "Spawn event")))
+        return 0
+    end
+    local pressure = get_spawn_pressure_profile(self)
+    local spawn_total = 1 + math.max(0, tonumber(pressure.spawn_delta or 0) or 0)
+    if math.random() <= (tonumber(pressure.burst_chance or 0) or 0) then
+        spawn_total = spawn_total + 1
+    end
+    local spawned = 0
+    for _ = 1, math.max(1, spawn_total) do
+        local idx = math.random(1, #edge_cells)
+        if spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx]) then
+            spawned = spawned + 1
+        end
+    end
+    print(string.format(
+        "%s: spawned %d blip(s) | tier=%d",
+        tostring(reason_tag or "Spawn event"),
+        spawned,
+        tonumber(pressure.tier or 0) or 0
+    ))
+    return spawned
 end
 
 local function get_wall_clock_ms()
@@ -5557,6 +5736,7 @@ local function update_purge_runtime(self)
         self.purge_time_expired = false
         self.purge_result_locked = false
         self.purge_deadline_epoch_ms = 0
+        self.realtime_mode_locked = false
         return
     end
 
@@ -5568,6 +5748,23 @@ local function update_purge_runtime(self)
     local planted = purge_has_bomb_on_portal_target(self)
     if planted then
         self.purge_bomb_planted = true
+    end
+    if self.purge_bomb_planted == true then
+        self.realtime_mode_locked = true
+    end
+    if self.realtime_mode_locked == true and self.realtime_rules_enabled ~= true then
+        self.realtime_rules_enabled = true
+        self.realtime_alien_tick_accum = 0
+        self.realtime_civilian_tick_accum = 0
+        self.realtime_blip_spawn_accum = 0
+        update_realtime_toggle_button_visual(self)
+        if host_authority and self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_broadcast_event(self, "realtime_mode_changed", {
+                enabled = true,
+                turn_id = self.mp_state.turn_id or 1
+            })
+        end
+        print("PURGE | bomb armed: realtime forced ON and locked.")
     end
     if host_authority and planted and self.purge_timer_started ~= true then
         self.purge_timer_started = true
@@ -14666,6 +14863,10 @@ local function try_toggle_realtime_button(self, screen_x, screen_y)
                 return true
             end
         end
+        if self.realtime_mode_locked == true and self.realtime_rules_enabled == true then
+            print("Realtime mode is locked ON for this mission.")
+            return true
+        end
         self.realtime_rules_enabled = not (self.realtime_rules_enabled == true)
         update_realtime_toggle_button_visual(self)
         self.realtime_alien_tick_accum = 0
@@ -15057,14 +15258,7 @@ local function process_realtime_world_ticks(self, dt)
         or any_civilian_is_moving(self)
     if not sim_busy and self.realtime_blip_spawn_accum >= blip_spawn_interval_s then
         self.realtime_blip_spawn_accum = self.realtime_blip_spawn_accum - blip_spawn_interval_s
-        local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
-        if #edge_cells > 0 then
-            local idx = math.random(1, #edge_cells)
-            spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
-            print("Realtime event: spawned 1 new blip")
-        else
-            print("Realtime event: no eligible unpowered blip spawn cells.")
-        end
+        spawn_blip_wave_for_pressure(self, "Realtime event")
     end
     sim_busy = self.alien_turn_active
         or self.pending_spitter_attack_phase
@@ -17814,6 +18008,7 @@ function init(self)
     self.realtime_civilian_tick_accum = 0
     self.realtime_blip_spawn_accum = 0
     self.realtime_client_settle_timer = 0
+    self.realtime_mode_locked = false
 
     --self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     --go.set_position(self.camera_pos, "/camera")

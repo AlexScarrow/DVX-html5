@@ -293,6 +293,9 @@ function M.extend(runtime, ctx)
         if runtime.emit_derple_feedback and unit and unit.id then
             runtime.emit_derple_feedback(self, unit.id, "RECEIVE_ITEM")
         end
+        if ctx and ctx.play_human_item_recieve_sfx and unit then
+            ctx.play_human_item_recieve_sfx(self, unit)
+        end
     end
 
     local function get_buff_info_event_type(item_type)
@@ -3035,7 +3038,9 @@ function M.extend(runtime, ctx)
     end
 
     runtime.play_power_node_activation_sound = function(self, cell, power_node)
-        -- FUTURE HOOK: trigger power-node activation SFX when audio assets are ready.
+        if ctx and ctx.play_power_node_on_sfx then
+            ctx.play_power_node_on_sfx(self)
+        end
     end
 
     runtime.stop_power_node_fx_for_cell = function(self, cell_id)
@@ -4935,6 +4940,7 @@ function M.extend(runtime, ctx)
                                 end
                                 remove_source_item()
                                 target_unit.current_health = target_unit.max_health
+                                emit_receive_item_feedback(self, target_unit)
                                 trigger_receive_pulse(target_unit)
                                 local pos = target_unit.go_path and go.get_position(target_unit.go_path) or nil
                                 if pos then

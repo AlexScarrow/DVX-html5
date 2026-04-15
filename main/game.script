@@ -316,6 +316,11 @@ SFX_SARGE_CONFIRM_SELECT_URL = "main:/sfx_sarge_confirm_select#sound"
 SFX_TECHIE_CONFIRM_SELECT_URL = "main:/sfx_techie_confirm_select#sound"
 SFX_MEDIC_CONFIRM_SELECT_URL = "main:/sfx_medic_confirm_select#sound"
 SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
+SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
+SFX_SARGE_ITEM_RECIEVE_URL = "main:/sfx_sarge_item_recieve#sound"
+SFX_TECHIE_ITEM_RECIEVE_URL = "main:/sfx_techie_item_recieve#sound"
+SFX_MEDIC_ITEM_RECIEVE_URL = "main:/sfx_medic_item_recieve#sound"
+SFX_GUNNER_ITEM_RECIEVE_URL = "main:/sfx_gunner_item_recieve#sound"
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -8984,6 +8989,23 @@ play_human_confirm_select_sfx = function(self, unit)
     end
 end
 
+play_power_node_on_sfx = function(self)
+    play_sfx_one_shot(self, "power_node_on")
+end
+
+play_human_item_recieve_sfx = function(self, unit)
+    local class_id = tostring(unit and unit.class_id or "")
+    if class_id == UNIT_CLASS_SARGE then
+        play_sfx_one_shot(self, "sarge_item_recieve")
+    elseif class_id == UNIT_CLASS_TECHIE then
+        play_sfx_one_shot(self, "techie_item_recieve")
+    elseif class_id == UNIT_CLASS_MEDIC then
+        play_sfx_one_shot(self, "medic_item_recieve")
+    elseif class_id == UNIT_CLASS_GUNNER then
+        play_sfx_one_shot(self, "gunner_item_recieve")
+    end
+end
+
 is_directional_move_sfx_allowed = function(self)
     return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
 end
@@ -14656,6 +14678,12 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     AP_COSTS = AP_COSTS,
     mp_get_active_player_id = function(self_ref)
         return multiplayer_get_active_player_id_for_commands(self_ref)
+    end,
+    play_power_node_on_sfx = function(self_ref)
+        play_power_node_on_sfx(self_ref)
+    end,
+    play_human_item_recieve_sfx = function(self_ref, unit)
+        play_human_item_recieve_sfx(self_ref, unit)
     end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
@@ -17700,6 +17728,11 @@ function init(self)
             techie_confirm_select = true,
             medic_confirm_select = true,
             gunner_confirm_select = true,
+            power_node_on = true,
+            sarge_item_recieve = true,
+            techie_item_recieve = true,
+            medic_item_recieve = true,
+            gunner_item_recieve = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -17725,6 +17758,11 @@ function init(self)
         techie_confirm_select = { url = msg.url(SFX_TECHIE_CONFIRM_SELECT_URL), playing = false },
         medic_confirm_select = { url = msg.url(SFX_MEDIC_CONFIRM_SELECT_URL), playing = false },
         gunner_confirm_select = { url = msg.url(SFX_GUNNER_CONFIRM_SELECT_URL), playing = false },
+        power_node_on = { url = msg.url(SFX_POWER_NODE_ON_URL), playing = false },
+        sarge_item_recieve = { url = msg.url(SFX_SARGE_ITEM_RECIEVE_URL), playing = false },
+        techie_item_recieve = { url = msg.url(SFX_TECHIE_ITEM_RECIEVE_URL), playing = false },
+        medic_item_recieve = { url = msg.url(SFX_MEDIC_ITEM_RECIEVE_URL), playing = false },
+        gunner_item_recieve = { url = msg.url(SFX_GUNNER_ITEM_RECIEVE_URL), playing = false },
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),

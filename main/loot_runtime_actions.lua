@@ -3843,6 +3843,9 @@ function M.extend(runtime, ctx)
             cell.isPowered = false
             runtime.stop_power_node_fx_for_cell(self, cell.idNumber)
         end
+        if ctx and ctx.play_power_node_off_sfx then
+            ctx.play_power_node_off_sfx(self)
+        end
 
         print(string.format("%s retrieved a power unit from the node. Tile is now unpowered.", unit.display_name))
         runtime.refresh_loot_markers(self)

@@ -317,6 +317,7 @@ SFX_TECHIE_CONFIRM_SELECT_URL = "main:/sfx_techie_confirm_select#sound"
 SFX_MEDIC_CONFIRM_SELECT_URL = "main:/sfx_medic_confirm_select#sound"
 SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
 SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
+SFX_POWER_NODE_OFF_URL = "main:/sfx_power_node_off#sound"
 SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
 SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
 SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
@@ -9020,6 +9021,10 @@ play_power_node_on_sfx = function(self)
     play_sfx_one_shot(self, "power_node_on")
 end
 
+play_power_node_off_sfx = function(self)
+    play_sfx_one_shot(self, "power_node_off")
+end
+
 play_door_toggle_sfx = function(self)
     play_sfx_one_shot(self, "door_toggle")
 end
@@ -14792,6 +14797,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_power_node_on_sfx = function(self_ref)
         play_power_node_on_sfx(self_ref)
     end,
+    play_power_node_off_sfx = function(self_ref)
+        play_power_node_off_sfx(self_ref)
+    end,
     play_human_item_recieve_sfx = function(self_ref, unit)
         play_human_item_recieve_sfx(self_ref, unit)
     end,
@@ -17854,6 +17862,7 @@ function init(self)
             medic_confirm_select = true,
             gunner_confirm_select = true,
             power_node_on = true,
+            power_node_off = true,
             door_toggle = true,
             escape_pod_ready = true,
             factory_produce = true,
@@ -17891,6 +17900,7 @@ function init(self)
         medic_confirm_select = { url = msg.url(SFX_MEDIC_CONFIRM_SELECT_URL), playing = false },
         gunner_confirm_select = { url = msg.url(SFX_GUNNER_CONFIRM_SELECT_URL), playing = false },
         power_node_on = { url = msg.url(SFX_POWER_NODE_ON_URL), playing = false },
+        power_node_off = { url = msg.url(SFX_POWER_NODE_OFF_URL), playing = false },
         door_toggle = { url = msg.url(SFX_DOOR_TOGGLE_URL), playing = false },
         escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
         factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },

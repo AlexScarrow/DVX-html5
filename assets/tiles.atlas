@@ -311,6 +311,9 @@ images {
   image: "/assets/images/exterior_leftWall1.png"
 }
 images {
+  image: "/assets/images/exterior_rightWall1.png"
+}
+images {
   image: "/assets/images/exterior_roof1.png"
 }
 images {

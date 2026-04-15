@@ -17498,9 +17498,10 @@ end
 
             if placement.tile ~= "entry" and (not is_rescue_entry_tile_name(placement.tile)) then
                 -- Exterior details are only for truly exposed silhouettes:
-                -- roof: no overlapping tile anywhere above; left wall: no overlapping tile anywhere to the left.
+                -- roof: no overlapping tile anywhere above; walls: no overlapping tile anywhere to each side.
                 local has_tile_above = false
                 local has_tile_left = false
+                local has_tile_right = false
                 local p_left = placement.x - 1
                 local p_right = placement.x + 1
                 local p_bottom = placement.y - 1
@@ -17519,7 +17520,10 @@ end
                         if (not has_tile_left) and overlaps_y and scan.x < placement.x then
                             has_tile_left = true
                         end
-                        if has_tile_above and has_tile_left then
+                        if (not has_tile_right) and overlaps_y and scan.x > placement.x then
+                            has_tile_right = true
+                        end
+                        if has_tile_above and has_tile_left and has_tile_right then
                             break
                         end
                     end
@@ -17552,6 +17556,21 @@ end
                         go.set(msg.url(nil, left_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         table.insert(tile_objects, left_wall_id)
                         table.insert(self.exterior_detail_objects, left_wall_id)
+                    end
+                end
+                if not has_tile_right then
+                    local right_wall_id = factory.create(
+                        "/tile_factory#tile_factory",
+                        vmath.vector3(center_x + (CELL_WIDTH * 3), center_y, 0.02),
+                        nil,
+                        {},
+                        vmath.vector3(visual_scale, visual_scale, 1)
+                    )
+                    if right_wall_id then
+                        msg.post(msg.url(nil, right_wall_id, "sprite"), "play_animation", { id = hash("exterior_rightWall1") })
+                        go.set(msg.url(nil, right_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                        table.insert(tile_objects, right_wall_id)
+                        table.insert(self.exterior_detail_objects, right_wall_id)
                     end
                 end
             end

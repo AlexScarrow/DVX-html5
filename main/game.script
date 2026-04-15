@@ -68,7 +68,7 @@ COLOR_DEFAULT = vmath.vector4(1, 1, 1, 0)
 COLOR_PATH = vmath.vector4(1, 1, 0.35, 0)
 COLOR_START = vmath.vector4(0.3, 1, 0.3, 0)
 COLOR_END = vmath.vector4(1, 0.35, 0.35, 0)
-CAMERA_EDGE_PADDING_X = CELL_WIDTH * 1.2
+CAMERA_EDGE_PADDING_X = CELL_WIDTH * 6.0
 CAMERA_EDGE_PADDING_Y = CELL_HEIGHT * 0.5
 HUMAN_MOVE_SPEED = 250
 HUMAN_VISUAL_SCALE = 0.35
@@ -617,6 +617,7 @@ AESTHETIC_PROFILES = {
         backdrop_anim = "backdrop_boardgame",
         backdrop_tiled = true,
         backdrop_tile_cols = 18,
+        backdrop_tile_right_extra_cols = 2,
         backdrop_tile_rows = 15,
         backdrop_tile_art_w = 256,
         backdrop_tile_art_h = 256,
@@ -6668,7 +6669,7 @@ local function get_camera_clamped_pos(camera_pos, zoom)
     local clamped_y = camera_pos.y
 
     if min_x > max_x then
-        clamped_x = world_w * 0.5
+        clamped_x = clamp(camera_pos.x, max_x, min_x)
     else
         clamped_x = clamp(camera_pos.x, min_x, max_x)
     end
@@ -11421,7 +11422,9 @@ apply_aesthetic_mode = function(self)
                 go.delete(self.world_backdrop)
                 self.world_backdrop = nil
             end
-            local cols = (profile and profile.backdrop_tile_cols) or 5
+            local base_cols = (profile and profile.backdrop_tile_cols) or 5
+            local right_extra_cols = math.max(0, math.floor((profile and profile.backdrop_tile_right_extra_cols) or 0))
+            local cols = base_cols + right_extra_cols
             local rows = (profile and profile.backdrop_tile_rows) or 5
             local needed = math.max(1, cols * rows)
             self.world_backdrop_tiles = self.world_backdrop_tiles or {}
@@ -17790,7 +17793,7 @@ function init(self)
     self.sheen_art_h = 300--576
     self.sheen_offset_x = 0
     self.sheen_offset_y = 100
-    self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_BOARDGAME
+    self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_COMPUTER
     self.world_backdrop = nil
     self.world_backdrop_tiles = nil
     self.world_backdrop_anim = nil
@@ -18634,7 +18637,9 @@ function update(self, dt)
             apply_backdrop_emissive_tint(self, dt, profile)
         end
         if self.world_backdrop_tiles and #self.world_backdrop_tiles > 0 then
-            local cols = (profile and profile.backdrop_tile_cols) or 5
+            local base_cols = (profile and profile.backdrop_tile_cols) or 5
+            local right_extra_cols = math.max(0, math.floor((profile and profile.backdrop_tile_right_extra_cols) or 0))
+            local cols = base_cols + right_extra_cols
             local rows = (profile and profile.backdrop_tile_rows) or 5
             local tile_art_w = (profile and profile.backdrop_tile_art_w) or 256
             local tile_art_h = (profile and profile.backdrop_tile_art_h) or 256
@@ -18643,7 +18648,7 @@ function update(self, dt)
             local tile_scale_y = tile_scale_base
             local tile_span_x = tile_art_w * tile_scale_x
             local tile_span_y = tile_art_h * tile_scale_y
-            local x0 = bx - (((cols - 1) * tile_span_x) * 0.5)
+            local x0 = bx - (((base_cols - 1) * tile_span_x) * 0.5)
             local y0 = by - (((rows - 1) * tile_span_y) * 0.5)
             local tile_i = 1
             for row = 1, rows do

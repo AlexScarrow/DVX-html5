@@ -3937,6 +3937,9 @@ function M.extend(runtime, ctx)
             screen_x = screen_x,
             screen_y = screen_y
         }
+        if ctx and ctx.play_drag_item_sfx then
+            ctx.play_drag_item_sfx(self)
+        end
         return true
     end
 

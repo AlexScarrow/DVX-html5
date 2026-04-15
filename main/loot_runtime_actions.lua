@@ -4403,6 +4403,9 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             nav_obj.hasNavData = false
             nav_obj.isFixed = false
+            if ctx and ctx.play_task_done_sfx then
+                ctx.play_task_done_sfx(self)
+            end
             spawn_impact_ring_for_object(self, cell, nav_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
             runtime.refresh_exit_objective_state(self)
             runtime.refresh_fix_markers(self)
@@ -4503,6 +4506,9 @@ function M.extend(runtime, ctx)
             unit.current_ap = (unit.current_ap or 0) - ap_cost
             loader_obj.hasFood = false
             loader_obj.isFixed = false
+            if ctx and ctx.play_task_done_sfx then
+                ctx.play_task_done_sfx(self)
+            end
             -- For exit objective loader, only successful deploy should trigger the green ring.
             if loader_obj.contributesToExitObjective ~= true then
                 spawn_impact_ring_for_object(self, cell, loader_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
@@ -4601,6 +4607,9 @@ function M.extend(runtime, ctx)
         state.paid_units = 0
         state.payment_locked = false
         state.payment_confirm_flash = 0
+        if ctx and ctx.play_task_done_sfx then
+            ctx.play_task_done_sfx(self)
+        end
         print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
         return true
     end
@@ -5157,6 +5166,9 @@ function M.extend(runtime, ctx)
                                 end
                                 remove_source_item()
                                 target_socket_obj.powerLoaded = math.min(required, loaded + 1)
+                                if ctx and ctx.play_task_done_sfx then
+                                    ctx.play_task_done_sfx(self)
+                                end
                                 consumed = true
                                 runtime.refresh_power_node_markers(self)
                                 runtime.refresh_exit_objective_state(self)
@@ -5441,6 +5453,9 @@ function M.extend(runtime, ctx)
                                     local weld_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                     print(string.format("WELD FX CALLSITE: triggering overlay on cell %d", drop_cell_id or 0))
                                     runtime.spawn_vent_weld_fx(self, weld_cell, vent_target)
+                                    if ctx and ctx.play_welding_sfx then
+                                        ctx.play_welding_sfx(self)
+                                    end
                                     print(string.format(
                                         "%s welded vent object #%d using 1 %s. (AP -%d)",
                                         source_unit.display_name,
@@ -5565,6 +5580,13 @@ function M.extend(runtime, ctx)
                                     runtime.refresh_workshop_underlay_visuals(self)
                                     runtime.refresh_exit_objective_state(self)
                                     runtime.refresh_world_item_visuals(self)
+                                    if component_target.name == hash("wiregap")
+                                        and source_item == ctx.COMPONENT_UI.component_wiring_straight
+                                    then
+                                        if ctx and ctx.play_task_done_sfx then
+                                            ctx.play_task_done_sfx(self)
+                                        end
+                                    end
                                     if source_item == ctx.COMPONENT_UI.component_wiring_straight
                                         or source_item == ctx.COMPONENT_UI.component_wiring_corner
                                         or source_item == ctx.COMPONENT_UI.component_fuse
@@ -5577,6 +5599,9 @@ function M.extend(runtime, ctx)
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data
                                     then
+                                        if ctx and ctx.play_task_done_sfx then
+                                            ctx.play_task_done_sfx(self)
+                                        end
                                         local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                         if target_cell then
                                             spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.1, 0.3, 1.0, 1))
@@ -5585,6 +5610,9 @@ function M.extend(runtime, ctx)
                                     if component_target.name == hash("supply_loader")
                                         and source_item == ctx.COMPONENT_UI.component_food_supplies
                                     then
+                                        if ctx and ctx.play_task_done_sfx then
+                                            ctx.play_task_done_sfx(self)
+                                        end
                                         local target_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
                                         if target_cell then
                                             spawn_impact_ring_for_object(self, target_cell, component_target, vmath.vector4(0.2, 1.0, 0.25, 1))
@@ -5615,6 +5643,17 @@ function M.extend(runtime, ctx)
                                                 if menu_cell and menu_obj then
                                                     spawn_impact_ring_for_object(self, menu_cell, menu_obj, vmath.vector4(0.2, 1.0, 0.25, 1))
                                                 end
+                                            end
+                                        end
+                                    end
+                                    if source_item == ctx.COMPONENT_UI.component_wiring_straight then
+                                        if component_target.name == hash("wiregap")
+                                            or component_target.name == hash("wireGap")
+                                            or component_target.name == hash("wiregap_straight")
+                                            or component_target.name == hash("wireGap_straight")
+                                        then
+                                            if ctx and ctx.play_sparking_wire_sfx then
+                                                ctx.play_sparking_wire_sfx(self)
                                             end
                                         end
                                     end

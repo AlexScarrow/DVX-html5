@@ -315,6 +315,30 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_sparking_wire"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/sparking_wire.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_welding"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/welding.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_task_done"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/task_done.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "test_sprite"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

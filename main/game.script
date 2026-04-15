@@ -321,6 +321,9 @@ SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
 SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
 SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
 SFX_FABRICATOR_WORKING_URL = "main:/sfx_fabricator_working#sound"
+SFX_SPARKING_WIRE_URL = "main:/sfx_sparking_wire#sound"
+SFX_WELDING_URL = "main:/sfx_welding#sound"
+SFX_TASK_DONE_URL = "main:/sfx_task_done#sound"
 SFX_SARGE_ITEM_RECIEVE_URL = "main:/sfx_sarge_item_recieve#sound"
 SFX_TECHIE_ITEM_RECIEVE_URL = "main:/sfx_techie_item_recieve#sound"
 SFX_MEDIC_ITEM_RECIEVE_URL = "main:/sfx_medic_item_recieve#sound"
@@ -330,6 +333,8 @@ SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
 SFX_SPEEDY_MOVE_URL_4 = "main:/sfx_speedy_move_4#sound"
 SFX_SPEEDY_MOVE_MAX_STACK_VOICES = 4
+SPARKING_WIRE_MIN_INTERVAL_S = 1.2
+SPARKING_WIRE_MAX_INTERVAL_S = 2.8
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
@@ -9031,6 +9036,69 @@ play_fabricator_working_sfx = function(self)
     play_sfx_one_shot(self, "fabricator_working")
 end
 
+play_sparking_wire_sfx = function(self)
+    play_sfx_one_shot(self, "sparking_wire")
+end
+
+play_welding_sfx = function(self)
+    play_sfx_one_shot(self, "welding")
+end
+
+play_task_done_sfx = function(self)
+    play_sfx_one_shot(self, "task_done")
+end
+
+has_powered_wiregap_object = function(self)
+    if not self or not self.world_grid then
+        return false
+    end
+    for _, cell in ipairs(self.world_grid) do
+        if cell and cell.isPowered == true and cell.tileID ~= hash("empty") then
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objects) do
+                if obj and obj.name and obj.isFixed ~= true then
+                    if obj.name == hash("wiregap")
+                        or obj.name == hash("wireGap")
+                        or obj.name == hash("wiregap_straight")
+                        or obj.name == hash("wireGap_straight")
+                        or obj.name == hash("wiregap_corner")
+                        or obj.name == hash("wireGap_corner")
+                    then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+update_sparking_wire_ambient_sfx = function(self, dt)
+    if not self or (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return
+    end
+    if self.realtime_rules_enabled ~= true and self.alien_turn_active then
+        -- Keep timing stable during heavy turn-phase transitions.
+        return
+    end
+    local has_powered_wiregap = has_powered_wiregap_object(self)
+    if not has_powered_wiregap then
+        self.sparking_wire_timer_s = nil
+        return
+    end
+    local min_i = math.max(0.2, tonumber(SPARKING_WIRE_MIN_INTERVAL_S or 1.2) or 1.2)
+    local max_i = math.max(min_i, tonumber(SPARKING_WIRE_MAX_INTERVAL_S or min_i) or min_i)
+    if self.sparking_wire_timer_s == nil then
+        self.sparking_wire_timer_s = min_i + (math.random() * (max_i - min_i))
+        return
+    end
+    self.sparking_wire_timer_s = (tonumber(self.sparking_wire_timer_s or 0) or 0) - (tonumber(dt or 0) or 0)
+    if self.sparking_wire_timer_s <= 0 then
+        play_sparking_wire_sfx(self)
+        self.sparking_wire_timer_s = min_i + (math.random() * (max_i - min_i))
+    end
+end
+
 play_human_item_recieve_sfx = function(self, unit)
     local class_id = tostring(unit and unit.class_id or "")
     if class_id == UNIT_CLASS_SARGE then
@@ -14732,6 +14800,15 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     end,
     play_fabricator_working_sfx = function(self_ref)
         play_fabricator_working_sfx(self_ref)
+    end,
+    play_sparking_wire_sfx = function(self_ref)
+        play_sparking_wire_sfx(self_ref)
+    end,
+    play_welding_sfx = function(self_ref)
+        play_welding_sfx(self_ref)
+    end,
+    play_task_done_sfx = function(self_ref)
+        play_task_done_sfx(self_ref)
     end
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
@@ -17781,6 +17858,9 @@ function init(self)
             escape_pod_ready = true,
             factory_produce = true,
             fabricator_working = true,
+            sparking_wire = true,
+            welding = true,
+            task_done = true,
             sarge_item_recieve = true,
             techie_item_recieve = true,
             medic_item_recieve = true,
@@ -17815,6 +17895,9 @@ function init(self)
         escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
         factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },
         fabricator_working = { url = msg.url(SFX_FABRICATOR_WORKING_URL), playing = false },
+        sparking_wire = { url = msg.url(SFX_SPARKING_WIRE_URL), playing = false },
+        welding = { url = msg.url(SFX_WELDING_URL), playing = false },
+        task_done = { url = msg.url(SFX_TASK_DONE_URL), playing = false },
         sarge_item_recieve = { url = msg.url(SFX_SARGE_ITEM_RECIEVE_URL), playing = false },
         techie_item_recieve = { url = msg.url(SFX_TECHIE_ITEM_RECIEVE_URL), playing = false },
         medic_item_recieve = { url = msg.url(SFX_MEDIC_ITEM_RECIEVE_URL), playing = false },
@@ -17952,6 +18035,7 @@ function update(self, dt)
         refresh_ambient_sfx_state(self)
     end
     update_escape_pod_ready_sfx(self)
+    update_sparking_wire_ambient_sfx(self, dt)
     if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
     end

@@ -9760,6 +9760,7 @@ local function start_outro_slideshow_runtime(self)
         on_complete = function(done_reason, state)
             self.outro_slideshow_state = nil
             self.outro_slide_anim_id = nil
+            stop_outro_slideshow_runtime(self, "completed")
             if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
                 if tostring(self.end_outro_sequence_id or "") == "title" then
                     enter_flow_state(self, FLOW_STATE_TITLE)
@@ -9889,6 +9890,7 @@ local function update_outro_slideshow_runtime(self, dt)
     else
         self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
         if (self.flow_outro_timer or 0) >= 8.0 then
+            stop_outro_slideshow_runtime(self, "timeout")
             if tostring(self.end_outro_sequence_id or "") == "title" then
                 enter_flow_state(self, FLOW_STATE_TITLE)
             else

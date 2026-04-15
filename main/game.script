@@ -319,6 +319,7 @@ SFX_GUNNER_CONFIRM_SELECT_URL = "main:/sfx_gunner_confirm_select#sound"
 SFX_POWER_NODE_ON_URL = "main:/sfx_power_node_on#sound"
 SFX_POWER_NODE_OFF_URL = "main:/sfx_power_node_off#sound"
 SFX_DRAG_ITEM_URL = "main:/sfx_drag_item#sound"
+SFX_BREAK_BARRICADE_URL = "main:/sfx_break_barricade#sound"
 SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
 SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
 SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
@@ -1546,6 +1547,7 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
             end
         end)
     end
+    play_break_barricade_sfx(self)
 
     if hp <= 0 then
         reset_runtime_object_slot_to_empty(door_obj)
@@ -9033,6 +9035,10 @@ play_drag_item_sfx = function(self)
     play_sfx_one_shot(self, "drag_item")
 end
 
+play_break_barricade_sfx = function(self)
+    play_sfx_one_shot(self, "break_barricade")
+end
+
 play_door_toggle_sfx = function(self)
     play_sfx_one_shot(self, "door_toggle")
 end
@@ -14749,6 +14755,9 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     get_turret_gun_objects = function(self_ref)
         self_ref.turret_gun_objects = self_ref.turret_gun_objects or {}
         return self_ref.turret_gun_objects
+    end,
+    play_break_barricade_sfx = function(self_ref)
+        play_break_barricade_sfx(self_ref)
     end
 })
 LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
@@ -14814,6 +14823,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     end,
     play_drag_item_sfx = function(self_ref)
         play_drag_item_sfx(self_ref)
+    end,
+    play_break_barricade_sfx = function(self_ref)
+        play_break_barricade_sfx(self_ref)
     end,
     play_human_item_recieve_sfx = function(self_ref, unit)
         play_human_item_recieve_sfx(self_ref, unit)
@@ -17898,6 +17910,7 @@ function init(self)
             power_node_on = true,
             power_node_off = true,
             drag_item = true,
+            break_barricade = true,
             door_toggle = true,
             escape_pod_ready = true,
             factory_produce = true,
@@ -17937,6 +17950,7 @@ function init(self)
         power_node_on = { url = msg.url(SFX_POWER_NODE_ON_URL), playing = false },
         power_node_off = { url = msg.url(SFX_POWER_NODE_OFF_URL), playing = false },
         drag_item = { url = msg.url(SFX_DRAG_ITEM_URL), playing = false },
+        break_barricade = { url = msg.url(SFX_BREAK_BARRICADE_URL), playing = false },
         door_toggle = { url = msg.url(SFX_DOOR_TOGGLE_URL), playing = false },
         escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
         factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },

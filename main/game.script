@@ -16982,7 +16982,13 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
 
     local snapshot_controlled_unit_id = snapshot.controlled_unit_id
     if self.mp_state and self.mp_state.enabled then
-        if snapshot_controlled_unit_id and multiplayer_can_control_unit(self, snapshot_controlled_unit_id) then
+        if self.controlled_unit_id
+            and multiplayer_can_control_unit(self, self.controlled_unit_id)
+            and self.squad_units[self.controlled_unit_id]
+            and (self.squad_units[self.controlled_unit_id].current_health or 0) > 0
+        then
+            -- Preserve client-owned local selection when valid.
+        elseif snapshot_controlled_unit_id and multiplayer_can_control_unit(self, snapshot_controlled_unit_id) then
             self.controlled_unit_id = snapshot_controlled_unit_id
         else
             self.controlled_unit_id = nil

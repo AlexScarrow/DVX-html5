@@ -16171,8 +16171,8 @@ multiplayer_apply_move_unit_event = function(self, payload)
     end
     local ap_before = tonumber(payload.ap_before)
     if ap_before then
-        local max_ap = get_human_ap_refresh_cap(unit)
-        unit.current_ap = math.max(0, math.min(max_ap, math.floor(ap_before + 0.5)))
+        -- Host is authoritative for AP in multiplayer; do not clamp to local cap.
+        unit.current_ap = math.max(0, math.floor(ap_before + 0.5))
     end
     local path = nil
     local total_cost = nil

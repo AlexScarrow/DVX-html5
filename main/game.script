@@ -157,6 +157,21 @@ UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
 UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
 UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
+HUMAN_PORTRAIT_IDS = { "sarge", "techie", "medic", "gunner" }
+HUMAN_PORTRAIT_ANIM_BY_UNIT_ID = {
+    sarge = hash("sarge_portrait"),
+    techie = hash("techie_portrait"),
+    medic = hash("medic_portrait"),
+    gunner = hash("gunner_portrait")
+}
+HUMAN_PORTRAIT_DRAW_W = 42.5
+HUMAN_PORTRAIT_DRAW_H = 42.5
+HUMAN_PORTRAIT_START_X = SCREEN_WIDTH - 56
+HUMAN_PORTRAIT_START_Y = 480
+HUMAN_PORTRAIT_GAP_Y = 26
+HUMAN_PORTRAIT_Z = 0.846
+HUMAN_PORTRAIT_HIT_W = 90
+HUMAN_PORTRAIT_HIT_H = 90
 COMMS_PANEL_W = 300
 COMMS_PANEL_H = 470
 COMMS_PANEL_Z = 0.842
@@ -8022,6 +8037,7 @@ local function ui_is_button_node(self, go_id)
         "level_buttons",
         "ready_buttons",
         "mp_debug_player_buttons",
+        "human_portrait_icons",
         "flow_mp_mission_buttons",
         "flow_mp_count_buttons",
         "flow_mp_unit_buttons"
@@ -8532,7 +8548,8 @@ local function initialize_unit_ui(self)
         flow_mp_slot_icons = {},
         flow_score_rows = {},
         ready_buttons = {},
-        mp_debug_player_buttons = {}
+        mp_debug_player_buttons = {},
+        human_portrait_icons = {}
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
@@ -8608,6 +8625,15 @@ local function initialize_unit_ui(self)
         self.ui.mp_debug_player_buttons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z))
         if self.ui.mp_debug_player_buttons[i] then
             msg.post(msg.url(nil, self.ui.mp_debug_player_buttons[i], "sprite"), "play_animation", { id = hash("score_" .. tostring(i + 1)) })
+        end
+    end
+    for i, unit_id in ipairs(HUMAN_PORTRAIT_IDS) do
+        self.ui.human_portrait_icons[i] = create_ui_square_alpha(0, 0, HUMAN_PORTRAIT_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
+        if self.ui.human_portrait_icons[i] then
+            local anim_id = HUMAN_PORTRAIT_ANIM_BY_UNIT_ID[unit_id]
+            if anim_id then
+                msg.post(msg.url(nil, self.ui.human_portrait_icons[i], "sprite"), "play_animation", { id = anim_id })
+            end
         end
     end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
@@ -8757,6 +8783,11 @@ local function set_ui_hidden(self)
     if self.ui.mp_debug_player_buttons then
         for _, btn in ipairs(self.ui.mp_debug_player_buttons) do
             set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_DEBUG_BUTTON_Z, hidden, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021, MULTIPLAYER_DEBUG_BUTTON_DRAW_SIZE * 0.021)
+        end
+    end
+    if self.ui.human_portrait_icons then
+        for _, icon in ipairs(self.ui.human_portrait_icons) do
+            set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
         end
     end
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
@@ -12052,6 +12083,7 @@ function update_selected_unit_ui(self)
     end
     if not unit then
         set_ui_hidden(self)
+        update_human_portrait_ui(self)
         update_global_ui_buttons(self)
         if self.ui.level_buttons then
             local current_idx = self.current_level_index or 1
@@ -12353,6 +12385,7 @@ function update_selected_unit_ui(self)
         )
     end
     update_global_ui_buttons(self)
+    update_human_portrait_ui(self)
 end
 
 local function is_point_in_ui_panel(screen_x, screen_y)
@@ -12361,6 +12394,99 @@ local function is_point_in_ui_panel(screen_x, screen_y)
     local min_y = UI_PANEL_Y - UI_PANEL_H * 0.5
     local max_y = UI_PANEL_Y + UI_PANEL_H * 0.5
     return screen_x >= min_x and screen_x <= max_x and screen_y >= min_y and screen_y <= max_y
+end
+
+get_human_portrait_screen_pos = function(slot_index)
+    local step_y = HUMAN_PORTRAIT_DRAW_H + HUMAN_PORTRAIT_GAP_Y
+    return HUMAN_PORTRAIT_START_X, HUMAN_PORTRAIT_START_Y - ((slot_index - 1) * step_y)
+end
+
+get_visible_human_portrait_unit_ids = function(self)
+    local visible_ids = {}
+    for _, unit_id in ipairs(HUMAN_PORTRAIT_IDS) do
+        if not (self.mp_state and self.mp_state.enabled) or multiplayer_can_control_unit(self, unit_id) then
+            table.insert(visible_ids, unit_id)
+        end
+    end
+    return visible_ids
+end
+
+center_camera_on_unit = function(self, unit)
+    if not (self and unit) then
+        return
+    end
+    local ux, uy = nil, nil
+    if unit.go_path then
+        local p = go.get_position(unit.go_path)
+        ux = p and p.x or nil
+        uy = p and p.y or nil
+    end
+    if (not ux or not uy) and unit.cell_id then
+        local cx, cy = id_to_coords(unit.cell_id)
+        if cx and cy then
+            ux = ((cx - 1) * CELL_WIDTH) + (CELL_WIDTH * 0.5)
+            uy = ((cy - 1) * CELL_HEIGHT) + (CELL_HEIGHT * 0.5)
+        end
+    end
+    if ux and uy then
+        self.camera_pos.x = ux
+        self.camera_pos.y = uy
+        apply_camera_transform(self)
+    end
+end
+
+update_human_portrait_ui = function(self)
+    if not (self and self.ui and self.ui.human_portrait_icons) then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    local visible_ids = get_visible_human_portrait_unit_ids(self)
+    self.human_portrait_visible_unit_ids = visible_ids
+    for i, icon in ipairs(self.ui.human_portrait_icons) do
+        local unit_id = visible_ids[i]
+        if unit_id then
+            local sx, sy = get_human_portrait_screen_pos(i)
+            local unit = self.squad_units and self.squad_units[unit_id] or nil
+            local alive = unit and (unit.current_health or 0) > 0
+            local selected = unit and unit.is_selected and (self.controlled_unit_id == unit_id)
+            local tint = selected and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.85, 0.85, 0.85, 1)
+            if not alive then
+                tint = vmath.vector4(0.4, 0.4, 0.4, 0.7)
+            end
+            set_ui_square_transform(self, icon, sx, sy, HUMAN_PORTRAIT_Z, tint, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+        else
+            set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+        end
+    end
+end
+
+try_select_human_portrait = function(self, screen_x, screen_y)
+    if not (self and self.squad_units and self.ui and self.ui.human_portrait_icons) then
+        return false
+    end
+    local visible_ids = self.human_portrait_visible_unit_ids or get_visible_human_portrait_unit_ids(self)
+    for i, unit_id in ipairs(visible_ids) do
+        local cx, cy = get_human_portrait_screen_pos(i)
+        if is_point_in_screen_rect(screen_x, screen_y, cx, cy, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H) then
+            local unit = self.squad_units[unit_id]
+            if unit and (unit.current_health or 0) > 0 then
+                self.controlled_unit_id = unit_id
+                deselect_all_units(self)
+                unit.is_selected = true
+                self.ui_close_on_next_non_unit_click = false
+                self.awaiting_slot_shuffle_click = false
+                self.selected_start_cell = nil
+                close_comms_panel(self)
+                play_human_confirm_select_sfx(self, unit)
+                center_camera_on_unit(self, unit)
+                update_human_visual_state(self)
+                update_human_ap_debug_label(self)
+                update_selected_unit_ui(self)
+            end
+            return true
+        end
+    end
+    return false
 end
 
 function is_point_in_close_ui_button(screen_x, screen_y)
@@ -19106,6 +19232,10 @@ function on_input(self, action_id, action)
                     return true
                 end
                 if try_activate_comms_slot(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    return true
+                end
+                if try_select_human_portrait(self, input_x, input_y) then
                     dismiss_ranged_hit_preview(self)
                     return true
                 end

@@ -355,6 +355,7 @@ SFX_SPEEDY_MOVE_URL_4 = "main:/sfx_speedy_move_4#sound"
 SFX_SPEEDY_MOVE_MAX_STACK_VOICES = 4
 SPARKING_WIRE_MIN_INTERVAL_S = 1.2
 SPARKING_WIRE_MAX_INTERVAL_S = 2.8
+SPARKING_WIRE_HARD_COOLDOWN_S = 1.8
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
@@ -441,6 +442,17 @@ do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
     MP_SYNC_TRACE_ENABLED = (sync_trace_cfg == "1" or sync_trace_cfg == "true" or sync_trace_cfg == "on")
 end
+do
+    local telemetry_cfg = sys.get_config and sys.get_config("multiplayer.telemetry") or nil
+    if telemetry_cfg == nil or telemetry_cfg == "" then
+        MP_TELEMETRY_ENABLED = true
+    else
+        MP_TELEMETRY_ENABLED = (telemetry_cfg == "1" or telemetry_cfg == "true" or telemetry_cfg == "on")
+    end
+end
+MP_TELEMETRY_LOG_INTERVAL_S = 2.0
+MP_TELEMETRY_PING_INTERVAL_S = 1.0
+MP_TELEMETRY_DT_SPIKE_S = 0.05
 do
     local preview_cfg = sys.get_config and sys.get_config("debug.outro_preview") or nil
     DEBUG_OUTRO_PREVIEW_ENABLED = (preview_cfg == "1" or preview_cfg == "true" or preview_cfg == "on")
@@ -5776,7 +5788,8 @@ local function update_purge_runtime(self)
         if host_authority and self.mp_state and self.mp_state.enabled then
             multiplayer_transport_broadcast_event(self, "realtime_mode_changed", {
                 enabled = true,
-                turn_id = self.mp_state.turn_id or 1
+                turn_id = self.mp_state.turn_id or 1,
+                unit_digest = multiplayer_build_unit_state_digest(self)
             })
         end
         print("PURGE | bomb armed: realtime forced ON and locked.")
@@ -7020,7 +7033,7 @@ try_realtime_auto_load_ammo_from_backpack = function(self, unit)
     return false
 end
 
-local function get_human_armor_hit_reduction(unit)
+get_human_armor_hit_reduction = function(unit)
     if not unit or type(unit.equipment) ~= "table" then
         return 0
     end
@@ -9294,7 +9307,18 @@ play_fabricator_working_sfx = function(self)
 end
 
 play_sparking_wire_sfx = function(self)
+    if not self then
+        return false
+    end
+    local now_ms = (socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)
+    local cooldown_ms = math.max(100, math.floor(((tonumber(SPARKING_WIRE_HARD_COOLDOWN_S or 1.8) or 1.8) * 1000) + 0.5))
+    local next_allowed_ms = tonumber(self.sparking_wire_next_allowed_ms or 0) or 0
+    if now_ms < next_allowed_ms then
+        return false
+    end
+    self.sparking_wire_next_allowed_ms = now_ms + cooldown_ms
     play_sfx_one_shot(self, "sparking_wire")
+    return true
 end
 
 play_welding_sfx = function(self)
@@ -9341,6 +9365,7 @@ update_sparking_wire_ambient_sfx = function(self, dt)
     local has_powered_wiregap = has_powered_wiregap_object(self)
     if not has_powered_wiregap then
         self.sparking_wire_timer_s = nil
+        self.sparking_wire_next_allowed_ms = nil
         return
     end
     local min_i = math.max(0.2, tonumber(SPARKING_WIRE_MIN_INTERVAL_S or 1.2) or 1.2)
@@ -12712,6 +12737,804 @@ multiplayer_sync_trace = function(self, tag, details)
     ))
 end
 
+multiplayer_telemetry_on_send_command = function(self, cmd_type)
+    local t = self and self.mp_telemetry or nil
+    if not (t and t.enabled) then
+        return
+    end
+    t.tx_command_count = (tonumber(t.tx_command_count or 0) or 0) + 1
+    if cmd_type == "ping" then
+        local now_ms = (socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)
+        t.last_ping_sent_ms = now_ms
+    end
+end
+
+multiplayer_telemetry_on_recv_event = function(self, event_type)
+    local t = self and self.mp_telemetry or nil
+    if not (t and t.enabled) then
+        return
+    end
+    t.rx_event_count = (tonumber(t.rx_event_count or 0) or 0) + 1
+    if event_type == "realtime_state_snapshot" or event_type == "turn_state_snapshot" or event_type == "snapshot_state" then
+        t.rx_snapshot_count = (tonumber(t.rx_snapshot_count or 0) or 0) + 1
+    end
+end
+
+multiplayer_telemetry_on_snapshot_applied = function(self)
+    local t = self and self.mp_telemetry or nil
+    if not (t and t.enabled) then
+        return
+    end
+    t.snapshot_apply_count = (tonumber(t.snapshot_apply_count or 0) or 0) + 1
+end
+
+multiplayer_telemetry_on_snapshot_apply_failed = function(self)
+    local t = self and self.mp_telemetry or nil
+    if not (t and t.enabled) then
+        return
+    end
+    t.snapshot_apply_failed_count = (tonumber(t.snapshot_apply_failed_count or 0) or 0) + 1
+end
+
+multiplayer_telemetry_on_snapshot_correction = function(self, error_px)
+    local t = self and self.mp_telemetry or nil
+    if not (t and t.enabled) then
+        return
+    end
+    t.state_correction_count = (tonumber(t.state_correction_count or 0) or 0) + 1
+    local err = tonumber(error_px or 0) or 0
+    if err > (tonumber(t.max_position_error_px or 0) or 0) then
+        t.max_position_error_px = err
+    end
+end
+
+multiplayer_update_telemetry = function(self, dt)
+    local t = self and self.mp_telemetry or nil
+    if not (t and t.enabled and self.mp_state and self.mp_state.enabled) then
+        return
+    end
+    if (tonumber(dt or 0) or 0) > MP_TELEMETRY_DT_SPIKE_S then
+        t.dt_spike_count = (tonumber(t.dt_spike_count or 0) or 0) + 1
+    end
+    t.queued_event_count = self.mp_state.pending_events and #self.mp_state.pending_events or 0
+    t.log_accum_s = (tonumber(t.log_accum_s or 0) or 0) + (tonumber(dt or 0) or 0)
+    t.ping_accum_s = (tonumber(t.ping_accum_s or 0) or 0) + (tonumber(dt or 0) or 0)
+    if t.ping_accum_s >= MP_TELEMETRY_PING_INTERVAL_S
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+    then
+        t.ping_accum_s = 0
+        multiplayer_transport_send_command(self, "ping", {
+            turn_id = self.mp_state and self.mp_state.turn_id or 1,
+            sent_ms = (socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)
+        }, self.mp_state and self.mp_state.local_player_id or "p1")
+    end
+    if t.log_accum_s < MP_TELEMETRY_LOG_INTERVAL_S then
+        return
+    end
+    local window_s = math.max(0.001, t.log_accum_s)
+    t.log_accum_s = 0
+    local rtt_avg = tonumber(t.rtt_last_ms or 0) or 0
+    local rtt_p95 = rtt_avg
+    local samples = t.rtt_samples_ms or {}
+    if #samples > 0 then
+        local ordered = {}
+        for i = 1, #samples do
+            ordered[i] = samples[i]
+        end
+        table.sort(ordered)
+        local sum = 0
+        for i = 1, #ordered do
+            sum = sum + ordered[i]
+        end
+        rtt_avg = sum / #ordered
+        local p95_index = math.max(1, math.floor((#ordered * 0.95) + 0.5))
+        if p95_index > #ordered then
+            p95_index = #ordered
+        end
+        rtt_p95 = ordered[p95_index]
+    end
+    local tx_cmd = tonumber(t.tx_command_count or 0) or 0
+    local tx_evt = tonumber(t.tx_event_count or 0) or 0
+    local rx_evt = tonumber(t.rx_event_count or 0) or 0
+    local rx_snap = tonumber(t.rx_snapshot_count or 0) or 0
+    local corr = tonumber(t.state_correction_count or 0) or 0
+    local max_err = tonumber(t.max_position_error_px or 0) or 0
+    local dt_spikes = tonumber(t.dt_spike_count or 0) or 0
+    local checksum_mismatch = tonumber(t.checksum_mismatch_count or 0) or 0
+    local checksum_mismatch_units = tonumber(t.checksum_mismatch_units_count or 0) or 0
+    local checksum_mismatch_actors = tonumber(t.checksum_mismatch_actors_count or 0) or 0
+    local checksum_mismatch_world = tonumber(t.checksum_mismatch_world_count or 0) or 0
+    local checksum_mismatch_items = tonumber(t.checksum_mismatch_items_count or 0) or 0
+    local turn_mismatch = tonumber(t.turn_id_mismatch_count or 0) or 0
+    local qlen = tonumber(t.queued_event_count or 0) or 0
+    print(string.format(
+        "MP TELEMETRY | role=%s turn=%d rtt=%.1f/%.1fms tx_cmd=%.1f/s tx_evt=%.1f/s rx_evt=%.1f/s rx_snap=%.1f/s q=%d corr=%d maxErr=%.1f dtSpike=%d chkMis=%d chkU=%d chkA=%d chkW=%d chkI=%d turnMis=%d snapOk=%d snapFail=%d",
+        (self.mp_state.local_player_id == self.mp_state.host_player_id) and "host" or "client",
+        tonumber(self.mp_state.turn_id or 0) or 0,
+        rtt_avg,
+        rtt_p95,
+        tx_cmd / window_s,
+        tx_evt / window_s,
+        rx_evt / window_s,
+        rx_snap / window_s,
+        qlen,
+        corr,
+        max_err,
+        dt_spikes,
+        checksum_mismatch,
+        checksum_mismatch_units,
+        checksum_mismatch_actors,
+        checksum_mismatch_world,
+        checksum_mismatch_items,
+        turn_mismatch,
+        tonumber(t.snapshot_apply_count or 0) or 0,
+        tonumber(t.snapshot_apply_failed_count or 0) or 0
+    ))
+    print(string.format(
+        "MPCSV,role=%s,turn=%d,rtt_avg=%.1f,rtt_p95=%.1f,tx_cmd_ps=%.2f,tx_evt_ps=%.2f,rx_evt_ps=%.2f,rx_snap_ps=%.2f,q=%d,corr=%d,max_err=%.1f,dt_spike=%d,chk_mis=%d,chk_u=%d,chk_a=%d,chk_w=%d,chk_i=%d,turn_mis=%d,snap_ok=%d,snap_fail=%d",
+        (self.mp_state.local_player_id == self.mp_state.host_player_id) and "host" or "client",
+        tonumber(self.mp_state.turn_id or 0) or 0,
+        rtt_avg,
+        rtt_p95,
+        tx_cmd / window_s,
+        tx_evt / window_s,
+        rx_evt / window_s,
+        rx_snap / window_s,
+        qlen,
+        corr,
+        max_err,
+        dt_spikes,
+        checksum_mismatch,
+        checksum_mismatch_units,
+        checksum_mismatch_actors,
+        checksum_mismatch_world,
+        checksum_mismatch_items,
+        turn_mismatch,
+        tonumber(t.snapshot_apply_count or 0) or 0,
+        tonumber(t.snapshot_apply_failed_count or 0) or 0
+    ))
+    t.tx_command_count = 0
+    t.tx_event_count = 0
+    t.rx_event_count = 0
+    t.rx_snapshot_count = 0
+    t.state_correction_count = 0
+    t.max_position_error_px = 0
+    t.dt_spike_count = 0
+    t.checksum_mismatch_count = 0
+    t.checksum_mismatch_units_count = 0
+    t.checksum_mismatch_actors_count = 0
+    t.checksum_mismatch_world_count = 0
+    t.checksum_mismatch_items_count = 0
+    t.turn_id_mismatch_count = 0
+    t.snapshot_apply_count = 0
+    t.snapshot_apply_failed_count = 0
+end
+
+multiplayer_hash_serial_parts = function(parts)
+    local serial = table.concat(parts or {}, "|")
+    local h = 7
+    for i = 1, #serial do
+        h = ((h * 131) + string.byte(serial, i) + i) % 2147483647
+    end
+    return tostring(h)
+end
+
+multiplayer_build_unit_state_digest = function(self)
+    local digest = {}
+    if not self then
+        return digest
+    end
+    for _, unit_id in ipairs(get_spawn_order_unit_id_list() or {}) do
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local key = tostring(unit_id)
+        if unit then
+            local backpack_items = {}
+            for i = 1, #(unit.backpack_items or {}) do
+                backpack_items[i] = tostring(unit.backpack_items[i] or "_")
+            end
+            local equipment_state = {}
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER or {}) do
+                equipment_state[slot_name] = tostring((unit.equipment and unit.equipment[slot_name]) or "_")
+            end
+            digest[key] = {
+                cell = tonumber(unit.cell_id or 0) or 0,
+                ap = tonumber(unit.current_ap or 0) or 0,
+                hp = tonumber(unit.current_health or 0) or 0,
+                ammo = tonumber(unit.current_ammo or 0) or 0,
+                backpack_used = tonumber(unit.backpack_used or 0) or 0,
+                backpack_items = backpack_items,
+                equipment = equipment_state,
+                moving = unit.is_moving == true and 1 or 0,
+                dead = ((tonumber(unit.current_health or 0) or 0) <= 0) and 1 or 0,
+                shuttle = unit.in_shuttle == true and 1 or 0
+            }
+        else
+            digest[key] = {
+                missing = 1
+            }
+        end
+    end
+    return digest
+end
+
+multiplayer_log_unit_state_mismatch = function(self, host_digest)
+    if type(host_digest) ~= "table" then
+        print("MP DESYNC | unit_diff | host_digest_missing")
+        return
+    end
+    local local_digest = multiplayer_build_unit_state_digest(self)
+    local keys_seen = {}
+    local keys = {}
+    for key, _ in pairs(host_digest) do
+        local k = tostring(key)
+        if keys_seen[k] ~= true then
+            keys_seen[k] = true
+            keys[#keys + 1] = k
+        end
+    end
+    for key, _ in pairs(local_digest) do
+        local k = tostring(key)
+        if keys_seen[k] ~= true then
+            keys_seen[k] = true
+            keys[#keys + 1] = k
+        end
+    end
+    table.sort(keys)
+    local printed = 0
+    local max_lines = 8
+    for _, key in ipairs(keys) do
+        local h = host_digest[key] or host_digest[tonumber(key)] or {}
+        local l = local_digest[key] or local_digest[tonumber(key)] or {}
+        local h_missing = tonumber(h.missing or 0) or 0
+        local l_missing = tonumber(l.missing or 0) or 0
+        local h_cell = tonumber(h.cell or 0) or 0
+        local l_cell = tonumber(l.cell or 0) or 0
+        local h_ap = tonumber(h.ap or 0) or 0
+        local l_ap = tonumber(l.ap or 0) or 0
+        local h_hp = tonumber(h.hp or 0) or 0
+        local l_hp = tonumber(l.hp or 0) or 0
+        local h_ammo = tonumber(h.ammo or 0) or 0
+        local l_ammo = tonumber(l.ammo or 0) or 0
+        local h_backpack_used = tonumber(h.backpack_used or 0) or 0
+        local l_backpack_used = tonumber(l.backpack_used or 0) or 0
+        local h_backpack_sig = table.concat(h.backpack_items or {}, ",")
+        local l_backpack_sig = table.concat(l.backpack_items or {}, ",")
+        local h_equipment_sig_parts = {}
+        local l_equipment_sig_parts = {}
+        for _, slot_name in ipairs(BUFF_SLOT_ORDER or {}) do
+            h_equipment_sig_parts[#h_equipment_sig_parts + 1] = tostring((h.equipment and h.equipment[slot_name]) or "_")
+            l_equipment_sig_parts[#l_equipment_sig_parts + 1] = tostring((l.equipment and l.equipment[slot_name]) or "_")
+        end
+        local h_equipment_sig = table.concat(h_equipment_sig_parts, ",")
+        local l_equipment_sig = table.concat(l_equipment_sig_parts, ",")
+        local h_moving = tonumber(h.moving or 0) or 0
+        local l_moving = tonumber(l.moving or 0) or 0
+        local h_dead = tonumber(h.dead or 0) or 0
+        local l_dead = tonumber(l.dead or 0) or 0
+        local h_shuttle = tonumber(h.shuttle or 0) or 0
+        local l_shuttle = tonumber(l.shuttle or 0) or 0
+        local changed = (
+            h_missing ~= l_missing
+            or h_cell ~= l_cell
+            or h_ap ~= l_ap
+            or h_hp ~= l_hp
+            or h_ammo ~= l_ammo
+            or h_backpack_used ~= l_backpack_used
+            or h_backpack_sig ~= l_backpack_sig
+            or h_equipment_sig ~= l_equipment_sig
+            or h_moving ~= l_moving
+            or h_dead ~= l_dead
+            or h_shuttle ~= l_shuttle
+        )
+        if changed then
+            printed = printed + 1
+            if printed <= max_lines then
+                print(string.format(
+                    "MP DESYNC | unit_diff | unit=%s host[c=%d ap=%d hp=%d am=%d bu=%d bp=%s eq=%s mv=%d dead=%d sh=%d miss=%d] local[c=%d ap=%d hp=%d am=%d bu=%d bp=%s eq=%s mv=%d dead=%d sh=%d miss=%d]",
+                    key,
+                    h_cell, h_ap, h_hp, h_ammo, h_backpack_used, h_backpack_sig, h_equipment_sig, h_moving, h_dead, h_shuttle, h_missing,
+                    l_cell, l_ap, l_hp, l_ammo, l_backpack_used, l_backpack_sig, l_equipment_sig, l_moving, l_dead, l_shuttle, l_missing
+                ))
+            end
+        end
+    end
+    if printed == 0 then
+        print("MP DESYNC | unit_diff | no_row_delta")
+    elseif printed > max_lines then
+        print(string.format("MP DESYNC | unit_diff | truncated=%d", printed - max_lines))
+    end
+end
+
+multiplayer_apply_authoritative_unit_digest = function(self, unit_digest)
+    if not self or type(unit_digest) ~= "table" then
+        return false
+    end
+    local applied_any = false
+    local moved_unit_ids = {}
+    for key, row in pairs(unit_digest) do
+        local unit_id = tostring(key or "")
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if unit and type(row) == "table" then
+            local cell = tonumber(row.cell)
+            if cell and cell > 0 and unit.cell_id ~= cell then
+                move_human_to_cell(self, unit, cell)
+                unit.is_moving = false
+                unit.move_path = nil
+                unit.move_path_index = 0
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
+                moved_unit_ids[unit_id] = true
+                applied_any = true
+            end
+            local ap = tonumber(row.ap)
+            local ammo = tonumber(row.ammo)
+            local hp = tonumber(row.hp)
+            if ap then
+                unit.current_ap = math.max(0, math.floor(ap + 0.5))
+                applied_any = true
+            end
+            if ammo then
+                unit.current_ammo = math.max(0, math.floor(ammo + 0.5))
+                applied_any = true
+            end
+            if hp then
+                unit.current_health = math.max(0, math.floor(hp + 0.5))
+                applied_any = true
+            end
+            if row.backpack_used ~= nil then
+                unit.backpack_used = math.max(0, math.floor((tonumber(row.backpack_used or 0) or 0) + 0.5))
+                applied_any = true
+            end
+            if type(row.backpack_items) == "table" then
+                local backpack_items = {}
+                for i = 1, #row.backpack_items do
+                    backpack_items[i] = tostring(row.backpack_items[i] or "_")
+                end
+                unit.backpack_items = backpack_items
+                applied_any = true
+            end
+            if type(row.equipment) == "table" then
+                unit.equipment = unit.equipment or {}
+                for _, slot_name in ipairs(BUFF_SLOT_ORDER or {}) do
+                    unit.equipment[slot_name] = tostring(row.equipment[slot_name] or "_")
+                end
+                applied_any = true
+            end
+        end
+    end
+    if applied_any then
+        update_human_visual_state(self)
+        update_human_ap_debug_label(self)
+        for unit_id, _ in pairs(moved_unit_ids) do
+            local unit = self.squad_units and self.squad_units[unit_id] or nil
+            if unit and unit.go_path then
+                local pos = go.get_position(unit.go_path)
+                go.set_position(vmath.vector3(pos.x, pos.y, 0.5), unit.go_path)
+            end
+        end
+    end
+    return applied_any
+end
+
+multiplayer_build_actor_state_digest = function(self)
+    local digest = {
+        aliens = {},
+        civilians = {}
+    }
+    if not self then
+        return digest
+    end
+    for _, alien in ipairs(self.aliens or {}) do
+        if alien and alien.id ~= nil then
+            local key = tostring(alien.id)
+            digest.aliens[key] = {
+                id = tonumber(alien.id or 0) or 0,
+                cell = tonumber(alien.cell_id or 0) or 0,
+                hp = tonumber(alien.hp_current or 0) or 0,
+                dead = alien.is_dead == true and 1 or 0,
+                moving = alien.is_moving == true and 1 or 0,
+                type = tostring(alien.type or "blip")
+            }
+        end
+    end
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.id ~= nil then
+            local key = tostring(civilian.id)
+            digest.civilians[key] = {
+                id = tonumber(civilian.id or 0) or 0,
+                cell = tonumber(civilian.cell_id or 0) or 0,
+                hp = tonumber(civilian.current_health or 0) or 0,
+                dead = civilian.is_dead == true and 1 or 0,
+                awake = civilian.is_awake == true and 1 or 0,
+                rescued = civilian.is_rescued == true and 1 or 0
+            }
+        end
+    end
+    return digest
+end
+
+multiplayer_build_item_state_digest = function(self)
+    local digest = {
+        next_world_item_id = tonumber(self and self.next_world_item_id or 0) or 0,
+        items = {}
+    }
+    if not self then
+        return digest
+    end
+    for key, item in pairs(self.world_item_instances or {}) do
+        local item_id = tonumber(key) or tonumber(item and item.id or 0) or 0
+        if item_id > 0 and type(item) == "table" then
+            digest.items[tostring(item_id)] = multiplayer_clone_simple_table(item) or {}
+        end
+    end
+    return digest
+end
+
+multiplayer_build_world_state_digest = function(self)
+    local digest = {
+        cells = {}
+    }
+    if not self then
+        return digest
+    end
+    for cell_id, cell in ipairs(self.world_grid or {}) do
+        if cell then
+            local row = {
+                id = tonumber(cell_id or 0) or 0,
+                isPowered = cell.isPowered == true,
+                lightValue = tonumber(cell.lightValue or 0) or 0,
+                doors = {}
+            }
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
+                if obj and obj.name == hash("door") then
+                    row.doors[tostring(slot_idx)] = {
+                        slot = slot_idx,
+                        objectId = tonumber(obj.objectId or 0) or 0,
+                        isOpen = obj.isOpen == true,
+                        isFixed = obj.isFixed == true,
+                        isWelded = obj.isWelded == true,
+                        door_hp = tonumber(obj.door_hp or 0) or 0
+                    }
+                end
+            end
+            digest.cells[tostring(cell_id)] = row
+        end
+    end
+    return digest
+end
+
+multiplayer_apply_authoritative_world_digest = function(self, world_digest)
+    if not self or type(world_digest) ~= "table" then
+        return false
+    end
+    local cells = type(world_digest.cells) == "table" and world_digest.cells or world_digest
+    local applied_any = false
+    for key, row in pairs(cells or {}) do
+        local cell_id = tonumber((type(row) == "table" and row.id) or key)
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if cell and type(row) == "table" then
+            local powered = row.isPowered == true
+            local light_value = tonumber(row.lightValue or cell.lightValue or 0) or 0
+            if cell.isPowered ~= powered then
+                cell.isPowered = powered
+                applied_any = true
+            end
+            if tonumber(cell.lightValue or 0) ~= light_value then
+                cell.lightValue = light_value
+                applied_any = true
+            end
+            local host_doors = type(row.doors) == "table" and row.doors or {}
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
+                local door_state = host_doors[slot_idx] or host_doors[tostring(slot_idx)]
+                if type(door_state) == "table" then
+                    if obj then
+                        if obj.name ~= hash("door") then
+                            obj.name = hash("door")
+                        end
+                        local object_id = tonumber(door_state.objectId or obj.objectId or 0) or 0
+                        local door_open = door_state.isOpen == true
+                        local door_fixed = door_state.isFixed == true
+                        local door_welded = door_state.isWelded == true
+                        if tonumber(obj.objectId or 0) ~= object_id then
+                            obj.objectId = object_id
+                            applied_any = true
+                        end
+                        if obj.isOpen ~= door_open then
+                            obj.isOpen = door_open
+                            applied_any = true
+                        end
+                        if obj.isFixed ~= door_fixed then
+                            obj.isFixed = door_fixed
+                            applied_any = true
+                        end
+                        if obj.isWelded ~= door_welded then
+                            obj.isWelded = door_welded
+                            applied_any = true
+                        end
+                        local hp = tonumber(door_state.door_hp or 0) or 0
+                        if hp > 0 then
+                            if tonumber(obj.door_hp or 0) ~= hp then
+                                obj.door_hp = hp
+                                applied_any = true
+                            end
+                        elseif obj.door_hp ~= nil then
+                            obj.door_hp = nil
+                            applied_any = true
+                        end
+                    end
+                elseif obj and obj.name == hash("door") then
+                    reset_runtime_object_slot_to_empty(obj)
+                    applied_any = true
+                end
+            end
+        end
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+        LOOT_RUNTIME.refresh_door_markers(self)
+    end
+    return applied_any
+end
+
+multiplayer_apply_authoritative_item_digest = function(self, item_digest)
+    if not self or type(item_digest) ~= "table" then
+        return false
+    end
+    local source_items = type(item_digest.items) == "table" and item_digest.items or item_digest
+    local rebuilt = {}
+    for key, item in pairs(source_items or {}) do
+        if type(item) == "table" then
+            local item_id = tonumber(item.id) or tonumber(key) or 0
+            if item_id > 0 then
+                rebuilt[item_id] = multiplayer_clone_simple_table(item) or {}
+            end
+        end
+    end
+    self.world_item_instances = rebuilt
+    if item_digest.next_world_item_id ~= nil then
+        self.next_world_item_id = tonumber(item_digest.next_world_item_id or self.next_world_item_id or 0) or 0
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_loot_markers then
+        LOOT_RUNTIME.refresh_loot_markers(self)
+    end
+    return true
+end
+
+multiplayer_apply_authoritative_actor_digest = function(self, actor_digest)
+    if not self or type(actor_digest) ~= "table" then
+        return false
+    end
+    local applied_any = false
+    local aliens_digest = type(actor_digest.aliens) == "table" and actor_digest.aliens or {}
+    local civilians_digest = type(actor_digest.civilians) == "table" and actor_digest.civilians or {}
+    for key, row in pairs(aliens_digest) do
+        if type(row) == "table" then
+            local alien = find_alien_by_id(self, tonumber(row.id) or tonumber(key))
+            if alien then
+                local cell = tonumber(row.cell)
+                local hp = tonumber(row.hp)
+                if cell and cell > 0 and alien.cell_id ~= cell then
+                    alien.cell_id = cell
+                    applied_any = true
+                end
+                if hp then
+                    alien.hp_current = hp
+                    applied_any = true
+                end
+                if row.dead ~= nil then
+                    alien.is_dead = (tonumber(row.dead or 0) or 0) == 1
+                    applied_any = true
+                end
+                if row.moving ~= nil then
+                    alien.is_moving = (tonumber(row.moving or 0) or 0) == 1
+                    if alien.is_moving ~= true then
+                        alien.move_path = nil
+                        alien.move_path_index = nil
+                        alien.move_target_cell_id = nil
+                    end
+                    applied_any = true
+                end
+            end
+        end
+    end
+    for key, row in pairs(civilians_digest) do
+        if type(row) == "table" then
+            local target_id = tonumber(row.id) or tonumber(key)
+            if target_id then
+                for _, civilian in ipairs(self.civilians or {}) do
+                    if civilian and civilian.id == target_id then
+                        local cell = tonumber(row.cell)
+                        local hp = tonumber(row.hp)
+                        if cell and cell > 0 and civilian.cell_id ~= cell then
+                            civilian.cell_id = cell
+                            applied_any = true
+                        end
+                        if hp then
+                            civilian.current_health = hp
+                            applied_any = true
+                        end
+                        if row.dead ~= nil then
+                            civilian.is_dead = (tonumber(row.dead or 0) or 0) == 1
+                            applied_any = true
+                        end
+                        if row.awake ~= nil then
+                            civilian.is_awake = (tonumber(row.awake or 0) or 0) == 1
+                            applied_any = true
+                        end
+                        if row.rescued ~= nil then
+                            civilian.is_rescued = (tonumber(row.rescued or 0) or 0) == 1
+                            applied_any = true
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end
+    if applied_any then
+        for _, alien in ipairs(self.aliens or {}) do
+            if alien and alien.go_id and not alien.is_moving then
+                local x, y = id_to_coords(alien.cell_id)
+                if x and y then
+                    local wx, wy = coords_to_world_pos(x, y)
+                    go.set_position(vmath.vector3(wx, wy, 0.6), alien.go_id)
+                end
+            end
+        end
+        refresh_civilian_visuals(self)
+    end
+    return applied_any
+end
+
+multiplayer_compute_turn_checksum_buckets = function(self)
+    local buckets = {
+        units = "0",
+        actors = "0",
+        world = "0",
+        items = "0"
+    }
+    if not self then
+        return buckets
+    end
+
+    local unit_parts = {}
+    local function unit_push(...)
+        for i = 1, select("#", ...) do
+            unit_parts[#unit_parts + 1] = tostring(select(i, ...))
+        end
+    end
+    unit_push("turn", self.mp_state and self.mp_state.turn_id or 1)
+    for _, unit_id in ipairs(get_spawn_order_unit_id_list() or {}) do
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if unit then
+            unit_push(
+                "u",
+                unit_id,
+                unit.cell_id or 0,
+                unit.current_ap or 0,
+                unit.current_health or 0,
+                unit.current_ammo or 0,
+                unit.backpack_used or 0,
+                unit.in_shuttle == true and 1 or 0
+            )
+            for i = 1, #(unit.backpack_items or {}) do
+                unit_push("bi", unit_id, i, unit.backpack_items[i] or "_")
+            end
+            local equipment = unit.equipment or {}
+            for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+                unit_push("eq", unit_id, slot_name, tostring(equipment[slot_name] or "_"))
+            end
+        else
+            unit_push("u", unit_id, "missing")
+        end
+    end
+    buckets.units = multiplayer_hash_serial_parts(unit_parts)
+
+    local actor_parts = {}
+    local function actor_push(...)
+        for i = 1, select("#", ...) do
+            actor_parts[#actor_parts + 1] = tostring(select(i, ...))
+        end
+    end
+    local alien_rows = {}
+    for _, alien in ipairs(self.aliens or {}) do
+        alien_rows[#alien_rows + 1] = string.format(
+            "%d|%s|%d|%d|%d|%d",
+            tonumber(alien and alien.id or 0) or 0,
+            tostring(alien and alien.type or "blip"),
+            tonumber(alien and alien.cell_id or 0) or 0,
+            tonumber(alien and alien.hp_current or 0) or 0,
+            (alien and alien.is_dead == true) and 1 or 0,
+            (alien and alien.is_moving == true) and 1 or 0
+        )
+    end
+    table.sort(alien_rows)
+    for _, row in ipairs(alien_rows) do
+        actor_push("a", row)
+    end
+    local civilian_rows = {}
+    for _, civilian in ipairs(self.civilians or {}) do
+        civilian_rows[#civilian_rows + 1] = string.format(
+            "%d|%d|%d|%d|%d|%d",
+            tonumber(civilian and civilian.id or 0) or 0,
+            tonumber(civilian and civilian.cell_id or 0) or 0,
+            tonumber(civilian and civilian.current_health or 0) or 0,
+            (civilian and civilian.is_awake == true) and 1 or 0,
+            (civilian and civilian.is_dead == true) and 1 or 0,
+            (civilian and civilian.is_rescued == true) and 1 or 0
+        )
+    end
+    table.sort(civilian_rows)
+    for _, row in ipairs(civilian_rows) do
+        actor_push("cv", row)
+    end
+    buckets.actors = multiplayer_hash_serial_parts(actor_parts)
+
+    local world_parts = {}
+    local function world_push(...)
+        for i = 1, select("#", ...) do
+            world_parts[#world_parts + 1] = tostring(select(i, ...))
+        end
+    end
+    for cell_id, cell in ipairs(self.world_grid or {}) do
+        if cell then
+            world_push(
+                "c",
+                cell_id,
+                cell.isPowered == true and 1 or 0,
+                tonumber(cell.lightValue or 0) or 0
+            )
+            local door_rows = {}
+            for _, obj in ipairs(cell.objects or {}) do
+                if obj and obj.name == hash("door") then
+                    door_rows[#door_rows + 1] = string.format(
+                        "%d|%d",
+                        tonumber(obj.objectId or 0) or 0,
+                        obj.isOpen == true and 1 or 0
+                    )
+                end
+            end
+            table.sort(door_rows)
+            for _, row in ipairs(door_rows) do
+                world_push("d", cell_id, row)
+            end
+        end
+    end
+    buckets.world = multiplayer_hash_serial_parts(world_parts)
+
+    local item_parts = {}
+    local function item_push(...)
+        for i = 1, select("#", ...) do
+            item_parts[#item_parts + 1] = tostring(select(i, ...))
+        end
+    end
+    local world_item_ids = {}
+    for key, _ in pairs(self.world_item_instances or {}) do
+        world_item_ids[#world_item_ids + 1] = tonumber(key) or 0
+    end
+    table.sort(world_item_ids)
+    for _, item_id in ipairs(world_item_ids) do
+        local item = (self.world_item_instances and (self.world_item_instances[item_id] or self.world_item_instances[tostring(item_id)])) or nil
+        if item then
+            item_push(
+                "wi",
+                item_id,
+                tostring(item.item_type or item.type or "_"),
+                tonumber(item.cell_id or 0) or 0,
+                tonumber(item.world_x or 0) or 0,
+                tonumber(item.world_y or 0) or 0
+            )
+        end
+    end
+    buckets.items = multiplayer_hash_serial_parts(item_parts)
+
+    return buckets
+end
+
 multiplayer_compute_turn_checksum = function(self)
     if not self then
         return "0"
@@ -12829,12 +13652,7 @@ multiplayer_compute_turn_checksum = function(self)
         end
     end
 
-    local serial = table.concat(parts, "|")
-    local h = 7
-    for i = 1, #serial do
-        h = ((h * 131) + string.byte(serial, i) + i) % 2147483647
-    end
-    return tostring(h)
+    return multiplayer_hash_serial_parts(parts)
 end
 
 multiplayer_transport_handle_command = function(self, command)
@@ -12933,6 +13751,22 @@ multiplayer_transport_handle_command = function(self, command)
         table.insert(events, multiplayer_transport_emit_event(self, "snapshot_state", {
             target_player_id = sender,
             snapshot = snapshot
+        }))
+        return events
+    end
+
+    if cmd_type == "ping" then
+        if sender == self.mp_state.host_player_id then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "ping",
+                reason = "host_does_not_ping_itself"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pong_echo", {
+            target_player_id = sender,
+            sent_ms = tonumber(payload.sent_ms or 0) or 0,
+            turn_id = self.mp_state.turn_id or 1
         }))
         return events
     end
@@ -13115,12 +13949,26 @@ multiplayer_transport_handle_command = function(self, command)
         hit_chance = math.max(0, math.min(100, tonumber(hit_chance) or 0))
         local roll = math.random(1, 100)
         local impact_hit = roll <= hit_chance
+        local ap_before = tonumber(unit.current_ap or 0) or 0
+        local ammo_before = tonumber(unit.current_ammo or 0) or 0
+        local shot_is_ranged = (tonumber(unit.cell_id or 0) or 0) ~= (tonumber(alien.cell_id or 0) or 0)
+        local ap_cost = shot_is_ranged and shot_ap_cost or 0
+        local ammo_cost = shot_is_ranged and 1 or 0
+        local ap_after = math.max(0, ap_before - ap_cost)
+        local ammo_after = math.max(0, ammo_before - ammo_cost)
         table.insert(events, multiplayer_transport_emit_event(self, "manual_shot_applied", {
             unit_id = unit_id,
             alien_id = alien_id,
             hit_chance = hit_chance,
             roll = roll,
-            impact_hit = impact_hit
+            impact_hit = impact_hit,
+            shot_is_ranged = shot_is_ranged and 1 or 0,
+            ap_before = ap_before,
+            ap_after = ap_after,
+            ap_cost = ap_cost,
+            ammo_before = ammo_before,
+            ammo_after = ammo_after,
+            ammo_cost = ammo_cost
         }))
         return events
     end
@@ -13626,6 +14474,7 @@ multiplayer_transport_on_event = function(self, event)
         return
     end
     local event_id = event.event_id
+    multiplayer_telemetry_on_recv_event(self, event.type)
     multiplayer_sync_trace(
         self,
         "recv_event",
@@ -13668,6 +14517,9 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.snapshot_blocking = false
             self.mp_state.awaiting_snapshot_timeout_s = 0
             self.mp_state.expected_snapshot_turn_id = requested_turn_id
+            -- During turn handoff, events/snapshots can arrive slightly out of order.
+            -- Skip heartbeat mismatch checks for this turn until authoritative turn snapshot lands.
+            self.mp_state.turn_based_heartbeat_suspend_turn_id = requested_turn_id
             self.mp_state.post_turn_snapshot_delay_s = 0
             msg.post(".", "next_turn", { from_mp_turn_advanced = true, skip_authoritative_sim = true })
             print(string.format("MP TURNSTATE | awaiting_host_broadcast | turn_id=%d", requested_turn_id))
@@ -13688,6 +14540,9 @@ multiplayer_transport_on_event = function(self, event)
         local snapshot = event.payload and event.payload.snapshot or nil
         local snapshot_turn_id = tonumber(snapshot and snapshot.turn_id or 0) or payload_turn_id
         if expected_turn_id > 0 and snapshot_turn_id > 0 and snapshot_turn_id < expected_turn_id then
+            if self.mp_telemetry and self.mp_telemetry.enabled then
+                self.mp_telemetry.turn_id_mismatch_count = (tonumber(self.mp_telemetry.turn_id_mismatch_count or 0) or 0) + 1
+            end
             print(string.format(
                 "MP TURNSTATE | stale_ignored | snapshot_turn=%d expected_turn=%d",
                 snapshot_turn_id,
@@ -13696,9 +14551,11 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         if not multiplayer_apply_snapshot_state(self, snapshot) then
+            multiplayer_telemetry_on_snapshot_apply_failed(self)
             print("MP TURNSTATE | apply_failed")
             return
         end
+        multiplayer_telemetry_on_snapshot_applied(self)
         self.mp_state.awaiting_snapshot = false
         self.mp_state.snapshot_blocking = false
         self.mp_state.awaiting_snapshot_timeout_s = 0
@@ -13709,12 +14566,17 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.turn_id or 1,
             self.current_level_index or 0
         ))
+        self.mp_state.turn_based_heartbeat_suspend_turn_id = 0
         self.mp_state.turn_based_heartbeat_mismatch_streak = 0
         self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
         return
     end
     if event.type == "turn_state_heartbeat" then
         if not (self.mp_state and self.mp_state.enabled) then
+            return
+        end
+        if (tonumber(self.realtime_client_settle_timer or 0) or 0) > 0 then
+            -- Ignore turn-heartbeat checks while realtime mode settle window is active.
             return
         end
         local sender_player_id = event.sender_player_id or nil
@@ -13731,6 +14593,18 @@ multiplayer_transport_on_event = function(self, event)
         local payload = event.payload or {}
         local host_turn_id = tonumber(payload.turn_id or 0) or 0
         local local_turn_id = tonumber(self.mp_state.turn_id or 0) or 0
+        local suspended_turn_id = tonumber(self.mp_state.turn_based_heartbeat_suspend_turn_id or 0) or 0
+        if suspended_turn_id > 0 and local_turn_id == suspended_turn_id then
+            return
+        end
+        if any_unit_is_moving(self)
+            or any_alien_is_moving(self)
+            or self.pending_spitter_attack_phase
+            or self.pending_melee_attack_phase
+        then
+            -- Movement/attack phases are transient and can legitimately differ with prediction.
+            return
+        end
         if host_turn_id > 0 and local_turn_id > 0 and host_turn_id ~= local_turn_id then
             self.mp_state.turn_based_heartbeat_mismatch_streak = 0
             return
@@ -13740,9 +14614,91 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local local_checksum = tostring(multiplayer_compute_turn_checksum(self))
+        local checksum_buckets = multiplayer_compute_turn_checksum_buckets(self)
+        local host_units_checksum = tostring(payload.checksum_units or "")
+        local host_actors_checksum = tostring(payload.checksum_actors or "")
+        local host_world_checksum = tostring(payload.checksum_world or "")
+        local host_items_checksum = tostring(payload.checksum_items or "")
+        local host_unit_digest = payload.unit_digest
+        local host_actor_digest = payload.actor_digest
+        local host_world_digest = payload.world_digest
+        local host_item_digest = payload.item_digest
+        local unit_mismatch = (host_units_checksum ~= "" and host_units_checksum ~= tostring(checksum_buckets.units or ""))
+        local actors_mismatch = (host_actors_checksum ~= "" and host_actors_checksum ~= tostring(checksum_buckets.actors or ""))
+        local world_mismatch = (host_world_checksum ~= "" and host_world_checksum ~= tostring(checksum_buckets.world or ""))
+        local items_mismatch = (host_items_checksum ~= "" and host_items_checksum ~= tostring(checksum_buckets.items or ""))
+        if self.mp_telemetry and self.mp_telemetry.enabled then
+            if unit_mismatch then
+                self.mp_telemetry.checksum_mismatch_units_count = (tonumber(self.mp_telemetry.checksum_mismatch_units_count or 0) or 0) + 1
+            end
+            if actors_mismatch then
+                self.mp_telemetry.checksum_mismatch_actors_count = (tonumber(self.mp_telemetry.checksum_mismatch_actors_count or 0) or 0) + 1
+            end
+            if world_mismatch then
+                self.mp_telemetry.checksum_mismatch_world_count = (tonumber(self.mp_telemetry.checksum_mismatch_world_count or 0) or 0) + 1
+            end
+            if items_mismatch then
+                self.mp_telemetry.checksum_mismatch_items_count = (tonumber(self.mp_telemetry.checksum_mismatch_items_count or 0) or 0) + 1
+            end
+        end
         if local_checksum == host_checksum then
             self.mp_state.turn_based_heartbeat_mismatch_streak = 0
             return
+        end
+        if self.mp_telemetry and self.mp_telemetry.enabled then
+            self.mp_telemetry.checksum_mismatch_count = (tonumber(self.mp_telemetry.checksum_mismatch_count or 0) or 0) + 1
+        end
+        if unit_mismatch or actors_mismatch or world_mismatch or items_mismatch then
+            print(string.format(
+                "MP DESYNC | heartbeat_bucket_mismatch | turn_id=%d units=%d actors=%d world=%d items=%d",
+                local_turn_id,
+                unit_mismatch and 1 or 0,
+                actors_mismatch and 1 or 0,
+                world_mismatch and 1 or 0,
+                items_mismatch and 1 or 0
+            ))
+            if unit_mismatch then
+                local diff_signature = string.format(
+                    "%d|%s|%s",
+                    local_turn_id,
+                    tostring(host_units_checksum or ""),
+                    tostring(checksum_buckets.units or "")
+                )
+                if self.mp_state.turn_based_last_unit_diff_signature ~= diff_signature then
+                    self.mp_state.turn_based_last_unit_diff_signature = diff_signature
+                    multiplayer_log_unit_state_mismatch(self, host_unit_digest)
+                end
+                -- Fast path: if digest is available, reconcile idle unit state immediately.
+                -- This avoids repeated heartbeat mismatch churn for stale AP/cell drift.
+                if multiplayer_apply_authoritative_unit_digest(self, host_unit_digest) then
+                    local post_checksum = tostring(multiplayer_compute_turn_checksum(self))
+                    if post_checksum == host_checksum then
+                        self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+                        return
+                    end
+                end
+            end
+            if actors_mismatch and multiplayer_apply_authoritative_actor_digest(self, host_actor_digest) then
+                local post_checksum = tostring(multiplayer_compute_turn_checksum(self))
+                if post_checksum == host_checksum then
+                    self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+                    return
+                end
+            end
+            if world_mismatch and multiplayer_apply_authoritative_world_digest(self, host_world_digest) then
+                local post_checksum = tostring(multiplayer_compute_turn_checksum(self))
+                if post_checksum == host_checksum then
+                    self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+                    return
+                end
+            end
+            if items_mismatch and multiplayer_apply_authoritative_item_digest(self, host_item_digest) then
+                local post_checksum = tostring(multiplayer_compute_turn_checksum(self))
+                if post_checksum == host_checksum then
+                    self.mp_state.turn_based_heartbeat_mismatch_streak = 0
+                    return
+                end
+            end
         end
         self.mp_state.turn_based_heartbeat_mismatch_streak = (tonumber(self.mp_state.turn_based_heartbeat_mismatch_streak or 0) or 0) + 1
         local mismatch_threshold = math.max(1, tonumber(TURN_BASED_MP_HEARTBEAT_MISMATCH_THRESHOLD or 2) or 2)
@@ -13780,9 +14736,11 @@ multiplayer_transport_on_event = function(self, event)
         end
         local snapshot = event.payload and event.payload.snapshot or nil
         if not multiplayer_apply_realtime_snapshot_state(self, snapshot) then
+            multiplayer_telemetry_on_snapshot_apply_failed(self)
             print("MP RT SNAPSHOT | apply_failed")
             return
         end
+        multiplayer_telemetry_on_snapshot_applied(self)
         if seq > 0 then
             self.mp_state.realtime_last_applied_snapshot_seq = seq
         end
@@ -13817,6 +14775,7 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.post_turn_snapshot_delay_s = 0
             self.mp_state.last_snapshot_retry_turn_id = 0
             self.mp_state.realtime_last_applied_snapshot_seq = 0
+            multiplayer_apply_authoritative_unit_digest(self, event.payload and event.payload.unit_digest or nil)
         end
         print(string.format("MP RT MODE | synced_from_host | %s", enabled and "ON" or "OFF"))
         return
@@ -14396,6 +15355,28 @@ multiplayer_transport_on_event = function(self, event)
         print("MP NET | relay_pong.")
         return
     end
+    if event.type == "pong_echo" then
+        local target_player_id = event.payload and event.payload.target_player_id or nil
+        local local_player_id = self.mp_state and self.mp_state.local_player_id or nil
+        if target_player_id and local_player_id and target_player_id ~= local_player_id then
+            return
+        end
+        if self.mp_telemetry and self.mp_telemetry.enabled then
+            local sent_ms = tonumber(event.payload and event.payload.sent_ms or 0) or 0
+            if sent_ms > 0 then
+                local now_ms = (socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)
+                local rtt = math.max(0, now_ms - sent_ms)
+                self.mp_telemetry.rtt_last_ms = rtt
+                local samples = self.mp_telemetry.rtt_samples_ms or {}
+                samples[#samples + 1] = rtt
+                if #samples > 32 then
+                    table.remove(samples, 1)
+                end
+                self.mp_telemetry.rtt_samples_ms = samples
+            end
+        end
+        return
+    end
     if event.type == "error" then
         local code = event.payload and event.payload.code or "unknown"
         local message = event.payload and event.payload.message or "unknown"
@@ -14422,6 +15403,7 @@ multiplayer_transport_send_command = function(self, cmd_type, payload, sender_pl
             tostring(payload and payload.turn_id or "-")
         )
     )
+    multiplayer_telemetry_on_send_command(self, cmd_type)
     self.mp_transport.send_command({
         version = 1,
         session_id = self.mp_state.session_id or "local_session",
@@ -14434,6 +15416,9 @@ end
 multiplayer_transport_broadcast_events = function(self, events)
     if not (self.mp_state and self.mp_state.enabled and self.mp_transport and type(events) == "table" and #events > 0) then
         return
+    end
+    if self.mp_telemetry and self.mp_telemetry.enabled then
+        self.mp_telemetry.tx_event_count = (tonumber(self.mp_telemetry.tx_event_count or 0) or 0) + #events
     end
     if self.mp_transport.send_events then
         self.mp_transport.send_events(events)
@@ -14627,6 +15612,8 @@ init_multiplayer_runtime = function(self)
         turn_based_snapshot_accum_s = 0,
         turn_based_heartbeat_mismatch_streak = 0,
         turn_based_heartbeat_last_request_turn_id = 0,
+        turn_based_heartbeat_suspend_turn_id = 0,
+        turn_based_last_unit_diff_signature = "",
         realtime_last_sent_signature = "",
         workshop_state_sync_accum_s = 0,
         workshop_state_sync_signature = "",
@@ -14637,6 +15624,29 @@ init_multiplayer_runtime = function(self)
         event_seq = 0,
         seen_command_ids = {},
         seen_event_ids = {}
+    }
+    self.mp_telemetry = {
+        enabled = MP_TELEMETRY_ENABLED == true,
+        log_accum_s = 0,
+        ping_accum_s = 0,
+        rtt_last_ms = 0,
+        rtt_samples_ms = {},
+        tx_command_count = 0,
+        tx_event_count = 0,
+        rx_event_count = 0,
+        rx_snapshot_count = 0,
+        snapshot_apply_count = 0,
+        snapshot_apply_failed_count = 0,
+        state_correction_count = 0,
+        max_position_error_px = 0,
+        queued_event_count = 0,
+        checksum_mismatch_count = 0,
+        checksum_mismatch_units_count = 0,
+        checksum_mismatch_actors_count = 0,
+        checksum_mismatch_world_count = 0,
+        checksum_mismatch_items_count = 0,
+        turn_id_mismatch_count = 0,
+        dt_spike_count = 0
     }
     self.mp_state.debug_active_player_id = self.mp_state.local_player_id
     print(string.format(
@@ -15000,7 +16010,8 @@ local function try_toggle_realtime_button(self, screen_x, screen_y)
         if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
             multiplayer_transport_broadcast_event(self, "realtime_mode_changed", {
                 enabled = self.realtime_rules_enabled == true,
-                turn_id = self.mp_state.turn_id or 1
+                turn_id = self.mp_state.turn_id or 1,
+                unit_digest = multiplayer_build_unit_state_digest(self)
             })
         end
         print(string.format("Realtime rules: %s", self.realtime_rules_enabled and "ON" or "OFF"))
@@ -15223,7 +16234,7 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     end
 })
 
-local function update_human_ap_debug_label(self)
+update_human_ap_debug_label = function(self)
     local unit = get_controlled_unit(self)
     if not unit then
         return
@@ -16278,7 +17289,7 @@ multiplayer_apply_move_unit_event = function(self, payload)
         return false
     end
     local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
-    if not unit or unit.is_moving then
+    if not unit then
         return false
     end
     if (unit.current_health or 0) <= 0 then
@@ -16288,35 +17299,58 @@ multiplayer_apply_move_unit_event = function(self, payload)
     if not destination_cell_id then
         return false
     end
-    if unit.cell_id == destination_cell_id then
-        return false
-    end
-    if not is_walkable_cell(self.world_grid, destination_cell_id) then
-        return false
-    end
     local ap_before = tonumber(payload.ap_before)
     if ap_before then
         -- Host is authoritative for AP in multiplayer; do not clamp to local cap.
         unit.current_ap = math.max(0, math.floor(ap_before + 0.5))
     end
+    if unit.is_moving then
+        local desired_cell_id = tonumber(unit.desired_destination_cell_id or 0) or 0
+        if desired_cell_id == destination_cell_id then
+            -- Predicted move already in progress toward same target; treat as applied.
+            return true
+        end
+        -- Authoritative host chose a different destination; clear local predicted path.
+        unit.is_moving = false
+        unit.move_path = nil
+        unit.move_path_index = 0
+        unit.desired_destination_cell_id = nil
+        unit.desired_destination_slot_index = nil
+    end
     local path = nil
     local total_cost = nil
     if type(payload.path) == "table" and #payload.path >= 2 then
         path = multiplayer_clone_simple_table(payload.path)
-        if path and path[1] ~= unit.cell_id then
+        if path and path[#path] ~= destination_cell_id then
             path = nil
         end
     end
-    if not path then
+    if not path and is_walkable_cell(self.world_grid, destination_cell_id) then
         path, total_cost = find_path(self.world_grid, unit.cell_id, destination_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
     end
     if not path then
-        return false
+        -- Last resort: trust host and force a minimal authoritative path.
+        path = { unit.cell_id, destination_cell_id }
+        total_cost = tonumber(payload.ap_cost) or 0
+    end
+    if path[1] ~= unit.cell_id then
+        local coerced_path = { unit.cell_id }
+        for i = 2, #path do
+            coerced_path[#coerced_path + 1] = path[i]
+        end
+        path = coerced_path
     end
     if not total_cost then
         total_cost = tonumber(payload.ap_cost)
     end
     local resolved_slot = multiplayer_resolve_destination_slot(self, unit, destination_cell_id, payload.destination_slot_index)
+    if unit.cell_id == destination_cell_id then
+        local ap_after = tonumber(payload.ap_after)
+        if ap_after then
+            unit.current_ap = math.max(0, math.floor(ap_after + 0.5))
+        end
+        return true
+    end
     print(unit.display_name .. " route selected (network event):")
     if total_cost then
         print_path_debug(path, total_cost)
@@ -16331,11 +17365,59 @@ multiplayer_apply_manual_shot_event = function(self, payload)
         return false
     end
     local unit = self.squad_units and self.squad_units[payload.unit_id] or nil
-    local alien = find_alien_by_id(self, tonumber(payload.alien_id))
-    if not unit or not alien then
+    if not unit then
         return false
     end
-    return multiplayer_attempt_manual_shot_on_target(self, unit, alien, payload)
+    local ap_before = tonumber(payload.ap_before)
+    local ap_after = tonumber(payload.ap_after)
+    local ammo_before = tonumber(payload.ammo_before)
+    local ammo_after = tonumber(payload.ammo_after)
+    if ap_before then
+        unit.current_ap = math.max(0, math.floor(ap_before + 0.5))
+    end
+    if ammo_before then
+        unit.current_ammo = math.max(0, math.floor(ammo_before + 0.5))
+    end
+    if ap_after then
+        unit.current_ap = math.max(0, math.floor(ap_after + 0.5))
+    end
+    if ammo_after then
+        unit.current_ammo = math.max(0, math.floor(ammo_after + 0.5))
+    end
+    local shot_is_ranged = tonumber(payload.shot_is_ranged or -1) or -1
+    if shot_is_ranged == 1 then
+        local alien = find_alien_by_id(self, tonumber(payload.alien_id))
+        if alien then
+            local ok = multiplayer_attempt_manual_shot_on_target(self, unit, alien, payload)
+            -- Host payload is authoritative for AP/ammo; preserve it after local FX/sim path.
+            if ap_after then
+                unit.current_ap = math.max(0, math.floor(ap_after + 0.5))
+            end
+            if ammo_after then
+                unit.current_ammo = math.max(0, math.floor(ammo_after + 0.5))
+            end
+            update_human_visual_state(self)
+            update_human_ap_debug_label(self)
+            return ok
+        end
+        update_human_visual_state(self)
+        update_human_ap_debug_label(self)
+        return true
+    end
+    local alien = find_alien_by_id(self, tonumber(payload.alien_id))
+    if not alien then
+        return false
+    end
+    local ok = multiplayer_attempt_manual_shot_on_target(self, unit, alien, payload)
+    if ap_after then
+        unit.current_ap = math.max(0, math.floor(ap_after + 0.5))
+    end
+    if ammo_after then
+        unit.current_ammo = math.max(0, math.floor(ammo_after + 0.5))
+    end
+    update_human_visual_state(self)
+    update_human_ap_debug_label(self)
+    return ok
 end
 
 multiplayer_apply_comms_command_event = function(self, payload)
@@ -16534,12 +17616,15 @@ multiplayer_build_snapshot_state = function(self)
             local object_states = {}
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
-                if obj and obj.name and obj.name ~= hash("empty") then
-                    object_states[tostring(slot_idx)] = {
-                        isFixed = obj.isFixed == true,
-                        isWelded = obj.isWelded == true
-                    }
-                end
+                object_states[tostring(slot_idx)] = {
+                    has_object = (obj and obj.name and obj.name ~= hash("empty")) and true or false,
+                    is_door = (obj and obj.name == hash("door")) and true or false,
+                    object_id = tonumber(obj and obj.objectId or 0) or 0,
+                    isOpen = (obj and obj.isOpen == true) and true or false,
+                    isFixed = (obj and obj.isFixed == true) and true or false,
+                    isWelded = (obj and obj.isWelded == true) and true or false,
+                    door_hp = tonumber(obj and obj.door_hp or 0) or 0
+                }
             end
             snapshot.world_cells[tostring(cell.idNumber)] = {
                 isPowered = cell.isPowered == true,
@@ -16746,11 +17831,13 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                 if decouple_unit_motion then
                     local needs_reconcile = (unit.is_moving ~= true) and (dist_sq > (CELL_WIDTH * CELL_WIDTH * 1.44))
                     if needs_reconcile then
+                        multiplayer_telemetry_on_snapshot_correction(self, math.sqrt(dist_sq))
                         go.cancel_animations(unit.go_path, "position")
                         go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
                     end
                 else
                     if in_settle and dist_sq > 0.25 then
+                        multiplayer_telemetry_on_snapshot_correction(self, math.sqrt(dist_sq))
                         go.cancel_animations(unit.go_path, "position")
                         go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
                     elseif dist_sq > 0.25 then
@@ -16852,6 +17939,7 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                         -- keep host authority for decisions, but smooth medium position deltas
                         -- on clients so aliens do not appear frozen between snapshots.
                         if dist_sq > (snap_dist * snap_dist * 2.25) then
+                            multiplayer_telemetry_on_snapshot_correction(self, math.sqrt(dist_sq))
                             go.cancel_animations(alien.go_id, "position")
                             go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
                         elseif dist_sq > 4.0 then
@@ -16860,9 +17948,11 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                         end
                     else
                         if in_settle and dist_sq > 0.25 then
+                            multiplayer_telemetry_on_snapshot_correction(self, math.sqrt(dist_sq))
                             go.cancel_animations(alien.go_id, "position")
                             go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
                         elseif dist_sq > (snap_dist * snap_dist) then
+                            multiplayer_telemetry_on_snapshot_correction(self, math.sqrt(dist_sq))
                             go.cancel_animations(alien.go_id, "position")
                             go.set_position(vmath.vector3(ax, ay, 0.6), alien.go_id)
                         elseif dist_sq > 0.25 then
@@ -17017,9 +18107,28 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
                 local obj_state = object_states[slot_idx] or object_states[tostring(slot_idx)]
-                if obj and obj.name and obj.name ~= hash("empty") and type(obj_state) == "table" then
-                    obj.isFixed = (obj_state.isFixed == true)
-                    obj.isWelded = (obj_state.isWelded == true)
+                if type(obj_state) == "table" and obj then
+                    local has_object = obj_state.has_object == true
+                    local is_door = obj_state.is_door == true
+                    if not has_object then
+                        if obj.name == hash("door") then
+                            reset_runtime_object_slot_to_empty(obj)
+                        end
+                    elseif is_door then
+                        obj.name = hash("door")
+                        obj.objectId = tonumber(obj_state.object_id or obj.objectId or 0) or 0
+                        obj.isOpen = (obj_state.isOpen == true)
+                        obj.isFixed = (obj_state.isFixed == true)
+                        obj.isWelded = (obj_state.isWelded == true)
+                        local door_hp = tonumber(obj_state.door_hp or 0) or 0
+                        obj.door_hp = door_hp > 0 and door_hp or nil
+                    elseif obj.name and obj.name ~= hash("empty") then
+                        obj.isFixed = (obj_state.isFixed == true)
+                        obj.isWelded = (obj_state.isWelded == true)
+                        if obj.name == hash("door") then
+                            reset_runtime_object_slot_to_empty(obj)
+                        end
+                    end
                 end
             end
         end
@@ -18436,6 +19545,7 @@ function update(self, dt)
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
     end
+    multiplayer_update_telemetry(self, dt)
     if self.sfx_state and self.sfx_state.boot_deferred ~= true then
         self.sfx_state.boot_deferred = true
         refresh_ambient_sfx_state(self)
@@ -18468,10 +19578,26 @@ function update(self, dt)
             self.mp_state.turn_based_snapshot_accum_s = (tonumber(self.mp_state.turn_based_snapshot_accum_s or 0) or 0) + dt
             if self.mp_state.turn_based_snapshot_accum_s >= turn_snapshot_interval_s then
                 self.mp_state.turn_based_snapshot_accum_s = 0
-                multiplayer_transport_broadcast_event(self, "turn_state_heartbeat", {
-                    turn_id = self.mp_state.turn_id or 1,
-                    checksum = multiplayer_compute_turn_checksum(self)
-                })
+                if (tonumber(self.realtime_client_settle_timer or 0) or 0) <= 0
+                    and (not any_unit_is_moving(self))
+                    and (not any_alien_is_moving(self))
+                    and (not self.pending_spitter_attack_phase)
+                    and (not self.pending_melee_attack_phase)
+                then
+                    local heartbeat_buckets = multiplayer_compute_turn_checksum_buckets(self)
+                    multiplayer_transport_broadcast_event(self, "turn_state_heartbeat", {
+                        turn_id = self.mp_state.turn_id or 1,
+                        checksum = multiplayer_compute_turn_checksum(self),
+                        checksum_units = heartbeat_buckets.units,
+                        checksum_actors = heartbeat_buckets.actors,
+                        checksum_world = heartbeat_buckets.world,
+                        checksum_items = heartbeat_buckets.items,
+                        unit_digest = multiplayer_build_unit_state_digest(self),
+                        actor_digest = multiplayer_build_actor_state_digest(self),
+                        world_digest = multiplayer_build_world_state_digest(self),
+                        item_digest = multiplayer_build_item_state_digest(self)
+                    })
+                end
             end
         else
             self.mp_state.turn_based_snapshot_accum_s = 0

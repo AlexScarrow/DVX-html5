@@ -3833,6 +3833,8 @@ function M.extend(runtime, ctx)
             unit_id = unit.id,
             cell_id = cell.idNumber
         }) then
+            -- Multiplayer host applies authoritative resource mutation and broadcasts
+            -- digests; do not mutate local state preemptively on clients.
             return true
         end
 

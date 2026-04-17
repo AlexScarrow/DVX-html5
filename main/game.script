@@ -526,6 +526,34 @@ MP_NET_STATUS_DOT_Y = SCREEN_HEIGHT - 18
 MP_NET_STATUS_DOT_W = 14
 MP_NET_STATUS_DOT_H = 14
 MP_NET_STATUS_DOT_Z = 0.846
+do
+    local project_version_cfg = sys.get_config and sys.get_config("project.version") or nil
+    if project_version_cfg == nil or project_version_cfg == "" then
+        MP_BUILD_VERSION_NUMBER = "0"
+    else
+        MP_BUILD_VERSION_NUMBER = tostring(project_version_cfg)
+    end
+end
+get_mp_build_version_digits = function(version_text)
+    local parts = {}
+    for part in string.gmatch(tostring(version_text or ""), "(%d+)") do
+        parts[#parts + 1] = tostring(tonumber(part) or 0)
+        if #parts >= 3 then
+            break
+        end
+    end
+    while #parts < 3 do
+        parts[#parts + 1] = "0"
+    end
+    return table.concat(parts, "")
+end
+MP_BUILD_DIGIT_MAX = 8
+MP_BUILD_DIGIT_SPACING_PX = 10
+MP_BUILD_DIGIT_DRAW_W = 12
+MP_BUILD_DIGIT_DRAW_H = 14
+MP_BUILD_HUD_RIGHT_X = MP_NET_STATUS_DOT_X - 14
+MP_BUILD_HUD_Y = MP_NET_STATUS_DOT_Y
+MP_BUILD_HUD_Z = MP_NET_STATUS_DOT_Z
 ENTRY_FIRE_OFFSET_X = -50
 ENTRY_FIRE_OFFSET_Y = -60
 ENTRY_FIRE_Z = 0.08 -- Above entry tile base visuals while still below UI layers
@@ -8525,6 +8553,7 @@ local function initialize_unit_ui(self)
         score_digit_icons = {},
         ranged_hit_preview_digits = {},
         ranged_hit_preview_percent = nil,
+        mp_version_digit_icons = {},
         objective_button = nil,
         objective_reminder = nil,
         purge_timer_digit_icons = {},
@@ -8609,6 +8638,12 @@ local function initialize_unit_ui(self)
         self.ui.score_digit_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, SCORE_HUD_Z))
         if self.ui.score_digit_icons[i] then
             msg.post(msg.url(nil, self.ui.score_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
+        end
+    end
+    for i = 1, MP_BUILD_DIGIT_MAX do
+        self.ui.mp_version_digit_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, MP_BUILD_HUD_Z))
+        if self.ui.mp_version_digit_icons[i] then
+            msg.post(msg.url(nil, self.ui.mp_version_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
         end
     end
     for i = 1, 2 do
@@ -8752,6 +8787,11 @@ local function set_ui_hidden(self)
     if self.ui.score_digit_icons then
         for _, digit_id in ipairs(self.ui.score_digit_icons) do
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
+        end
+    end
+    if self.ui.mp_version_digit_icons then
+        for _, digit_id in ipairs(self.ui.mp_version_digit_icons) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, MP_BUILD_HUD_Z, hidden, MP_BUILD_DIGIT_DRAW_W * 0.021, MP_BUILD_DIGIT_DRAW_H * 0.021)
         end
     end
     if self.ui.ranged_hit_preview_digits then
@@ -8935,6 +8975,44 @@ function update_score_hud(self, visible)
         end
     end
     update_ranged_hit_preview_hud(self, true)
+end
+
+update_mp_build_hud = function(self, visible)
+    if not self.ui or not self.ui.mp_version_digit_icons then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if visible ~= true then
+        for _, digit_id in ipairs(self.ui.mp_version_digit_icons) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, MP_BUILD_HUD_Z, hidden, MP_BUILD_DIGIT_DRAW_W * 0.021, MP_BUILD_DIGIT_DRAW_H * 0.021)
+        end
+        return
+    end
+    local version_text = get_mp_build_version_digits(MP_BUILD_VERSION_NUMBER)
+    if #version_text > MP_BUILD_DIGIT_MAX then
+        version_text = string.sub(version_text, #version_text - MP_BUILD_DIGIT_MAX + 1)
+    end
+    local count = #version_text
+    local start_x = MP_BUILD_HUD_RIGHT_X - ((count - 1) * MP_BUILD_DIGIT_SPACING_PX)
+    for idx, digit_id in ipairs(self.ui.mp_version_digit_icons) do
+        if idx <= count then
+            local ch = string.sub(version_text, idx, idx)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            local dx = start_x + ((idx - 1) * MP_BUILD_DIGIT_SPACING_PX)
+            set_ui_square_transform(
+                self,
+                digit_id,
+                dx,
+                MP_BUILD_HUD_Y,
+                MP_BUILD_HUD_Z,
+                vmath.vector4(1, 1, 1, 0.9),
+                MP_BUILD_DIGIT_DRAW_W * 0.021,
+                MP_BUILD_DIGIT_DRAW_H * 0.021
+            )
+        else
+            set_ui_square_transform(self, digit_id, -9999, -9999, MP_BUILD_HUD_Z, hidden, MP_BUILD_DIGIT_DRAW_W * 0.021, MP_BUILD_DIGIT_DRAW_H * 0.021)
+        end
+    end
 end
 
 local function get_purge_timer_display_text(self)
@@ -10251,6 +10329,7 @@ function update_flow_ui(self, dt)
     if not self.ui then
         return
     end
+    update_mp_build_hud(self, true)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
@@ -11142,6 +11221,7 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.transport_status_dot, -9999, -9999, MP_NET_STATUS_DOT_Z, hidden, MP_NET_STATUS_DOT_W, MP_NET_STATUS_DOT_H)
         update_objective_ui(self, false)
         update_score_hud(self, false)
+        update_mp_build_hud(self, true)
         return
     end
     local tutorial_locked = tutorial_rules_locked and tutorial_rules_locked(self)
@@ -11337,6 +11417,7 @@ function update_global_ui_buttons(self)
     end
     update_objective_ui(self, true)
     update_score_hud(self, true)
+    update_mp_build_hud(self, true)
     update_purge_timer_hud(self, true)
 end
 
@@ -13051,19 +13132,28 @@ multiplayer_apply_authoritative_unit_digest = function(self, unit_digest)
     end
     local applied_any = false
     local moved_unit_ids = {}
+    local moved_unit_target_cells = {}
     for key, row in pairs(unit_digest) do
         local unit_id = tostring(key or "")
         local unit = self.squad_units and self.squad_units[unit_id] or nil
         if unit and type(row) == "table" then
             local cell = tonumber(row.cell)
             if cell and cell > 0 and unit.cell_id ~= cell then
-                move_human_to_cell(self, unit, cell)
+                local old_cell_id = unit.cell_id
+                if old_cell_id and self.world_grid and self.world_grid[old_cell_id] then
+                    self.world_grid[old_cell_id].isOccupied = hash("empty")
+                end
+                unit.cell_id = cell
+                if self.world_grid and self.world_grid[cell] then
+                    self.world_grid[cell].isOccupied = unit.occupancy_hash or hash("human")
+                end
                 unit.is_moving = false
                 unit.move_path = nil
                 unit.move_path_index = 0
                 unit.desired_destination_cell_id = nil
                 unit.desired_destination_slot_index = nil
                 moved_unit_ids[unit_id] = true
+                moved_unit_target_cells[unit_id] = cell
                 applied_any = true
             end
             local ap = tonumber(row.ap)
@@ -13108,8 +13198,16 @@ multiplayer_apply_authoritative_unit_digest = function(self, unit_digest)
         for unit_id, _ in pairs(moved_unit_ids) do
             local unit = self.squad_units and self.squad_units[unit_id] or nil
             if unit and unit.go_path then
-                local pos = go.get_position(unit.go_path)
-                go.set_position(vmath.vector3(pos.x, pos.y, 0.5), unit.go_path)
+                local target_cell = tonumber(moved_unit_target_cells[unit_id] or unit.cell_id)
+                local cell = target_cell and self.world_grid and self.world_grid[target_cell] or nil
+                if cell then
+                    local tx, ty = coords_to_world_pos(cell.xCell, cell.yCell)
+                    go.cancel_animations(unit.go_path, "position")
+                    go.set_position(vmath.vector3(tx, ty, 0.5), unit.go_path)
+                else
+                    local pos = go.get_position(unit.go_path)
+                    go.set_position(vmath.vector3(pos.x, pos.y, 0.5), unit.go_path)
+                end
             end
         end
     end
@@ -14312,9 +14410,23 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "retrieve_power_applied", {
+        if not multiplayer_apply_retrieve_power_event(self, {
             unit_id = unit_id,
             cell_id = cell_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_power",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "retrieve_power_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15226,8 +15338,24 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_retrieve_power_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local should_apply_local = payload.host_applied ~= true
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_retrieve_power_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | retrieve_power_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_machine_markers then
+            LOOT_RUNTIME.refresh_machine_markers(self)
+        end
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -15653,6 +15781,12 @@ init_multiplayer_runtime = function(self)
         "MP NET | identity | local=%s host=%s",
         tostring(self.mp_state.local_player_id),
         tostring(self.mp_state.host_player_id)
+    ))
+    print(string.format(
+        "MP NET | build_version=%s build_digits=%s role=%s",
+        tostring(MP_BUILD_VERSION_NUMBER or "0"),
+        tostring(get_mp_build_version_digits(MP_BUILD_VERSION_NUMBER)),
+        (self.mp_state.local_player_id == self.mp_state.host_player_id) and "host" or "client"
     ))
     multiplayer_reset_ready_gate(self)
     multiplayer_transport_init(self)
@@ -19530,6 +19664,11 @@ function init(self)
     end
 
     print("=== Initialization Complete ===")
+    print(string.format(
+        "MP BUILD | version=%s digits=%s",
+        tostring(MP_BUILD_VERSION_NUMBER or "0"),
+        tostring(get_mp_build_version_digits(MP_BUILD_VERSION_NUMBER))
+    ))
 
     print("=== Initialization Complete ===")
     print("WorldGrid size: " .. GRID_COLS .. "x" .. GRID_ROWS)

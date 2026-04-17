@@ -12480,7 +12480,6 @@ try_select_human_portrait = function(self, screen_x, screen_y)
                 play_human_confirm_select_sfx(self, unit)
                 center_camera_on_unit(self, unit)
                 update_human_visual_state(self)
-                update_human_ap_debug_label(self)
                 update_selected_unit_ui(self)
             end
             return true

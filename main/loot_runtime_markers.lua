@@ -14,8 +14,8 @@ function M.extend(runtime, ctx)
     local BARRICADE_HP_BAR_Z = 0.81
     local BARRICADE_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
     local BARRICADE_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
-    local DOOR_HP_DEFAULT = 3
-    local DOOR_HP_MAX = 3
+    local DOOR_HP_DEFAULT = 10
+    local DOOR_HP_MAX = 10
     local HAZARD_FX_Y_OFFSET = -35
     local HAZARD_FX_Z = 0.69
     local DNA_BAR_SLOT_COUNT = 10

@@ -1626,10 +1626,10 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
         return true
     end
     self.door_damage_cells_this_turn[damage_key] = true
-    local hp = door_obj.door_hp or 3
+    local hp = door_obj.door_hp or 10
     hp = math.max(0, hp - 1)
     door_obj.door_hp = hp
-    door_obj.door_damage_tint = math.max(0.25, math.min(1.0, hp / 3))
+    door_obj.door_damage_tint = math.max(0.25, math.min(1.0, hp / 10))
     door_obj.door_shudder_timer = 0.60
     door_obj.door_shudder_phase = 0
 

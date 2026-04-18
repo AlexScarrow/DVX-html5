@@ -547,6 +547,34 @@ get_mp_build_version_digits = function(version_text)
     end
     return table.concat(parts, "")
 end
+
+get_boardgame_dice_anchor_world = function(self)
+    if not self or not self.world_grid then
+        return nil, nil
+    end
+    local min_x = nil
+    local max_y = nil
+    for _, cell in ipairs(self.world_grid) do
+        if cell and cell.tileID and cell.tileID ~= hash("empty") then
+            local cx = tonumber(cell.xCell or 0) or 0
+            local cy = tonumber(cell.yCell or 0) or 0
+            if cx > 0 and cy > 0 then
+                if min_x == nil or cx < min_x then
+                    min_x = cx
+                end
+                if max_y == nil or cy > max_y then
+                    max_y = cy
+                end
+            end
+        end
+    end
+    if min_x == nil or max_y == nil then
+        return nil, nil
+    end
+    local anchor_x = min_x - BOARDGAME_BACKDROP_DICE_CELL_OFFSET_LEFT
+    local anchor_y = max_y + BOARDGAME_BACKDROP_DICE_CELL_OFFSET_UP
+    return coords_to_world_pos(anchor_x, anchor_y)
+end
 MP_BUILD_DIGIT_MAX = 8
 MP_BUILD_DIGIT_SPACING_PX = 10
 MP_BUILD_DIGIT_DRAW_W = 12
@@ -554,6 +582,13 @@ MP_BUILD_DIGIT_DRAW_H = 14
 MP_BUILD_HUD_RIGHT_X = MP_NET_STATUS_DOT_X - 14
 MP_BUILD_HUD_Y = MP_NET_STATUS_DOT_Y
 MP_BUILD_HUD_Z = MP_NET_STATUS_DOT_Z
+BOARDGAME_BACKDROP_DICE_ANIM = hash("dice")
+BOARDGAME_BACKDROP_DICE_CELL_OFFSET_LEFT = 2
+BOARDGAME_BACKDROP_DICE_CELL_OFFSET_UP = 2
+BOARDGAME_BACKDROP_DICE_PIXEL_OFFSET_X = 500
+BOARDGAME_BACKDROP_DICE_PIXEL_OFFSET_Y = -500
+BOARDGAME_BACKDROP_DICE_Z_OFFSET = 0.02
+BOARDGAME_BACKDROP_DICE_SCALE = 1.0
 ENTRY_FIRE_OFFSET_X = -50
 ENTRY_FIRE_OFFSET_Y = -60
 ENTRY_FIRE_Z = 0.08 -- Above entry tile base visuals while still below UI layers
@@ -10975,6 +11010,10 @@ function reset_and_load_level(self, level_index)
         self.world_backdrop = nil
         self.world_backdrop_anim = nil
     end
+    if self.world_backdrop_dice then
+        go.delete(self.world_backdrop_dice)
+        self.world_backdrop_dice = nil
+    end
     if self.backdrop_cloud_fx then
         go.delete(self.backdrop_cloud_fx)
         self.backdrop_cloud_fx = nil
@@ -11765,6 +11804,7 @@ apply_aesthetic_mode = function(self)
     local table_sweep_shadow_anim = (profile and profile.table_sweep_shadow_anim) or "tile_generic_alpha_layer"
     local table_sweep_shadow_tint = (profile and profile.table_sweep_shadow_tint) or vmath.vector4(0.2, 0.17, 0.13, 0.2)
     local table_sweep_shadow_factory = "/tile_factory#tile_factory"
+    local boardgame_dice_enabled = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME) and backdrop_enabled == true
 
     if backdrop_enabled then
         if backdrop_tiled then
@@ -11829,6 +11869,20 @@ apply_aesthetic_mode = function(self)
             end
         end
         self.world_backdrop_anim = nil
+    end
+    if boardgame_dice_enabled then
+        if not self.world_backdrop_dice then
+            self.world_backdrop_dice = factory.create("/tile_factory#tile_factory", vmath.vector3(self.camera_pos.x, self.camera_pos.y, (self.world_backdrop_z or -0.2) + BOARDGAME_BACKDROP_DICE_Z_OFFSET))
+            if self.world_backdrop_dice then
+                msg.post(msg.url(nil, self.world_backdrop_dice, "sprite"), "play_animation", { id = BOARDGAME_BACKDROP_DICE_ANIM })
+            end
+        end
+        if self.world_backdrop_dice then
+            go.set(msg.url(nil, self.world_backdrop_dice, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        end
+    elseif self.world_backdrop_dice then
+        go.delete(self.world_backdrop_dice)
+        self.world_backdrop_dice = nil
     end
 
     if backdrop_clouds_enabled then
@@ -19411,6 +19465,7 @@ function init(self)
     self.sheen_offset_y = 100
     self.aesthetic_mode = self.aesthetic_mode or AESTHETIC_MODE_COMPUTER
     self.world_backdrop = nil
+    self.world_backdrop_dice = nil
     self.world_backdrop_tiles = nil
     self.world_backdrop_anim = nil
     self.world_backdrop_z = 0.001
@@ -20307,6 +20362,30 @@ function update(self, dt)
                     tile_i = tile_i + 1
                 end
             end
+            if self.world_backdrop_dice then
+                local dice_scale = tile_scale_base * BOARDGAME_BACKDROP_DICE_SCALE
+                local dice_x, dice_y = get_boardgame_dice_anchor_world(self)
+                if not (dice_x and dice_y) then
+                    dice_x = bx
+                    dice_y = by
+                end
+                dice_x = dice_x + BOARDGAME_BACKDROP_DICE_PIXEL_OFFSET_X
+                dice_y = dice_y + BOARDGAME_BACKDROP_DICE_PIXEL_OFFSET_Y
+                go.set_position(vmath.vector3(dice_x, dice_y, (self.world_backdrop_z or -0.2) + BOARDGAME_BACKDROP_DICE_Z_OFFSET), self.world_backdrop_dice)
+                go.set_scale(vmath.vector3(dice_scale, dice_scale, 1), self.world_backdrop_dice)
+            end
+        elseif self.world_backdrop_dice then
+            local backdrop_scale = (profile and profile.backdrop_scale) or 1
+            local dice_scale = backdrop_scale * BOARDGAME_BACKDROP_DICE_SCALE
+            local dice_x, dice_y = get_boardgame_dice_anchor_world(self)
+            if not (dice_x and dice_y) then
+                dice_x = bx
+                dice_y = by
+            end
+            dice_x = dice_x + BOARDGAME_BACKDROP_DICE_PIXEL_OFFSET_X
+            dice_y = dice_y + BOARDGAME_BACKDROP_DICE_PIXEL_OFFSET_Y
+            go.set_position(vmath.vector3(dice_x, dice_y, (self.world_backdrop_z or -0.2) + BOARDGAME_BACKDROP_DICE_Z_OFFSET), self.world_backdrop_dice)
+            go.set_scale(vmath.vector3(dice_scale, dice_scale, 1), self.world_backdrop_dice)
         end
     end
     update_backdrop_cloud_fx(self)

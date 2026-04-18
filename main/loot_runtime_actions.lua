@@ -5282,9 +5282,17 @@ function M.extend(runtime, ctx)
                                         print("A turret is already deployed on this cell.")
                                         flash_invalid_drag_units(source_unit, nil)
                                     else
-                                        local slot = get_empty_object_slot(drop_cell)
+                                        local slot = find_clicked_drop_slot(drop_cell, world_x, world_y)
+                                        if slot and slot.name ~= hash("empty")
+                                            and slot.name ~= hash("blip_spawn")
+                                            and slot.name ~= hash("blip")
+                                        then
+                                            print("Clicked slot is occupied. Choose another slot for turret deploy.")
+                                            flash_invalid_drag_units(source_unit, nil)
+                                            slot = nil
+                                        end
                                         if not slot then
-                                            print("No object slot available on this cell for turret deploy.")
+                                            print("No valid clicked slot for turret deploy.")
                                             flash_invalid_drag_units(source_unit, nil)
                                         else
                                             if not try_consume_current_drag_ap(nil) then
@@ -5304,7 +5312,8 @@ function M.extend(runtime, ctx)
                                             slot.dependsOn = 0
                                             slot.isDependentOn = {}
                                             slot.objectId = allocate_runtime_object_id(self.world_grid)
-                                            slot.offsetX = 0
+                                            local turret_slot_index = get_cell_object_slot_index(drop_cell, slot) or 2
+                                            slot.offsetX = OBSTACLE_SLOT_X_BY_INDEX[turret_slot_index] or 0
                                             slot.offsetY = 0
                                             slot.fxOffsetX = 0
                                             slot.fxOffsetY = 0

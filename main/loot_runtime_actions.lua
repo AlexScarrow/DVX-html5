@@ -761,7 +761,7 @@ function M.extend(runtime, ctx)
 
     local function fill_backpack_with_packed_turret(unit, cap)
         unit.backpack_items = {}
-        for _ = 1, cap do
+        for _ = 1, math.min(cap or 0, 6) do
             table.insert(unit.backpack_items, TURRET_PACKED_ITEM)
         end
         unit.backpack_used = #unit.backpack_items
@@ -4754,8 +4754,16 @@ function M.extend(runtime, ctx)
             source_item = source_unit.backpack_items[drag.source_slot_index]
         end
         if drag.drag_type ~= "command" and (not source_item) then
-            self.drag_resource = { active = false }
-            return true
+            if drag.drag_type ~= "equipped_buff" and drag.item_type then
+                drag.source_slot_index = get_backpack_item_slot(source_unit, drag.item_type)
+                if drag.source_slot_index then
+                    source_item = source_unit.backpack_items[drag.source_slot_index]
+                end
+            end
+            if not source_item then
+                self.drag_resource = { active = false }
+                return true
+            end
         end
         local function remove_source_item()
             if drag.drag_type == "equipped_buff" then

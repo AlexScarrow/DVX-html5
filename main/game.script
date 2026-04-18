@@ -13850,7 +13850,7 @@ multiplayer_transport_handle_command = function(self, command)
     end
 
     if cmd_type == "set_ready" then
-        local target_player_id = payload.player_id
+        local target_player_id = payload.player_id or sender
         local ready_on = payload.ready == true
         local is_required = false
         for _, required_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
@@ -14670,6 +14670,28 @@ multiplayer_transport_on_event = function(self, event)
         if player_id then
             local ready_on = event.payload.ready == true
             self.mp_state.ready_by_player_id[player_id] = ready_on
+            if ready_on
+                and LOOT_RUNTIME
+                and LOOT_RUNTIME.spawn_impact_ring_at_world
+                and self.mp_state
+                and self.mp_state.local_player_id == self.mp_state.host_player_id
+                and player_id ~= self.mp_state.host_player_id
+                and self.mp_state.required_ready_player_ids
+            then
+                for i, required_id in ipairs(self.mp_state.required_ready_player_ids) do
+                    if required_id == player_id then
+                        local bx = get_multiplayer_ready_button_x(i)
+                        LOOT_RUNTIME.spawn_impact_ring_at_world(
+                            self,
+                            bx,
+                            MULTIPLAYER_READY_BUTTON_Y,
+                            vmath.vector4(1.0, 0.55, 0.2, 1),
+                            0.7
+                        )
+                        break
+                    end
+                end
+            end
             print(string.format(
                 "MP READY | %s | player_id=%s | turn_id=%d",
                 ready_on and "ready_on" or "ready_off",
@@ -15459,6 +15481,13 @@ multiplayer_transport_on_event = function(self, event)
     if event.type == "command_rejected" then
         local reason = event.payload and event.payload.reason or "unknown"
         local cmd = event.payload and event.payload.command_type or "unknown"
+        if cmd == "move_unit" and self.squad_units then
+            for _, unit in pairs(self.squad_units) do
+                if unit then
+                    unit.mp_move_command_pending = nil
+                end
+            end
+        end
         print(string.format("MP COMMAND | rejected | type=%s reason=%s", tostring(cmd), tostring(reason)))
         if cmd == "manual_shot"
             and reason == "invalid_target"
@@ -16101,7 +16130,10 @@ try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
     if not is_point_in_screen_rect(screen_x, screen_y, NEW_TURN_BUTTON_X, NEW_TURN_BUTTON_Y, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H) then
         return false
     end
-    local player_id = self.mp_state.local_player_id
+    local player_id = self.mp_state.local_player_id or multiplayer_get_active_player_id_for_commands(self)
+    if not player_id then
+        return false
+    end
     local ready_on = not (self.mp_state.ready_by_player_id[player_id] == true)
     multiplayer_transport_send_command(self, "set_ready", {
         player_id = player_id,
@@ -17445,6 +17477,7 @@ multiplayer_apply_move_unit_event = function(self, payload)
     if not unit then
         return false
     end
+    unit.mp_move_command_pending = nil
     if (unit.current_health or 0) <= 0 then
         return false
     end
@@ -18858,6 +18891,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             print(unit.display_name .. " is already moving.")
             return true
         end
+        if unit.mp_move_command_pending == true then
+            print(unit.display_name .. " move is awaiting host confirmation.")
+            return true
+        end
         if unit.current_ap <= 0 then
             print(unit.display_name .. " has no AP. Click next turn to refresh.")
             update_human_visual_state(self)
@@ -18917,6 +18954,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     destination_cell_id = clicked_cell_id,
                     destination_slot_index = destination_slot_index or destination_slot_requested
                 }, active_player_id)
+                unit.mp_move_command_pending = true
             else
                 begin_human_path_move(self, path, clicked_cell_id, destination_slot_index or destination_slot_requested)
             end

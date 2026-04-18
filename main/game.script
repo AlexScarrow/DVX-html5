@@ -341,6 +341,7 @@ SFX_DOOR_TOGGLE_URL = "main:/sfx_door_toggle#sound"
 SFX_ESCAPE_POD_READY_URL = "main:/sfx_escape_pod_ready#sound"
 SFX_FACTORY_PRODUCE_URL = "main:/sfx_factory_produce#sound"
 SFX_FABRICATOR_WORKING_URL = "main:/sfx_fabricator_working#sound"
+SFX_VENDING_MACHINE_ON_URL = "main:/sfx_vending_machine_on#sound"
 SFX_SPARKING_WIRE_URL = "main:/sfx_sparking_wire#sound"
 SFX_WELDING_URL = "main:/sfx_welding#sound"
 SFX_TASK_DONE_URL = "main:/sfx_task_done#sound"
@@ -9419,6 +9420,10 @@ play_fabricator_working_sfx = function(self)
     play_sfx_one_shot(self, "fabricator_working")
 end
 
+play_vending_machine_on_sfx = function(self)
+    play_sfx_one_shot(self, "vending_machine_on")
+end
+
 play_sparking_wire_sfx = function(self)
     if not self then
         return false
@@ -16377,6 +16382,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_fabricator_working_sfx = function(self_ref)
         play_fabricator_working_sfx(self_ref)
     end,
+    play_vending_machine_on_sfx = function(self_ref)
+        play_vending_machine_on_sfx(self_ref)
+    end,
     play_sparking_wire_sfx = function(self_ref)
         play_sparking_wire_sfx(self_ref)
     end,
@@ -19557,6 +19565,7 @@ function init(self)
             escape_pod_ready = true,
             factory_produce = true,
             fabricator_working = true,
+            vending_machine_on = true,
             sparking_wire = true,
             welding = true,
             task_done = true,
@@ -19599,6 +19608,7 @@ function init(self)
         escape_pod_ready = { url = msg.url(SFX_ESCAPE_POD_READY_URL), playing = false },
         factory_produce = { url = msg.url(SFX_FACTORY_PRODUCE_URL), playing = false },
         fabricator_working = { url = msg.url(SFX_FABRICATOR_WORKING_URL), playing = false },
+        vending_machine_on = { url = msg.url(SFX_VENDING_MACHINE_ON_URL), playing = false },
         sparking_wire = { url = msg.url(SFX_SPARKING_WIRE_URL), playing = false },
         welding = { url = msg.url(SFX_WELDING_URL), playing = false },
         task_done = { url = msg.url(SFX_TASK_DONE_URL), playing = false },

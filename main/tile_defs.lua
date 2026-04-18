@@ -701,22 +701,22 @@ library["canteen"] = canteen
 
     medbay.cells[8].object1 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
-        offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+        offsetX = -110, offsetY = 15, hitW = 32, hitH = 32, requiredComponent = nil
     }
 
     medbay.cells[9].object1 = {
         name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 901,
-        offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+        offsetX = 10, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
     }
     medbay.cells[9].object2 = {
         name = hash("medbay_reviver"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
         offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 1, hitH = 1, requiredComponent = nil
     }
 
-    medbay.cells[9].object3 = {
-        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
-        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-    }
+    -- medbay.cells[9].object3 = {
+    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    --     offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    -- }
      -- medbay.cells[8].object2 = {
      --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 5802,
      --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
@@ -929,24 +929,28 @@ library["lab"] = lab
     }
 
     -- Wiring dependency lane (cell 6)
-    factory.cells[6].object1 = {
-        name = hash("wiregap"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
-        offsetX = 78, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
-    }
+    -- factory.cells[6].object1 = {
+    --     name = hash("wiregap"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    --     offsetX = 78, offsetY = -8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+    -- }
 
     factory.cells[6].object2 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
-        offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+        offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    factory.cells[6].object3 = {
+        name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 603,
+        offsetX = 0, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
     }
 
     -- Factory machinery anchors (cells 5 and 8). These are fixed but only functional
     -- when their dependency chain is satisfied.
     factory.cells[5].object1 = {
-        name = hash("factory_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 601, isDependentOn = {}, objectId = 501,
+        name = hash("factory_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 84, hitH = 84, requiredComponent = nil
     }
     factory.cells[8].object1 = {
-        name = hash("factory_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 601, isDependentOn = {}, objectId = 801,
+        name = hash("factory_machine"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
         offsetX = 0, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 84, hitH = 84, requiredComponent = nil
     }
 

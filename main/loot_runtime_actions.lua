@@ -3733,6 +3733,15 @@ function M.extend(runtime, ctx)
         unit.backpack_used = #unit.backpack_items
         unit.current_ap = unit.current_ap - fix_ap_cost
         fixable.isFixed = true
+        if ctx and ctx.play_vending_machine_on_sfx
+            and required_component == ctx.COMPONENT_UI.component_fuse
+            and cell and cell.isPowered == true
+            and fixable and fixable.isFixed == true
+            and (fixable.name == hash("ammo_vending_machine") or fixable.name == hash("med_vending_machine"))
+            and runtime.is_object_dependency_met(self.world_grid, fixable)
+        then
+            ctx.play_vending_machine_on_sfx(self)
+        end
         if dependency_id > 0 then
             if dependency_met_pre_fix then
                 print(string.format(
@@ -5553,6 +5562,18 @@ function M.extend(runtime, ctx)
                                     end
                                     remove_source_item()
                                     component_target.isFixed = true
+                                    if ctx and ctx.play_vending_machine_on_sfx
+                                        and source_item == ctx.COMPONENT_UI.component_fuse
+                                        and self.world_grid
+                                        and self.world_grid[drop_cell_id]
+                                        and self.world_grid[drop_cell_id].isPowered == true
+                                        and component_target and component_target.isFixed == true
+                                        and (component_target.name == hash("ammo_vending_machine")
+                                            or component_target.name == hash("med_vending_machine"))
+                                        and runtime.is_object_dependency_met(self.world_grid, component_target)
+                                    then
+                                        ctx.play_vending_machine_on_sfx(self)
+                                    end
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data then
                                         local drop_cell = (self.world_grid and self.world_grid[drop_cell_id]) or nil

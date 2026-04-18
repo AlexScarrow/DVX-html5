@@ -315,6 +315,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_vending_machine_on"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/vending_machine_on.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_sparking_wire"
   data: "components {\n"
   "  id: \"sound\"\n"

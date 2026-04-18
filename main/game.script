@@ -245,6 +245,7 @@ REALTIME_TOGGLE_BUTTON_W = 180
 REALTIME_TOGGLE_BUTTON_H = 54
 REALTIME_TOGGLE_BUTTON_DRAW_W = 44.25
 REALTIME_TOGGLE_BUTTON_DRAW_H = 30.5
+REALTIME_TOGGLE_BUTTON_DISABLED = true
 LAUNCH_BUTTON_Z = 0.845
 SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
 SCORE_HUD_Y = SCREEN_HEIGHT - 20
@@ -7950,7 +7951,10 @@ update_multiplayer_new_turn_button_visual = function(self)
     end
     local anim_id = hash("button_newTurn")
     local tint = vmath.vector4(1, 1, 1, 1)
-    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+    if self.new_turn_button_mode == "alien_activity" then
+        anim_id = hash("alien_activity_button")
+        tint = vmath.vector4(1, 1, 1, 1)
+    elseif self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         anim_id = hash("ready_button")
         local local_player_id = self.mp_state.local_player_id
         local local_ready = self.mp_state.ready_by_player_id and self.mp_state.ready_by_player_id[local_player_id] == true
@@ -7981,6 +7985,14 @@ clear_ranged_hit_preview = function(self)
     self.pending_manual_shot_chance = nil
     self.ranged_hit_preview_fading_out = false
     self.ranged_hit_preview_fade_alpha = 0
+end
+
+local function clear_locked_manual_target(self)
+    if not self then
+        return
+    end
+    self.locked_manual_target_alien_id = nil
+    self.locked_manual_target_unit_id = nil
 end
 
 dismiss_ranged_hit_preview = function(self)
@@ -11274,6 +11286,7 @@ function update_global_ui_buttons(self)
         or self.pending_melee_attack_phase
         or any_alien_is_moving(self)
     if self.realtime_rules_enabled == true then
+        self.new_turn_button_mode = "hidden"
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
@@ -11286,6 +11299,7 @@ function update_global_ui_buttons(self)
         )
         update_multiplayer_new_turn_button_visual(self)
     elseif tutorial_locked then
+        self.new_turn_button_mode = "tutorial_locked"
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
@@ -11298,18 +11312,20 @@ function update_global_ui_buttons(self)
         )
         update_multiplayer_new_turn_button_visual(self)
     elseif alien_cycle_active then
+        self.new_turn_button_mode = "alien_activity"
         set_ui_square_transform(
             self,
             self.ui.new_turn_button,
-            -9999,
-            -9999,
+            NEW_TURN_BUTTON_X,
+            NEW_TURN_BUTTON_Y,
             NEW_TURN_BUTTON_Z,
-            vmath.vector4(0, 0, 0, 0),
-            NEW_TURN_BUTTON_W,
-            NEW_TURN_BUTTON_H
+            vmath.vector4(1, 1, 1, 1),
+            NEW_TURN_BUTTON_VISUAL_SCALE,
+            NEW_TURN_BUTTON_VISUAL_SCALE
         )
         update_multiplayer_new_turn_button_visual(self)
     else
+        self.new_turn_button_mode = "standard"
         local new_turn_button_w = NEW_TURN_BUTTON_VISUAL_SCALE
         local new_turn_button_h = NEW_TURN_BUTTON_VISUAL_SCALE
         if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
@@ -11390,7 +11406,9 @@ function update_global_ui_buttons(self)
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         launch_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
     end
-    local realtime_btn_color = vmath.vector4(1, 1, 1, 1)
+    local realtime_btn_color = (REALTIME_TOGGLE_BUTTON_DISABLED == true)
+        and vmath.vector4(0.4, 0.4, 0.4, 0.9)
+        or vmath.vector4(1, 1, 1, 1)
     update_realtime_toggle_button_visual(self)
     set_ui_square_transform(
         self,
@@ -12635,6 +12653,9 @@ try_select_human_portrait = function(self, screen_x, screen_y)
         if is_point_in_screen_rect(screen_x, screen_y, cx, cy, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H) then
             local unit = self.squad_units[unit_id]
             if unit and (unit.current_health or 0) > 0 then
+                if self.controlled_unit_id ~= unit_id then
+                    clear_locked_manual_target(self)
+                end
                 self.controlled_unit_id = unit_id
                 deselect_all_units(self)
                 unit.is_selected = true
@@ -12793,6 +12814,15 @@ function try_next_turn_button(self, screen_x, screen_y)
     if self.realtime_rules_enabled == true then
         return false
     end
+    local half_w = NEW_TURN_BUTTON_W * 0.5
+    local half_h = NEW_TURN_BUTTON_H * 0.5
+    local inside_button = screen_x >= (NEW_TURN_BUTTON_X - half_w)
+        and screen_x <= (NEW_TURN_BUTTON_X + half_w)
+        and screen_y >= (NEW_TURN_BUTTON_Y - half_h)
+        and screen_y <= (NEW_TURN_BUTTON_Y + half_h)
+    if not inside_button then
+        return false
+    end
     if self.alien_turn_active
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase
@@ -12801,12 +12831,7 @@ function try_next_turn_button(self, screen_x, screen_y)
     then
         return false
     end
-    local half_w = NEW_TURN_BUTTON_W * 0.5
-    local half_h = NEW_TURN_BUTTON_H * 0.5
-    if screen_x >= (NEW_TURN_BUTTON_X - half_w)
-        and screen_x <= (NEW_TURN_BUTTON_X + half_w)
-        and screen_y >= (NEW_TURN_BUTTON_Y - half_h)
-        and screen_y <= (NEW_TURN_BUTTON_Y + half_h) then
+    if inside_button then
         if tutorial_rules_locked and tutorial_rules_locked(self) then
             return true
         end
@@ -15782,6 +15807,9 @@ multiplayer_enforce_controlled_unit = function(self, force_select)
     if not (chosen_unit_id and owned_unit) then
         return
     end
+    if self.controlled_unit_id ~= chosen_unit_id then
+        clear_locked_manual_target(self)
+    end
     self.controlled_unit_id = chosen_unit_id
 
     -- Keep selection deterministic when switching active multiplayer player:
@@ -16124,6 +16152,14 @@ try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
     if not (self.mp_state and self.mp_state.enabled) then
         return false
     end
+    if self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+    then
+        return false
+    end
     if self.mp_state.local_player_id == self.mp_state.host_player_id then
         return false
     end
@@ -16213,6 +16249,10 @@ local function try_toggle_realtime_button(self, screen_x, screen_y)
         and screen_x <= (REALTIME_TOGGLE_BUTTON_X + half_w)
         and screen_y >= (REALTIME_TOGGLE_BUTTON_Y - half_h)
         and screen_y <= (REALTIME_TOGGLE_BUTTON_Y + half_h) then
+        if REALTIME_TOGGLE_BUTTON_DISABLED == true then
+            print("Realtime/Turn-based toggle is temporarily disabled.")
+            return true
+        end
         if self.mp_state and self.mp_state.enabled then
             if self.realtime_mp_enabled ~= true then
                 print("Realtime multiplayer is disabled in config.")
@@ -17207,6 +17247,9 @@ local function update_single_unit_movement(self, unit, dt)
         go.set_position(vmath.vector3(target_x, target_y, 0.5), unit.go_path)
         set_unit_rotation_degrees(unit, 0)
         unit.current_ap = unit.current_ap - target_cost
+        if tostring(self.locked_manual_target_unit_id or "") == tostring(unit.id or "") then
+            clear_locked_manual_target(self)
+        end
         unit.forced_slot_index = unit.entry_slot_index
         local from_cell_id = unit.cell_id
         move_human_to_cell(self, unit, target_cell_id)
@@ -18453,6 +18496,9 @@ multiplayer_force_select_unit = function(self, unit_id)
     if not unit then
         return false
     end
+    if self.controlled_unit_id ~= unit_id then
+        clear_locked_manual_target(self)
+    end
     self.controlled_unit_id = unit_id
     deselect_all_units(self)
     unit.is_selected = true
@@ -18649,9 +18695,28 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
         return true
     end
 
-    local alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
-    if not alien then
+    local clicked_alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
+    if not clicked_alien then
         return false
+    end
+    local alien = clicked_alien
+    local locked_alien_id = tonumber(self.locked_manual_target_alien_id or 0) or 0
+    local locked_unit_id = tostring(self.locked_manual_target_unit_id or "")
+    if locked_unit_id ~= "" and tostring(unit.id or "") ~= locked_unit_id then
+        clear_locked_manual_target(self)
+        locked_alien_id = 0
+    end
+    if locked_alien_id > 0 then
+        local locked_alien = find_alien_by_id(self, locked_alien_id)
+        if locked_alien and (not locked_alien.is_dead) then
+            alien = locked_alien
+        else
+            clear_locked_manual_target(self)
+        end
+    end
+    if not self.locked_manual_target_alien_id and alien and (not alien.is_dead) then
+        self.locked_manual_target_alien_id = alien.id
+        self.locked_manual_target_unit_id = unit.id
     end
     if self.realtime_rules_enabled == true or unit.cell_id == alien.cell_id then
         clear_ranged_hit_preview(self)
@@ -18754,6 +18819,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             return true
         end
         if self.controlled_unit_id == clicked_unit.id and clicked_unit.is_selected then
+            clear_locked_manual_target(self)
             if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
                 local assignment = self.cell_slot_assignments[clicked_cell_id]
                 local current_slot = assignment[clicked_unit.id] or 1
@@ -18790,6 +18856,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                 print(clicked_unit.display_name .. " shifted position within cell.")
             end
         else
+            clear_locked_manual_target(self)
             self.controlled_unit_id = clicked_unit.id
             deselect_all_units(self)
             clicked_unit.is_selected = true
@@ -18821,6 +18888,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
     if unit.is_selected then
         if try_toggle_door_with_selected_human(self, unit, world_x, world_y) then
+            clear_locked_manual_target(self)
             self.ui_close_on_next_non_unit_click = false
             update_human_visual_state(self)
             update_human_ap_debug_label(self)
@@ -18830,6 +18898,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.ui_close_on_next_non_unit_click = false
             return true
         end
+        clear_locked_manual_target(self)
         if self.pending_manual_shot_alien_id and (self.ranged_hit_preview_fade_alpha or 0) > 0 then
             dismiss_ranged_hit_preview(self)
             self.ui_close_on_next_non_unit_click = false
@@ -20175,6 +20244,12 @@ function update(self, dt)
     end
     tick_human_reactive_fire_cooldowns(self, dt)
     process_turret_reactive_fire(self, dt)
+    if self.locked_manual_target_alien_id then
+        local locked_alien = find_alien_by_id(self, tonumber(self.locked_manual_target_alien_id or 0) or 0)
+        if (not locked_alien) or locked_alien.is_dead then
+            clear_locked_manual_target(self)
+        end
+    end
     if self.pending_manual_shot_alien_id then
         if self.ranged_hit_preview_fading_out == true then
             local fade_s = math.max(0.001, tonumber(RANGED_HIT_PREVIEW_FADE_SECONDS or 0.22) or 0.22)
@@ -20470,13 +20545,20 @@ function on_input(self, action_id, action)
             if not inside_view then
                 return true
             end
-            if get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then
+            local alien_activity_active = self.alien_turn_active
+                or self.pending_spitter_attack_phase
+                or self.pending_melee_attack_phase
+                or any_alien_is_moving(self)
+                or any_civilian_is_moving(self)
+            if (not alien_activity_active) and get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then
                 if LOOT_RUNTIME.begin_command_drag(self, input_x, input_y) then
+                    clear_locked_manual_target(self)
                     self.is_panning = false
                     self.did_drag = true
                     return true
                 end
                 if LOOT_RUNTIME.begin_resource_drag(self, input_x, input_y) then
+                    clear_locked_manual_target(self)
                     self.is_panning = false
                     self.did_drag = true
                     return true
@@ -20500,7 +20582,20 @@ function on_input(self, action_id, action)
                 return true
             end
             if not self.did_drag then
+                local alien_activity_active = self.alien_turn_active
+                    or self.pending_spitter_attack_phase
+                    or self.pending_melee_attack_phase
+                    or any_alien_is_moving(self)
+                    or any_civilian_is_moving(self)
                 if tutorial_try_advance_from_click(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    return true
+                end
+                if alien_activity_active then
+                    if try_next_turn_button(self, input_x, input_y) then
+                        dismiss_ranged_hit_preview(self)
+                        return true
+                    end
                     dismiss_ranged_hit_preview(self)
                     return true
                 end

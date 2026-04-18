@@ -32,6 +32,9 @@ images {
   image: "/assets/images/button_newTurn.png"
 }
 images {
+  image: "/assets/images/alien_activity_button.png"
+}
+images {
   image: "/assets/images/ready_button.png"
 }
 images {

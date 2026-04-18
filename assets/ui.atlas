@@ -34,6 +34,18 @@ images {
 images {
   image: "/assets/images/ready_button.png"
 }
+images {
+  image: "/assets/images/sarge_portrait.png"
+}
+images {
+  image: "/assets/images/techie_portrait.png"
+}
+images {
+  image: "/assets/images/medic_portrait.png"
+}
+images {
+  image: "/assets/images/gunner_portrait.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

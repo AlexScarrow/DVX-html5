@@ -1232,6 +1232,13 @@ function M.extend(runtime, ctx)
     end
 
     runtime.spawn_loot_pickup_blip = function(self, from_cell_id, to_slot_index, item_type, from_world_x, from_world_y)
+        if self
+            and self.mp_state
+            and self.mp_state.enabled == true
+            and self.mp_state.applying_remote_event == true
+        then
+            return
+        end
         local from_x, from_y = from_world_x, from_world_y
         if not from_x or not from_y then
             if not self.world_grid or not self.world_grid[from_cell_id] then

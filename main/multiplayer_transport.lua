@@ -17,9 +17,37 @@ local function clone_table(t)
     return out
 end
 
+local function normalize_for_json(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local has_non_numeric_key = false
+    local numeric_keys = {}
+    for k, _ in pairs(value) do
+        if type(k) == "number" and k >= 1 and math.floor(k) == k then
+            table.insert(numeric_keys, k)
+        else
+            has_non_numeric_key = true
+        end
+    end
+    if not has_non_numeric_key and #numeric_keys > 0 then
+        table.sort(numeric_keys)
+        local out = {}
+        for _, k in ipairs(numeric_keys) do
+            out[#out + 1] = normalize_for_json(value[k])
+        end
+        return out
+    end
+    local out = {}
+    for k, v in pairs(value) do
+        out[k] = normalize_for_json(v)
+    end
+    return out
+end
+
 local function encode_json(value)
     if ok_json and json and json.encode then
-        return json.encode(value)
+        return json.encode(normalize_for_json(value))
     end
     return nil
 end

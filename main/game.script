@@ -665,6 +665,7 @@ HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS = 0.4
 HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S = 0.0
 HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S = 1.0
 SPITTER_MAX_RANGE_CELLS = tonumber((ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter and ALIEN_BALANCE.TYPES.spitter.ranged_cells) or 4) or 4
+MULTIPLAYER_ACTIVE_ALIEN_CAP = 28
 SPITTER_SHOT_AP_COST = tonumber(ALIEN_ACTION_COSTS.ranged_attack or 1) or 1
 SPITTER_SHOT_INTERVAL_SECONDS = 0.5
 SPITTER_PROJECTILE_SPEED = 900
@@ -2620,6 +2621,41 @@ get_blip_cell_offset = function(alien)
     return alien.blip_cell_offset_x or 0, alien.blip_cell_offset_y or 0
 end
 
+ALIEN_STACK_SLOT_LANE_X = { 20, -20, 40, -40, 60, -60 }
+
+get_alien_effective_position_type = function(alien)
+    if not alien then
+        return nil
+    end
+    if alien.type == ALIEN_TYPE_BLIP then
+        return alien.hidden_reveal_type or ALIEN_TYPE_BLIP
+    end
+    return alien.type
+end
+
+get_alien_stack_lane_offset_x = function(self, alien, cell_id, include_current_on_target_cell)
+    if not (self and self.aliens and alien and cell_id) then
+        return 0
+    end
+    local on_cell = {}
+    for _, scan in ipairs(self.aliens) do
+        if (not scan.is_dead)
+            and (scan.cell_id == cell_id or (include_current_on_target_cell == true and scan.id == alien.id))
+        then
+            table.insert(on_cell, scan)
+        end
+    end
+    table.sort(on_cell, function(a, b)
+        return (a.id or 0) < (b.id or 0)
+    end)
+    for i, scan in ipairs(on_cell) do
+        if scan.id == alien.id then
+            return ALIEN_STACK_SLOT_LANE_X[i] or 0
+        end
+    end
+    return 0
+end
+
 local function has_unobstructed_los(world_grid, from_id, to_id)
     local from_cell = world_grid[from_id]
     local to_cell = world_grid[to_id]
@@ -2824,49 +2860,16 @@ local function ensure_alien_visual(self, alien)
     end
 
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
-    if alien.type == ALIEN_TYPE_BLIP then
-        local off_x, off_y = get_blip_cell_offset(alien)
-        x = x + off_x
-        y = y + off_y
-    else
-        x = x + (CELL_WIDTH * 0.25)
-        local human_count = 0
-        if self.squad_units then
-            for _, unit in pairs(self.squad_units) do
-                if unit.cell_id == alien.cell_id and (unit.current_health or 0) > 0 then
-                    human_count = human_count + 1
-                end
-            end
-        end
-        if human_count > 0 and self.aliens then
-            local on_cell = {}
-            for _, scan in ipairs(self.aliens) do
-                if (not scan.is_dead) and scan.cell_id == alien.cell_id and scan.type ~= ALIEN_TYPE_BLIP then
-                    table.insert(on_cell, scan)
-                end
-            end
-            table.sort(on_cell, function(a, b)
-                return (a.id or 0) < (b.id or 0)
-            end)
-            local idx = 1
-            for i, scan in ipairs(on_cell) do
-                if scan.id == alien.id then
-                    idx = i
-                    break
-                end
-            end
-            local lane = { 20, -20, 40, -40, 60, -60 }
-            x = x + (lane[idx] or 0)
-        end
-        x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
-    end
-    if alien.type == ALIEN_TYPE_SPEEDY then
+    local position_type = get_alien_effective_position_type(alien)
+    x = x + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
+    x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
+    if position_type == ALIEN_TYPE_SPEEDY then
         y = y + 50
-    elseif alien.type == ALIEN_TYPE_SPITTER then
+    elseif position_type == ALIEN_TYPE_SPITTER then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-    elseif alien.type == ALIEN_TYPE_CANNON then
+    elseif position_type == ALIEN_TYPE_CANNON then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
-    elseif alien.type == ALIEN_TYPE_BRUTE then
+    elseif position_type == ALIEN_TYPE_BRUTE then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 35
     else
         y = y + 0
@@ -2967,49 +2970,16 @@ local function refresh_alien_visual(self, alien)
 
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
-    if alien.type == ALIEN_TYPE_BLIP then
-        local off_x, off_y = get_blip_cell_offset(alien)
-        x = x + off_x
-        y = y + off_y
-    else
-        x = x + (CELL_WIDTH * 0.25)
-        local human_count = 0
-        if self.squad_units then
-            for _, unit in pairs(self.squad_units) do
-                if unit.cell_id == alien.cell_id and (unit.current_health or 0) > 0 then
-                    human_count = human_count + 1
-                end
-            end
-        end
-        if human_count > 0 and self.aliens then
-            local on_cell = {}
-            for _, scan in ipairs(self.aliens) do
-                if (not scan.is_dead) and scan.cell_id == alien.cell_id and scan.type ~= ALIEN_TYPE_BLIP then
-                    table.insert(on_cell, scan)
-                end
-            end
-            table.sort(on_cell, function(a, b)
-                return (a.id or 0) < (b.id or 0)
-            end)
-            local idx = 1
-            for i, scan in ipairs(on_cell) do
-                if scan.id == alien.id then
-                    idx = i
-                    break
-                end
-            end
-            local lane = { 20, -20, 40, -40, 60, -60 }
-            x = x + (lane[idx] or 0)
-        end
-        x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
-    end
-    if alien.type == ALIEN_TYPE_SPEEDY then
+    local position_type = get_alien_effective_position_type(alien)
+    x = x + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
+    x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
+    if position_type == ALIEN_TYPE_SPEEDY then
         y = y + 50
-    elseif alien.type == ALIEN_TYPE_SPITTER then
+    elseif position_type == ALIEN_TYPE_SPITTER then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-    elseif alien.type == ALIEN_TYPE_CANNON then
+    elseif position_type == ALIEN_TYPE_CANNON then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
-    elseif alien.type == ALIEN_TYPE_BRUTE then
+    elseif position_type == ALIEN_TYPE_BRUTE then
         y = y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 5
     else
         y = y + 0
@@ -3071,6 +3041,12 @@ local function maybe_reveal_blip(self, alien)
     if alien.type ~= ALIEN_TYPE_BLIP then
         return
     end
+    if self.mp_state
+        and self.mp_state.enabled == true
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+    then
+        return
+    end
 
     -- Blips cannot reveal while standing in VOID cells.
     local current_cell = self.world_grid[alien.cell_id]
@@ -3082,6 +3058,10 @@ local function maybe_reveal_blip(self, alien)
         if has_unobstructed_los(self.world_grid, alien.cell_id, human_cell_id) then
             local revealed_type = alien.hidden_reveal_type or pick_weighted_blip_reveal_type(self)
             local cfg = ALIEN_TYPE_CONFIG[revealed_type]
+            local preserved_pos = nil
+            if alien.go_id then
+                preserved_pos = go.get_position(alien.go_id)
+            end
             alien.type = revealed_type
             alien.ap_max = cfg.ap_per_turn
             alien.hp_max = cfg.hp
@@ -3090,6 +3070,9 @@ local function maybe_reveal_blip(self, alien)
             alien.has_ranged = cfg.has_ranged == true
             alien.ranged_cells = cfg.ranged_cells or 0
             refresh_alien_visual(self, alien)
+            if preserved_pos and alien.go_id then
+                go.set_position(preserved_pos, alien.go_id)
+            end
             print(string.format("Blip #%d revealed as %s", alien.id, revealed_type))
             return
         end
@@ -4642,56 +4625,16 @@ local function update_alien_movement(self, dt)
                 local to_vent = get_vent_object_on_cell(to_cell)
                 local is_vent_jump = (alien.type ~= ALIEN_TYPE_BRUTE) and from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-                if alien.type == ALIEN_TYPE_BLIP then
-                    if alien.blip_step_for_index ~= alien.move_path_index then
-                        alien.blip_step_for_index = alien.move_path_index
-                        alien.blip_step_offset_x = math.random(-45, 45)
-                        alien.blip_step_offset_y = math.random(-45, 45)
-                    end
-                    tx = tx + (alien.blip_step_offset_x or 0)
-                    ty = ty + (alien.blip_step_offset_y or 0)
-                else
-                    tx = tx + (CELL_WIDTH * 0.25)
-                    local human_count = 0
-                    if self.squad_units then
-                        for _, unit in pairs(self.squad_units) do
-                            if unit.cell_id == target_cell_id and (unit.current_health or 0) > 0 then
-                                human_count = human_count + 1
-                            end
-                        end
-                    end
-                    if human_count > 0 and self.aliens then
-                        local on_cell = {}
-                        for _, scan in ipairs(self.aliens) do
-                            if (not scan.is_dead)
-                                and scan.type ~= ALIEN_TYPE_BLIP
-                                and (scan.cell_id == target_cell_id or scan.id == alien.id)
-                            then
-                                table.insert(on_cell, scan)
-                            end
-                        end
-                        table.sort(on_cell, function(a, b)
-                            return (a.id or 0) < (b.id or 0)
-                        end)
-                        local idx = 1
-                        for i, scan in ipairs(on_cell) do
-                            if scan.id == alien.id then
-                                idx = i
-                                break
-                            end
-                        end
-                        local lane = { 20, -20, 40, -40, 60, -60 }
-                        tx = tx + (lane[idx] or 0)
-                    end
-                    tx = clamp_world_x_to_cell(target_cell, tx)
-                end
-                if alien.type == ALIEN_TYPE_SPEEDY then
+                local position_type = get_alien_effective_position_type(alien)
+                tx = tx + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, target_cell_id, true)
+                tx = clamp_world_x_to_cell(target_cell, tx)
+                if position_type == ALIEN_TYPE_SPEEDY then
                     ty = ty + 50
-                elseif alien.type == ALIEN_TYPE_SPITTER then
+                elseif position_type == ALIEN_TYPE_SPITTER then
                     ty = ty - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-                elseif alien.type == ALIEN_TYPE_CANNON then
+                elseif position_type == ALIEN_TYPE_CANNON then
                     ty = ty - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
-                elseif alien.type == ALIEN_TYPE_BRUTE then
+                elseif position_type == ALIEN_TYPE_BRUTE then
                     ty = ty - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 35
                 else
                     ty = ty + 0
@@ -4892,13 +4835,6 @@ local function update_alien_movement(self, dt)
                             end
                             trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_before_step, obstacle_nudge_scale)
                         end
-                        if alien.type == ALIEN_TYPE_BLIP then
-                            alien.blip_cell_offset_x = alien.blip_step_offset_x or alien.blip_cell_offset_x
-                            alien.blip_cell_offset_y = alien.blip_step_offset_y or alien.blip_cell_offset_y
-                            alien.blip_step_for_index = nil
-                            alien.blip_step_offset_x = nil
-                            alien.blip_step_offset_y = nil
-                        end
                         alien.counter_move_total_dist = nil
                         if is_vent_jump then
                             local cx, cy = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
@@ -4941,11 +4877,12 @@ local function update_alien_movement(self, dt)
                                     end
                                     desired_x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], desired_x)
                                     local _, ty_adj = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
-                                    if alien.type == ALIEN_TYPE_SPEEDY then
+                                    local position_type = get_alien_effective_position_type(alien)
+                                    if position_type == ALIEN_TYPE_SPEEDY then
                                         ty_adj = ty_adj + 50
-                                    elseif alien.type == ALIEN_TYPE_SPITTER then
+                                    elseif position_type == ALIEN_TYPE_SPITTER then
                                         ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-                                    elseif alien.type == ALIEN_TYPE_CANNON then
+                                    elseif position_type == ALIEN_TYPE_CANNON then
                                         ty_adj = ty_adj - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
                                     end
                                     local occupied = {}
@@ -5041,6 +4978,11 @@ local function process_alien_turn(self)
             spawn_blip_wave_for_pressure(self, "Turn event")
         end
         self.alien_turn_active = true
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            multiplayer_transport_broadcast_event(self, "alien_activity_state", {
+                active = true
+            })
+        end
         self.alien_turn_waiting_for_advance = false
         self.barricade_damage_cells_this_turn = {}
         self.door_damage_cells_this_turn = {}
@@ -5164,6 +5106,14 @@ local function process_alien_turn(self)
     self.alien_turn_active = false
     self.alien_turn_waiting_for_advance = false
     self.alien_turn_manual_pause = false
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+        multiplayer_transport_broadcast_event(self, "alien_activity_state", {
+            active = false
+        })
+    end
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        self.mp_state.client_alien_activity_visible = false
+    end
     print("=== Alien Turn End ===")
 end
 
@@ -5176,14 +5126,28 @@ local function spawn_initial_blips(self, count)
         return
     end
 
+    local active_count = 0
+    for _, alien in ipairs(self.aliens or {}) do
+        if alien and (not alien.is_dead) then
+            active_count = active_count + 1
+        end
+    end
+    local mp_cap = tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
+    local cap_active = self.mp_state and self.mp_state.enabled and mp_cap > 0
+
     local used = {}
     for i = 1, math.min(count, #edge_cells) do
+        if cap_active and active_count >= mp_cap then
+            break
+        end
         local idx = math.random(1, #edge_cells)
         while used[idx] do
             idx = math.random(1, #edge_cells)
         end
         used[idx] = true
-        spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx])
+        if spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx]) then
+            active_count = active_count + 1
+        end
     end
 end
 
@@ -5728,10 +5692,31 @@ spawn_blip_wave_for_pressure = function(self, reason_tag)
         spawn_total = spawn_total + 1
     end
     local spawned = 0
+    local active_count = 0
+    for _, alien in ipairs(self.aliens or {}) do
+        if alien and (not alien.is_dead) then
+            active_count = active_count + 1
+        end
+    end
+    local mp_cap = tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
+    local cap_active = self.mp_state and self.mp_state.enabled and mp_cap > 0
+    if cap_active and active_count >= mp_cap then
+        print(string.format(
+            "%s: spawn paused at multiplayer alien cap (%d/%d).",
+            tostring(reason_tag or "Spawn event"),
+            active_count,
+            mp_cap
+        ))
+        return 0
+    end
     for _ = 1, math.max(1, spawn_total) do
+        if cap_active and active_count >= mp_cap then
+            break
+        end
         local idx = math.random(1, #edge_cells)
         if spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx]) then
             spawned = spawned + 1
+            active_count = active_count + 1
         end
     end
     print(string.format(
@@ -5829,6 +5814,9 @@ local function update_purge_runtime(self)
         self.purge_result_locked = false
         self.purge_deadline_epoch_ms = 0
         self.realtime_mode_locked = false
+        if self.mp_state and self.mp_state.enabled then
+            self.mp_state.last_broadcast_alien_activity_state = false
+        end
         return
     end
 
@@ -7949,9 +7937,18 @@ update_multiplayer_new_turn_button_visual = function(self)
     if not (self and self.ui and self.ui.new_turn_button) then
         return
     end
+    local alien_activity_active = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+        or (self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+            and self.mp_state.client_alien_activity_visible == true)
     local anim_id = hash("button_newTurn")
     local tint = vmath.vector4(1, 1, 1, 1)
-    if self.new_turn_button_mode == "alien_activity" then
+    if alien_activity_active or self.new_turn_button_mode == "alien_activity" then
         anim_id = hash("alien_activity_button")
         tint = vmath.vector4(1, 1, 1, 1)
     elseif self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
@@ -11285,7 +11282,36 @@ function update_global_ui_buttons(self)
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase
         or any_alien_is_moving(self)
-    if self.realtime_rules_enabled == true then
+        or (self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+            and self.mp_state.client_alien_activity_visible == true)
+    if self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id == self.mp_state.host_player_id
+    then
+        local activity_state = alien_cycle_active == true
+        if self.mp_state.last_broadcast_alien_activity_state ~= activity_state then
+            self.mp_state.last_broadcast_alien_activity_state = activity_state
+            multiplayer_transport_broadcast_event(self, "alien_activity_state", {
+                active = activity_state
+            })
+        end
+    end
+    if alien_cycle_active then
+        self.new_turn_button_mode = "alien_activity"
+        set_ui_square_transform(
+            self,
+            self.ui.new_turn_button,
+            NEW_TURN_BUTTON_X,
+            NEW_TURN_BUTTON_Y,
+            NEW_TURN_BUTTON_Z,
+            vmath.vector4(1, 1, 1, 1),
+            NEW_TURN_BUTTON_VISUAL_SCALE,
+            NEW_TURN_BUTTON_VISUAL_SCALE
+        )
+        update_multiplayer_new_turn_button_visual(self)
+    elseif self.realtime_rules_enabled == true then
         self.new_turn_button_mode = "hidden"
         set_ui_square_transform(
             self,
@@ -11307,19 +11333,6 @@ function update_global_ui_buttons(self)
             NEW_TURN_BUTTON_Y,
             NEW_TURN_BUTTON_Z,
             vmath.vector4(0.85, 0.2, 0.2, 0.95),
-            NEW_TURN_BUTTON_VISUAL_SCALE,
-            NEW_TURN_BUTTON_VISUAL_SCALE
-        )
-        update_multiplayer_new_turn_button_visual(self)
-    elseif alien_cycle_active then
-        self.new_turn_button_mode = "alien_activity"
-        set_ui_square_transform(
-            self,
-            self.ui.new_turn_button,
-            NEW_TURN_BUTTON_X,
-            NEW_TURN_BUTTON_Y,
-            NEW_TURN_BUTTON_Z,
-            vmath.vector4(1, 1, 1, 1),
             NEW_TURN_BUTTON_VISUAL_SCALE,
             NEW_TURN_BUTTON_VISUAL_SCALE
         )
@@ -14735,6 +14748,7 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.snapshot_blocking = false
             self.mp_state.awaiting_snapshot_timeout_s = 0
             self.mp_state.expected_snapshot_turn_id = requested_turn_id
+            self.mp_state.client_alien_activity_visible = false
             -- During turn handoff, events/snapshots can arrive slightly out of order.
             -- Skip heartbeat mismatch checks for this turn until authoritative turn snapshot lands.
             self.mp_state.turn_based_heartbeat_suspend_turn_id = requested_turn_id
@@ -14779,6 +14793,7 @@ multiplayer_transport_on_event = function(self, event)
         self.mp_state.awaiting_snapshot_timeout_s = 0
         self.mp_state.expected_snapshot_turn_id = 0
         self.mp_state.last_snapshot_retry_turn_id = 0
+        self.mp_state.client_alien_activity_visible = false
         print(string.format(
             "MP TURNSTATE | applied | turn_id=%d level=%d",
             self.mp_state.turn_id or 1,
@@ -14811,6 +14826,9 @@ multiplayer_transport_on_event = function(self, event)
         local payload = event.payload or {}
         local host_turn_id = tonumber(payload.turn_id or 0) or 0
         local local_turn_id = tonumber(self.mp_state.turn_id or 0) or 0
+        if self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            self.mp_state.client_alien_activity_visible = payload.alien_activity_active == true
+        end
         local suspended_turn_id = tonumber(self.mp_state.turn_based_heartbeat_suspend_turn_id or 0) or 0
         if suspended_turn_id > 0 and local_turn_id == suspended_turn_id then
             return
@@ -15308,6 +15326,13 @@ multiplayer_transport_on_event = function(self, event)
         end
         start_multiplayer_game_flow(self, config)
         print("MP SETUP | match_started event applied.")
+        return
+    end
+    if event.type == "alien_activity_state" then
+        local sender_player_id = event.sender_player_id or nil
+        if self.mp_state and self.mp_state.enabled and sender_player_id == self.mp_state.host_player_id then
+            self.mp_state.client_alien_activity_visible = event.payload and event.payload.active == true
+        end
         return
     end
     if event.type == "move_unit_applied" then
@@ -19832,6 +19857,11 @@ function update(self, dt)
                     local heartbeat_buckets = multiplayer_compute_turn_checksum_buckets(self)
                     multiplayer_transport_broadcast_event(self, "turn_state_heartbeat", {
                         turn_id = self.mp_state.turn_id or 1,
+                        alien_activity_active = self.alien_turn_active
+                            or self.pending_spitter_attack_phase
+                            or self.pending_melee_attack_phase
+                            or any_alien_is_moving(self)
+                            or any_civilian_is_moving(self),
                         checksum = multiplayer_compute_turn_checksum(self),
                         checksum_units = heartbeat_buckets.units,
                         checksum_actors = heartbeat_buckets.actors,
@@ -20509,6 +20539,15 @@ end
 -- =============================================================================
 
 function on_input(self, action_id, action)
+    local alien_activity_blocked = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+        or (self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+            and self.mp_state.client_alien_activity_visible == true)
     if action_id == hash("touch") then
         local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
@@ -20545,12 +20584,7 @@ function on_input(self, action_id, action)
             if not inside_view then
                 return true
             end
-            local alien_activity_active = self.alien_turn_active
-                or self.pending_spitter_attack_phase
-                or self.pending_melee_attack_phase
-                or any_alien_is_moving(self)
-                or any_civilian_is_moving(self)
-            if (not alien_activity_active) and get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then
+            if (not alien_activity_blocked) and get_selected_unit(self) and is_point_in_ui_panel(input_x, input_y) then
                 if LOOT_RUNTIME.begin_command_drag(self, input_x, input_y) then
                     clear_locked_manual_target(self)
                     self.is_panning = false
@@ -20582,16 +20616,11 @@ function on_input(self, action_id, action)
                 return true
             end
             if not self.did_drag then
-                local alien_activity_active = self.alien_turn_active
-                    or self.pending_spitter_attack_phase
-                    or self.pending_melee_attack_phase
-                    or any_alien_is_moving(self)
-                    or any_civilian_is_moving(self)
                 if tutorial_try_advance_from_click(self, input_x, input_y) then
                     dismiss_ranged_hit_preview(self)
                     return true
                 end
-                if alien_activity_active then
+                if alien_activity_blocked then
                     if try_next_turn_button(self, input_x, input_y) then
                         dismiss_ranged_hit_preview(self)
                         return true
@@ -20863,6 +20892,9 @@ function on_message(self, message_id, message, sender)
         next_turn_reset_human_ap(self)
         local skip_authoritative_sim = message and message.skip_authoritative_sim == true
         if skip_authoritative_sim then
+            if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+                self.mp_state.client_alien_activity_visible = false
+            end
             print("MP TURN | non_host_skip_local_alien_factory_sim")
             return
         end

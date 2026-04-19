@@ -12600,9 +12600,7 @@ end
 get_visible_human_portrait_unit_ids = function(self)
     local visible_ids = {}
     for _, unit_id in ipairs(HUMAN_PORTRAIT_IDS) do
-        if not (self.mp_state and self.mp_state.enabled) or multiplayer_can_control_unit(self, unit_id) then
-            table.insert(visible_ids, unit_id)
-        end
+        table.insert(visible_ids, unit_id)
     end
     return visible_ids
 end
@@ -12645,7 +12643,11 @@ update_human_portrait_ui = function(self)
             local unit = self.squad_units and self.squad_units[unit_id] or nil
             local alive = unit and (unit.current_health or 0) > 0
             local selected = unit and unit.is_selected and (self.controlled_unit_id == unit_id)
+            local owned = (not (self.mp_state and self.mp_state.enabled)) or multiplayer_can_control_unit(self, unit_id)
             local tint = selected and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.85, 0.85, 0.85, 1)
+            if not owned then
+                tint = vmath.vector4(0.35, 0.35, 0.35, 0.75)
+            end
             if not alive then
                 tint = vmath.vector4(0.4, 0.4, 0.4, 0.7)
             end
@@ -12665,6 +12667,9 @@ try_select_human_portrait = function(self, screen_x, screen_y)
         local cx, cy = get_human_portrait_screen_pos(i)
         if is_point_in_screen_rect(screen_x, screen_y, cx, cy, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H) then
             local unit = self.squad_units[unit_id]
+            if self.mp_state and self.mp_state.enabled and not multiplayer_can_control_unit(self, unit_id) then
+                return true
+            end
             if unit and (unit.current_health or 0) > 0 then
                 if self.controlled_unit_id ~= unit_id then
                     clear_locked_manual_target(self)

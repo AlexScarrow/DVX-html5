@@ -1,6 +1,7 @@
 [project]
 title = Derples vs Xenos
 version = 1.1
+developer = Grrr Games
 dependencies#0 = https://github.com/defold/extension-websocket/archive/master.zip
 
 [bootstrap]

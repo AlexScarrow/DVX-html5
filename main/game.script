@@ -547,7 +547,7 @@ get_mp_build_version_digits = function(version_text)
     while #parts < 3 do
         parts[#parts + 1] = "0"
     end
-    return table.concat(parts, "")
+    return table.concat(parts, ".")
 end
 
 get_boardgame_dice_anchor_world = function(self)
@@ -8755,8 +8755,8 @@ local function initialize_unit_ui(self)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.tutorial_panel = create_outro_marker_sprite(hash("tutorial1"), TUTORIAL_PANEL_Z)
-    self.ui.flow_solo_setup_panel = create_ui_marker_sprite(hash("solo_setup_panel"), SOLO_SETUP_PANEL_Z)
-    self.ui.flow_solo_mission_select = create_ui_marker_sprite(hash("solo_mission_select"), SOLO_SETUP_UI_Z + 0.001)
+    self.ui.flow_solo_setup_panel = create_ui_marker_sprite(hash("solo_setup_panel"), SOLO_SETUP_UI_Z + 0.001)
+    self.ui.flow_solo_mission_select = create_ui_marker_sprite(hash("solo_selected_mission_frame"), SOLO_SETUP_UI_Z + 0.002)
     self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
     for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
         self.ui.flow_mp_mission_buttons[i] = create_ui_marker_sprite(multiplayer_get_mission_anim_id(mission_type), MP_SETUP_UI_Z)
@@ -9043,7 +9043,13 @@ update_mp_build_hud = function(self, visible)
     for idx, digit_id in ipairs(self.ui.mp_version_digit_icons) do
         if idx <= count then
             local ch = string.sub(version_text, idx, idx)
-            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            local anim_id = nil
+            if ch == "." then
+                anim_id = hash("score_period")
+            else
+                anim_id = hash("score_" .. ch)
+            end
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = anim_id })
             local dx = start_x + ((idx - 1) * MP_BUILD_DIGIT_SPACING_PX)
             set_ui_square_transform(
                 self,
@@ -10496,16 +10502,25 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
-        set_ui_square_transform(self, self.ui.flow_solo_setup_panel, SOLO_SETUP_PANEL_X, SOLO_SETUP_PANEL_Y, SOLO_SETUP_PANEL_Z, vmath.vector4(1, 1, 1, 1), SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
+        set_ui_square_transform(
+            self,
+            self.ui.flow_solo_setup_panel,
+            SOLO_SETUP_EXPLAINER_X[1] + SOLO_SETUP_SELECT_OFFSET_X + 300,
+            SOLO_SETUP_EXPLAINER_Y + SOLO_SETUP_SELECT_OFFSET_Y + 35,
+            SOLO_SETUP_UI_Z + 0.001,
+            vmath.vector4(1, 1, 1, 1),
+            1,
+            1
+        )
         set_ui_square_transform(
             self,
             self.ui.flow_solo_mission_select,
-            SOLO_SETUP_EXPLAINER_X[selected_idx] + SOLO_SETUP_SELECT_OFFSET_X,
-            SOLO_SETUP_EXPLAINER_Y + SOLO_SETUP_SELECT_OFFSET_Y,
-            SOLO_SETUP_UI_Z + 0.001,
-            vmath.vector4(1, 1, 1, 0.95),
-            1,
-            1
+            SOLO_SETUP_EXPLAINER_X[selected_idx] + 9,
+            SOLO_SETUP_EXPLAINER_Y - 63,
+            SOLO_SETUP_UI_Z + 0.002,
+            vmath.vector4(1, 1, 1, 1),
+            1 + (0.05 * ((math.sin((self.flow_overlay_phase or 0) * 3.2) + 1) * 0.5)),
+            1 + (0.05 * ((math.sin((self.flow_overlay_phase or 0) * 3.2) + 1) * 0.5))
         )
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
         if self.ui.flow_mp_mission_buttons then
@@ -14267,12 +14282,29 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "resource_drag_applied", {
+        if not multiplayer_apply_resource_drag_event(self, {
             screen_x = tonumber(payload.screen_x),
             screen_y = tonumber(payload.screen_y),
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y),
             drag = multiplayer_clone_flat_table(drag)
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "resource_drag_end",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "resource_drag_applied", {
+            screen_x = tonumber(payload.screen_x),
+            screen_y = tonumber(payload.screen_y),
+            world_x = tonumber(payload.world_x),
+            world_y = tonumber(payload.world_y),
+            drag = multiplayer_clone_flat_table(drag),
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15397,12 +15429,23 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=resource_drag_applied")
-        self.mp_state.applying_remote_event = true
-        local ok = multiplayer_apply_resource_drag_event(self, event.payload or {})
-        self.mp_state.applying_remote_event = false
+        local payload = event.payload or {}
+        local should_apply_local = payload.host_applied ~= true
+        local ok = true
+        if should_apply_local then
+            self.mp_state.applying_remote_event = true
+            ok = multiplayer_apply_resource_drag_event(self, payload)
+            self.mp_state.applying_remote_event = false
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
         if not ok then
             print("MP COMMAND | resource_drag_applied ignored.")
             multiplayer_sync_trace(self, "apply_event_end", "type=resource_drag_applied ok=false")
+        elseif reconciled then
+            multiplayer_sync_trace(self, "apply_event_end", "type=resource_drag_applied ok=true reconciled=true")
         else
             multiplayer_sync_trace(self, "apply_event_end", "type=resource_drag_applied ok=true")
         end

@@ -428,6 +428,9 @@ images {
   image: "/assets/images/solo_mission_select.png"
 }
 images {
+  image: "/assets/images/solo_selected_mission_frame.png"
+}
+images {
   image: "/assets/images/mp_btn_2p.png"
 }
 images {
@@ -583,6 +586,9 @@ images {
 }
 images {
   image: "/assets/images/score_percent.png"
+}
+images {
+  image: "/assets/images/score_period.png"
 }
 images {
   image: "/assets/images/realtime_button_on.png"

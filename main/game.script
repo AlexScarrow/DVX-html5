@@ -429,7 +429,7 @@ PURGE_BOMB_ITEM_TYPE = "bomb"
 PURGE_BOMB_TILE_NAME = "portal"
 PURGE_BOMB_LOCAL_CELL = 6
 PURGE_RESCUE_RETURN_LOCAL_CELL = 4
-PURGE_COUNTDOWN_SECONDS = 300
+PURGE_COUNTDOWN_TURNS = 5
 DIFFICULTY_PRESSURE_BY_TIER = {
     [0] = { spawn_delta = 0, strong_multiplier = 1.00, burst_chance = 0.00 },
     [1] = { spawn_delta = 1, strong_multiplier = 1.20, burst_chance = 0.10 },
@@ -5776,19 +5776,16 @@ local function purge_is_extract_ready(self)
 end
 
 local function get_purge_mission_status(self)
-    local now_ms = get_wall_clock_ms()
-    local started = self.purge_timer_started == true and tonumber(self.purge_deadline_epoch_ms or 0) > 0
-    local remaining_ms = 0
-    if started then
-        remaining_ms = math.max(0, (tonumber(self.purge_deadline_epoch_ms or 0) or 0) - now_ms)
-    end
+    local started = self.purge_timer_started == true
+    local remaining_turns = math.max(0, tonumber(self.purge_turns_remaining or 0) or 0)
     return {
         bomb_planted = self.purge_bomb_planted == true,
         timer_started = started,
         launch_pressed = self.purge_launch_pressed == true,
         extract_ready = purge_is_extract_ready(self),
-        remaining_ms = remaining_ms,
-        remaining_s = math.ceil(remaining_ms / 1000),
+        remaining_turns = remaining_turns,
+        remaining_ms = remaining_turns * 1000,
+        remaining_s = remaining_turns,
         expired = self.purge_time_expired == true
     }
 end
@@ -5813,6 +5810,7 @@ local function update_purge_runtime(self)
         self.purge_time_expired = false
         self.purge_result_locked = false
         self.purge_deadline_epoch_ms = 0
+        self.purge_turns_remaining = 0
         self.realtime_mode_locked = false
         if self.mp_state and self.mp_state.enabled then
             self.mp_state.last_broadcast_alien_activity_state = false
@@ -5820,7 +5818,6 @@ local function update_purge_runtime(self)
         return
     end
 
-    local now_ms = get_wall_clock_ms()
     local host_authority = true
     if self.mp_state and self.mp_state.enabled then
         host_authority = self.mp_state.local_player_id == self.mp_state.host_player_id
@@ -5829,41 +5826,40 @@ local function update_purge_runtime(self)
     if planted then
         self.purge_bomb_planted = true
     end
-    if self.purge_bomb_planted == true then
-        self.realtime_mode_locked = true
-    end
-    if self.realtime_mode_locked == true and self.realtime_rules_enabled ~= true then
-        self.realtime_rules_enabled = true
-        self.realtime_alien_tick_accum = 0
-        self.realtime_civilian_tick_accum = 0
-        self.realtime_blip_spawn_accum = 0
-        update_realtime_toggle_button_visual(self)
-        if host_authority and self.mp_state and self.mp_state.enabled then
-            multiplayer_transport_broadcast_event(self, "realtime_mode_changed", {
-                enabled = true,
-                turn_id = self.mp_state.turn_id or 1,
-                unit_digest = multiplayer_build_unit_state_digest(self)
-            })
-        end
-        print("PURGE | bomb armed: realtime forced ON and locked.")
-    end
+    self.realtime_mode_locked = false
     if host_authority and planted and self.purge_timer_started ~= true then
         self.purge_timer_started = true
-        self.purge_deadline_epoch_ms = now_ms + (PURGE_COUNTDOWN_SECONDS * 1000)
+        self.purge_turns_remaining = PURGE_COUNTDOWN_TURNS
         self.purge_time_expired = false
         self.purge_result_locked = false
-        print("PURGE | bomb planted, countdown started (300s).")
+        print(string.format("PURGE | bomb planted, countdown started (%d turns).", PURGE_COUNTDOWN_TURNS))
     end
+end
 
-    if self.purge_timer_started ~= true or self.purge_result_locked == true or not host_authority then
+local function purge_tick_turn_countdown_if_needed(self)
+    if not purge_is_active_mission(self) then
         return
     end
-
-    local deadline_ms = tonumber(self.purge_deadline_epoch_ms or 0) or 0
-    if deadline_ms <= 0 or now_ms < deadline_ms then
+    if self.purge_timer_started ~= true or self.purge_result_locked == true then
         return
     end
-
+    local host_authority = true
+    if self.mp_state and self.mp_state.enabled then
+        host_authority = self.mp_state.local_player_id == self.mp_state.host_player_id
+    end
+    if not host_authority then
+        return
+    end
+    local turns_remaining = math.max(0, tonumber(self.purge_turns_remaining or 0) or 0)
+    if turns_remaining <= 0 then
+        return
+    end
+    turns_remaining = turns_remaining - 1
+    self.purge_turns_remaining = turns_remaining
+    if turns_remaining > 0 then
+        print(string.format("PURGE | countdown tick: %d turns remaining.", turns_remaining))
+        return
+    end
     self.purge_time_expired = true
     self.purge_result_locked = true
     local extract_ready = purge_is_extract_ready(self)
@@ -5872,7 +5868,7 @@ local function update_purge_runtime(self)
     SCORE_RUNTIME.record_mission_failed(state)
     self.game_won = false
     print(string.format(
-        "PURGE | FAILURE at timeout. launch=%s extract=%s",
+        "PURGE | FAILURE at turn timeout. launch=%s extract=%s",
         launch_ready and "yes" or "no",
         extract_ready and "yes" or "no"
     ))
@@ -9070,12 +9066,10 @@ end
 local function get_purge_timer_display_text(self)
     local status = get_purge_mission_status(self)
     if status.timer_started ~= true then
-        return "0500"
+        return string.format("%04d", PURGE_COUNTDOWN_TURNS)
     end
-    local total_seconds = math.max(0, tonumber(status.remaining_s or 0) or 0)
-    local mins = math.floor(total_seconds / 60)
-    local secs = total_seconds % 60
-    return string.format("%02d%02d", mins, secs)
+    local turns_remaining = math.max(0, tonumber(status.remaining_turns or 0) or 0)
+    return string.format("%04d", turns_remaining)
 end
 
 local function update_purge_timer_hud(self, visible)
@@ -9103,7 +9097,7 @@ local function update_purge_timer_hud(self, visible)
     local count = #text
     local start_x = PURGE_TIMER_HUD_CENTER_X - ((count - 1) * PURGE_TIMER_HUD_DIGIT_SPACING_PX * 0.5)
     local tint = vmath.vector4(1, 1, 1, 1)
-    if status.remaining_s <= 60 then
+    if status.remaining_turns <= 1 then
         tint = vmath.vector4(1, 0.5, 0.4, 1)
     end
     for i, digit_id in ipairs(self.ui.purge_timer_digit_icons) do
@@ -11194,6 +11188,7 @@ function reset_and_load_level(self, level_index)
     self.purge_time_expired = false
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
+    self.purge_turns_remaining = 0
     self.end_result = ""
     self.end_mission_type = ""
     self.end_outro_sequence_id = ""
@@ -17858,6 +17853,7 @@ multiplayer_build_snapshot_state = function(self)
         purge_launch_pressed = self.purge_launch_pressed == true,
         purge_time_expired = self.purge_time_expired == true,
         purge_result_locked = self.purge_result_locked == true,
+        purge_turns_remaining = tonumber(self.purge_turns_remaining or 0) or 0,
         purge_deadline_epoch_ms = tonumber(self.purge_deadline_epoch_ms or 0) or 0,
         end_result = tostring(self.end_result or ""),
         end_mission_type = tostring(self.end_mission_type or ""),
@@ -17963,7 +17959,11 @@ multiplayer_compute_realtime_snapshot_signature = function(snapshot)
     end
 
     push("t", tonumber(snapshot.turn_id or 0) or 0)
-    push("p", tonumber(snapshot.purge_deadline_epoch_ms or 0) or 0, snapshot.purge_timer_started == true and 1 or 0)
+    push(
+        "p",
+        tonumber(snapshot.purge_turns_remaining or 0) or 0,
+        snapshot.purge_timer_started == true and 1 or 0
+    )
     push("d", tonumber(snapshot.dna_analysis_progress or 0) or 0, snapshot.dna_sample_returned == true and 1 or 0)
 
     local unit_rows = {}
@@ -18319,6 +18319,7 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
     self.purge_launch_pressed = snapshot.purge_launch_pressed == true
     self.purge_time_expired = snapshot.purge_time_expired == true
     self.purge_result_locked = snapshot.purge_result_locked == true
+    self.purge_turns_remaining = tonumber(snapshot.purge_turns_remaining or self.purge_turns_remaining or 0) or 0
     self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
 
     if not decouple_motion then
@@ -18501,6 +18502,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     self.purge_launch_pressed = snapshot.purge_launch_pressed == true
     self.purge_time_expired = snapshot.purge_time_expired == true
     self.purge_result_locked = snapshot.purge_result_locked == true
+    self.purge_turns_remaining = tonumber(snapshot.purge_turns_remaining or self.purge_turns_remaining or 0) or 0
     self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
     self.end_result = tostring(snapshot.end_result or self.end_result or "")
     self.end_mission_type = tostring(snapshot.end_mission_type or self.end_mission_type or "")
@@ -19637,6 +19639,7 @@ function init(self)
     self.purge_time_expired = false
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
+    self.purge_turns_remaining = 0
     self.end_result = ""
     self.end_mission_type = ""
     self.end_outro_sequence_id = ""
@@ -20994,6 +20997,7 @@ function on_message(self, message_id, message, sender)
             return
         end
         next_turn_reset_human_ap(self)
+        purge_tick_turn_countdown_if_needed(self)
         local skip_authoritative_sim = message and message.skip_authoritative_sim == true
         if skip_authoritative_sim then
             if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then

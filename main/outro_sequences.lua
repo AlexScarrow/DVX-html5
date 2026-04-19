@@ -835,6 +835,7 @@ title = {
             --fx_cues = {},
             sfx_cues = {}
         },
+        --fading in
         {
             id = "title_04",
             start_at = 8,
@@ -857,6 +858,7 @@ title = {
             --fx_cues = {},
             sfx_cues = {}
         },
+        --start landing down
         {
             id = "title_03",
             start_at = 12,
@@ -868,31 +870,33 @@ title = {
             --fx_cues = {},
             sfx_cues = {}
         },
+        --bounce up
         {
             id = "title_03",
             start_at = 16,
             anim = "outro_title_derples_word",
             duration = 0.5,
             ease = "linear",
-            from = { x = 0, y = 30, z = 2.7, scale_x = 0.03, scale_y = 0.04, alpha = 1.0 },
+            from = { x = 0, y = 30, z = 2.6, scale_x = 0.03, scale_y = 0.04, alpha = 1.0 },
             to = { x = 0, y = 30, z = 2.7, scale_x = 0.035, scale_y = 0.045, alpha = 1.0 },
             --fx_cues = {},
             sfx_cues = {}
         },
+        --down again
         {
             id = "title_03",
             start_at = 16.5,
             anim = "outro_title_derples_word",
-            duration = 1,
+            duration = 0.4,
             ease = "linear",
-            from = { x = 0, y = 30, z = 2.7, scale_x = 0.03, scale_y = 0.04, alpha = 1.0 },
+            from = { x = 0, y = 30, z = 2.7, scale_x = 0.035, scale_y = 0.045, alpha = 1.0 },
             to = { x = 0, y = 30, z = 2.7, scale_x = 0.03, scale_y = 0.04, alpha = 1.0 },
             --fx_cues = {},
             sfx_cues = {}
         },
         {
             id = "title_03",
-            start_at = 17.5,
+            start_at = 16.9,
             anim = "outro_title_derples_word",
             duration = 6.50,
             ease = "linear",

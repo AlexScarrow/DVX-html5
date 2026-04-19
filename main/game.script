@@ -10584,7 +10584,7 @@ function update_flow_ui(self, dt)
                 set_ui_square_transform(
                     self,
                     btn,
-                    MP_SETUP_MISSION_BTN_X[i],
+                    MP_SETUP_MISSION_BTN_X[i] + 3,
                     MP_SETUP_MISSION_BTN_Y,
                     MP_SETUP_UI_Z,
                     tint,
@@ -10593,7 +10593,7 @@ function update_flow_ui(self, dt)
                 )
             end
         end
-        local count_x = { MP_SETUP_BTN_2P_X, MP_SETUP_BTN_3P_X, MP_SETUP_BTN_4P_X }
+        local count_x = { MP_SETUP_BTN_2P_X + 11, MP_SETUP_BTN_3P_X + 1, MP_SETUP_BTN_4P_X + 1 }
         if self.ui.flow_mp_count_buttons then
             for i, btn in ipairs(self.ui.flow_mp_count_buttons) do
                 local is_active = (i + 1) == (self.mp_setup and self.mp_setup.player_count or 2)
@@ -10602,7 +10602,7 @@ function update_flow_ui(self, dt)
             end
         end
         local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
-        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] + 4, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] - 1, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z, valid and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z - 0.001, valid and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
@@ -10768,7 +10768,7 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         if is_point_in_screen_rect(
             input_x,
             input_y,
-            MP_SETUP_MISSION_BTN_X[i],
+            MP_SETUP_MISSION_BTN_X[i] + 3,
             MP_SETUP_MISSION_BTN_Y,
             MP_SETUP_MISSION_BTN_W,
             MP_SETUP_MISSION_BTN_H
@@ -10779,9 +10779,9 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         end
     end
     local count_buttons = {
-        { x = MP_SETUP_BTN_2P_X, count = 2 },
-        { x = MP_SETUP_BTN_3P_X, count = 3 },
-        { x = MP_SETUP_BTN_4P_X, count = 4 }
+        { x = MP_SETUP_BTN_2P_X + 11, count = 2 },
+        { x = MP_SETUP_BTN_3P_X + 1, count = 3 },
+        { x = MP_SETUP_BTN_4P_X + 1, count = 4 }
     }
     for _, btn in ipairs(count_buttons) do
         if is_point_in_screen_rect(input_x, input_y, btn.x, MP_SETUP_COUNT_BTN_Y, MP_SETUP_COUNT_BTN_W, MP_SETUP_COUNT_BTN_H) then

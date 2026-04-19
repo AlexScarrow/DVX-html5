@@ -8477,6 +8477,7 @@ collect_runtime_reference_counts = function(self)
     c.tile_room_shadows = count_non_nil_entries(self.tile_room_shadows)
     c.tile_light_layers = count_non_nil_entries(self.tile_light_layers)
     c.tile_alpha_layers = count_non_nil_entries(self.tile_alpha_layers)
+    c.alien_turn_overlay = self.alien_turn_overlay and 1 or 0
     c.entry_fire_fx_objects = count_non_nil_entries(self.entry_fire_fx_objects)
     c.exit_green_smoke_fx_objects = count_non_nil_entries(self.exit_green_smoke_fx_objects)
     c.world_item_visuals = count_non_nil_entries(self.world_item_visuals)
@@ -11047,6 +11048,8 @@ function reset_and_load_level(self, level_index)
     safe_delete_map(machine_objects)
     safe_delete_map(self.tile_light_layers)
     safe_delete_map(self.tile_alpha_layers)
+    safe_delete(self.alien_turn_overlay)
+    self.alien_turn_overlay = nil
     safe_delete_map(self.fix_objects)
     safe_delete_map(self.power_node_objects)
     safe_delete_map(self.vent_objects)
@@ -19143,6 +19146,7 @@ end
         self.ladder_markers = {}
         self.tile_base_objects = {}
         self.tile_alpha_power_state = {}
+        self.alien_turn_overlay_visible = false
         self.tile_off_proximity_mul_state = {}
         loot_objects = {}
         machine_objects = {}
@@ -19335,6 +19339,27 @@ end
                 self.tile_alpha_layers[placement_index] = alpha_id
                 self.tile_alpha_power_state[placement_index] = always_visible and true or false
             end
+        end
+        if self.alien_turn_overlay then
+            go.delete(self.alien_turn_overlay)
+            self.alien_turn_overlay = nil
+        end
+        self.alien_turn_overlay = factory.create(
+            "/tile_factory#tile_factory",
+            vmath.vector3(self.camera_pos.x, self.camera_pos.y, 0.701),
+            nil,
+            {},
+            vmath.vector3(
+                4.2 / math.max(0.0001, (self.camera_zoom or 1)),
+                4 / math.max(0.0001, (self.camera_zoom or 1)),
+                1
+            )
+        )
+        if self.alien_turn_overlay then
+            msg.post(msg.url(nil, self.alien_turn_overlay, "sprite"), "play_animation", { id = hash("alien_turn_overlay") })
+            pcall(go.set, msg.url(nil, self.alien_turn_overlay, "sprite"), "blend_mode", (render and render.BLEND_ADD) or 1)
+            go.set(msg.url(nil, self.alien_turn_overlay, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+            self.alien_turn_overlay_visible = false
         end
         for _, cell in ipairs(self.world_grid) do
             if is_valid_ladder_cell(cell) then
@@ -20082,6 +20107,26 @@ function update(self, dt)
             end
         end
     end
+    local alien_turn_overlay_active = self.alien_turn_active
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+        or any_civilian_is_moving(self)
+        or (self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+            and self.mp_state.client_alien_activity_visible == true)
+    if self.alien_turn_overlay then
+        local was_on = self.alien_turn_overlay_visible == true
+        if was_on ~= alien_turn_overlay_active then
+            go.set(
+                msg.url(nil, self.alien_turn_overlay, "sprite"),
+                "tint",
+                alien_turn_overlay_active and vmath.vector4(1, 1, 1, 0.75) or vmath.vector4(1, 1, 1, 0)
+            )
+            self.alien_turn_overlay_visible = alien_turn_overlay_active == true
+        end
+    end
     apply_computer_emissive_accents(self, dt)
 
     update_human_movement(self, dt)
@@ -20519,6 +20564,17 @@ function update(self, dt)
         local oy = self.sheen_offset_y or 0
         go.set_position(vmath.vector3(self.camera_pos.x + ox, self.camera_pos.y + oy, self.sheen_z or 0.4), self.sheen_overlay)
         go.set_scale(vmath.vector3(sx, sy, 1), self.sheen_overlay)
+    end
+    if self.alien_turn_overlay then
+        go.set_position(vmath.vector3(self.camera_pos.x, self.camera_pos.y, 0.701), self.alien_turn_overlay)
+        go.set_scale(
+            vmath.vector3(
+                4.2 / math.max(0.0001, (self.camera_zoom or 1)),
+                4 / math.max(0.0001, (self.camera_zoom or 1)),
+                1
+            ),
+            self.alien_turn_overlay
+        )
     end
 
     if not self.is_panning then

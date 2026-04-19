@@ -110,6 +110,9 @@ images {
   image: "/assets/images/tile_generic_alpha_layer.png"
 }
 images {
+  image: "/assets/images/alien_turn_overlay.png"
+}
+images {
   image: "/assets/images/alien_meleeSwipe_1.png"
 }
 images {

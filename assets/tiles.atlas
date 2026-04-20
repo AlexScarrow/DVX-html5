@@ -596,6 +596,36 @@ images {
 images {
   image: "/assets/images/realtime_button_off.png"
 }
+images {
+  image: "/assets/images/pin_1.png"
+}
+images {
+  image: "/assets/images/pin_2.png"
+}
+images {
+  image: "/assets/images/pin_3.png"
+}
+images {
+  image: "/assets/images/pin_4.png"
+}
+images {
+  image: "/assets/images/pin_5.png"
+}
+images {
+  image: "/assets/images/pin_6.png"
+}
+images {
+  image: "/assets/images/pin_7.png"
+}
+images {
+  image: "/assets/images/pin_8.png"
+}
+images {
+  image: "/assets/images/pin_9.png"
+}
+images {
+  image: "/assets/images/pin_panel.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

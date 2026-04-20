@@ -593,6 +593,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "pin_panel_factory"
+  data: "embedded_components {\n"
+  "  id: \"pin_panel_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/pin_panel_marker.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "outro_marker_factory"
   data: "embedded_components {\n"
   "  id: \"outro_marker_factory\"\n"

@@ -10196,20 +10196,87 @@ multiplayer_lobby_ensure_runtime = function(self)
     lobby.pin_key_flash_timers = lobby.pin_key_flash_timers or {}
     lobby.pin_mode = tostring(lobby.pin_mode or "")
     lobby.pin_target_session_id = tostring(lobby.pin_target_session_id or "")
+    lobby.pending_join_session_id = tostring(lobby.pending_join_session_id or "")
     lobby.session_counter = tonumber(lobby.session_counter or 6) or 6
     lobby.host_draft_session_id = tostring(lobby.host_draft_session_id or "")
     lobby.local_username = tostring(lobby.local_username or ((self.mp_state and self.mp_state.local_player_id) or "Player"))
     lobby.pending_cancel_confirm = lobby.pending_cancel_confirm == true
     if type(lobby.sessions) ~= "table" then
-        lobby.sessions = {
-            { id = "sess_1", host_name = "Nova", status = "published_open", players = 2, max_players = 4, is_locked = false },
-            { id = "sess_2", host_name = "Rook", status = "published_private", players = 1, max_players = 3, is_locked = true, pin = "2468" },
-            { id = "sess_3", host_name = "Mara", status = "published_open", players = 3, max_players = 4, is_locked = false },
-            { id = "sess_4", host_name = "Kite", status = "published_private", players = 2, max_players = 2, is_locked = true, pin = "1357" },
-            { id = "sess_5", host_name = "Lumen", status = "published_open", players = 1, max_players = 4, is_locked = false },
-            { id = "sess_6", host_name = "Aegis", status = "published_open", players = 4, max_players = 4, is_locked = false }
+        lobby.sessions = {}
+    end
+end
+
+multiplayer_lobby_build_state_payload = function(self)
+    local lobby = self.mp_lobby or {}
+    local sessions = {}
+    for _, session in ipairs(lobby.sessions or {}) do
+        if session then
+            sessions[#sessions + 1] = {
+                id = tostring(session.id or ""),
+                host_name = tostring(session.host_name or "Host"),
+                status = tostring(session.status or "published_open"),
+                players = math.max(1, tonumber(session.players or 1) or 1),
+                max_players = math.max(2, tonumber(session.max_players or 4) or 4),
+                is_locked = session.is_locked == true,
+                joined_player_ids = session.joined_player_ids or {}
+            }
+        end
+    end
+    return {
+        sessions = sessions,
+        page_index = math.max(1, tonumber(lobby.page_index or 1) or 1),
+        session_counter = tonumber(lobby.session_counter or #sessions) or #sessions
+    }
+end
+
+multiplayer_lobby_find_session_joined_by_player = function(self, player_id)
+    local pid = tostring(player_id or "")
+    if pid == "" then
+        return nil
+    end
+    local lobby = self.mp_lobby or {}
+    for _, session in ipairs(lobby.sessions or {}) do
+        if session and type(session.joined_player_ids) == "table" then
+            for _, joined_id in ipairs(session.joined_player_ids) do
+                if tostring(joined_id or "") == pid then
+                    return session
+                end
+            end
+        end
+    end
+    return nil
+end
+
+multiplayer_lobby_apply_state_payload = function(self, payload)
+    multiplayer_lobby_ensure_runtime(self)
+    if type(payload) ~= "table" then
+        return
+    end
+    local lobby = self.mp_lobby
+    lobby.sessions = {}
+    for _, session in ipairs(payload.sessions or {}) do
+        lobby.sessions[#lobby.sessions + 1] = {
+            id = tostring(session.id or ""),
+            host_name = tostring(session.host_name or "Host"),
+            status = tostring(session.status or "published_open"),
+            players = math.max(1, tonumber(session.players or 1) or 1),
+            max_players = math.max(2, tonumber(session.max_players or 4) or 4),
+            is_locked = session.is_locked == true,
+            joined_player_ids = session.joined_player_ids or {}
         }
     end
+    lobby.page_index = math.max(1, tonumber(payload.page_index or lobby.page_index or 1) or 1)
+    lobby.session_counter = tonumber(payload.session_counter or lobby.session_counter or #lobby.sessions) or #lobby.sessions
+end
+
+multiplayer_lobby_push_state = function(self, target_player_id)
+    if not (self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id) then
+        return
+    end
+    multiplayer_transport_broadcast_event(self, "lobby_state_updated", {
+        target_player_id = target_player_id,
+        lobby_state = multiplayer_lobby_build_state_payload(self)
+    })
 end
 
 multiplayer_lobby_get_session_by_id = function(self, session_id)
@@ -10267,6 +10334,8 @@ multiplayer_lobby_enter_mp_setup_from_session = function(self, session)
     if self.mp_state then
         self.mp_state.enabled = true
         self.mp_state.debug_active_player_id = self.mp_state.local_player_id
+        self.mp_state.session_id = tostring(session.id or self.mp_state.session_id or "local_session")
+        self.mp_state.player_count = tonumber(session.max_players or self.mp_state.player_count or 2) or 2
     end
     multiplayer_setup_init_runtime(self)
     enter_flow_state(self, FLOW_STATE_MP_SETUP)
@@ -10285,7 +10354,11 @@ multiplayer_lobby_create_host_draft = function(self)
         return false
     end
     if lobby.host_draft_session_id and lobby.host_draft_session_id ~= "" then
-        return true
+        local existing = multiplayer_lobby_get_session_by_id(self, lobby.host_draft_session_id)
+        if existing then
+            return true
+        end
+        lobby.host_draft_session_id = ""
     end
     lobby.session_counter = (tonumber(lobby.session_counter or 0) or 0) + 1
     local session_id = string.format("sess_host_%d", lobby.session_counter)
@@ -10296,10 +10369,12 @@ multiplayer_lobby_create_host_draft = function(self)
         players = 1,
         max_players = 4,
         is_locked = false,
-        pin = ""
+        pin = "",
+        joined_player_ids = { self.mp_state and self.mp_state.host_player_id or "p1" }
     }
     table.insert(lobby.sessions, session)
     lobby.host_draft_session_id = session_id
+    multiplayer_lobby_push_state(self)
     return true
 end
 
@@ -10321,13 +10396,100 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
         session.is_locked = false
         session.pin = ""
     end
+    multiplayer_lobby_push_state(self)
     return multiplayer_lobby_enter_mp_setup_from_session(self, session)
+end
+
+multiplayer_lobby_cancel_session = function(self, session_id)
+    multiplayer_lobby_ensure_runtime(self)
+    if not multiplayer_lobby_is_host(self) then
+        return false
+    end
+    local lobby = self.mp_lobby
+    local sid = tostring(session_id or "")
+    if sid == "" then
+        sid = tostring(lobby.host_draft_session_id or "")
+    end
+    if sid == "" then
+        return false
+    end
+    local removed = false
+    for i = #lobby.sessions, 1, -1 do
+        local session = lobby.sessions[i]
+        if session and tostring(session.id or "") == sid then
+            table.remove(lobby.sessions, i)
+            removed = true
+            break
+        end
+    end
+    if not removed then
+        return false
+    end
+    if tostring(lobby.host_draft_session_id or "") == sid then
+        lobby.host_draft_session_id = ""
+    end
+    if self.mp_state and tostring(self.mp_state.session_id or "") == sid then
+        self.mp_state.session_id = "local_session"
+    end
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_transport_broadcast_event(self, "lobby_session_closed", {
+            session_id = sid
+        })
+    end
+    multiplayer_lobby_push_state(self)
+    return true
+end
+
+multiplayer_lobby_remove_player_from_session = function(self, session_id, player_id)
+    multiplayer_lobby_ensure_runtime(self)
+    if not multiplayer_lobby_is_host(self) then
+        return false
+    end
+    local session = multiplayer_lobby_get_session_by_id(self, session_id)
+    if not session then
+        return false
+    end
+    local pid = tostring(player_id or "")
+    if pid == "" then
+        return false
+    end
+    session.joined_player_ids = session.joined_player_ids or {}
+    local removed = false
+    for i = #session.joined_player_ids, 1, -1 do
+        if tostring(session.joined_player_ids[i] or "") == pid then
+            table.remove(session.joined_player_ids, i)
+            removed = true
+        end
+    end
+    if removed then
+        session.players = math.max(1, math.min(tonumber(session.max_players or 4) or 4, #session.joined_player_ids))
+        multiplayer_lobby_push_state(self)
+    end
+    return removed
 end
 
 multiplayer_lobby_submit_pin_entry = function(self)
     local lobby = self.mp_lobby
     if not lobby then
         return false
+    end
+    local is_client = self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+    if is_client and lobby.pin_mode == "join_locked" then
+        local target_session_id = tostring(lobby.pin_target_session_id or "")
+        if target_session_id ~= "" and #lobby.pin_buffer == MP_LOBBY_MAX_PIN_LEN then
+            multiplayer_transport_send_command(self, "lobby_join_session", {
+                session_id = target_session_id,
+                pin = lobby.pin_buffer
+            }, self.mp_state.local_player_id)
+            lobby.pending_join_session_id = target_session_id
+            lobby.pin_mode = ""
+            lobby.pin_feedback = ""
+            lobby.pin_feedback_timer = 0
+            return true
+        end
+        lobby.pin_feedback = "bad"
+        lobby.pin_feedback_timer = 0.35
+        return true
     end
     if lobby.pin_mode == "host_publish_private" then
         if #lobby.pin_buffer == MP_LOBBY_MAX_PIN_LEN then
@@ -10556,7 +10718,7 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
     end
     set_ui_square_transform(self, self.ui.flow_panel, MP_LOBBY_PANEL_X, MP_LOBBY_PANEL_Y, FLOW_UI_PANEL_Z, vmath.vector4(0.06, 0.1, 0.16, 1), MP_LOBBY_PANEL_W, MP_LOBBY_PANEL_H)
     if self.ui.flow_mp_lobby_pin_modal_bg then
-        set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_modal_bg, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, MP_LOBBY_PIN_MODAL_W, MP_LOBBY_PIN_MODAL_H)
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_modal_bg, -9999, -9999, MP_LOBBY_PIN_MODAL_Z, hidden, MP_LOBBY_PIN_MODAL_W, MP_LOBBY_PIN_MODAL_H)
     end
     if self.ui.flow_mp_lobby_pin_display then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_display, -9999, -9999, SOLO_SETUP_UI_Z + 0.002, hidden, MP_LOBBY_PIN_DISPLAY_W, MP_LOBBY_PIN_DISPLAY_H)
@@ -11304,7 +11466,24 @@ function update_flow_ui(self, dt)
 end
 
 multiplayer_setup_handle_touch = function(self, input_x, input_y)
-    if self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+    local is_client_not_host = self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
+        if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            multiplayer_lobby_cancel_session(self, self.mp_state.session_id)
+        elseif self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "lobby_leave_session", {
+                session_id = tostring(self.mp_state.session_id or "")
+            }, self.mp_state.local_player_id)
+        end
+        if self.mp_state then
+            self.mp_state.session_id = "local_session"
+            self.mp_state.enabled = false
+        end
+        self.multiplayer_mode_active = false
+        enter_flow_state(self, FLOW_STATE_TITLE)
+        return true
+    end
+    if is_client_not_host then
         print("MP SETUP | only host may edit setup.")
         return true
     end
@@ -11333,14 +11512,6 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
             multiplayer_setup_push_state(self)
             return true
         end
-    end
-    if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
-        if self.mp_state then
-            self.mp_state.enabled = false
-        end
-        self.multiplayer_mode_active = false
-        enter_flow_state(self, FLOW_STATE_TITLE)
-        return true
     end
     if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
         if multiplayer_setup_is_valid(self) then
@@ -11478,6 +11649,8 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
     if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_CREATE_BTN_X, MP_LOBBY_CREATE_BTN_Y, MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H) then
         if multiplayer_lobby_is_host(self) then
             multiplayer_lobby_create_host_draft(self)
+        elseif self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
         end
         return true
     end
@@ -11493,6 +11666,8 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
         if multiplayer_lobby_is_host(self) then
             multiplayer_lobby_create_host_draft(self)
             return multiplayer_lobby_publish_host_draft(self, "")
+        elseif self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
         end
         return true
     end
@@ -11503,6 +11678,8 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
             lobby.pin_buffer = ""
             lobby.pin_feedback = ""
             lobby.pin_feedback_timer = 0
+        elseif self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
         end
         return true
     end
@@ -11523,6 +11700,13 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
                     lobby.pin_buffer = ""
                     lobby.pin_feedback = ""
                     lobby.pin_feedback_timer = 0
+                    return true
+                end
+                if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+                    multiplayer_transport_send_command(self, "lobby_join_session", {
+                        session_id = tostring(session.id or "")
+                    }, self.mp_state.local_player_id)
+                    lobby.pending_join_session_id = tostring(session.id or "")
                     return true
                 end
                 return multiplayer_lobby_enter_mp_setup_from_session(self, session)
@@ -11553,6 +11737,13 @@ function handle_flow_touch(self, input_x, input_y)
             end
             multiplayer_lobby_ensure_runtime(self)
             enter_flow_state(self, FLOW_STATE_MP_LOBBY)
+            if self.mp_state and self.mp_state.enabled then
+                if self.mp_state.local_player_id == self.mp_state.host_player_id then
+                    multiplayer_lobby_push_state(self)
+                else
+                    multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
+                end
+            end
             return true
         end
         return true
@@ -14635,6 +14826,99 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "request_lobby_state" then
+        multiplayer_lobby_ensure_runtime(self)
+        table.insert(events, multiplayer_transport_emit_event(self, "lobby_state_updated", {
+            target_player_id = sender,
+            lobby_state = multiplayer_lobby_build_state_payload(self)
+        }))
+        return events
+    end
+
+    if cmd_type == "lobby_join_session" then
+        multiplayer_lobby_ensure_runtime(self)
+        local session_id = tostring(payload.session_id or "")
+        local pin = tostring(payload.pin or "")
+        local session = multiplayer_lobby_get_session_by_id(self, session_id)
+        if not session or session.status == "draft" then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "session_not_found"
+            }))
+            return events
+        end
+        if tonumber(session.players or 0) >= tonumber(session.max_players or 4) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "session_full"
+            }))
+            return events
+        end
+        if session.is_locked == true then
+            local expected = tostring(session.pin or "")
+            if expected == "" or pin ~= expected then
+                table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                    command_type = "lobby_join_session",
+                    reason = "pin_invalid"
+                }))
+                return events
+            end
+        end
+        session.joined_player_ids = session.joined_player_ids or {}
+        local already_joined = false
+        for _, joined_id in ipairs(session.joined_player_ids) do
+            if tostring(joined_id or "") == tostring(sender or "") then
+                already_joined = true
+                break
+            end
+        end
+        if not already_joined then
+            session.joined_player_ids[#session.joined_player_ids + 1] = tostring(sender or "")
+            session.players = math.min(tonumber(session.max_players or 4) or 4, tonumber(#session.joined_player_ids) or 1)
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "lobby_state_updated", {
+            lobby_state = multiplayer_lobby_build_state_payload(self)
+        }))
+        local setup_config = multiplayer_setup_build_session_config(self)
+        if session.max_players then
+            setup_config.player_count = math.max(2, math.min(4, tonumber(session.max_players or setup_config.player_count or 2) or 2))
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
+            target_player_id = sender,
+            session_id = tostring(session.id or ""),
+            session_max_players = tonumber(session.max_players or setup_config.player_count or 2) or 2,
+            session_config = setup_config
+        }))
+        return events
+    end
+
+    if cmd_type == "lobby_leave_session" then
+        multiplayer_lobby_ensure_runtime(self)
+        local session_id = tostring(payload.session_id or "")
+        if session_id == "" then
+            local existing = multiplayer_lobby_find_session_joined_by_player(self, sender)
+            session_id = tostring(existing and existing.id or "")
+        end
+        if session_id == "" then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_leave_session",
+                reason = "session_not_found"
+            }))
+            return events
+        end
+        if multiplayer_lobby_remove_player_from_session(self, session_id, sender) then
+            table.insert(events, multiplayer_transport_emit_event(self, "lobby_state_updated", {
+                lobby_state = multiplayer_lobby_build_state_payload(self)
+            }))
+        else
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_leave_session",
+                reason = "player_not_in_session"
+            }))
+        end
+        return events
+    end
+
     if cmd_type == "push_setup_state" then
         if sender ~= self.mp_state.host_player_id then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
@@ -15996,7 +16280,63 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "lobby_state_updated" then
+        local target_player_id = event.payload and event.payload.target_player_id or nil
+        local local_player_id = self.mp_state and self.mp_state.local_player_id or "p1"
+        if target_player_id and target_player_id ~= local_player_id then
+            return
+        end
+        if self.mp_state and self.mp_state.local_player_id == self.mp_state.host_player_id then
+            return
+        end
+        multiplayer_lobby_apply_state_payload(self, event.payload and event.payload.lobby_state or nil)
+        return
+    end
+    if event.type == "lobby_join_accepted" then
+        local target_player_id = event.payload and event.payload.target_player_id or nil
+        local local_player_id = self.mp_state and self.mp_state.local_player_id or "p1"
+        if target_player_id and target_player_id ~= local_player_id then
+            return
+        end
+        multiplayer_lobby_ensure_runtime(self)
+        local session_id = tostring(event.payload and event.payload.session_id or "")
+        local session = multiplayer_lobby_get_session_by_id(self, session_id)
+        local setup_config = event.payload and event.payload.session_config or nil
+        if session then
+            multiplayer_lobby_enter_mp_setup_from_session(self, session)
+        else
+            local synthetic = {
+                id = session_id ~= "" and session_id or "remote_session",
+                max_players = tonumber(event.payload and event.payload.session_max_players or 2) or 2
+            }
+            multiplayer_lobby_enter_mp_setup_from_session(self, synthetic)
+        end
+        if type(setup_config) == "table" then
+            multiplayer_setup_apply_session_config(self, setup_config)
+        end
+        print("MP LOBBY | join accepted -> setup")
+        return
+    end
+    if event.type == "lobby_session_closed" then
+        local closed_session_id = tostring(event.payload and event.payload.session_id or "")
+        local local_session_id = tostring(self.mp_state and self.mp_state.session_id or "")
+        local is_client = self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        if is_client and closed_session_id ~= "" and local_session_id ~= "" and closed_session_id == local_session_id then
+            multiplayer_lobby_ensure_runtime(self)
+            self.mp_state.session_id = "local_session"
+            self.multiplayer_mode_active = true
+            enter_flow_state(self, FLOW_STATE_MP_LOBBY)
+            multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
+            print("MP LOBBY | host closed session, client ejected to lobby.")
+        end
+        return
+    end
     if event.type == "match_started" then
+        local target_player_id = event.payload and event.payload.target_player_id or nil
+        local local_player_id = self.mp_state and self.mp_state.local_player_id or "p1"
+        if target_player_id and target_player_id ~= local_player_id then
+            return
+        end
         local config = event.payload and event.payload.session_config or nil
         if type(config) ~= "table" then
             config = multiplayer_setup_build_session_config(self)
@@ -16244,6 +16584,18 @@ multiplayer_transport_on_event = function(self, event)
                 print(string.format("MP SNAPSHOT | requested_manual_shot_invalid_target | turn_id=%d", current_turn_id))
             end
         end
+        if cmd == "lobby_join_session" and self.mp_lobby then
+            self.mp_lobby.pending_join_session_id = ""
+            self.mp_lobby.pin_mode = ""
+            self.mp_lobby.pin_feedback = "bad"
+            self.mp_lobby.pin_feedback_timer = 0.45
+            if reason ~= "pin_invalid" and self.mp_state and self.mp_state.enabled then
+                multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
+            end
+        end
+        if cmd == "lobby_leave_session" and self.mp_state and self.mp_state.enabled then
+            multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
+        end
         return
     end
     if event.type == "joined_room" then
@@ -16266,9 +16618,15 @@ multiplayer_transport_on_event = function(self, event)
         local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
         if is_local_host then
             multiplayer_setup_push_state(self)
+            if self.game_flow_state == FLOW_STATE_MP_LOBBY then
+                multiplayer_lobby_push_state(self)
+            end
         else
             multiplayer_transport_send_command(self, "request_setup_state", {}, self.mp_state.local_player_id)
             print("MP SETUP | requested_from_host")
+            if self.game_flow_state == FLOW_STATE_MP_LOBBY then
+                multiplayer_transport_send_command(self, "request_lobby_state", {}, self.mp_state.local_player_id)
+            end
         end
         if not is_local_host then
             self.mp_state.awaiting_snapshot = true

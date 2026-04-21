@@ -10360,6 +10360,20 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
     }, self.mp_state.local_player_id)
 end
 
+multiplayer_lobby_reannounce_active_offer = function(self, target_player_id)
+    multiplayer_lobby_ensure_runtime(self)
+    local lobby = self.mp_lobby
+    local offer_id = tostring(lobby.local_active_offer_id or "")
+    if offer_id == "" then
+        return
+    end
+    local session = multiplayer_lobby_get_session_by_id(self, offer_id)
+    if not session then
+        return
+    end
+    multiplayer_lobby_emit_offer_upsert(self, session, target_player_id)
+end
+
 multiplayer_lobby_emit_offer_remove = function(self, offer_id)
     if not (self.mp_state and self.mp_state.enabled and offer_id and offer_id ~= "") then
         return
@@ -11986,7 +12000,9 @@ function handle_flow_touch(self, input_x, input_y)
             multiplayer_lobby_ensure_runtime(self)
             enter_flow_state(self, FLOW_STATE_MP_LOBBY)
             if self.mp_state and self.mp_state.enabled then
-                -- Offer-plane events are authoritative for lobby discovery.
+                multiplayer_transport_send_command(self, "lobby_request_offer_reannounce", {
+                    target_player_id = tostring(self.mp_state.local_player_id or "p1")
+                }, self.mp_state.local_player_id)
             end
             return true
         end
@@ -14974,6 +14990,7 @@ multiplayer_transport_handle_command = function(self, command)
         or cmd_type == "lobby_offer_remove"
         or cmd_type == "lobby_offer_heartbeat"
         or cmd_type == "lobby_offer_join_response"
+        or cmd_type == "lobby_request_offer_reannounce"
     )
     if (not is_local_host) and (not offer_plane_command) then
         return events
@@ -15082,6 +15099,31 @@ multiplayer_transport_handle_command = function(self, command)
             target_player_id = sender,
             lobby_state = multiplayer_lobby_build_state_payload(self)
         }))
+        return events
+    end
+
+    if cmd_type == "lobby_request_offer_reannounce" then
+        multiplayer_lobby_ensure_runtime(self)
+        local requester_player_id = tostring(sender or "")
+        local target_player_id = tostring(payload.target_player_id or requester_player_id)
+        local offer_id = tostring(self.mp_lobby.local_active_offer_id or "")
+        local session = multiplayer_lobby_get_session_by_id(self, offer_id)
+        if session and target_player_id ~= "" then
+            table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_upsert", {
+                target_player_id = target_player_id,
+                offer = {
+                    id = tostring(session.id or ""),
+                    owner_player_id = tostring(session.owner_player_id or "p1"),
+                    host_name = tostring(session.host_name or "Host"),
+                    status = tostring(session.status or "published_open"),
+                    players = math.max(1, tonumber(session.players or 1) or 1),
+                    max_players = math.max(2, tonumber(session.max_players or 2) or 2),
+                    is_locked = session.is_locked == true,
+                    joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
+                    updated_at_ms = tonumber(session.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
+                }
+            }))
+        end
         return events
     end
 
@@ -17075,6 +17117,7 @@ multiplayer_transport_on_event = function(self, event)
             }, self.mp_state.local_player_id)
             print("MP SNAPSHOT | requested_from_host")
         end
+        multiplayer_lobby_reannounce_active_offer(self, nil)
         return
     end
     if event.type == "player_joined" then
@@ -17086,6 +17129,7 @@ multiplayer_transport_on_event = function(self, event)
             if self.mp_state.local_player_id == self.mp_state.host_player_id then
                 multiplayer_setup_push_state(self)
             end
+            multiplayer_lobby_reannounce_active_offer(self, player_id)
         end
         return
     end

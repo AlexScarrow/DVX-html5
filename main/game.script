@@ -10053,10 +10053,31 @@ multiplayer_setup_is_valid = function(self)
     if not (self.mp_setup and self.mp_setup.seat_slots) then
         return false
     end
+    local session_joined_count = nil
+    if self.mp_state and self.mp_state.enabled then
+        local active_session_id = tostring(self.mp_state.session_id or "")
+        if active_session_id ~= "" then
+            multiplayer_lobby_ensure_runtime(self)
+            local active_offer = multiplayer_lobby_get_session_by_id(self, active_session_id)
+            if active_offer then
+                if type(active_offer.joined_player_ids) == "table" and #active_offer.joined_player_ids > 0 then
+                    session_joined_count = #active_offer.joined_player_ids
+                else
+                    local offer_players = tonumber(active_offer.players or 0) or 0
+                    if offer_players > 0 then
+                        session_joined_count = offer_players
+                    end
+                end
+            end
+        end
+    end
     local used = {}
     local total_assigned = 0
     local assigned_per_player = {}
     local count = self.mp_setup.player_count or 2
+    if session_joined_count and session_joined_count > 0 and count > session_joined_count then
+        return false
+    end
     for i = 1, count do
         local player_id = "p" .. tostring(i)
         local slot_count = multiplayer_get_slot_count_for_player(count, player_id)

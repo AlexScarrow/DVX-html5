@@ -11514,6 +11514,7 @@ function update_flow_ui(self, dt)
     end
     if state == FLOW_STATE_MP_SETUP then
         local valid = multiplayer_setup_is_valid(self)
+        local can_launch = multiplayer_lobby_is_local_offer_owner(self)
         if self.mp_state and self.mp_state.enabled then
             set_ui_square_transform(
                 self,
@@ -11565,9 +11566,9 @@ function update_flow_ui(self, dt)
         local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
         set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] - 1, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z, valid and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z - 0.001, valid and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z + 0.001, valid and hidden or vmath.vector4(1, 1, 1, 0.92), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z, (can_launch and valid) and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z - 0.001, (can_launch and valid) and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z + 0.001, (can_launch and valid) and hidden or (can_launch and vmath.vector4(1, 1, 1, 0.92) or hidden), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         if self.ui.flow_mp_unit_buttons then
             local pulse = 1 + (0.06 * math.sin((self.flow_overlay_phase or 0) * 8))
             for i, btn in ipairs(self.ui.flow_mp_unit_buttons) do

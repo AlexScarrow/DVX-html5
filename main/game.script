@@ -1475,7 +1475,8 @@ try_brute_break_adjacent_barricade = function(self, alien)
         target_cell_id = nil
         for _, dir in ipairs(search_dirs) do
             local adj_id = get_adjacent_cell(alien.cell_id, dir)
-            if adj_id and is_cell_barricaded(self.world_grid, adj_id) and can_cross_between_cells(self.world_grid, alien.cell_id, adj_id) then
+            local adj_cell = adj_id and self.world_grid and self.world_grid[adj_id] or nil
+            if adj_id and adj_cell and adj_cell.tileID ~= hash("empty") and is_cell_barricaded(self.world_grid, adj_id) then
                 local _, _, edge_door_closed = get_edge_door_context(self.world_grid, alien.cell_id, adj_id)
                 if edge_door_closed then
                     -- Closed door on the edge blocks barricade attacks; brute should hit the door first.
@@ -3618,29 +3619,7 @@ local function choose_spitter_target(self, alien)
     for _, target in ipairs(get_living_alien_targets(self)) do
         local dist = heuristic(alien.cell_id, target.cell_id)
         if dist <= range_cells and has_unobstructed_los(self.world_grid, alien.cell_id, target.cell_id) then
-            local vertical_lane_allowed = true
-            local from_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
-            local to_cell = self.world_grid and self.world_grid[target.cell_id] or nil
-            if from_cell and to_cell then
-                local is_vertical_lane = (from_cell.xCell == to_cell.xCell) and (from_cell.yCell ~= to_cell.yCell)
-                if is_vertical_lane then
-                    local from_center_x = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
-                    local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
-                    local shooter_pos = alien.go_id and go.get_position(alien.go_id) or nil
-                    local target_go_id = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
-                    local target_pos = target_go_id and go.get_position(target_go_id) or nil
-                    local shooter_x = shooter_pos and shooter_pos.x or from_center_x
-                    local target_x = target_pos and target_pos.x or to_center_x
-                    local right_threshold = CELL_WIDTH * 0.15
-                    local shooter_in_right_lane = shooter_x >= (from_center_x + right_threshold)
-                    local target_in_right_lane = target_x >= (to_center_x + right_threshold)
-                    vertical_lane_allowed = shooter_in_right_lane and target_in_right_lane
-                end
-            end
-            local blocked_by_barricade = spitter_shot_blocked_by_barricade(self, alien, target)
-            if vertical_lane_allowed and (not blocked_by_barricade) then
-                table.insert(candidates, { unit = target, dist = dist, hp = target.current_health })
-            end
+            table.insert(candidates, { unit = target, dist = dist, hp = target.current_health })
         end
     end
 
@@ -4390,37 +4369,6 @@ local function update_spitter_attack_phase(self, dt)
         print(string.format("Spitter #%d cannot fire (no valid target in LOS/range)", spitter.id))
         return
     end
-    local blocked_by_barricade, block_reason = spitter_shot_blocked_by_barricade(self, spitter, target)
-    if blocked_by_barricade then
-        print(string.format(
-            "Spitter #%d blocked by barricade (reason=%s) shooterCell=%d targetCell=%d",
-            spitter.id, tostring(block_reason), spitter.cell_id or 0, target.cell_id or 0
-        ))
-        return
-    end
-
-    local spitter_cell = self.world_grid and self.world_grid[spitter.cell_id] or nil
-    local target_cell_for_lane = self.world_grid and self.world_grid[target.cell_id] or nil
-    if spitter_cell and target_cell_for_lane then
-        local is_vertical_lane = (spitter_cell.xCell == target_cell_for_lane.xCell) and (spitter_cell.yCell ~= target_cell_for_lane.yCell)
-        if is_vertical_lane then
-            local spitter_center_x = coords_to_world_pos(spitter_cell.xCell, spitter_cell.yCell)
-            local target_center_x = coords_to_world_pos(target_cell_for_lane.xCell, target_cell_for_lane.yCell)
-            local spitter_pos_for_lane = spitter.go_id and go.get_position(spitter.go_id) or nil
-            local target_go_id_for_lane = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
-            local target_pos_for_lane = target_go_id_for_lane and go.get_position(target_go_id_for_lane) or nil
-            local spitter_x = spitter_pos_for_lane and spitter_pos_for_lane.x or spitter_center_x
-            local target_x = target_pos_for_lane and target_pos_for_lane.x or target_center_x
-            local right_threshold = CELL_WIDTH * 0.15
-            local spitter_in_right_lane = spitter_x >= (spitter_center_x + right_threshold)
-            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
-            if (not spitter_in_right_lane) or (not target_in_right_lane) then
-                print(string.format("Spitter #%d blocked: vertical shot requires right-lane alignment.", spitter.id))
-                return
-            end
-        end
-    end
-
     local target_go_id = target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id]) or nil
     if spitter.go_id and target_go_id then
         local spitter_pos = go.get_position(spitter.go_id)
@@ -18921,13 +18869,27 @@ local function next_turn_reset_human_ap(self)
     apply_start_of_turn_environment_damage(self)
 
     for _, unit in pairs(self.squad_units) do
+        -- Turn boundaries are authoritative movement boundaries:
+        -- clear any stale in-progress motion state before restoring AP.
+        unit.is_moving = false
+        unit.mp_move_command_pending = nil
+        unit.move_path = nil
+        unit.move_path_index = 0
+        unit.desired_destination_cell_id = nil
+        unit.desired_destination_slot_index = nil
+        unit.micro_target_x = nil
+        unit.micro_target_y = nil
+        unit.micro_move_kind = nil
+        unit.vertical_prep_done_for_index = nil
+        unit.entry_slot_for_index = nil
+        unit.entry_slot_index = nil
+        unit.last_completed_step_vertical = false
+        unit.shadow_motion_offset = nil
+        unit.counter_move_total_dist = nil
         if unit and (unit.current_health or 0) > 0 then
             unit.current_ap = get_human_new_turn_ap_refresh(unit)
         else
             unit.current_ap = 0
-            unit.is_moving = false
-            unit.move_path = nil
-            unit.move_path_index = 0
         end
         clear_counter_shadow_proxy(unit)
         unit.is_selected = false
@@ -21369,10 +21331,41 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         end
 
         if unit.is_moving then
+            local stale_move_state = false
+            if not unit.move_path or type(unit.move_path) ~= "table" or #unit.move_path < 2 then
+                stale_move_state = true
+            else
+                local idx = tonumber(unit.move_path_index or 0) or 0
+                if idx <= 0 or idx > #unit.move_path then
+                    stale_move_state = true
+                end
+            end
+            if stale_move_state then
+                -- Safety-net: recover from stuck movement flags so unit actions do not soft-lock.
+                unit.is_moving = false
+                unit.move_path = nil
+                unit.move_path_index = 0
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
+                unit.micro_target_x = nil
+                unit.micro_target_y = nil
+                unit.micro_move_kind = nil
+                unit.vertical_prep_done_for_index = nil
+                unit.entry_slot_for_index = nil
+                unit.entry_slot_index = nil
+                unit.last_completed_step_vertical = false
+                unit.shadow_motion_offset = nil
+                unit.counter_move_total_dist = nil
+            end
+        end
+        if unit.is_moving then
             print(unit.display_name .. " is already moving.")
             return true
         end
-        if unit.mp_move_command_pending == true then
+        local is_non_host_client = self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        if is_non_host_client and unit.mp_move_command_pending == true then
             print(unit.display_name .. " move is awaiting host confirmation.")
             return true
         end
@@ -21435,7 +21428,9 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     destination_cell_id = clicked_cell_id,
                     destination_slot_index = destination_slot_index or destination_slot_requested
                 }, active_player_id)
-                unit.mp_move_command_pending = true
+                if is_non_host_client then
+                    unit.mp_move_command_pending = true
+                end
             else
                 begin_human_path_move(self, path, clicked_cell_id, destination_slot_index or destination_slot_requested)
             end

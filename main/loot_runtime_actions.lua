@@ -4209,12 +4209,25 @@ function M.extend(runtime, ctx)
         if not cell or not turret_obj then
             return false
         end
-        if send_mp_resource_command(self, "pickup_turret", {
-            unit_id = unit.id,
-            cell_id = cell.idNumber,
-            world_x = world_x,
-            world_y = world_y
-        }) then
+        if ctx.mp_is_enabled and ctx.mp_is_enabled(self) then
+            if ctx.mp_send_command then
+                local payload = {
+                    unit_id = unit.id,
+                    cell_id = cell.idNumber,
+                    world_x = world_x,
+                    world_y = world_y
+                }
+                if ctx.mp_get_turn_id then
+                    payload.turn_id = ctx.mp_get_turn_id(self)
+                end
+                local sender_player_id = nil
+                if ctx.mp_get_active_player_id then
+                    sender_player_id = ctx.mp_get_active_player_id(self)
+                end
+                ctx.mp_send_command(self, "pickup_turret", payload, sender_player_id)
+            end
+            -- In multiplayer, turret pickup must always flow through host command handling.
+            -- Do not fallback to local mutation here; that creates ghost turrets on peers.
             return true
         end
         return runtime.try_pickup_world_turret_by_ids(self, unit.id, cell.idNumber, world_x, world_y)

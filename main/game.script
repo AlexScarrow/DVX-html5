@@ -13998,6 +13998,36 @@ multiplayer_transport_emit_event = function(self, event_type, payload)
     return evt
 end
 
+multiplayer_broadcast_turn_state_heartbeat_now = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return
+    end
+    if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        return
+    end
+    if self.realtime_rules_enabled == true then
+        return
+    end
+    local heartbeat_buckets = multiplayer_compute_turn_checksum_buckets(self)
+    multiplayer_transport_broadcast_event(self, "turn_state_heartbeat", {
+        turn_id = self.mp_state.turn_id or 1,
+        alien_activity_active = self.alien_turn_active
+            or self.pending_spitter_attack_phase
+            or self.pending_melee_attack_phase
+            or any_alien_is_moving(self)
+            or any_civilian_is_moving(self),
+        checksum = multiplayer_compute_turn_checksum(self),
+        checksum_units = heartbeat_buckets.units,
+        checksum_actors = heartbeat_buckets.actors,
+        checksum_world = heartbeat_buckets.world,
+        checksum_items = heartbeat_buckets.items,
+        unit_digest = multiplayer_build_unit_state_digest(self),
+        actor_digest = multiplayer_build_actor_state_digest(self),
+        world_digest = multiplayer_build_world_state_digest(self),
+        item_digest = multiplayer_build_item_state_digest(self)
+    })
+end
+
 multiplayer_sync_trace = function(self, tag, details)
     if MP_SYNC_TRACE_ENABLED ~= true then
         return
@@ -14489,7 +14519,8 @@ multiplayer_build_world_state_digest = function(self)
                 id = tonumber(cell_id or 0) or 0,
                 isPowered = cell.isPowered == true,
                 lightValue = tonumber(cell.lightValue or 0) or 0,
-                doors = {}
+                doors = {},
+                turrets = {}
             }
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
@@ -14501,6 +14532,18 @@ multiplayer_build_world_state_digest = function(self)
                         isFixed = obj.isFixed == true,
                         isWelded = obj.isWelded == true,
                         door_hp = tonumber(obj.door_hp or 0) or 0
+                    }
+                elseif obj and obj.name == hash("gun_turret") then
+                    row.turrets[tostring(slot_idx)] = {
+                        slot = slot_idx,
+                        objectId = tonumber(obj.objectId or 0) or 0,
+                        isFixed = obj.isFixed == true,
+                        isWelded = obj.isWelded == true,
+                        offsetX = tonumber(obj.offsetX or 0) or 0,
+                        offsetY = tonumber(obj.offsetY or 0) or 0,
+                        hitW = tonumber(obj.hitW or 48) or 48,
+                        hitH = tonumber(obj.hitH or 48) or 48,
+                        turretArmingTurns = tonumber(obj.turretArmingTurns or 0) or 0
                     }
                 end
             end
@@ -14531,6 +14574,7 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
                 applied_any = true
             end
             local host_doors = type(row.doors) == "table" and row.doors or {}
+            local host_turrets = type(row.turrets) == "table" and row.turrets or {}
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
                 local door_state = host_doors[slot_idx] or host_doors[tostring(slot_idx)]
@@ -14574,11 +14618,66 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
                     reset_runtime_object_slot_to_empty(obj)
                     applied_any = true
                 end
+                local turret_state = host_turrets[slot_idx] or host_turrets[tostring(slot_idx)]
+                if type(turret_state) == "table" then
+                    if obj then
+                        if obj.name ~= hash("gun_turret") then
+                            obj.name = hash("gun_turret")
+                            applied_any = true
+                        end
+                        local turret_object_id = tonumber(turret_state.objectId or obj.objectId or 0) or 0
+                        if tonumber(obj.objectId or 0) ~= turret_object_id then
+                            obj.objectId = turret_object_id
+                            applied_any = true
+                        end
+                        local turret_fixed = turret_state.isFixed == true
+                        local turret_welded = turret_state.isWelded == true
+                        if obj.isFixed ~= turret_fixed then
+                            obj.isFixed = turret_fixed
+                            applied_any = true
+                        end
+                        if obj.isWelded ~= turret_welded then
+                            obj.isWelded = turret_welded
+                            applied_any = true
+                        end
+                        local offset_x = tonumber(turret_state.offsetX or obj.offsetX or 0) or 0
+                        local offset_y = tonumber(turret_state.offsetY or obj.offsetY or 0) or 0
+                        if tonumber(obj.offsetX or 0) ~= offset_x then
+                            obj.offsetX = offset_x
+                            applied_any = true
+                        end
+                        if tonumber(obj.offsetY or 0) ~= offset_y then
+                            obj.offsetY = offset_y
+                            applied_any = true
+                        end
+                        local hit_w = tonumber(turret_state.hitW or obj.hitW or 48) or 48
+                        local hit_h = tonumber(turret_state.hitH or obj.hitH or 48) or 48
+                        if tonumber(obj.hitW or 0) ~= hit_w then
+                            obj.hitW = hit_w
+                            applied_any = true
+                        end
+                        if tonumber(obj.hitH or 0) ~= hit_h then
+                            obj.hitH = hit_h
+                            applied_any = true
+                        end
+                        local arming_turns = tonumber(turret_state.turretArmingTurns or obj.turretArmingTurns or 0) or 0
+                        if tonumber(obj.turretArmingTurns or 0) ~= arming_turns then
+                            obj.turretArmingTurns = arming_turns
+                            applied_any = true
+                        end
+                    end
+                elseif obj and obj.name == hash("gun_turret") then
+                    reset_runtime_object_slot_to_empty(obj)
+                    applied_any = true
+                end
             end
         end
     end
     if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
+        LOOT_RUNTIME.refresh_turret_markers(self)
     end
     return applied_any
 end
@@ -14795,18 +14894,35 @@ multiplayer_compute_turn_checksum_buckets = function(self)
                 tonumber(cell.lightValue or 0) or 0
             )
             local door_rows = {}
-            for _, obj in ipairs(cell.objects or {}) do
+            local turret_rows = {}
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
                 if obj and obj.name == hash("door") then
                     door_rows[#door_rows + 1] = string.format(
-                        "%d|%d",
+                        "%d|%d|%d",
+                        slot_idx,
                         tonumber(obj.objectId or 0) or 0,
                         obj.isOpen == true and 1 or 0
+                    )
+                elseif obj and obj.name == hash("gun_turret") then
+                    turret_rows[#turret_rows + 1] = string.format(
+                        "%d|%d|%d|%d|%d|%d",
+                        slot_idx,
+                        tonumber(obj.objectId or 0) or 0,
+                        obj.isFixed == true and 1 or 0,
+                        obj.isWelded == true and 1 or 0,
+                        tonumber(obj.offsetX or 0) or 0,
+                        tonumber(obj.offsetY or 0) or 0
                     )
                 end
             end
             table.sort(door_rows)
             for _, row in ipairs(door_rows) do
                 world_push("d", cell_id, row)
+            end
+            table.sort(turret_rows)
+            for _, row in ipairs(turret_rows) do
+                world_push("t", cell_id, row)
             end
         end
     end
@@ -14923,18 +15039,35 @@ multiplayer_compute_turn_checksum = function(self)
                 tonumber(cell.lightValue or 0) or 0
             )
             local door_rows = {}
-            for _, obj in ipairs(cell.objects or {}) do
+            local turret_rows = {}
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
                 if obj and obj.name == hash("door") then
                     door_rows[#door_rows + 1] = string.format(
-                        "%d|%d",
+                        "%d|%d|%d",
+                        slot_idx,
                         tonumber(obj.objectId or 0) or 0,
                         obj.isOpen == true and 1 or 0
+                    )
+                elseif obj and obj.name == hash("gun_turret") then
+                    turret_rows[#turret_rows + 1] = string.format(
+                        "%d|%d|%d|%d|%d|%d",
+                        slot_idx,
+                        tonumber(obj.objectId or 0) or 0,
+                        obj.isFixed == true and 1 or 0,
+                        obj.isWelded == true and 1 or 0,
+                        tonumber(obj.offsetX or 0) or 0,
+                        tonumber(obj.offsetY or 0) or 0
                     )
                 end
             end
             table.sort(door_rows)
             for _, row in ipairs(door_rows) do
                 push("d", cell_id, row)
+            end
+            table.sort(turret_rows)
+            for _, row in ipairs(turret_rows) do
+                push("t", cell_id, row)
             end
         end
     end
@@ -15663,11 +15796,27 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "pickup_obstacle_applied", {
+        if not multiplayer_apply_pickup_obstacle_event(self, {
             unit_id = unit_id,
             cell_id = cell_id,
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y)
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_obstacle",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_obstacle_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            world_x = tonumber(payload.world_x),
+            world_y = tonumber(payload.world_y),
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15698,9 +15847,23 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "pickup_corpse_applied", {
+        if not multiplayer_apply_pickup_corpse_event(self, {
             unit_id = unit_id,
             corpse_ref = tostring(corpse_ref)
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_corpse",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_corpse_applied", {
+            unit_id = unit_id,
+            corpse_ref = tostring(corpse_ref),
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15732,11 +15895,65 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "pickup_turret_applied", {
+        local pre_turret_slots = {}
+        do
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
+                if obj and obj.name == hash("gun_turret") then
+                    pre_turret_slots[slot_idx] = {
+                        had_turret = true,
+                        object_id = tonumber(obj.objectId or 0) or 0
+                    }
+                else
+                    pre_turret_slots[slot_idx] = {
+                        had_turret = false,
+                        object_id = 0
+                    }
+                end
+            end
+        end
+        if not multiplayer_apply_pickup_turret_event(self, {
             unit_id = unit_id,
             cell_id = cell_id,
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y)
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "pickup_turret",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        local turret_slot_idx = nil
+        local turret_object_id = nil
+        do
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
+                local pre = pre_turret_slots[slot_idx] or {}
+                local still_turret = (obj and obj.name == hash("gun_turret")) or false
+                if pre.had_turret == true and not still_turret then
+                    turret_slot_idx = slot_idx
+                    turret_object_id = tonumber(pre.object_id or 0) or 0
+                    break
+                end
+            end
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "pickup_turret_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            world_x = tonumber(payload.world_x),
+            world_y = tonumber(payload.world_y),
+            turret_slot_idx = turret_slot_idx,
+            turret_object_id = turret_object_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
+        }))
+        table.insert(events, multiplayer_transport_emit_event(self, "turret_removed_fx", {
+            cell_id = cell_id,
+            turret_slot_idx = turret_slot_idx,
+            turret_object_id = turret_object_id
         }))
         return events
     end
@@ -15769,10 +15986,25 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "workshop_select_applied", {
+        if not multiplayer_apply_workshop_select_event(self, {
             unit_id = unit_id,
             cell_id = cell_id,
             slot_idx = slot_idx
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_select",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "workshop_select_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            slot_idx = slot_idx,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15805,9 +16037,23 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "supply_loader_interact_applied", {
+        if not multiplayer_apply_supply_loader_interact_event(self, {
             unit_id = unit_id,
             cell_id = cell_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "supply_loader_interact",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "supply_loader_interact_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15840,9 +16086,23 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "nav_computer_interact_applied", {
+        if not multiplayer_apply_nav_computer_interact_event(self, {
             unit_id = unit_id,
             cell_id = cell_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "nav_computer_interact",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "nav_computer_interact_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -15920,9 +16180,23 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "retrieve_world_item_applied", {
+        if not multiplayer_apply_retrieve_world_item_event(self, {
             unit_id = unit_id,
             world_item_id = world_item_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "retrieve_world_item",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "retrieve_world_item_applied", {
+            unit_id = unit_id,
+            world_item_id = world_item_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -16030,10 +16304,25 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "scavenge_crate_applied", {
+        if not multiplayer_apply_scavenge_crate_event(self, {
             unit_id = unit_id,
             cell_id = cell_id,
             crate_object_id = crate_obj.objectId or crate_object_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "scavenge_crate",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "scavenge_crate_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            crate_object_id = crate_obj.objectId or crate_object_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
         }))
         return events
     end
@@ -16888,7 +17177,8 @@ multiplayer_transport_on_event = function(self, event)
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=resource_drag_applied")
         local payload = event.payload or {}
-        local should_apply_local = payload.host_applied ~= true
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
         local ok = true
         if should_apply_local then
             self.mp_state.applying_remote_event = true
@@ -16907,6 +17197,61 @@ multiplayer_transport_on_event = function(self, event)
         else
             multiplayer_sync_trace(self, "apply_event_end", "type=resource_drag_applied ok=true")
         end
+        multiplayer_broadcast_turn_state_heartbeat_now(self)
+        return
+    end
+    if event.type == "turret_removed_fx" then
+        local payload = event.payload or {}
+        local cell_id = tonumber(payload.cell_id)
+        if cell_id then
+            local cell = self.world_grid and self.world_grid[cell_id] or nil
+            if cell then
+                local removed_any = false
+                local slot_idx = tonumber(payload.turret_slot_idx)
+                local turret_object_id = tonumber(payload.turret_object_id)
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                if slot_idx and slot_idx >= 1 and slot_idx <= 3 then
+                    local obj = objects[slot_idx]
+                    if obj and obj.name == hash("gun_turret") then
+                        reset_runtime_object_slot_to_empty(obj)
+                        removed_any = true
+                    end
+                end
+                if (not removed_any) and turret_object_id and turret_object_id > 0 then
+                    for _, obj in ipairs(objects) do
+                        if obj and obj.name == hash("gun_turret") and (tonumber(obj.objectId or 0) or 0) == turret_object_id then
+                            reset_runtime_object_slot_to_empty(obj)
+                            removed_any = true
+                            break
+                        end
+                    end
+                end
+                if not removed_any then
+                    for _, obj in ipairs(objects) do
+                        if obj and obj.name == hash("gun_turret") then
+                            reset_runtime_object_slot_to_empty(obj)
+                            removed_any = true
+                        end
+                    end
+                end
+                if removed_any then
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
+                        LOOT_RUNTIME.refresh_turret_markers(self)
+                    end
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                        LOOT_RUNTIME.refresh_fix_markers(self)
+                    end
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+                        LOOT_RUNTIME.refresh_world_item_visuals(self)
+                    end
+                end
+            end
+        end
+        -- Always rebuild turret visuals for this event to clear any stale marker GOs,
+        -- even when authoritative state was already updated earlier.
+        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
+            LOOT_RUNTIME.refresh_turret_markers(self)
+        end
         return
     end
     if event.type == "pickup_obstacle_applied" then
@@ -16914,8 +17259,22 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_pickup_obstacle_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_pickup_obstacle_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | pickup_obstacle_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -16924,8 +17283,22 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_pickup_corpse_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_pickup_corpse_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | pickup_corpse_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -16935,12 +17308,99 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=pickup_turret_applied")
-        if not multiplayer_apply_pickup_turret_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_pickup_turret_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | pickup_turret_applied ignored.")
             multiplayer_sync_trace(self, "apply_event_end", "type=pickup_turret_applied ok=false")
         else
             multiplayer_sync_trace(self, "apply_event_end", "type=pickup_turret_applied ok=true")
         end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        local turret_cell_id = tonumber(payload.cell_id)
+        local turret_slot_idx = tonumber(payload.turret_slot_idx)
+        local turret_object_id = tonumber(payload.turret_object_id)
+        if turret_cell_id and turret_slot_idx then
+            local cell = self.world_grid and self.world_grid[turret_cell_id] or nil
+            if cell then
+                local turret_obj = nil
+                if turret_slot_idx == 1 then turret_obj = cell.object1 end
+                if turret_slot_idx == 2 then turret_obj = cell.object2 end
+                if turret_slot_idx == 3 then turret_obj = cell.object3 end
+                if turret_obj and turret_obj.name == hash("gun_turret") then
+                    reset_runtime_object_slot_to_empty(turret_obj)
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
+                        LOOT_RUNTIME.refresh_turret_markers(self)
+                    end
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                        LOOT_RUNTIME.refresh_fix_markers(self)
+                    end
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+                        LOOT_RUNTIME.refresh_world_item_visuals(self)
+                    end
+                    reconciled = true
+                end
+            end
+        end
+        if turret_cell_id and (not turret_slot_idx) and turret_object_id and turret_object_id > 0 then
+            local cell = self.world_grid and self.world_grid[turret_cell_id] or nil
+            if cell then
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(objects) do
+                    if obj and obj.name == hash("gun_turret") and (tonumber(obj.objectId or 0) or 0) == turret_object_id then
+                        reset_runtime_object_slot_to_empty(obj)
+                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
+                            LOOT_RUNTIME.refresh_turret_markers(self)
+                        end
+                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                            LOOT_RUNTIME.refresh_fix_markers(self)
+                        end
+                        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+                            LOOT_RUNTIME.refresh_world_item_visuals(self)
+                        end
+                        reconciled = true
+                        break
+                    end
+                end
+            end
+        end
+        if turret_cell_id then
+            local cell = self.world_grid and self.world_grid[turret_cell_id] or nil
+            if cell then
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                local removed_any = false
+                for _, obj in ipairs(objects) do
+                    if obj and obj.name == hash("gun_turret") then
+                        reset_runtime_object_slot_to_empty(obj)
+                        removed_any = true
+                    end
+                end
+                if removed_any then
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
+                        LOOT_RUNTIME.refresh_turret_markers(self)
+                    end
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                        LOOT_RUNTIME.refresh_fix_markers(self)
+                    end
+                    if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+                        LOOT_RUNTIME.refresh_world_item_visuals(self)
+                    end
+                    reconciled = true
+                end
+            end
+        end
+        if (not applied_ok) and (not reconciled) then
+            return
+        end
+        multiplayer_broadcast_turn_state_heartbeat_now(self)
         return
     end
     if event.type == "workshop_select_applied" then
@@ -16948,8 +17408,22 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_workshop_select_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_workshop_select_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | workshop_select_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -16958,8 +17432,22 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_supply_loader_interact_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_supply_loader_interact_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | supply_loader_interact_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -16968,8 +17456,22 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_nav_computer_interact_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_nav_computer_interact_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | nav_computer_interact_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -17004,8 +17506,22 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_queue_pending_event(self, event)
             return
         end
-        if not multiplayer_apply_retrieve_world_item_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_retrieve_world_item_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | retrieve_world_item_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
         end
         return
     end
@@ -17029,12 +17545,27 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=scavenge_crate_applied")
-        if not multiplayer_apply_scavenge_crate_event(self, event.payload or {}) then
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_scavenge_crate_event(self, payload)
+        end
+        if not applied_ok then
             print("MP COMMAND | scavenge_crate_applied ignored.")
             multiplayer_sync_trace(self, "apply_event_end", "type=scavenge_crate_applied ok=false")
         else
             multiplayer_sync_trace(self, "apply_event_end", "type=scavenge_crate_applied ok=true")
         end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
+        end
+        multiplayer_broadcast_turn_state_heartbeat_now(self)
         return
     end
     if event.type == "command_rejected" then
@@ -19934,7 +20465,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
                     local has_object = obj_state.has_object == true
                     local is_door = obj_state.is_door == true
                     if not has_object then
-                        if obj.name == hash("door") then
+                        if obj.name and obj.name ~= hash("empty") then
                             reset_runtime_object_slot_to_empty(obj)
                         end
                     elseif is_door then

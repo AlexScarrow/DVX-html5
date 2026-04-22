@@ -470,6 +470,7 @@ MP_LOBBY_PIN_ENTER_HIT_W = 260
 MP_LOBBY_PIN_ENTER_HIT_H = 72
 MP_LOBBY_SLOTS_PER_PAGE = 8
 MP_LOBBY_MAX_PIN_LEN = 4
+MP_LOBBY_SCREEN_OFFSET_Y = 100
 MP_LOBBY_PIN_MODAL_Z = FLOW_UI_BUTTON_Z + 0.01
 MP_LOBBY_PIN_KEYS_Z = FLOW_UI_BUTTON_Z + 0.02
 MP_LOBBY_PIN_ANIM_IDS_BY_INDEX = {
@@ -483,6 +484,10 @@ MP_LOBBY_PIN_ANIM_IDS_BY_INDEX = {
     hash("pin_8"),
     hash("pin_9")
 }
+
+mp_lobby_y = function(y)
+    return (tonumber(y or 0) or 0) + (tonumber(MP_LOBBY_SCREEN_OFFSET_Y or 0) or 0)
+end
 MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
@@ -8665,6 +8670,7 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_boxes = {},
         flow_mp_lobby_cards = {},
         flow_mp_lobby_status_strips = {},
+        flow_mp_lobby_backpanel = nil,
         flow_mp_lobby_pin_keys = {},
         flow_mp_lobby_pin_modal_bg = nil,
         flow_mp_lobby_pin_display = nil,
@@ -8819,6 +8825,7 @@ local function initialize_unit_ui(self)
         self.ui.flow_mp_lobby_cards[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
         self.ui.flow_mp_lobby_status_strips[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
     end
+    self.ui.flow_mp_lobby_backpanel = create_ui_marker_sprite(hash("lobby_backpanel"), FLOW_UI_PANEL_Z + 0.001)
     for i = 1, 8 do
         self.ui.flow_mp_lobby_boxes[i] = create_ui_square(0, 0, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
     end
@@ -9002,6 +9009,9 @@ local function set_ui_hidden(self)
         for _, card_id in ipairs(self.ui.flow_mp_lobby_cards) do
             set_ui_square_transform(self, card_id, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
         end
+    end
+    if self.ui.flow_mp_lobby_backpanel then
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
     end
     if self.ui.flow_mp_lobby_status_strips then
         for _, strip_id in ipairs(self.ui.flow_mp_lobby_status_strips) do
@@ -10823,14 +10833,14 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
             set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
         end
     end
-    set_ui_square_transform(self, boxes[1], MP_LOBBY_BACK_BTN_X, MP_LOBBY_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(0.74, 0.26, 0.26, 0.96), MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H)
-    set_ui_square_transform(self, boxes[2], MP_LOBBY_CREATE_BTN_X, MP_LOBBY_CREATE_BTN_Y, MP_SETUP_UI_Z, create_tint, MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
-    set_ui_square_transform(self, boxes[3], MP_LOBBY_PAGE_LEFT_X, MP_LOBBY_PAGE_LEFT_Y, MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
-    set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, MP_LOBBY_PAGE_RIGHT_Y, MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
-    set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, MP_LOBBY_PAGE_LABEL_Y, MP_SETUP_UI_Z, vmath.vector4(0.44, 0.52, 0.66, 0.9), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
-    set_ui_square_transform(self, boxes[6], MP_LOBBY_HOST_INFO_X, MP_LOBBY_HOST_INFO_Y, MP_SETUP_UI_Z, host_info_tint, MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
-    set_ui_square_transform(self, boxes[7], MP_LOBBY_HOST_OPEN_BTN_X, MP_LOBBY_HOST_OPEN_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
-    set_ui_square_transform(self, boxes[8], MP_LOBBY_HOST_PRIVATE_BTN_X, MP_LOBBY_HOST_PRIVATE_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
+    set_ui_square_transform(self, boxes[1], MP_LOBBY_BACK_BTN_X + 10, mp_lobby_y(MP_LOBBY_BACK_BTN_Y - 25), MP_SETUP_UI_Z, vmath.vector4(0.74, 0.26, 0.26, 0.96), MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H)
+    set_ui_square_transform(self, boxes[2], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
+    set_ui_square_transform(self, boxes[3], MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
+    set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
+    set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, mp_lobby_y(MP_LOBBY_PAGE_LABEL_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
+    set_ui_square_transform(self, boxes[6], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
+    set_ui_square_transform(self, boxes[7], MP_LOBBY_HOST_OPEN_BTN_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
+    set_ui_square_transform(self, boxes[8], MP_LOBBY_HOST_PRIVATE_BTN_X, mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
 end
 
 multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_bg, open_bg, locked_bg, empty_bg)
@@ -10841,7 +10851,7 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
     for row = 1, 2 do
         for col = 1, 4 do
             local card_x = MP_LOBBY_CARD_COL_X[col]
-            local card_y = MP_LOBBY_CARD_ROW_Y[row]
+            local card_y = mp_lobby_y(MP_LOBBY_CARD_ROW_Y[row])
             local session = visible_sessions[session_index]
             local card_id = self.ui.flow_mp_lobby_cards[session_index]
             local strip_id = self.ui.flow_mp_lobby_status_strips and self.ui.flow_mp_lobby_status_strips[session_index] or nil
@@ -10850,9 +10860,9 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                 if session then
                     tint = session.is_locked and locked_bg or open_bg
                 end
-                set_ui_square_transform(self, card_id, card_x, card_y, MP_SETUP_UI_Z + 0.002, card_bg, MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
+                set_ui_square_transform(self, card_id, card_x, card_y, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
                 if strip_id then
-                    set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, tint, MP_LOBBY_CARD_W - 34, 56)
+                    set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
                 end
             end
             session_index = session_index + 1
@@ -10863,13 +10873,13 @@ end
 multiplayer_lobby_render_host_publish_buttons = function(self, host_open_tint, host_private_tint, hidden)
     if self.ui.flow_score_rows then
         if self.ui.flow_score_rows[1] then
-            set_ui_square_transform(self, self.ui.flow_score_rows[1], MP_LOBBY_HOST_OPEN_BTN_X, MP_LOBBY_HOST_OPEN_BTN_Y, FLOW_UI_BUTTON_Z, host_open_tint, MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H)
+            set_ui_square_transform(self, self.ui.flow_score_rows[1], MP_LOBBY_HOST_OPEN_BTN_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H)
         end
         if self.ui.flow_score_rows[2] then
-            set_ui_square_transform(self, self.ui.flow_score_rows[2], MP_LOBBY_HOST_PRIVATE_BTN_X, MP_LOBBY_HOST_PRIVATE_BTN_Y, FLOW_UI_BUTTON_Z, host_private_tint, MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H)
+            set_ui_square_transform(self, self.ui.flow_score_rows[2], MP_LOBBY_HOST_PRIVATE_BTN_X, mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y), FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H)
         end
         if self.ui.flow_score_rows[3] then
-            set_ui_square_transform(self, self.ui.flow_score_rows[3], MP_LOBBY_HOST_INFO_X, MP_LOBBY_HOST_INFO_Y, FLOW_UI_BUTTON_Z, hidden, MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
+            set_ui_square_transform(self, self.ui.flow_score_rows[3], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
         end
         for i = 4, #self.ui.flow_score_rows do
             set_ui_square_transform(self, self.ui.flow_score_rows[i], -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
@@ -10884,7 +10894,7 @@ multiplayer_lobby_render_pin_modal = function(self, pin_display_tint, pin_bg_tin
     end
     set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, vmath.vector4(0, 0, 0, 0), 1, 1)
     set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), 1, 1)
-    set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_modal_bg, MP_LOBBY_PIN_MODAL_X, MP_LOBBY_PIN_MODAL_Y, MP_LOBBY_PIN_MODAL_Z, vmath.vector4(1, 1, 1, 1), 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_modal_bg, MP_LOBBY_PIN_MODAL_X, mp_lobby_y(MP_LOBBY_PIN_MODAL_Y), MP_LOBBY_PIN_MODAL_Z, vmath.vector4(1, 1, 1, 1), 1, 1)
     if self.ui.flow_mp_lobby_pin_modal_bg then
         pcall(go.set, msg.url(nil, self.ui.flow_mp_lobby_pin_modal_bg, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
         pcall(go.set, msg.url(nil, self.ui.flow_mp_lobby_pin_modal_bg, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
@@ -10908,7 +10918,7 @@ multiplayer_lobby_render_pin_modal = function(self, pin_display_tint, pin_bg_tin
                     local flash_key_index = ((row - 1) * 3) + col
                     local flash_t = tonumber(lobby.pin_key_flash_timers and lobby.pin_key_flash_timers[flash_key_index] or 0) or 0
                     local key_tint = flash_t > 0 and vmath.vector4(0.24, 0.9, 0.34, 1) or pin_key_tint
-                    set_ui_square_transform(self, key_btn, MP_LOBBY_PIN_KEYPAD_COL_X[col], MP_LOBBY_PIN_KEYPAD_ROW_Y[row], MP_LOBBY_PIN_KEYS_Z, key_tint, 1, 1)
+                    set_ui_square_transform(self, key_btn, MP_LOBBY_PIN_KEYPAD_COL_X[col], mp_lobby_y(MP_LOBBY_PIN_KEYPAD_ROW_Y[row]), MP_LOBBY_PIN_KEYS_Z, key_tint, 1, 1)
                     pcall(go.set, msg.url(nil, key_btn, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
                 end
                 key_index = key_index + 1
@@ -10940,7 +10950,10 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
     elseif lobby.pin_feedback == "bad" then
         pin_display_tint = vmath.vector4(0.92, 0.24, 0.24, 0.95)
     end
-    set_ui_square_transform(self, self.ui.flow_panel, MP_LOBBY_PANEL_X, MP_LOBBY_PANEL_Y, FLOW_UI_PANEL_Z, vmath.vector4(0.06, 0.1, 0.16, 1), MP_LOBBY_PANEL_W, MP_LOBBY_PANEL_H)
+    set_ui_square_transform(self, self.ui.flow_panel, MP_LOBBY_PANEL_X, mp_lobby_y(MP_LOBBY_PANEL_Y), FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PANEL_W, MP_LOBBY_PANEL_H)
+    if self.ui.flow_mp_lobby_backpanel then
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, MP_LOBBY_PANEL_X - 21, mp_lobby_y(MP_LOBBY_PANEL_Y - 90), FLOW_UI_PANEL_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
+    end
     if self.ui.flow_mp_lobby_pin_modal_bg then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_modal_bg, -9999, -9999, MP_LOBBY_PIN_MODAL_Z, hidden, MP_LOBBY_PIN_MODAL_W, MP_LOBBY_PIN_MODAL_H)
     end
@@ -11835,7 +11848,7 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
     local page_count = multiplayer_lobby_page_count(self)
     lobby.page_index = math.max(1, math.min(page_count, tonumber(lobby.page_index or 1) or 1))
     if lobby.pin_mode ~= "" then
-        if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PIN_MODAL_X, MP_LOBBY_PIN_MODAL_Y, MP_LOBBY_PIN_MODAL_W, MP_LOBBY_PIN_MODAL_H) then
+        if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PIN_MODAL_X, mp_lobby_y(MP_LOBBY_PIN_MODAL_Y), MP_LOBBY_PIN_MODAL_W, MP_LOBBY_PIN_MODAL_H) then
             local key_labels = {
                 "1", "2", "3",
                 "4", "5", "6",
@@ -11844,7 +11857,7 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
             for row = 1, 3 do
                 for col = 1, 3 do
                     local row_label_index = ((row - 1) * 3) + col
-                    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PIN_KEYPAD_COL_X[col], MP_LOBBY_PIN_KEYPAD_ROW_Y[row], MP_LOBBY_PIN_KEY_HIT_W, MP_LOBBY_PIN_KEY_HIT_H) then
+                    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PIN_KEYPAD_COL_X[col], mp_lobby_y(MP_LOBBY_PIN_KEYPAD_ROW_Y[row]), MP_LOBBY_PIN_KEY_HIT_W, MP_LOBBY_PIN_KEY_HIT_H) then
                         local label = key_labels[row_label_index]
                         local flash_key_index = ((row - 1) * 3) + col
                         if #lobby.pin_buffer < MP_LOBBY_MAX_PIN_LEN then
@@ -11863,7 +11876,7 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
         lobby.pin_feedback_timer = 0
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_BACK_BTN_X, MP_LOBBY_BACK_BTN_Y, MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_BACK_BTN_X + 10, mp_lobby_y(MP_LOBBY_BACK_BTN_Y - 25), MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H) then
         local active_offer_id = tostring(lobby.local_active_offer_id or "")
         if active_offer_id ~= "" then
             multiplayer_lobby_cancel_session(self, active_offer_id)
@@ -11875,23 +11888,19 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
         enter_flow_state(self, FLOW_STATE_TITLE)
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_CREATE_BTN_X, MP_LOBBY_CREATE_BTN_Y, MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H) then
-        multiplayer_lobby_create_host_draft(self)
-        return true
-    end
-    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PAGE_LEFT_X, MP_LOBBY_PAGE_LEFT_Y, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H) then
         lobby.page_index = math.max(1, (tonumber(lobby.page_index or 1) or 1) - 1)
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PAGE_RIGHT_X, MP_LOBBY_PAGE_RIGHT_Y, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H) then
         lobby.page_index = math.min(page_count, (tonumber(lobby.page_index or 1) or 1) + 1)
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_HOST_OPEN_BTN_X, MP_LOBBY_HOST_OPEN_BTN_Y, MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_HOST_OPEN_BTN_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H) then
         multiplayer_lobby_create_host_draft(self)
         return multiplayer_lobby_publish_host_draft(self, "")
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_HOST_PRIVATE_BTN_X, MP_LOBBY_HOST_PRIVATE_BTN_Y, MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H) then
+    if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_HOST_PRIVATE_BTN_X, mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y), MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H) then
         multiplayer_lobby_create_host_draft(self)
         lobby.pin_mode = "host_publish_private"
         lobby.pin_buffer = ""
@@ -11904,7 +11913,7 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
     for row = 1, 2 do
         for col = 1, 4 do
             local card_x = MP_LOBBY_CARD_COL_X[col]
-            local card_y = MP_LOBBY_CARD_ROW_Y[row]
+            local card_y = mp_lobby_y(MP_LOBBY_CARD_ROW_Y[row])
             if is_point_in_screen_rect(input_x, input_y, card_x, card_y, MP_LOBBY_CARD_W, MP_LOBBY_CARD_H) then
                 local session = visible_sessions[idx]
                 if not session then

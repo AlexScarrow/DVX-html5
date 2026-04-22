@@ -626,6 +626,9 @@ images {
 images {
   image: "/assets/images/pin_panel.png"
 }
+images {
+  image: "/assets/images/lobby_backpanel.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

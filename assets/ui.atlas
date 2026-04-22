@@ -5,6 +5,9 @@ images {
   image: "/assets/images/DVX_sheen.png"
 }
 images {
+  image: "/assets/images/lobby_backpanel.png"
+}
+images {
   image: "/assets/images/human_projectile_1.png"
 }
 images {

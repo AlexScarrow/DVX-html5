@@ -4233,7 +4233,7 @@ function M.extend(runtime, ctx)
         return runtime.try_pickup_world_turret_by_ids(self, unit.id, cell.idNumber, world_x, world_y)
     end
 
-    runtime.try_pickup_obstacle_by_ids = function(self, unit_id, cell_id, world_x, world_y)
+    runtime.try_pickup_obstacle_by_ids = function(self, unit_id, cell_id, world_x, world_y, obstacle_object_id, obstacle_slot_idx)
         local unit = self.squad_units and self.squad_units[unit_id] or nil
         local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
         if not unit or not cell then
@@ -4258,8 +4258,29 @@ function M.extend(runtime, ctx)
         local wx = tonumber(world_x)
         local wy = tonumber(world_y)
         local obstacle_slot = nil
+        local target_object_id = tonumber(obstacle_object_id or 0) or 0
+        if target_object_id > 0 then
+            local slots = { cell.object1, cell.object2, cell.object3 }
+            for _, slot in ipairs(slots) do
+                if slot
+                    and slot.name == hash("obstacle")
+                    and (tonumber(slot.objectId or 0) or 0) == target_object_id
+                then
+                    obstacle_slot = slot
+                    break
+                end
+            end
+        end
+        local target_slot_idx = tonumber(obstacle_slot_idx or 0) or 0
+        if (not obstacle_slot) and target_slot_idx >= 1 and target_slot_idx <= 3 then
+            local slots = { cell.object1, cell.object2, cell.object3 }
+            local slot = slots[target_slot_idx]
+            if slot and slot.name == hash("obstacle") then
+                obstacle_slot = slot
+            end
+        end
         if wx and wy then
-            obstacle_slot = find_clicked_obstacle_slot(cell, wx, wy)
+            obstacle_slot = obstacle_slot or find_clicked_obstacle_slot(cell, wx, wy)
         end
         if not obstacle_slot then
             obstacle_slot = find_any_obstacle_slot(cell)
@@ -4344,11 +4365,21 @@ function M.extend(runtime, ctx)
             unit_id = unit.id,
             cell_id = clicked_cell_id,
             world_x = world_x,
-            world_y = world_y
+            world_y = world_y,
+            obstacle_object_id = tonumber(obstacle_slot.objectId or 0) or 0,
+            obstacle_slot_idx = tonumber(get_cell_object_slot_index(cell, obstacle_slot) or 0) or 0
         }) then
             return true
         end
-        return runtime.try_pickup_obstacle_by_ids(self, unit.id, clicked_cell_id, world_x, world_y)
+        return runtime.try_pickup_obstacle_by_ids(
+            self,
+            unit.id,
+            clicked_cell_id,
+            world_x,
+            world_y,
+            tonumber(obstacle_slot.objectId or 0) or 0,
+            tonumber(get_cell_object_slot_index(cell, obstacle_slot) or 0) or 0
+        )
     end
 
     local function is_point_in_object_hitbox(cell, obj, world_x, world_y)
@@ -4877,9 +4908,13 @@ function M.extend(runtime, ctx)
             local in_buff_drop_zone = runtime.is_point_in_buff_drop_zone and runtime.is_point_in_buff_drop_zone(screen_x, screen_y) or false
             if in_buff_drop_zone and runtime.is_buff_item and runtime.is_buff_item(source_item) then
                 local buff_slot_target = runtime.get_buff_slot_for_item and runtime.get_buff_slot_for_item(source_item) or nil
+                local existing_item = source_unit.equipment and source_unit.equipment[buff_slot_target] or nil
+                if existing_item == "_" or existing_item == "" then
+                    existing_item = nil
+                end
                 if not buff_slot_target then
                     print("Invalid buff definition (missing slot).")
-                elseif (source_unit.equipment and source_unit.equipment[buff_slot_target]) ~= nil then
+                elseif existing_item ~= nil then
                     print("Slot already occupied.")
                 else
                     if not try_consume_current_drag_ap(nil) then
@@ -4898,6 +4933,50 @@ function M.extend(runtime, ctx)
             if consumed then
                 self.drag_resource = { active = false }
                 return true
+            end
+            local portrait_target_unit_id = ctx.get_human_portrait_unit_id_at
+                and ctx.get_human_portrait_unit_id_at(self, screen_x, screen_y)
+                or nil
+            if portrait_target_unit_id and runtime.is_buff_item and runtime.is_buff_item(source_item) then
+                local portrait_target = self.squad_units and self.squad_units[portrait_target_unit_id] or nil
+                if portrait_target
+                    and (portrait_target.current_health or 0) > 0
+                then
+                    local buff_slot_target = runtime.get_buff_slot_for_item and runtime.get_buff_slot_for_item(source_item) or nil
+                    portrait_target.equipment = portrait_target.equipment or {}
+                    local existing_item = portrait_target.equipment[buff_slot_target]
+                    if existing_item == "_" or existing_item == "" then
+                        existing_item = nil
+                    end
+                    if not buff_slot_target then
+                        print("Invalid buff definition (missing slot).")
+                        flash_invalid_drag_units(source_unit, portrait_target)
+                    elseif existing_item ~= nil then
+                        print("Slot already occupied.")
+                        flash_invalid_drag_units(source_unit, portrait_target)
+                    else
+                        if not try_consume_current_drag_ap(portrait_target) then
+                            self.drag_resource = { active = false }
+                            return true
+                        end
+                        if remove_source_item() then
+                            portrait_target.equipment[buff_slot_target] = source_item
+                            consumed = true
+                            emit_buff_info_feedback(self, portrait_target, source_item)
+                            print(string.format(
+                                "%s equipped %s on %s via portrait drop. (AP -%d)",
+                                portrait_target.display_name,
+                                source_item,
+                                buff_slot_target,
+                                get_drag_ap_cost()
+                            ))
+                        end
+                    end
+                end
+                if consumed then
+                    self.drag_resource = { active = false }
+                    return true
+                end
             end
             local bar_target = runtime.get_bar_drop_target(screen_x, screen_y)
             if bar_target then

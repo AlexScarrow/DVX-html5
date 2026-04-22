@@ -13798,6 +13798,20 @@ try_select_human_portrait = function(self, screen_x, screen_y)
     return false
 end
 
+get_human_portrait_unit_id_at = function(self, screen_x, screen_y)
+    if not (self and self.squad_units and self.ui and self.ui.human_portrait_icons) then
+        return nil
+    end
+    local visible_ids = self.human_portrait_visible_unit_ids or get_visible_human_portrait_unit_ids(self)
+    for i, unit_id in ipairs(visible_ids) do
+        local cx, cy = get_human_portrait_screen_pos(i)
+        if is_point_in_screen_rect(screen_x, screen_y, cx, cy, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H) then
+            return unit_id
+        end
+    end
+    return nil
+end
+
 function is_point_in_close_ui_button(screen_x, screen_y)
     local button_x, button_y = get_ui_panel_close_button_center()
     local half = 14
@@ -14520,7 +14534,8 @@ multiplayer_build_world_state_digest = function(self)
                 isPowered = cell.isPowered == true,
                 lightValue = tonumber(cell.lightValue or 0) or 0,
                 doors = {},
-                turrets = {}
+                turrets = {},
+                obstacles = {}
             }
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
@@ -14544,6 +14559,19 @@ multiplayer_build_world_state_digest = function(self)
                         hitW = tonumber(obj.hitW or 48) or 48,
                         hitH = tonumber(obj.hitH or 48) or 48,
                         turretArmingTurns = tonumber(obj.turretArmingTurns or 0) or 0
+                    }
+                elseif obj and obj.name == hash("obstacle") then
+                    row.obstacles[tostring(slot_idx)] = {
+                        slot = slot_idx,
+                        objectId = tonumber(obj.objectId or 0) or 0,
+                        isFixed = obj.isFixed == true,
+                        isWelded = obj.isWelded == true,
+                        offsetX = tonumber(obj.offsetX or 0) or 0,
+                        offsetY = tonumber(obj.offsetY or 0) or 0,
+                        hitW = tonumber(obj.hitW or 24) or 24,
+                        hitH = tonumber(obj.hitH or 24) or 24,
+                        obstacleCount = tonumber(obj.obstacleCount or obj.stackCount or 1) or 1,
+                        stackCount = tonumber(obj.stackCount or obj.obstacleCount or 1) or 1
                     }
                 end
             end
@@ -14575,6 +14603,7 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
             end
             local host_doors = type(row.doors) == "table" and row.doors or {}
             local host_turrets = type(row.turrets) == "table" and row.turrets or {}
+            local host_obstacles = type(row.obstacles) == "table" and row.obstacles or {}
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
                 local door_state = host_doors[slot_idx] or host_doors[tostring(slot_idx)]
@@ -14670,6 +14699,62 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
                     reset_runtime_object_slot_to_empty(obj)
                     applied_any = true
                 end
+                local obstacle_state = host_obstacles[slot_idx] or host_obstacles[tostring(slot_idx)]
+                if type(obstacle_state) == "table" then
+                    if obj then
+                        if obj.name ~= hash("obstacle") then
+                            obj.name = hash("obstacle")
+                            applied_any = true
+                        end
+                        local obstacle_object_id = tonumber(obstacle_state.objectId or obj.objectId or 0) or 0
+                        if tonumber(obj.objectId or 0) ~= obstacle_object_id then
+                            obj.objectId = obstacle_object_id
+                            applied_any = true
+                        end
+                        local obstacle_fixed = obstacle_state.isFixed == true
+                        local obstacle_welded = obstacle_state.isWelded == true
+                        if obj.isFixed ~= obstacle_fixed then
+                            obj.isFixed = obstacle_fixed
+                            applied_any = true
+                        end
+                        if obj.isWelded ~= obstacle_welded then
+                            obj.isWelded = obstacle_welded
+                            applied_any = true
+                        end
+                        local offset_x = tonumber(obstacle_state.offsetX or obj.offsetX or 0) or 0
+                        local offset_y = tonumber(obstacle_state.offsetY or obj.offsetY or 0) or 0
+                        if tonumber(obj.offsetX or 0) ~= offset_x then
+                            obj.offsetX = offset_x
+                            applied_any = true
+                        end
+                        if tonumber(obj.offsetY or 0) ~= offset_y then
+                            obj.offsetY = offset_y
+                            applied_any = true
+                        end
+                        local hit_w = tonumber(obstacle_state.hitW or obj.hitW or 24) or 24
+                        local hit_h = tonumber(obstacle_state.hitH or obj.hitH or 24) or 24
+                        if tonumber(obj.hitW or 0) ~= hit_w then
+                            obj.hitW = hit_w
+                            applied_any = true
+                        end
+                        if tonumber(obj.hitH or 0) ~= hit_h then
+                            obj.hitH = hit_h
+                            applied_any = true
+                        end
+                        local stack_count = tonumber(obstacle_state.stackCount or obstacle_state.obstacleCount or obj.stackCount or obj.obstacleCount or 1) or 1
+                        if tonumber(obj.stackCount or 0) ~= stack_count then
+                            obj.stackCount = stack_count
+                            applied_any = true
+                        end
+                        if tonumber(obj.obstacleCount or 0) ~= stack_count then
+                            obj.obstacleCount = stack_count
+                            applied_any = true
+                        end
+                    end
+                elseif obj and obj.name == hash("obstacle") then
+                    reset_runtime_object_slot_to_empty(obj)
+                    applied_any = true
+                end
             end
         end
     end
@@ -14678,6 +14763,12 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
     end
     if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_turret_markers then
         LOOT_RUNTIME.refresh_turret_markers(self)
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+        LOOT_RUNTIME.refresh_fix_markers(self)
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+        LOOT_RUNTIME.refresh_world_item_visuals(self)
     end
     return applied_any
 end
@@ -14895,6 +14986,7 @@ multiplayer_compute_turn_checksum_buckets = function(self)
             )
             local door_rows = {}
             local turret_rows = {}
+            local obstacle_rows = {}
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
                 if obj and obj.name == hash("door") then
@@ -14914,6 +15006,17 @@ multiplayer_compute_turn_checksum_buckets = function(self)
                         tonumber(obj.offsetX or 0) or 0,
                         tonumber(obj.offsetY or 0) or 0
                     )
+                elseif obj and obj.name == hash("obstacle") then
+                    obstacle_rows[#obstacle_rows + 1] = string.format(
+                        "%d|%d|%d|%d|%d|%d|%d",
+                        slot_idx,
+                        tonumber(obj.objectId or 0) or 0,
+                        tonumber(obj.stackCount or obj.obstacleCount or 1) or 1,
+                        obj.isFixed == true and 1 or 0,
+                        obj.isWelded == true and 1 or 0,
+                        tonumber(obj.offsetX or 0) or 0,
+                        tonumber(obj.offsetY or 0) or 0
+                    )
                 end
             end
             table.sort(door_rows)
@@ -14923,6 +15026,10 @@ multiplayer_compute_turn_checksum_buckets = function(self)
             table.sort(turret_rows)
             for _, row in ipairs(turret_rows) do
                 world_push("t", cell_id, row)
+            end
+            table.sort(obstacle_rows)
+            for _, row in ipairs(obstacle_rows) do
+                world_push("o", cell_id, row)
             end
         end
     end
@@ -15040,6 +15147,7 @@ multiplayer_compute_turn_checksum = function(self)
             )
             local door_rows = {}
             local turret_rows = {}
+            local obstacle_rows = {}
             local objects = { cell.object1, cell.object2, cell.object3 }
             for slot_idx, obj in ipairs(objects) do
                 if obj and obj.name == hash("door") then
@@ -15059,6 +15167,17 @@ multiplayer_compute_turn_checksum = function(self)
                         tonumber(obj.offsetX or 0) or 0,
                         tonumber(obj.offsetY or 0) or 0
                     )
+                elseif obj and obj.name == hash("obstacle") then
+                    obstacle_rows[#obstacle_rows + 1] = string.format(
+                        "%d|%d|%d|%d|%d|%d|%d",
+                        slot_idx,
+                        tonumber(obj.objectId or 0) or 0,
+                        tonumber(obj.stackCount or obj.obstacleCount or 1) or 1,
+                        obj.isFixed == true and 1 or 0,
+                        obj.isWelded == true and 1 or 0,
+                        tonumber(obj.offsetX or 0) or 0,
+                        tonumber(obj.offsetY or 0) or 0
+                    )
                 end
             end
             table.sort(door_rows)
@@ -15068,6 +15187,10 @@ multiplayer_compute_turn_checksum = function(self)
             table.sort(turret_rows)
             for _, row in ipairs(turret_rows) do
                 push("t", cell_id, row)
+            end
+            table.sort(obstacle_rows)
+            for _, row in ipairs(obstacle_rows) do
+                push("o", cell_id, row)
             end
         end
     end
@@ -15796,11 +15919,32 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        local pre_obstacle_by_slot = {}
+        do
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
+                if obj and obj.name == hash("obstacle") then
+                    pre_obstacle_by_slot[slot_idx] = {
+                        has_obstacle = true,
+                        object_id = tonumber(obj.objectId or 0) or 0,
+                        count = tonumber(obj.stackCount or obj.obstacleCount or 1) or 1
+                    }
+                else
+                    pre_obstacle_by_slot[slot_idx] = {
+                        has_obstacle = false,
+                        object_id = 0,
+                        count = 0
+                    }
+                end
+            end
+        end
         if not multiplayer_apply_pickup_obstacle_event(self, {
             unit_id = unit_id,
             cell_id = cell_id,
             world_x = tonumber(payload.world_x),
-            world_y = tonumber(payload.world_y)
+            world_y = tonumber(payload.world_y),
+            obstacle_object_id = tonumber(payload.obstacle_object_id or 0) or 0,
+            obstacle_slot_idx = tonumber(payload.obstacle_slot_idx or 0) or 0
         }) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "pickup_obstacle",
@@ -15813,11 +15957,69 @@ multiplayer_transport_handle_command = function(self, command)
             cell_id = cell_id,
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y),
+            obstacle_object_id = tonumber(payload.obstacle_object_id or 0) or 0,
+            obstacle_slot_idx = tonumber(payload.obstacle_slot_idx or 0) or 0,
             host_applied = true,
             unit_digest = multiplayer_build_unit_state_digest(self),
             world_digest = multiplayer_build_world_state_digest(self),
             item_digest = multiplayer_build_item_state_digest(self)
         }))
+        do
+            local obstacle_slot_idx = 0
+            local obstacle_object_id = 0
+            local obstacle_count_after = 0
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for slot_idx, obj in ipairs(objects) do
+                local pre = pre_obstacle_by_slot[slot_idx] or {}
+                local pre_has = pre.has_obstacle == true
+                local pre_count = tonumber(pre.count or 0) or 0
+                local post_has = (obj and obj.name == hash("obstacle")) or false
+                local post_count = post_has and (tonumber(obj.stackCount or obj.obstacleCount or 1) or 1) or 0
+                if pre_has ~= post_has or pre_count ~= post_count then
+                    obstacle_slot_idx = slot_idx
+                    obstacle_object_id = post_has and (tonumber(obj.objectId or 0) or 0) or (tonumber(pre.object_id or 0) or 0)
+                    obstacle_count_after = post_count
+                    break
+                end
+            end
+            if obstacle_slot_idx == 0 then
+                obstacle_slot_idx = tonumber(payload.obstacle_slot_idx or 0) or 0
+                obstacle_object_id = tonumber(payload.obstacle_object_id or 0) or 0
+                if obstacle_slot_idx >= 1 and obstacle_slot_idx <= 3 then
+                    local slot = objects[obstacle_slot_idx]
+                    if slot and slot.name == hash("obstacle") then
+                        obstacle_count_after = tonumber(slot.stackCount or slot.obstacleCount or 1) or 1
+                    end
+                end
+            end
+            local obstacle_slots = {}
+            for slot_idx, obj in ipairs(objects) do
+                if obj and obj.name == hash("obstacle") then
+                    obstacle_slots[tostring(slot_idx)] = {
+                        is_obstacle = true,
+                        object_id = tonumber(obj.objectId or 0) or 0,
+                        count = tonumber(obj.stackCount or obj.obstacleCount or 1) or 1,
+                        isFixed = obj.isFixed == true,
+                        isWelded = obj.isWelded == true,
+                        offsetX = tonumber(obj.offsetX or 0) or 0,
+                        offsetY = tonumber(obj.offsetY or 0) or 0,
+                        hitW = tonumber(obj.hitW or 24) or 24,
+                        hitH = tonumber(obj.hitH or 24) or 24
+                    }
+                else
+                    obstacle_slots[tostring(slot_idx)] = {
+                        is_obstacle = false
+                    }
+                end
+            end
+            table.insert(events, multiplayer_transport_emit_event(self, "obstacle_pickup_fx", {
+                cell_id = cell_id,
+                obstacle_slot_idx = obstacle_slot_idx,
+                obstacle_object_id = obstacle_object_id,
+                obstacle_count_after = obstacle_count_after,
+                obstacle_slots = obstacle_slots
+            }))
+        end
         return events
     end
 
@@ -17276,6 +17478,55 @@ multiplayer_transport_on_event = function(self, event)
         if (not applied_ok) and (not reconciled) then
             return
         end
+        multiplayer_broadcast_turn_state_heartbeat_now(self)
+        return
+    end
+    if event.type == "obstacle_pickup_fx" then
+        local payload = event.payload or {}
+        local cell_id = tonumber(payload.cell_id)
+        local obstacle_slot_idx = tonumber(payload.obstacle_slot_idx or 0) or 0
+        local obstacle_count_after = tonumber(payload.obstacle_count_after or 0) or 0
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if cell then
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            local obstacle_slots = type(payload.obstacle_slots) == "table" and payload.obstacle_slots or nil
+            if obstacle_slots then
+                for slot_idx, slot in ipairs(objects) do
+                    local state = obstacle_slots[slot_idx] or obstacle_slots[tostring(slot_idx)] or {}
+                    if state.is_obstacle == true then
+                        slot.name = hash("obstacle")
+                        slot.objectId = tonumber(state.object_id or slot.objectId or 0) or 0
+                        local count = tonumber(state.count or 1) or 1
+                        slot.stackCount = count
+                        slot.obstacleCount = count
+                        slot.isFixed = state.isFixed == true
+                        slot.isWelded = state.isWelded == true
+                        slot.offsetX = tonumber(state.offsetX or slot.offsetX or 0) or 0
+                        slot.offsetY = tonumber(state.offsetY or slot.offsetY or 0) or 0
+                        slot.hitW = tonumber(state.hitW or slot.hitW or 24) or 24
+                        slot.hitH = tonumber(state.hitH or slot.hitH or 24) or 24
+                    elseif slot and slot.name == hash("obstacle") then
+                        reset_runtime_object_slot_to_empty(slot)
+                    end
+                end
+            elseif obstacle_slot_idx >= 1 and obstacle_slot_idx <= 3 then
+                local slot = objects[obstacle_slot_idx]
+                if slot and slot.name == hash("obstacle") then
+                    if obstacle_count_after <= 0 then
+                        reset_runtime_object_slot_to_empty(slot)
+                    else
+                        slot.stackCount = obstacle_count_after
+                        slot.obstacleCount = obstacle_count_after
+                    end
+                end
+            end
+            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
+                LOOT_RUNTIME.refresh_fix_markers(self)
+            end
+            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
+                LOOT_RUNTIME.refresh_world_item_visuals(self)
+            end
+        end
         return
     end
     if event.type == "pickup_corpse_applied" then
@@ -18504,6 +18755,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     UI_PANEL_X = UI_PANEL_X,
     UI_PANEL_Y = UI_PANEL_Y,
     BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
+    get_human_portrait_unit_id_at = get_human_portrait_unit_id_at,
     UNIT_CLICK_SELECT_RADIUS = UNIT_CLICK_SELECT_RADIUS,
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,
     UNIT_CLASS_TECHIE = UNIT_CLASS_TECHIE,
@@ -20664,11 +20916,21 @@ multiplayer_apply_pickup_obstacle_event = function(self, payload)
     local cell_id = tonumber(payload.cell_id)
     local world_x = tonumber(payload.world_x)
     local world_y = tonumber(payload.world_y)
+    local obstacle_object_id = tonumber(payload.obstacle_object_id or 0) or 0
+    local obstacle_slot_idx = tonumber(payload.obstacle_slot_idx or 0) or 0
     if not (unit_id and cell_id) then
         return false
     end
     self.mp_state.applying_remote_event = true
-    local ok = LOOT_RUNTIME.try_pickup_obstacle_by_ids(self, unit_id, cell_id, world_x, world_y) == true
+    local ok = LOOT_RUNTIME.try_pickup_obstacle_by_ids(
+        self,
+        unit_id,
+        cell_id,
+        world_x,
+        world_y,
+        obstacle_object_id,
+        obstacle_slot_idx
+    ) == true
     self.mp_state.applying_remote_event = false
     return ok
 end

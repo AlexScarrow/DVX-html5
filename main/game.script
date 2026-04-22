@@ -14778,14 +14778,25 @@ multiplayer_apply_authoritative_item_digest = function(self, item_digest)
         return false
     end
     local source_items = type(item_digest.items) == "table" and item_digest.items or item_digest
-    local rebuilt = {}
+    local staged = {}
     for key, item in pairs(source_items or {}) do
         if type(item) == "table" then
             local item_id = tonumber(item.id) or tonumber(key) or 0
             if item_id > 0 then
-                rebuilt[item_id] = multiplayer_clone_simple_table(item) or {}
+                local cloned = multiplayer_clone_simple_table(item) or {}
+                cloned.id = item_id
+                table.insert(staged, cloned)
             end
         end
+    end
+    table.sort(staged, function(a, b)
+        local a_id = tonumber(a and a.id or 0) or 0
+        local b_id = tonumber(b and b.id or 0) or 0
+        return a_id < b_id
+    end)
+    local rebuilt = {}
+    for _, item in ipairs(staged) do
+        table.insert(rebuilt, item)
     end
     self.world_item_instances = rebuilt
     if item_digest.next_world_item_id ~= nil then
@@ -18740,6 +18751,12 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     end,
     play_break_barricade_sfx = function(self_ref)
         play_break_barricade_sfx(self_ref)
+    end,
+    mp_is_local_host = function(self_ref)
+        return self_ref
+            and self_ref.mp_state
+            and self_ref.mp_state.enabled
+            and self_ref.mp_state.local_player_id == self_ref.mp_state.host_player_id
     end
 })
 LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {

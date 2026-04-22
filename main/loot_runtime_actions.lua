@@ -2135,6 +2135,18 @@ function M.extend(runtime, ctx)
 
     runtime.process_factory_turn = function(self)
         runtime.ensure_item_runtime_state(self)
+        local mp_enabled = (ctx.mp_is_enabled and ctx.mp_is_enabled(self)) == true
+        local is_confirmed_client = false
+        if mp_enabled and self and self.mp_state then
+            local local_player_id = self.mp_state.local_player_id
+            local host_player_id = self.mp_state.host_player_id
+            if local_player_id and host_player_id and local_player_id ~= host_player_id then
+                is_confirmed_client = true
+            end
+        end
+        if is_confirmed_client then
+            return
+        end
         local instances = get_factory_instances(self)
         self.factory_instance_cache = instances
         for tile_instance_id, instance in pairs(instances) do
@@ -2165,7 +2177,7 @@ function M.extend(runtime, ctx)
                             t = 0,
                             duration = 1 / FACTORY_BELT_PAN_RATE
                         })
-                        if ctx.mp_is_enabled and ctx.mp_is_enabled(self) and (not (ctx.mp_is_applying_event and ctx.mp_is_applying_event(self))) then
+                        if mp_enabled and (not (ctx.mp_is_applying_event and ctx.mp_is_applying_event(self))) then
                             if ctx.mp_emit_event then
                                 ctx.mp_emit_event(self, "factory_token_spawned", {
                                     tile_instance_id = tile_instance_id,
@@ -2249,6 +2261,15 @@ function M.extend(runtime, ctx)
         if not self.factory_conveyor_tokens then
             return
         end
+        local mp_enabled = (ctx.mp_is_enabled and ctx.mp_is_enabled(self)) == true
+        local is_confirmed_client = false
+        if mp_enabled and self and self.mp_state then
+            local local_player_id = self.mp_state.local_player_id
+            local host_player_id = self.mp_state.host_player_id
+            if local_player_id and host_player_id and local_player_id ~= host_player_id then
+                is_confirmed_client = true
+            end
+        end
         local needs_world_item_refresh = false
         for i = #self.factory_conveyor_tokens, 1, -1 do
             local token = self.factory_conveyor_tokens[i]
@@ -2261,7 +2282,7 @@ function M.extend(runtime, ctx)
                 pcall(go.set_position, vmath.vector3(px, py, FACTORY_CONVEYOR_TOKEN_Z), token.go_id)
                 if token.t >= 1 then
                     pcall(go.delete, token.go_id)
-                    if token.remote_visual_only ~= true then
+                    if token.remote_visual_only ~= true and (not is_confirmed_client) then
                         local instances = self.factory_instance_cache or get_factory_instances(self)
                         local instance = instances[token.tile_instance_id]
                         if instance then

@@ -10838,7 +10838,7 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
     set_ui_square_transform(self, boxes[3], MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, mp_lobby_y(MP_LOBBY_PAGE_LABEL_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
-    set_ui_square_transform(self, boxes[6], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
+    set_ui_square_transform(self, boxes[6], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), MP_SETUP_UI_Z, host_info_tint, MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
     set_ui_square_transform(self, boxes[7], MP_LOBBY_HOST_OPEN_BTN_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
     set_ui_square_transform(self, boxes[8], MP_LOBBY_HOST_PRIVATE_BTN_X, mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
 end
@@ -10862,7 +10862,7 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                 end
                 set_ui_square_transform(self, card_id, card_x, card_y, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
                 if strip_id then
-                    set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
+                    set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, tint, MP_LOBBY_CARD_W - 34, 56)
                 end
             end
             session_index = session_index + 1
@@ -10879,7 +10879,7 @@ multiplayer_lobby_render_host_publish_buttons = function(self, host_open_tint, h
             set_ui_square_transform(self, self.ui.flow_score_rows[2], MP_LOBBY_HOST_PRIVATE_BTN_X, mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y), FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_ACTION_W, MP_LOBBY_HOST_ACTION_H)
         end
         if self.ui.flow_score_rows[3] then
-            set_ui_square_transform(self, self.ui.flow_score_rows[3], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
+            set_ui_square_transform(self, self.ui.flow_score_rows[3], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), FLOW_UI_BUTTON_Z, hidden, MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
         end
         for i = 4, #self.ui.flow_score_rows do
             set_ui_square_transform(self, self.ui.flow_score_rows[i], -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)

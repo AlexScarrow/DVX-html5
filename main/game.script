@@ -8030,6 +8030,9 @@ update_multiplayer_new_turn_button_visual = function(self)
     elseif self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         anim_id = hash("ready_button")
         local local_player_id = self.mp_state.local_player_id
+        if multiplayer_get_slot_player_id_for_network then
+            local_player_id = multiplayer_get_slot_player_id_for_network(self, local_player_id)
+        end
         local local_ready = self.mp_state.ready_by_player_id and self.mp_state.ready_by_player_id[local_player_id] == true
         if not local_ready then
             tint = vmath.vector4(1, 0.25, 0.25, 1)
@@ -18547,7 +18550,11 @@ try_multiplayer_ready_buttons = function(self, screen_x, screen_y)
     if not is_point_in_screen_rect(screen_x, screen_y, NEW_TURN_BUTTON_X, NEW_TURN_BUTTON_Y, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H) then
         return false
     end
-    local player_id = self.mp_state.local_player_id or multiplayer_get_active_player_id_for_commands(self)
+    local network_player_id = self.mp_state.local_player_id or multiplayer_get_active_player_id_for_commands(self)
+    local player_id = network_player_id
+    if multiplayer_get_slot_player_id_for_network then
+        player_id = multiplayer_get_slot_player_id_for_network(self, network_player_id)
+    end
     if not player_id then
         return false
     end

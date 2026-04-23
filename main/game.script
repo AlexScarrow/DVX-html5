@@ -9991,6 +9991,8 @@ function start_multiplayer_game_flow(self, session_config)
     self.selected_mission_type = multiplayer_normalize_mission_type(session_config and session_config.mission_type or self.selected_mission_type or MISSION_TYPE_ESCAPE)
     if self.mp_state then
         self.mp_state.enabled = true
+        self.mp_state.match_end_dispatched = false
+        self.mp_state.match_end_last_event_id = ""
         self.mp_state.session_id = "local_session_" .. tostring(os.time())
         self.mp_state.mission_type = self.selected_mission_type
         local session_player_count = session_config and session_config.player_count or self.mp_state.player_count or 4
@@ -11229,6 +11231,10 @@ local function start_outro_slideshow_runtime(self)
             self.outro_slideshow_state = nil
             self.outro_slide_anim_id = nil
             stop_outro_slideshow_runtime(self, "completed")
+            local finish_reason = tostring(done_reason or "")
+            if finish_reason == "restart" or finish_reason == "score_flow" or finish_reason == "stopped" then
+                return
+            end
             if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
                 if tostring(self.end_outro_sequence_id or "") == "title" then
                     enter_flow_state(self, FLOW_STATE_TITLE)
@@ -11369,6 +11375,27 @@ local function update_outro_slideshow_runtime(self, dt)
 end
 
 function enter_mission_outro(self, result, reason)
+    if self.mp_state and self.mp_state.enabled then
+        local local_pid = tostring(self.mp_state.local_player_id or "")
+        local host_pid = tostring(self.mp_state.host_player_id or "")
+        local is_host = (local_pid ~= "" and host_pid ~= "" and local_pid == host_pid) or (local_pid == "" and host_pid == "")
+        if is_host and self.mp_state.match_end_dispatched ~= true then
+            local final_result_for_event = tostring(result or (self.game_won and "win" or "lose"))
+            if final_result_for_event ~= "win" and final_result_for_event ~= "lose" then
+                final_result_for_event = self.game_won and "win" or "lose"
+            end
+            self.mp_state.match_end_dispatched = true
+            multiplayer_transport_broadcast_event(self, "match_ended", {
+                result = final_result_for_event,
+                reason = tostring(reason or "unknown")
+            })
+            print(string.format(
+                "MP OUTRO | host broadcast match_ended | result=%s reason=%s",
+                tostring(final_result_for_event),
+                tostring(reason or "unknown")
+            ))
+        end
+    end
     self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
     self.flow_outro_timer = 0
     self.flow_submit_done = false
@@ -12154,8 +12181,6 @@ function handle_flow_touch(self, input_x, input_y)
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH - 110, 54, 170, 52) then
             if self.outro_slideshow_state then
                 OUTRO_SLIDESHOW.skip(self.outro_slideshow_state)
-            else
-                enter_score_flow(self)
             end
             return true
         end
@@ -12213,6 +12238,8 @@ function reset_and_load_level(self, level_index)
     end
     if self.mp_state and self.mp_state.enabled then
         self.mp_state.mission_type = self.current_mission_type
+        self.mp_state.match_end_dispatched = false
+        self.mp_state.match_end_last_event_id = ""
     end
     log_runtime_reference_audit(self, "pre_clear")
     clear_path_visuals(self)
@@ -17471,6 +17498,28 @@ multiplayer_transport_on_event = function(self, event)
         end
         start_multiplayer_game_flow(self, config)
         print("MP SETUP | match_started event applied.")
+        return
+    end
+    if event.type == "match_ended" then
+        local sender_player_id = tostring(event.sender_player_id or "")
+        local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "")
+        if sender_player_id ~= "" and sender_player_id == local_player_id then
+            return
+        end
+        local evt_id = tostring(event.event_id or "")
+        if self.mp_state then
+            if evt_id ~= "" and evt_id == tostring(self.mp_state.match_end_last_event_id or "") then
+                return
+            end
+            self.mp_state.match_end_last_event_id = evt_id
+        end
+        local payload = event.payload or {}
+        enter_mission_outro(self, payload.result or "lose", payload.reason or "unknown")
+        print(string.format(
+            "MP OUTRO | match_ended event applied | result=%s reason=%s",
+            tostring(payload.result or "lose"),
+            tostring(payload.reason or "unknown")
+        ))
         return
     end
     if event.type == "alien_activity_state" then

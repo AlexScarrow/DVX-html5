@@ -18,7 +18,7 @@
 -- luacheck: globals NEW_TURN_BUTTON_X NEW_TURN_BUTTON_Y NEW_TURN_BUTTON_W NEW_TURN_BUTTON_H NEW_TURN_BUTTON_Z
 -- luacheck: globals LAUNCH_BUTTON_X LAUNCH_BUTTON_Y LAUNCH_BUTTON_W LAUNCH_BUTTON_H LAUNCH_BUTTON_Z
 -- luacheck: globals FLOW_UI_OVERLAY_Z FLOW_UI_PANEL_Z FLOW_UI_BUTTON_Z FLOW_UI_SCREEN_W FLOW_UI_SCREEN_H
--- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE FLOW_STATE_MP_SETUP FLOW_STATE_MP_LOBBY EXIT_TEST_STASH_ENABLED
+-- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE FLOW_STATE_SCORE_SOLO FLOW_STATE_SCORE_MP FLOW_STATE_MP_SETUP FLOW_STATE_MP_LOBBY EXIT_TEST_STASH_ENABLED
 -- luacheck: globals AESTHETIC_BUTTON_X AESTHETIC_BUTTON_Y AESTHETIC_BUTTON_W AESTHETIC_BUTTON_H AESTHETIC_BUTTON_Z
 -- luacheck: globals ZOOM_IN_BUTTON_X ZOOM_IN_BUTTON_Y ZOOM_IN_BUTTON_W ZOOM_IN_BUTTON_H ZOOM_IN_BUTTON_Z
 -- luacheck: globals ZOOM_OUT_BUTTON_X ZOOM_OUT_BUTTON_Y ZOOM_OUT_BUTTON_W ZOOM_OUT_BUTTON_H ZOOM_OUT_BUTTON_Z
@@ -305,7 +305,9 @@ OUTRO_SLIDE_DEFAULT_H = 540
 FLOW_STATE_TITLE = "title"
 FLOW_STATE_GAME = "game"
 FLOW_STATE_OUTRO = "outro"
-FLOW_STATE_SCORE = "score"
+FLOW_STATE_SCORE_SOLO = "score_solo"
+FLOW_STATE_SCORE_MP = "score_mp"
+FLOW_STATE_SCORE = FLOW_STATE_SCORE_SOLO
 FLOW_STATE_MP_SETUP = "mp_setup"
 FLOW_STATE_MP_LOBBY = "mp_lobby"
 FLOW_STATE_SOLO_SETUP = "solo_setup"
@@ -9529,6 +9531,101 @@ play_turret_gun_sfx = function(self)
     play_sfx_one_shot(self, "turret_gun")
 end
 
+score_build_publish_payload = function(self, score_state)
+    local breakdown = self.flow_score_breakdown or compute_placeholder_score_breakdown(self)
+    local payload = {
+        match_id = string.format(
+            "%s_t%d_%s",
+            tostring((self.mp_state and self.mp_state.session_id) or "solo_session"),
+            tonumber(self.mp_state and self.mp_state.turn_id or 1) or 1,
+            tostring(self.end_result or "unknown")
+        ),
+        score_total = tonumber(breakdown.total or 0) or 0,
+        mission_type = tostring(self.end_mission_type or multiplayer_normalize_mission_type(get_current_mission_type(self))),
+        result = tostring(self.end_result or (self.game_won and "win" or "lose")),
+        origin = (score_state == FLOW_STATE_SCORE_MP) and "multiplayer" or "solo",
+        team_player_ids = {},
+        team_display_names = {}
+    }
+    if score_state == FLOW_STATE_SCORE_MP and self.mp_state and self.mp_state.enabled then
+        local host_pid = tostring(self.mp_state.host_player_id or "p1")
+        payload.team_player_ids[1] = host_pid
+        payload.team_display_names[1] = mp_alpha_label_from_network_id(host_pid)
+    else
+        local solo_id = tostring((self.mp_state and self.mp_state.local_player_id) or "p1")
+        payload.team_player_ids[1] = solo_id
+        payload.team_display_names[1] = mp_alpha_label_from_network_id(solo_id)
+    end
+    return payload
+end
+
+score_persist_pending_uploads = function(self)
+    local queue = self and self.pending_score_uploads or {}
+    local ok = pcall(sys.save, "dvx_score_publish_queue", { entries = queue })
+    if not ok then
+        print("SCORE | failed to persist pending publish queue.")
+    end
+end
+
+score_load_pending_uploads = function(self)
+    local ok, data = pcall(sys.load, "dvx_score_publish_queue")
+    if not ok or type(data) ~= "table" then
+        self.pending_score_uploads = {}
+        self.flow_score_publish_pending_count = 0
+        return
+    end
+    local entries = type(data.entries) == "table" and data.entries or {}
+    self.pending_score_uploads = entries
+    self.flow_score_publish_pending_count = #entries
+end
+
+score_enqueue_pending_publish = function(self, payload, reason)
+    if not self then
+        return
+    end
+    self.pending_score_uploads = self.pending_score_uploads or {}
+    self.pending_score_uploads[#self.pending_score_uploads + 1] = {
+        payload = payload,
+        reason = tostring(reason or "pending"),
+        created_at_ms = get_wall_clock_ms(),
+        retry_count = 0
+    }
+    self.flow_score_publish_status = "pending"
+    self.flow_score_publish_pending_count = #self.pending_score_uploads
+    score_persist_pending_uploads(self)
+end
+
+score_try_auto_publish = function(self, score_state)
+    local payload = score_build_publish_payload(self, score_state)
+    self.flow_score_last_publish_payload = payload
+    local simulate_failure = tostring((sys.get_config and sys.get_config("leaderboard.simulate_publish_failure")) or "") == "1"
+    if simulate_failure then
+        self.flow_submit_done = true
+        score_enqueue_pending_publish(self, payload, "simulated_failure")
+        print("SCORE | auto publish failed (simulated), queued for retry.")
+        return
+    end
+    local is_mp = score_state == FLOW_STATE_SCORE_MP
+    if is_mp then
+        local is_host = self.mp_state
+            and self.mp_state.enabled
+            and tostring(self.mp_state.local_player_id or "") == tostring(self.mp_state.host_player_id or "")
+        if is_host then
+            self.flow_submit_done = true
+            self.flow_score_publish_status = "published_host"
+            print("SCORE | auto publish attempted (multiplayer host).")
+        else
+            self.flow_submit_done = true
+            self.flow_score_publish_status = "host_only"
+            print("SCORE | auto publish handled by host (multiplayer client).")
+        end
+        return
+    end
+    self.flow_submit_done = true
+    self.flow_score_publish_status = "published_solo"
+    print("SCORE | auto publish attempted (solo).")
+end
+
 play_alien_death_sfx = function(self, alien_type)
     if alien_type == ALIEN_TYPE_CANNON then
         play_sfx_one_shot(self, "cannonfodder_dies")
@@ -9744,7 +9841,8 @@ refresh_ambient_sfx_state = function(self)
         or (state == FLOW_STATE_SOLO_SETUP)
         or (state == FLOW_STATE_MP_SETUP)
         or (state == FLOW_STATE_MP_LOBBY)
-        or (state == FLOW_STATE_SCORE)
+        or (state == FLOW_STATE_SCORE_SOLO)
+        or (state == FLOW_STATE_SCORE_MP)
         or is_title_outro
     set_sound_loop_state(self, "planet", in_gameplay)
     set_sound_loop_state(self, "title", in_title_like)
@@ -11459,7 +11557,12 @@ function enter_score_flow(self)
     if not self.flow_score_breakdown then
         self.flow_score_breakdown = compute_placeholder_score_breakdown(self)
     end
-    enter_flow_state(self, FLOW_STATE_SCORE)
+    local score_state = FLOW_STATE_SCORE_SOLO
+    if tostring(self.end_session_origin or "") == "multiplayer" or (self.mp_state and self.mp_state.enabled) then
+        score_state = FLOW_STATE_SCORE_MP
+    end
+    enter_flow_state(self, score_state)
+    score_try_auto_publish(self, score_state)
     local s = self.flow_score_breakdown
     print(string.format(
         "SCORE | total=%d survivors=%d seated=%d power=%d objectives=%d dead=%d",
@@ -12186,10 +12289,9 @@ function handle_flow_touch(self, input_x, input_y)
         end
         return true
     end
-    if state == FLOW_STATE_SCORE then
+    if state == FLOW_STATE_SCORE_SOLO or state == FLOW_STATE_SCORE_MP then
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, 250, 56) then
-            self.flow_submit_done = true
-            print("SCORE | leaderboard submit hook (placeholder)")
+            print("SCORE | manual submit disabled (auto publish flow).")
             return true
         end
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, 250, 56) then
@@ -12447,6 +12549,11 @@ function reset_and_load_level(self, level_index)
     self.end_outro_sequence_id = ""
     self.end_reason = ""
     self.end_session_origin = ""
+    self.pending_score_uploads = {}
+    self.flow_score_publish_status = ""
+    self.flow_score_publish_pending_count = 0
+    self.flow_score_last_publish_payload = nil
+    score_load_pending_uploads(self)
     self.outro_slideshow_state = nil
     self.outro_fx_instances = {}
     self.outro_slide_anim_id = nil

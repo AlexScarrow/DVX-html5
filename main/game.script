@@ -15568,6 +15568,7 @@ multiplayer_transport_handle_command = function(self, command)
             return events
         end
         local owner_player_id = tostring(session.owner_player_id or self.mp_state.host_player_id or "p1")
+        local session_max_players = math.max(2, math.min(4, tonumber(session.max_players or 4) or 4))
         if tostring(sender or "") ~= owner_player_id then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_offer_join_response",
@@ -15597,7 +15598,7 @@ multiplayer_transport_handle_command = function(self, command)
                     host_name = tostring(session.host_name or "Host"),
                     status = tostring(session.status or "published_open"),
                     players = math.max(1, tonumber(session.players or 1) or 1),
-                    max_players = math.max(2, tonumber(session.max_players or 2) or 2),
+                    max_players = math.max(2, tonumber(session.max_players or session_max_players) or session_max_players),
                     is_locked = session.is_locked == true,
                     joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {})
                 }
@@ -15610,14 +15611,25 @@ multiplayer_transport_handle_command = function(self, command)
             reason = reason
         }))
         if accepted then
+            local joined_count = math.max(1, tonumber(#(session.joined_player_ids or {})) or 1)
+            local desired_player_count = math.max(2, math.min(session_max_players, joined_count))
+            if self.mp_setup and desired_player_count > tonumber(self.mp_setup.player_count or 2) then
+                local promoted_setup_config = multiplayer_setup_build_session_config(self)
+                promoted_setup_config.player_count = desired_player_count
+                multiplayer_setup_apply_session_config(self, promoted_setup_config)
+            end
             local setup_config = multiplayer_setup_build_session_config(self)
-            if session.max_players then
-                setup_config.player_count = math.max(2, math.min(4, tonumber(session.max_players or setup_config.player_count or 2) or 2))
+            setup_config.player_count = math.max(2, math.min(session_max_players, tonumber(setup_config.player_count or desired_player_count) or desired_player_count))
+            table.insert(events, multiplayer_transport_emit_event(self, "setup_state_updated", {
+                session_config = setup_config
+            }))
+            if self.mp_state then
+                self.mp_state.player_count = setup_config.player_count
             end
             table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
                 target_player_id = requester_player_id,
                 session_id = tostring(session.id or ""),
-                session_max_players = tonumber(session.max_players or setup_config.player_count or 2) or 2,
+                session_max_players = session_max_players,
                 session_config = setup_config
             }))
         end

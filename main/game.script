@@ -471,6 +471,14 @@ MP_LOBBY_PIN_ENTER_HIT_H = 72
 MP_LOBBY_SLOTS_PER_PAGE = 8
 MP_LOBBY_MAX_PIN_LEN = 4
 MP_LOBBY_SCREEN_OFFSET_Y = 100
+MP_LOBBY_NAME_MAX_CHARS = 12
+MP_LOBBY_NAME_LETTER_SPACING = 7
+MP_LOBBY_NAME_BASE_Y_OFFSET = -57
+MP_LOBBY_NAME_SCALE = 0.25
+MP_SETUP_NAME_MAX_CHARS = 12
+MP_SETUP_NAME_LETTER_SPACING = 12
+MP_SETUP_NAME_Y = 229
+MP_SETUP_NAME_SCALE = 0.25
 MP_LOBBY_PIN_MODAL_Z = FLOW_UI_BUTTON_Z + 0.01
 MP_LOBBY_PIN_KEYS_Z = FLOW_UI_BUTTON_Z + 0.02
 MP_LOBBY_PIN_ANIM_IDS_BY_INDEX = {
@@ -487,6 +495,77 @@ MP_LOBBY_PIN_ANIM_IDS_BY_INDEX = {
 
 mp_lobby_y = function(y)
     return (tonumber(y or 0) or 0) + (tonumber(MP_LOBBY_SCREEN_OFFSET_Y or 0) or 0)
+end
+
+mp_lobby_sanitize_name = function(raw_name)
+    local normalized = string.lower(tostring(raw_name or "host"))
+    normalized = string.gsub(normalized, "[^a-z]", "")
+    if normalized == "" then
+        normalized = "player"
+    end
+    if #normalized > MP_LOBBY_NAME_MAX_CHARS then
+        normalized = string.sub(normalized, 1, MP_LOBBY_NAME_MAX_CHARS)
+    end
+    return normalized
+end
+
+mp_alpha_label_from_network_id = function(network_id)
+    local raw = string.lower(tostring(network_id or ""))
+    if raw == "p1" then return "playerone" end
+    if raw == "p2" then return "playertwo" end
+    if raw == "p3" then return "playerthree" end
+    if raw == "p4" then return "playerfour" end
+    return mp_lobby_sanitize_name(raw)
+end
+
+mp_network_id_for_slot = function(self, slot_player_id)
+    local slot_id = tostring(slot_player_id or "")
+    if slot_id == "" then
+        return ""
+    end
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return slot_id
+    end
+    local slot_index = tonumber(string.sub(slot_id, 2))
+    if not slot_index then
+        return slot_id
+    end
+    local host_id = tostring(self.mp_state.host_player_id or "p1")
+    local ordered = {}
+    ordered[1] = host_id
+    for i = 1, 4 do
+        local pid = "p" .. tostring(i)
+        if pid ~= host_id then
+            ordered[#ordered + 1] = pid
+        end
+    end
+    return tostring(ordered[slot_index] or slot_id)
+end
+
+mp_setup_get_joined_slot_lookup = function(self)
+    local joined_slots = {}
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        joined_slots["p1"] = true
+        return joined_slots
+    end
+    local active_offer = nil
+    local active_session_id = tostring(self.mp_state.session_id or "")
+    if active_session_id ~= "" then
+        multiplayer_lobby_ensure_runtime(self)
+        active_offer = multiplayer_lobby_get_session_by_id(self, active_session_id)
+    end
+    local joined_player_ids = active_offer and active_offer.joined_player_ids or nil
+    if type(joined_player_ids) == "table" and #joined_player_ids > 0 then
+        for _, network_player_id in ipairs(joined_player_ids) do
+            local slot_player_id = multiplayer_get_slot_player_id_for_network(self, network_player_id)
+            joined_slots[tostring(slot_player_id or "")] = true
+        end
+        return joined_slots
+    end
+    local owner_network_id = tostring((active_offer and active_offer.owner_player_id) or self.mp_state.host_player_id or "p1")
+    local owner_slot_id = multiplayer_get_slot_player_id_for_network(self, owner_network_id)
+    joined_slots[tostring(owner_slot_id or "p1")] = true
+    return joined_slots
 end
 MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
@@ -8671,6 +8750,8 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_cards = {},
         flow_mp_lobby_status_strips = {},
         flow_mp_lobby_backpanel = nil,
+        flow_mp_lobby_name_letters = {},
+        flow_mp_setup_name_letters = {},
         flow_mp_lobby_pin_keys = {},
         flow_mp_lobby_pin_modal_bg = nil,
         flow_mp_lobby_pin_display = nil,
@@ -8826,6 +8907,12 @@ local function initialize_unit_ui(self)
         self.ui.flow_mp_lobby_status_strips[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
     end
     self.ui.flow_mp_lobby_backpanel = create_ui_marker_sprite(hash("lobby_backpanel"), FLOW_UI_PANEL_Z + 0.001)
+    for i = 1, (MP_LOBBY_SLOTS_PER_PAGE * MP_LOBBY_NAME_MAX_CHARS) do
+        self.ui.flow_mp_lobby_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
+    end
+    for i = 1, (#MP_SETUP_PLAYER_IDS * MP_SETUP_NAME_MAX_CHARS) do
+        self.ui.flow_mp_setup_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
+    end
     for i = 1, 8 do
         self.ui.flow_mp_lobby_boxes[i] = create_ui_square(0, 0, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
     end
@@ -9012,6 +9099,16 @@ local function set_ui_hidden(self)
     end
     if self.ui.flow_mp_lobby_backpanel then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    end
+    if self.ui.flow_mp_lobby_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_lobby_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_mp_setup_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_setup_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
     end
     if self.ui.flow_mp_lobby_status_strips then
         for _, strip_id in ipairs(self.ui.flow_mp_lobby_status_strips) do
@@ -10848,6 +10945,12 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
         return
     end
     local session_index = 1
+    local letter_cursor = 1
+    if self.ui.flow_mp_lobby_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_lobby_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, vmath.vector4(0, 0, 0, 0), 1, 1)
+        end
+    end
     for row = 1, 2 do
         for col = 1, 4 do
             local card_x = MP_LOBBY_CARD_COL_X[col]
@@ -10863,6 +10966,34 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                 set_ui_square_transform(self, card_id, card_x, card_y, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
                 if strip_id then
                     set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, tint, MP_LOBBY_CARD_W - 34, 56)
+                end
+                if session and self.ui.flow_mp_lobby_name_letters then
+                    local name_text = mp_alpha_label_from_network_id(session.host_name or "")
+                    local name_len = #name_text
+                    if name_len > 0 then
+                        local span = (name_len - 1) * MP_LOBBY_NAME_LETTER_SPACING
+                        local start_x = card_x - (span * 0.5)
+                        local name_y = card_y + MP_LOBBY_NAME_BASE_Y_OFFSET
+                        for ci = 1, name_len do
+                            local glyph_id = self.ui.flow_mp_lobby_name_letters[letter_cursor]
+                            if not glyph_id then
+                                break
+                            end
+                            local ch = string.sub(name_text, ci, ci)
+                            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+                            set_ui_square_transform(
+                                self,
+                                glyph_id,
+                                start_x + ((ci - 1) * MP_LOBBY_NAME_LETTER_SPACING),
+                                name_y,
+                                MP_SETUP_UI_Z + 0.004,
+                                vmath.vector4(1, 1, 1, 0.95),
+                                MP_LOBBY_NAME_SCALE,
+                                MP_LOBBY_NAME_SCALE
+                            )
+                            letter_cursor = letter_cursor + 1
+                        end
+                    end
                 end
             end
             session_index = session_index + 1
@@ -11579,6 +11710,48 @@ function update_flow_ui(self, dt)
                         end
                     else
                         set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                    end
+                end
+            end
+        end
+        if self.ui.flow_mp_setup_name_letters then
+            for _, letter_id in ipairs(self.ui.flow_mp_setup_name_letters) do
+                set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+            end
+            local joined_slot_lookup = mp_setup_get_joined_slot_lookup(self)
+            local setup_letter_cursor = 1
+            for seat_index, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
+                local player_count = self.mp_setup and self.mp_setup.player_count or 2
+                if seat_index <= player_count and joined_slot_lookup[player_id] == true then
+                    local network_id = mp_network_id_for_slot(self, player_id)
+                    local label = mp_alpha_label_from_network_id(network_id)
+                    if #label > MP_SETUP_NAME_MAX_CHARS then
+                        label = string.sub(label, 1, MP_SETUP_NAME_MAX_CHARS)
+                    end
+                    local label_len = #label
+                    if label_len > 0 then
+                        local seat_x = MP_SETUP_SEAT_X[seat_index] + MP_SETUP_SLOT_X_OFFSET
+                        local span = (label_len - 1) * MP_SETUP_NAME_LETTER_SPACING
+                        local start_x = seat_x - (span * 0.5)
+                        for ci = 1, label_len do
+                            local glyph_id = self.ui.flow_mp_setup_name_letters[setup_letter_cursor]
+                            if not glyph_id then
+                                break
+                            end
+                            local ch = string.sub(label, ci, ci)
+                            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+                            set_ui_square_transform(
+                                self,
+                                glyph_id,
+                                start_x + ((ci - 1) * MP_SETUP_NAME_LETTER_SPACING),
+                                MP_SETUP_NAME_Y,
+                                MP_SETUP_UI_Z + 0.004,
+                                vmath.vector4(1, 1, 1, 0.98),
+                                MP_SETUP_NAME_SCALE,
+                                MP_SETUP_NAME_SCALE
+                            )
+                            setup_letter_cursor = setup_letter_cursor + 1
+                        end
                     end
                 end
             end

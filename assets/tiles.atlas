@@ -629,6 +629,84 @@ images {
 images {
   image: "/assets/images/lobby_backpanel.png"
 }
+images {
+  image: "/assets/images/letter_a.png"
+}
+images {
+  image: "/assets/images/letter_b.png"
+}
+images {
+  image: "/assets/images/letter_c.png"
+}
+images {
+  image: "/assets/images/letter_d.png"
+}
+images {
+  image: "/assets/images/letter_e.png"
+}
+images {
+  image: "/assets/images/letter_f.png"
+}
+images {
+  image: "/assets/images/letter_g.png"
+}
+images {
+  image: "/assets/images/letter_h.png"
+}
+images {
+  image: "/assets/images/letter_i.png"
+}
+images {
+  image: "/assets/images/letter_j.png"
+}
+images {
+  image: "/assets/images/letter_k.png"
+}
+images {
+  image: "/assets/images/letter_l.png"
+}
+images {
+  image: "/assets/images/letter_m.png"
+}
+images {
+  image: "/assets/images/letter_n.png"
+}
+images {
+  image: "/assets/images/letter_o.png"
+}
+images {
+  image: "/assets/images/letter_p.png"
+}
+images {
+  image: "/assets/images/letter_q.png"
+}
+images {
+  image: "/assets/images/letter_r.png"
+}
+images {
+  image: "/assets/images/letter_s.png"
+}
+images {
+  image: "/assets/images/letter_t.png"
+}
+images {
+  image: "/assets/images/letter_u.png"
+}
+images {
+  image: "/assets/images/letter_v.png"
+}
+images {
+  image: "/assets/images/letter_w.png"
+}
+images {
+  image: "/assets/images/letter_x.png"
+}
+images {
+  image: "/assets/images/letter_y.png"
+}
+images {
+  image: "/assets/images/letter_z.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

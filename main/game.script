@@ -254,6 +254,14 @@ SCORE_HUD_MAX_DIGITS = 8
 SCORE_HUD_DIGIT_SPACING_PX = 16
 SCORE_HUD_DIGIT_DRAW_W = 20.25
 SCORE_HUD_DIGIT_DRAW_H = 23.625
+SCORE_FLOW_DIGIT_SCALE = 1.0
+SCORE_FLOW_DIGIT_CENTER_X = SCREEN_WIDTH * 0.5
+SCORE_FLOW_DIGIT_Y = SCREEN_HEIGHT * 0.60
+SCORE_FLOW_DIGIT_SPACING_PX = SCORE_HUD_DIGIT_SPACING_PX * SCORE_FLOW_DIGIT_SCALE
+SCORE_FLOW_TEAM_Y = SCREEN_HEIGHT * 0.50
+SCORE_FLOW_TEAM_LETTER_SCALE = 0.35
+SCORE_FLOW_TEAM_LETTER_SPACING = 10
+SCORE_FLOW_TEAM_TOKEN_GAP = 16
 RANGED_HIT_PREVIEW_Z = 0.77
 RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
 RANGED_HIT_PREVIEW_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W * 0.66
@@ -8748,6 +8756,7 @@ local function initialize_unit_ui(self)
         flow_mp_unit_buttons = {},
         flow_mp_slot_icons = {},
         flow_score_rows = {},
+        flow_score_team_name_letters = {},
         flow_mp_lobby_boxes = {},
         flow_mp_lobby_cards = {},
         flow_mp_lobby_status_strips = {},
@@ -8903,6 +8912,9 @@ local function initialize_unit_ui(self)
     end
     for i = 1, 4 do
         self.ui.flow_score_rows[i] = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 300, 28)
+    end
+    for i = 1, 64 do
+        self.ui.flow_score_team_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_PANEL_Z + 0.006)
     end
     for i = 1, 8 do
         self.ui.flow_mp_lobby_cards[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
@@ -9094,6 +9106,11 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
         end
     end
+    if self.ui.flow_score_team_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_score_team_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
+        end
+    end
     if self.ui.flow_mp_lobby_cards then
         for _, card_id in ipairs(self.ui.flow_mp_lobby_cards) do
             set_ui_square_transform(self, card_id, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
@@ -9208,6 +9225,111 @@ function update_score_hud(self, visible)
         end
     end
     update_ranged_hit_preview_hud(self, true)
+end
+
+update_score_flow_digits = function(self, visible)
+    if not self.ui or not self.ui.score_digit_icons then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    local draw_w = SCORE_HUD_DIGIT_DRAW_W * 0.021 * SCORE_FLOW_DIGIT_SCALE
+    local draw_h = SCORE_HUD_DIGIT_DRAW_H * 0.021 * SCORE_FLOW_DIGIT_SCALE
+    if visible ~= true then
+        for _, digit_id in ipairs(self.ui.score_digit_icons) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.005, hidden, draw_w, draw_h)
+        end
+        return
+    end
+
+    local breakdown = self.flow_score_breakdown or { total = 0 }
+    local score_text = tostring(math.max(0, math.floor(tonumber(breakdown.total or 0) or 0)))
+    if #score_text > SCORE_HUD_MAX_DIGITS then
+        score_text = string.sub(score_text, #score_text - SCORE_HUD_MAX_DIGITS + 1)
+    end
+    local count = #score_text
+    local start_x = SCORE_FLOW_DIGIT_CENTER_X - ((count - 1) * SCORE_FLOW_DIGIT_SPACING_PX * 0.5)
+    for idx, digit_id in ipairs(self.ui.score_digit_icons) do
+        if idx <= count then
+            local ch = string.sub(score_text, idx, idx)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            local dx = start_x + ((idx - 1) * SCORE_FLOW_DIGIT_SPACING_PX)
+            set_ui_square_transform(self, digit_id, dx, SCORE_FLOW_DIGIT_Y, FLOW_UI_PANEL_Z + 0.005, vmath.vector4(1, 1, 1, 1), draw_w, draw_h)
+        else
+            set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.005, hidden, draw_w, draw_h)
+        end
+    end
+end
+
+update_score_flow_team_names = function(self, visible)
+    if not self.ui or not self.ui.flow_score_team_name_letters then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    for _, letter_id in ipairs(self.ui.flow_score_team_name_letters) do
+        set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
+    end
+    if visible ~= true then
+        return
+    end
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_SCORE_MP then
+        return
+    end
+    local names = nil
+    if self.flow_score_team_display_names and type(self.flow_score_team_display_names) == "table" then
+        names = self.flow_score_team_display_names
+    elseif self.flow_score_last_publish_payload and type(self.flow_score_last_publish_payload.team_display_names) == "table" then
+        names = self.flow_score_last_publish_payload.team_display_names
+    end
+    if type(names) ~= "table" then
+        return
+    end
+    local tokens = {}
+    for _, name in ipairs(names) do
+        local clean = mp_lobby_sanitize_name(name)
+        if clean ~= "" then
+            tokens[#tokens + 1] = clean
+        end
+    end
+    if #tokens <= 0 then
+        return
+    end
+    local spans = {}
+    local total_span = 0
+    for i, token in ipairs(tokens) do
+        local token_span = math.max(1, #token) * SCORE_FLOW_TEAM_LETTER_SPACING
+        spans[i] = token_span
+        total_span = total_span + token_span
+        if i < #tokens then
+            total_span = total_span + SCORE_FLOW_TEAM_TOKEN_GAP
+        end
+    end
+    local cursor_x = SCORE_FLOW_DIGIT_CENTER_X - (total_span * 0.5)
+    local letter_cursor = 1
+    for token_index, token in ipairs(tokens) do
+        for ci = 1, #token do
+            local glyph_id = self.ui.flow_score_team_name_letters[letter_cursor]
+            if not glyph_id then
+                return
+            end
+            local ch = string.sub(token, ci, ci)
+            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+            set_ui_square_transform(
+                self,
+                glyph_id,
+                cursor_x + ((ci - 1) * SCORE_FLOW_TEAM_LETTER_SPACING),
+                SCORE_FLOW_TEAM_Y,
+                FLOW_UI_PANEL_Z + 0.006,
+                vmath.vector4(1, 1, 1, 0.98),
+                SCORE_FLOW_TEAM_LETTER_SCALE,
+                SCORE_FLOW_TEAM_LETTER_SCALE
+            )
+            letter_cursor = letter_cursor + 1
+        end
+        cursor_x = cursor_x + spans[token_index]
+        if token_index < #tokens then
+            cursor_x = cursor_x + SCORE_FLOW_TEAM_TOKEN_GAP
+        end
+    end
 end
 
 update_mp_build_hud = function(self, visible)
@@ -11482,11 +11604,55 @@ function enter_mission_outro(self, result, reason)
             if final_result_for_event ~= "win" and final_result_for_event ~= "lose" then
                 final_result_for_event = self.game_won and "win" or "lose"
             end
-            self.mp_state.match_end_dispatched = true
+            local final_score_breakdown = compute_placeholder_score_breakdown(self)
+            self.flow_score_breakdown = final_score_breakdown
+            local payload_team_ids = {}
+            local payload_team_seen = {}
+            local function add_team_id(pid)
+                local norm = tostring(pid or "")
+                if norm == "" then
+                    return
+                end
+                if payload_team_seen[norm] == true then
+                    return
+                end
+                payload_team_seen[norm] = true
+                payload_team_ids[#payload_team_ids + 1] = norm
+            end
+            add_team_id(host_pid)
+            add_team_id(local_pid)
+            if self.mp_state and type(self.mp_state.connected_players) == "table" then
+                local connected_ids = {}
+                for pid, is_connected in pairs(self.mp_state.connected_players) do
+                    if is_connected == true then
+                        connected_ids[#connected_ids + 1] = tostring(pid)
+                    end
+                end
+                table.sort(connected_ids)
+                for _, pid in ipairs(connected_ids) do
+                    add_team_id(pid)
+                end
+            end
+            if self.mp_state and type(self.mp_state.required_ready_player_ids) == "table" then
+                for _, pid in ipairs(self.mp_state.required_ready_player_ids) do
+                    add_team_id(pid)
+                end
+            end
+            local payload_team_names = {}
+            for _, pid in ipairs(payload_team_ids) do
+                payload_team_names[#payload_team_names + 1] = mp_alpha_label_from_network_id(pid)
+            end
+            if #payload_team_names <= 0 then
+                payload_team_names[1] = mp_alpha_label_from_network_id(self.mp_state.local_player_id or self.mp_state.host_player_id or "p1")
+            end
+            self.flow_score_team_display_names = payload_team_names
             multiplayer_transport_broadcast_event(self, "match_ended", {
                 result = final_result_for_event,
-                reason = tostring(reason or "unknown")
+                reason = tostring(reason or "unknown"),
+                score_breakdown = final_score_breakdown,
+                team_display_names = payload_team_names
             })
+            self.mp_state.match_end_dispatched = true
             print(string.format(
                 "MP OUTRO | host broadcast match_ended | result=%s reason=%s",
                 tostring(final_result_for_event),
@@ -11583,6 +11749,8 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
+    update_score_flow_digits(self, false)
+    update_score_flow_team_names(self, false)
     if state ~= FLOW_STATE_GAME then
         set_ui_square_transform(self, self.ui.transport_status_dot, -9999, -9999, MP_NET_STATUS_DOT_Z, hidden, MP_NET_STATUS_DOT_W, MP_NET_STATUS_DOT_H)
     end
@@ -11947,6 +12115,8 @@ function update_flow_ui(self, dt)
         end
         return
     end
+    update_score_flow_digits(self, true)
+    update_score_flow_team_names(self, true)
     local s = self.flow_score_breakdown or { survivors = 0, seated = 0, power_units = 0, objectives = 0, total = 0 }
     set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.07, 0.13, 0.09, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, FLOW_UI_BUTTON_Z, self.flow_submit_done and vmath.vector4(0.2, 0.65, 0.22, 0.95) or vmath.vector4(0.2, 0.45, 0.75, 0.95), 250, 56)
@@ -17622,6 +17792,12 @@ multiplayer_transport_on_event = function(self, event)
         end
         local payload = event.payload or {}
         enter_mission_outro(self, payload.result or "lose", payload.reason or "unknown")
+        if type(payload.score_breakdown) == "table" then
+            self.flow_score_breakdown = payload.score_breakdown
+        end
+        if type(payload.team_display_names) == "table" then
+            self.flow_score_team_display_names = payload.team_display_names
+        end
         print(string.format(
             "MP OUTRO | match_ended event applied | result=%s reason=%s",
             tostring(payload.result or "lose"),

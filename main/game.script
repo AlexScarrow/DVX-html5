@@ -262,6 +262,39 @@ SCORE_FLOW_TEAM_Y = SCREEN_HEIGHT * 0.50
 SCORE_FLOW_TEAM_LETTER_SCALE = 0.35
 SCORE_FLOW_TEAM_LETTER_SPACING = 10
 SCORE_FLOW_TEAM_TOKEN_GAP = 16
+LEADERBOARD_DEBUG_LAYOUT_ENABLED = true
+LEADERBOARD_DEBUG_PANEL_TOPLEFT_X = 0
+LEADERBOARD_DEBUG_PANEL_TOPLEFT_Y = 0
+LEADERBOARD_DEBUG_PANEL_W = 1280
+LEADERBOARD_DEBUG_PANEL_H = 720
+LEADERBOARD_DEBUG_PANEL_X = LEADERBOARD_DEBUG_PANEL_TOPLEFT_X + (LEADERBOARD_DEBUG_PANEL_W * 0.5)
+LEADERBOARD_DEBUG_PANEL_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_PANEL_TOPLEFT_Y + (LEADERBOARD_DEBUG_PANEL_H * 0.5))
+LEADERBOARD_DEBUG_FRAME_TOPLEFT_X = 40
+LEADERBOARD_DEBUG_FRAME_TOPLEFT_Y = 120
+LEADERBOARD_DEBUG_FRAME_W = 640
+LEADERBOARD_DEBUG_FRAME_H = 500
+LEADERBOARD_DEBUG_FRAME_X = LEADERBOARD_DEBUG_FRAME_TOPLEFT_X + (LEADERBOARD_DEBUG_FRAME_W * 0.5)
+LEADERBOARD_DEBUG_FRAME_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_FRAME_TOPLEFT_Y + (LEADERBOARD_DEBUG_FRAME_H * 0.5))
+LEADERBOARD_DEBUG_PAGE_BTN_W = 42
+LEADERBOARD_DEBUG_PAGE_BTN_H = 42
+LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_X = 720
+LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_Y = 260
+LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_X = 720
+LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_Y = 320
+LEADERBOARD_DEBUG_PAGE_UP_X = LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_X + (LEADERBOARD_DEBUG_PAGE_BTN_W * 0.5)
+LEADERBOARD_DEBUG_PAGE_UP_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_Y + (LEADERBOARD_DEBUG_PAGE_BTN_H * 0.5))
+LEADERBOARD_DEBUG_PAGE_DOWN_X = LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_X + (LEADERBOARD_DEBUG_PAGE_BTN_W * 0.5)
+LEADERBOARD_DEBUG_PAGE_DOWN_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_Y + (LEADERBOARD_DEBUG_PAGE_BTN_H * 0.5))
+LEADERBOARD_DEBUG_BACK_W = 140
+LEADERBOARD_DEBUG_BACK_H = 52
+LEADERBOARD_DEBUG_BACK_TOPLEFT_X = 90
+LEADERBOARD_DEBUG_BACK_TOPLEFT_Y = 648
+LEADERBOARD_DEBUG_BACK_X = LEADERBOARD_DEBUG_BACK_TOPLEFT_X + (LEADERBOARD_DEBUG_BACK_W * 0.5)
+LEADERBOARD_DEBUG_BACK_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_BACK_TOPLEFT_Y + (LEADERBOARD_DEBUG_BACK_H * 0.5))
+LEADERBOARD_DEBUG_ROW_TOPLEFT_Y = 170
+LEADERBOARD_DEBUG_ROW_Y = SCREEN_HEIGHT - LEADERBOARD_DEBUG_ROW_TOPLEFT_Y
+LEADERBOARD_DEBUG_NAME_X = 100
+LEADERBOARD_DEBUG_SCORE_X = 300
 RANGED_HIT_PREVIEW_Z = 0.77
 RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
 RANGED_HIT_PREVIEW_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W * 0.66
@@ -8739,6 +8772,10 @@ local function initialize_unit_ui(self)
         flow_outro_skip_button = nil,
         flow_score_submit_button = nil,
         flow_score_title_button = nil,
+        flow_leaderboard_debug_frame = nil,
+        flow_leaderboard_debug_page_up = nil,
+        flow_leaderboard_debug_page_down = nil,
+        flow_leaderboard_debug_back = nil,
         flow_title_tutorial_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
@@ -8883,6 +8920,10 @@ local function initialize_unit_ui(self)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
     self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
+    self.ui.flow_leaderboard_debug_frame = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
+    self.ui.flow_leaderboard_debug_page_up = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+    self.ui.flow_leaderboard_debug_page_down = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+    self.ui.flow_leaderboard_debug_back = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
     self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
@@ -9067,6 +9108,10 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -9247,13 +9292,19 @@ update_score_flow_digits = function(self, visible)
         score_text = string.sub(score_text, #score_text - SCORE_HUD_MAX_DIGITS + 1)
     end
     local count = #score_text
-    local start_x = SCORE_FLOW_DIGIT_CENTER_X - ((count - 1) * SCORE_FLOW_DIGIT_SPACING_PX * 0.5)
+    local center_x = SCORE_FLOW_DIGIT_CENTER_X
+    local draw_y = SCORE_FLOW_DIGIT_Y
+    if LEADERBOARD_DEBUG_LAYOUT_ENABLED then
+        center_x = LEADERBOARD_DEBUG_SCORE_X
+        draw_y = LEADERBOARD_DEBUG_ROW_Y
+    end
+    local start_x = center_x - ((count - 1) * SCORE_FLOW_DIGIT_SPACING_PX * 0.5)
     for idx, digit_id in ipairs(self.ui.score_digit_icons) do
         if idx <= count then
             local ch = string.sub(score_text, idx, idx)
             msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
             local dx = start_x + ((idx - 1) * SCORE_FLOW_DIGIT_SPACING_PX)
-            set_ui_square_transform(self, digit_id, dx, SCORE_FLOW_DIGIT_Y, FLOW_UI_PANEL_Z + 0.005, vmath.vector4(1, 1, 1, 1), draw_w, draw_h)
+            set_ui_square_transform(self, digit_id, dx, draw_y, FLOW_UI_PANEL_Z + 0.005, vmath.vector4(1, 1, 1, 1), draw_w, draw_h)
         else
             set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.005, hidden, draw_w, draw_h)
         end
@@ -9271,7 +9322,8 @@ update_score_flow_team_names = function(self, visible)
     if visible ~= true then
         return
     end
-    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_SCORE_MP then
+    local score_state = self.game_flow_state or FLOW_STATE_GAME
+    if score_state ~= FLOW_STATE_SCORE_SOLO and score_state ~= FLOW_STATE_SCORE_MP then
         return
     end
     local names = nil
@@ -9279,6 +9331,10 @@ update_score_flow_team_names = function(self, visible)
         names = self.flow_score_team_display_names
     elseif self.flow_score_last_publish_payload and type(self.flow_score_last_publish_payload.team_display_names) == "table" then
         names = self.flow_score_last_publish_payload.team_display_names
+    end
+    if score_state == FLOW_STATE_SCORE_SOLO and (type(names) ~= "table" or #names <= 0) then
+        local solo_id = tostring((self.mp_state and self.mp_state.local_player_id) or "p1")
+        names = { mp_alpha_label_from_network_id(solo_id) }
     end
     if type(names) ~= "table" then
         return
@@ -9293,6 +9349,12 @@ update_score_flow_team_names = function(self, visible)
     if #tokens <= 0 then
         return
     end
+    local name_draw_y = SCORE_FLOW_TEAM_Y
+    local name_start_x_override = nil
+    if LEADERBOARD_DEBUG_LAYOUT_ENABLED then
+        name_draw_y = LEADERBOARD_DEBUG_ROW_Y
+        name_start_x_override = LEADERBOARD_DEBUG_NAME_X
+    end
     local spans = {}
     local total_span = 0
     for i, token in ipairs(tokens) do
@@ -9304,6 +9366,9 @@ update_score_flow_team_names = function(self, visible)
         end
     end
     local cursor_x = SCORE_FLOW_DIGIT_CENTER_X - (total_span * 0.5)
+    if name_start_x_override then
+        cursor_x = name_start_x_override
+    end
     local letter_cursor = 1
     for token_index, token in ipairs(tokens) do
         for ci = 1, #token do
@@ -9317,7 +9382,7 @@ update_score_flow_team_names = function(self, visible)
                 self,
                 glyph_id,
                 cursor_x + ((ci - 1) * SCORE_FLOW_TEAM_LETTER_SPACING),
-                SCORE_FLOW_TEAM_Y,
+                name_draw_y,
                 FLOW_UI_PANEL_Z + 0.006,
                 vmath.vector4(1, 1, 1, 0.98),
                 SCORE_FLOW_TEAM_LETTER_SCALE,
@@ -11839,6 +11904,10 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
         if self.ui.flow_score_rows then
             for _, row_id in ipairs(self.ui.flow_score_rows) do
                 set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
@@ -12117,10 +12186,21 @@ function update_flow_ui(self, dt)
     end
     update_score_flow_digits(self, true)
     update_score_flow_team_names(self, true)
-    local s = self.flow_score_breakdown or { survivors = 0, seated = 0, power_units = 0, objectives = 0, total = 0 }
-    set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.07, 0.13, 0.09, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
-    set_ui_square_transform(self, self.ui.flow_score_submit_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, FLOW_UI_BUTTON_Z, self.flow_submit_done and vmath.vector4(0.2, 0.65, 0.22, 0.95) or vmath.vector4(0.2, 0.45, 0.75, 0.95), 250, 56)
-    set_ui_square_transform(self, self.ui.flow_score_title_button, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, FLOW_UI_BUTTON_Z, vmath.vector4(0.72, 0.24, 0.24, 0.95), 250, 56)
+    local panel_tint = LEADERBOARD_DEBUG_LAYOUT_ENABLED and vmath.vector4(0.15, 0.08, 0.24, 0.30) or vmath.vector4(0.07, 0.13, 0.09, 1)
+    set_ui_square_transform(self, self.ui.flow_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z, panel_tint, LEADERBOARD_DEBUG_PANEL_W, LEADERBOARD_DEBUG_PANEL_H)
+    set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    if LEADERBOARD_DEBUG_LAYOUT_ENABLED then
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, LEADERBOARD_DEBUG_FRAME_X, LEADERBOARD_DEBUG_FRAME_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.8, 1.0, 0.45), LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, LEADERBOARD_DEBUG_PAGE_UP_X, LEADERBOARD_DEBUG_PAGE_UP_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.86, 0.2, 0.8), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, LEADERBOARD_DEBUG_PAGE_DOWN_X, LEADERBOARD_DEBUG_PAGE_DOWN_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.72, 0.24, 0.8), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.93, 0.36, 0.36, 0.82), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
+    else
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
+    end
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -12156,22 +12236,8 @@ function update_flow_ui(self, dt)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     if self.ui.flow_score_rows then
-        local vals = {
-            math.max(0, s.survivors or 0) * 28,
-            math.max(0, s.seated or 0) * 28,
-            math.max(0, s.power_units or 0) * 12,
-            math.max(0, s.objectives or 0) * 70
-        }
-        local cols = {
-            vmath.vector4(0.24, 0.78, 0.34, 0.95),
-            vmath.vector4(0.35, 0.75, 0.9, 0.95),
-            vmath.vector4(0.95, 0.85, 0.24, 0.95),
-            vmath.vector4(0.9, 0.48, 0.92, 0.95)
-        }
-        local y = SCREEN_HEIGHT * 0.67
-        for i, row_id in ipairs(self.ui.flow_score_rows) do
-            local w = math.min(300, math.max(90, vals[i] or 90))
-            set_ui_square_transform(self, row_id, SCREEN_WIDTH * 0.5, y - ((i - 1) * 52), FLOW_UI_PANEL_Z, cols[i] or vmath.vector4(0.7, 0.7, 0.7, 0.9), w, 28)
+        for _, row_id in ipairs(self.ui.flow_score_rows) do
+            set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)
         end
     end
 end
@@ -12460,13 +12526,17 @@ function handle_flow_touch(self, input_x, input_y)
         return true
     end
     if state == FLOW_STATE_SCORE_SOLO or state == FLOW_STATE_SCORE_MP then
-        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.28, 250, 56) then
-            print("SCORE | manual submit disabled (auto publish flow).")
-            return true
-        end
-        if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.17, 250, 56) then
+        if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H) then
             enter_flow_state(self, FLOW_STATE_TITLE)
             self.game_won = false
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_PAGE_UP_X, LEADERBOARD_DEBUG_PAGE_UP_Y, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H) then
+            print("SCORE | leaderboard page up debug pressed.")
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_PAGE_DOWN_X, LEADERBOARD_DEBUG_PAGE_DOWN_Y, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H) then
+            print("SCORE | leaderboard page down debug pressed.")
             return true
         end
         return true

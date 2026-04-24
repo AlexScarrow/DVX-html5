@@ -10469,7 +10469,7 @@ function start_solo_game_flow(self)
     self.selected_mission_type = multiplayer_normalize_mission_type(selected)
     self.controlled_unit_id = "sarge"
     local level_index = select_level_index_for_mission(self, self.selected_mission_type)
-    reset_and_load_level(self, level_index)
+    reset_and_load_level(self, level_index, true)
     reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
@@ -10484,7 +10484,7 @@ local function start_tutorial_game_flow(self)
     end
     self.selected_mission_type = MISSION_TYPE_TUTORIAL
     self.controlled_unit_id = "sarge"
-    reset_and_load_level(self, 5)
+    reset_and_load_level(self, 5, true)
     self.tutorial_mode = true
     self.tutorial_completed = false
     local step1 = TUTORIAL_STEP_DEFS[1]
@@ -10540,7 +10540,7 @@ function start_multiplayer_game_flow(self, session_config)
     if level_index < 1 or not (self.level_library and self.level_library[level_index]) then
         level_index = select_level_index_for_mission(self, self.selected_mission_type)
     end
-    reset_and_load_level(self, level_index)
+    reset_and_load_level(self, level_index, true)
     multiplayer_enforce_controlled_unit(self, true)
     reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
@@ -12821,7 +12821,143 @@ local function get_selected_unit(self)
     return nil
 end
 
-function reset_and_load_level(self, level_index)
+finish_level_load_after_clear = function(self, level_index)
+    self.tile_library = require("main.tile_defs").create_tile_library(COMPONENT_UI)
+    self.level_library = require("main.level_defs").create_level_library()
+    self.world_grid = create_world_grid()
+    self.world_grid = bake_level_to_world_grid(self.world_grid, self.level_library[level_index], self.tile_library)
+
+    self.alien_turn_active = false
+    self.alien_turn_waiting_for_advance = false
+    self.alien_turn_manual_pause = false
+    self.pending_spitter_attack_phase = false
+    self.spitter_attack_started = false
+    self.spitter_attack_timer = 0
+    self.spitter_attack_queue = {}
+    self.spitter_projectiles = {}
+    self.pending_melee_attack_phase = false
+    self.melee_attack_started = false
+    self.melee_attack_timer = 0
+    self.melee_action_queue = {}
+    self.melee_ap_left_by_alien_id = {}
+    self.turret_projectiles = {}
+    self.turret_pending_shots = {}
+    self.next_turret_shot_id = 0
+    self.turret_last_human_cell_by_id = {}
+    self.turret_last_alien_cell_by_id = {}
+    self.turret_fire_cooldown_by_object_id = {}
+    self.turret_fired_this_alien_turn_by_object_id = {}
+    self.human_reactive_fire_cooldown_by_unit_id = {}
+    self.human_reactive_pending_delay_by_unit_id = {}
+    self.loot_pickup_blips = {}
+    self.world_item_instances = {}
+    self.world_item_visuals = {}
+    self.world_item_shadow_visuals = {}
+    self.loot_shadow_objects = {}
+    self.machine_shadow_objects = {}
+    self.turret_shadow_objects = {}
+    self.power_node_shadow_objects = {}
+    self.vent_shadow_objects = {}
+    self.door_shadow_objects = {}
+    self.entry_fire_fx_objects = {}
+    self.exit_green_smoke_fx_objects = {}
+    self.exit_green_smoke_fx_power_state = {}
+    self.wiregap_shadow_objects = {}
+    self.next_world_item_id = 0
+    self.drag_resource = { active = false }
+    self.civilian_turn_waiting_for_alien = false
+    self.exit_objective_state = nil
+    self.dna_analysis_progress = 0
+    self.dna_analysis_complete = false
+    self.dna_sample_spawned = false
+    self.dna_sample_returned = false
+    self.purge_bomb_planted = false
+    self.purge_timer_started = false
+    self.purge_launch_pressed = false
+    self.purge_time_expired = false
+    self.purge_result_locked = false
+    self.purge_deadline_epoch_ms = 0
+    self.purge_turns_remaining = 0
+    self.end_result = ""
+    self.end_mission_type = ""
+    self.end_outro_sequence_id = ""
+    self.end_reason = ""
+    self.end_session_origin = ""
+    self.pending_score_uploads = {}
+    self.flow_score_publish_status = ""
+    self.flow_score_publish_pending_count = 0
+    self.flow_score_last_publish_payload = nil
+    self.leaderboard_entries_solo = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_SOLO)
+    self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
+    score_load_pending_uploads(self)
+    self.outro_slideshow_state = nil
+    self.outro_fx_instances = {}
+    self.outro_slide_anim_id = nil
+    self.tutorial_mode = false
+    self.tutorial_completed = false
+    self.tutorial_overlay_active = false
+    self.tutorial_step_index = nil
+    self.tutorial_anchor_world_x = nil
+    self.tutorial_anchor_world_y = nil
+    self.tutorial_panel_screen_x = nil
+    self.tutorial_panel_screen_y = nil
+    self.nightvision_reveal_unit_id = nil
+    self.nightvision_reveal_tile_id = 0
+    self.nightvision_reveal_hold_timer = 0
+    self.nightvision_reveal_alpha = 0
+    self.launch_fx_timer = 0
+    self.game_won = false
+    self.score_turn_counter = 0
+    self.score_state = nil
+    ensure_score_state(self)
+    self.score_display_total = 0
+    self.power_node_loop_fx = {}
+    self.melee_swipe_fx = {}
+    self.melee_swipe_next_id = 0
+    log_runtime_reference_audit(self, "post_clear")
+
+    self.squad_units = create_squad_units()
+    self.controlled_unit_id = "sarge"
+    self.aliens = {}
+    self.next_alien_id = 0
+    clear_civilian_visuals(self)
+    self.civilians = {}
+    self.next_civilian_id = 0
+    self.civilians = {}
+    self.next_civilian_id = 0
+    self.civilian_visuals = {}
+    self.civilian_shadow_visuals = {}
+    self.civilian_hp_bar_bg_visuals = {}
+    self.civilian_hp_bar_fill_visuals = {}
+    self.civilian_hp_bar_bg_visuals = {}
+    self.civilian_hp_bar_fill_visuals = {}
+
+    spawn_visuals(self)
+    apply_aesthetic_mode(self)
+    if self.spawn_human_unit_fn then
+        self.spawn_human_unit_fn(self)
+    else
+        spawn_human_unit(self)
+    end
+    spawn_initial_blips(self, INITIAL_BLIP_COUNT)
+    spawn_civilians_for_current_mission(self)
+    refresh_civilian_visuals(self)
+    print("SCORE TRACE READY | scoring runtime initialized")
+    score_log_snapshot(self, "level_reset")
+    spawn_exit_test_stash(self)
+    LOOT_RUNTIME.refresh_exit_objective_state(self)
+    refresh_dna_marker_runtime(self)
+    update_human_visual_state(self)
+    update_selected_unit_ui(self)
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_enforce_controlled_unit(self, true)
+    end
+    log_runtime_reference_audit(self, "post_load")
+    print("Loaded level " .. tostring(level_index))
+    return true
+end
+
+function reset_and_load_level(self, level_index, defer_spawn)
     if not self.level_library or not self.level_library[level_index] then
         print("Level index not found: " .. tostring(level_index))
         return false
@@ -12993,139 +13129,15 @@ function reset_and_load_level(self, level_index)
         end
     end
 
-    self.tile_library = require("main.tile_defs").create_tile_library(COMPONENT_UI)
-    self.level_library = require("main.level_defs").create_level_library()
-    self.world_grid = create_world_grid()
-    self.world_grid = bake_level_to_world_grid(self.world_grid, self.level_library[level_index], self.tile_library)
-
-    self.alien_turn_active = false
-    self.alien_turn_waiting_for_advance = false
-    self.alien_turn_manual_pause = false
-    self.pending_spitter_attack_phase = false
-    self.spitter_attack_started = false
-    self.spitter_attack_timer = 0
-    self.spitter_attack_queue = {}
-    self.spitter_projectiles = {}
-    self.pending_melee_attack_phase = false
-    self.melee_attack_started = false
-    self.melee_attack_timer = 0
-    self.melee_action_queue = {}
-    self.melee_ap_left_by_alien_id = {}
-    self.turret_projectiles = {}
-    self.turret_pending_shots = {}
-    self.next_turret_shot_id = 0
-    self.turret_last_human_cell_by_id = {}
-    self.turret_last_alien_cell_by_id = {}
-    self.turret_fire_cooldown_by_object_id = {}
-    self.turret_fired_this_alien_turn_by_object_id = {}
-    self.human_reactive_fire_cooldown_by_unit_id = {}
-    self.human_reactive_pending_delay_by_unit_id = {}
-    self.loot_pickup_blips = {}
-    self.world_item_instances = {}
-    self.world_item_visuals = {}
-    self.world_item_shadow_visuals = {}
-    self.loot_shadow_objects = {}
-    self.machine_shadow_objects = {}
-    self.turret_shadow_objects = {}
-    self.power_node_shadow_objects = {}
-    self.vent_shadow_objects = {}
-    self.door_shadow_objects = {}
-    self.entry_fire_fx_objects = {}
-    self.exit_green_smoke_fx_objects = {}
-    self.exit_green_smoke_fx_power_state = {}
-    self.wiregap_shadow_objects = {}
-    self.next_world_item_id = 0
-    self.drag_resource = { active = false }
-    self.civilian_turn_waiting_for_alien = false
-    self.exit_objective_state = nil
-    self.dna_analysis_progress = 0
-    self.dna_analysis_complete = false
-    self.dna_sample_spawned = false
-    self.dna_sample_returned = false
-    self.purge_bomb_planted = false
-    self.purge_timer_started = false
-    self.purge_launch_pressed = false
-    self.purge_time_expired = false
-    self.purge_result_locked = false
-    self.purge_deadline_epoch_ms = 0
-    self.purge_turns_remaining = 0
-    self.end_result = ""
-    self.end_mission_type = ""
-    self.end_outro_sequence_id = ""
-    self.end_reason = ""
-    self.end_session_origin = ""
-    self.pending_score_uploads = {}
-    self.flow_score_publish_status = ""
-    self.flow_score_publish_pending_count = 0
-    self.flow_score_last_publish_payload = nil
-    self.leaderboard_entries_solo = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_SOLO)
-    self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
-    score_load_pending_uploads(self)
-    self.outro_slideshow_state = nil
-    self.outro_fx_instances = {}
-    self.outro_slide_anim_id = nil
-    self.tutorial_mode = false
-    self.tutorial_completed = false
-    self.tutorial_overlay_active = false
-    self.tutorial_step_index = nil
-    self.tutorial_anchor_world_x = nil
-    self.tutorial_anchor_world_y = nil
-    self.tutorial_panel_screen_x = nil
-    self.tutorial_panel_screen_y = nil
-    self.nightvision_reveal_unit_id = nil
-    self.nightvision_reveal_tile_id = 0
-    self.nightvision_reveal_hold_timer = 0
-    self.nightvision_reveal_alpha = 0
-    self.launch_fx_timer = 0
-    self.game_won = false
-    self.score_turn_counter = 0
-    self.score_state = nil
-    ensure_score_state(self)
-    self.score_display_total = 0
-    self.power_node_loop_fx = {}
-    self.melee_swipe_fx = {}
-    self.melee_swipe_next_id = 0
-    log_runtime_reference_audit(self, "post_clear")
-
-    self.squad_units = create_squad_units()
-    self.controlled_unit_id = "sarge"
-    self.aliens = {}
-    self.next_alien_id = 0
-    clear_civilian_visuals(self)
-    self.civilians = {}
-    self.next_civilian_id = 0
-    self.civilians = {}
-    self.next_civilian_id = 0
-    self.civilian_visuals = {}
-    self.civilian_shadow_visuals = {}
-    self.civilian_hp_bar_bg_visuals = {}
-    self.civilian_hp_bar_fill_visuals = {}
-    self.civilian_hp_bar_bg_visuals = {}
-    self.civilian_hp_bar_fill_visuals = {}
-
-    spawn_visuals(self)
-    apply_aesthetic_mode(self)
-    if self.spawn_human_unit_fn then
-        self.spawn_human_unit_fn(self)
-    else
-        spawn_human_unit(self)
+    if defer_spawn == true then
+        self.pending_level_load = self.pending_level_load or {}
+        self.pending_level_load.level_index = level_index
+        self.pending_level_load.frames_until_spawn = 1
+        print(string.format("Level load deferred after clear -> level %d", level_index))
+        return true
     end
-    spawn_initial_blips(self, INITIAL_BLIP_COUNT)
-    spawn_civilians_for_current_mission(self)
-    refresh_civilian_visuals(self)
-    print("SCORE TRACE READY | scoring runtime initialized")
-    score_log_snapshot(self, "level_reset")
-    spawn_exit_test_stash(self)
-    LOOT_RUNTIME.refresh_exit_objective_state(self)
-    refresh_dna_marker_runtime(self)
-    update_human_visual_state(self)
-    update_selected_unit_ui(self)
-    if self.mp_state and self.mp_state.enabled then
-        multiplayer_enforce_controlled_unit(self, true)
-    end
-    log_runtime_reference_audit(self, "post_load")
-    print("Loaded level " .. tostring(level_index))
-    return true
+
+    return finish_level_load_after_clear(self, level_index)
 end
 
 local function get_level_button_screen_x(level_index)
@@ -14071,7 +14083,7 @@ function request_level_load(self, level_index, source_tag)
         return false
     end
     self.level_switch_in_progress = true
-    local ok = reset_and_load_level(self, level_index)
+    local ok = reset_and_load_level(self, level_index, true)
     self.level_switch_in_progress = false
     if ok then
         print(string.format("Level load requested from %s -> level %d", tostring(source_tag or "unknown"), level_index))
@@ -23091,6 +23103,19 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    if self.pending_level_load and self.pending_level_load.level_index then
+        local remaining = tonumber(self.pending_level_load.frames_until_spawn or 0) or 0
+        if remaining > 0 then
+            self.pending_level_load.frames_until_spawn = remaining - 1
+        else
+            local pending_level_index = tonumber(self.pending_level_load.level_index or 0) or 0
+            self.pending_level_load = nil
+            if pending_level_index > 0 then
+                finish_level_load_after_clear(self, pending_level_index)
+            end
+        end
+    end
+
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
     end

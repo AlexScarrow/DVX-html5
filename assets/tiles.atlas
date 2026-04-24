@@ -630,6 +630,18 @@ images {
   image: "/assets/images/lobby_backpanel.png"
 }
 images {
+  image: "/assets/images/leaderboard_panel.png"
+}
+images {
+  image: "/assets/images/leaderboard_panel_header.png"
+}
+images {
+  image: "/assets/images/leaderboard_player_header.png"
+}
+images {
+  image: "/assets/images/leaderboard_team_header.png"
+}
+images {
   image: "/assets/images/letter_a.png"
 }
 images {

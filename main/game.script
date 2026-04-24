@@ -263,6 +263,7 @@ SCORE_FLOW_TEAM_LETTER_SCALE = 0.35
 SCORE_FLOW_TEAM_LETTER_SPACING = 10
 SCORE_FLOW_TEAM_TOKEN_GAP = 16
 LEADERBOARD_DEBUG_LAYOUT_ENABLED = true
+LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED = true
 LEADERBOARD_DEBUG_PANEL_TOPLEFT_X = 0
 LEADERBOARD_DEBUG_PANEL_TOPLEFT_Y = 0
 LEADERBOARD_DEBUG_PANEL_W = 1280
@@ -277,10 +278,10 @@ LEADERBOARD_DEBUG_FRAME_X = LEADERBOARD_DEBUG_FRAME_TOPLEFT_X + (LEADERBOARD_DEB
 LEADERBOARD_DEBUG_FRAME_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_FRAME_TOPLEFT_Y + (LEADERBOARD_DEBUG_FRAME_H * 0.5))
 LEADERBOARD_DEBUG_PAGE_BTN_W = 42
 LEADERBOARD_DEBUG_PAGE_BTN_H = 42
-LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_X = 720
-LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_Y = 260
-LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_X = 720
-LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_Y = 320
+LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_X = 638
+LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_Y = 135
+LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_X = 638
+LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_Y = 572
 LEADERBOARD_DEBUG_PAGE_UP_X = LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_X + (LEADERBOARD_DEBUG_PAGE_BTN_W * 0.5)
 LEADERBOARD_DEBUG_PAGE_UP_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_PAGE_UP_TOPLEFT_Y + (LEADERBOARD_DEBUG_PAGE_BTN_H * 0.5))
 LEADERBOARD_DEBUG_PAGE_DOWN_X = LEADERBOARD_DEBUG_PAGE_DOWN_TOPLEFT_X + (LEADERBOARD_DEBUG_PAGE_BTN_W * 0.5)
@@ -291,10 +292,25 @@ LEADERBOARD_DEBUG_BACK_TOPLEFT_X = 90
 LEADERBOARD_DEBUG_BACK_TOPLEFT_Y = 648
 LEADERBOARD_DEBUG_BACK_X = LEADERBOARD_DEBUG_BACK_TOPLEFT_X + (LEADERBOARD_DEBUG_BACK_W * 0.5)
 LEADERBOARD_DEBUG_BACK_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_BACK_TOPLEFT_Y + (LEADERBOARD_DEBUG_BACK_H * 0.5))
-LEADERBOARD_DEBUG_ROW_TOPLEFT_Y = 170
+LEADERBOARD_DEBUG_ROW_TOPLEFT_Y = 200
 LEADERBOARD_DEBUG_ROW_Y = SCREEN_HEIGHT - LEADERBOARD_DEBUG_ROW_TOPLEFT_Y
-LEADERBOARD_DEBUG_NAME_X = 100
-LEADERBOARD_DEBUG_SCORE_X = 300
+LEADERBOARD_DEBUG_ROW_GAP = 40
+LEADERBOARD_DEBUG_ROWS_PER_PAGE = 10
+LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT = 20
+LEADERBOARD_DEBUG_NAME_X = 120
+LEADERBOARD_DEBUG_SCORE_X = 500
+LEADERBOARD_PANEL_HEADER_X = 640
+LEADERBOARD_PANEL_HEADER_Y = 619
+LEADERBOARD_ROLE_HEADER_TOPLEFT_X = LEADERBOARD_DEBUG_FRAME_TOPLEFT_X + 71
+LEADERBOARD_ROLE_HEADER_TOPLEFT_Y = LEADERBOARD_DEBUG_FRAME_TOPLEFT_Y + 14
+LEADERBOARD_ROLE_HEADER_X = LEADERBOARD_ROLE_HEADER_TOPLEFT_X + 50
+LEADERBOARD_ROLE_HEADER_Y = SCREEN_HEIGHT - (LEADERBOARD_ROLE_HEADER_TOPLEFT_Y + 20)
+LEADERBOARD_DEBUG_SCORE_DIGITS_PER_ROW = 6
+LEADERBOARD_DEBUG_SCORE_DIGIT_SPACING = 14
+LEADERBOARD_DEBUG_SCORE_DIGIT_SCALE = 0.7
+LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW = 24
+LEADERBOARD_DEBUG_NAME_LETTER_SPACING = 10
+LEADERBOARD_DEBUG_NAME_LETTER_SCALE = 0.28
 RANGED_HIT_PREVIEW_Z = 0.77
 RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
 RANGED_HIT_PREVIEW_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W * 0.66
@@ -8772,6 +8788,9 @@ local function initialize_unit_ui(self)
         flow_outro_skip_button = nil,
         flow_score_submit_button = nil,
         flow_score_title_button = nil,
+        flow_leaderboard_panel = nil,
+        flow_leaderboard_panel_header = nil,
+        flow_leaderboard_role_header = nil,
         flow_leaderboard_debug_frame = nil,
         flow_leaderboard_debug_page_up = nil,
         flow_leaderboard_debug_page_down = nil,
@@ -8794,6 +8813,8 @@ local function initialize_unit_ui(self)
         flow_mp_slot_icons = {},
         flow_score_rows = {},
         flow_score_team_name_letters = {},
+        flow_leaderboard_dummy_name_letters = {},
+        flow_leaderboard_dummy_score_digits = {},
         flow_mp_lobby_boxes = {},
         flow_mp_lobby_cards = {},
         flow_mp_lobby_status_strips = {},
@@ -8920,6 +8941,18 @@ local function initialize_unit_ui(self)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
     self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
+    self.ui.flow_leaderboard_panel = create_ui_marker_sprite(hash("leaderboard_panel"), FLOW_UI_PANEL_Z + 0.002)
+    self.ui.flow_leaderboard_panel_header = create_ui_marker_sprite(hash("leaderboard_panel_header"), FLOW_UI_BUTTON_Z)
+    self.ui.flow_leaderboard_role_header = create_ui_marker_sprite(hash("leaderboard_player_header"), FLOW_UI_BUTTON_Z)
+    if self.ui.flow_leaderboard_panel then
+        pcall(go.set, msg.url(nil, self.ui.flow_leaderboard_panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
+    if self.ui.flow_leaderboard_panel_header then
+        pcall(go.set, msg.url(nil, self.ui.flow_leaderboard_panel_header, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
+    if self.ui.flow_leaderboard_role_header then
+        pcall(go.set, msg.url(nil, self.ui.flow_leaderboard_role_header, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     self.ui.flow_leaderboard_debug_frame = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
     self.ui.flow_leaderboard_debug_page_up = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     self.ui.flow_leaderboard_debug_page_down = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
@@ -8956,6 +8989,12 @@ local function initialize_unit_ui(self)
     end
     for i = 1, 64 do
         self.ui.flow_score_team_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_PANEL_Z + 0.006)
+    end
+    for i = 1, (LEADERBOARD_DEBUG_ROWS_PER_PAGE * LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW) do
+        self.ui.flow_leaderboard_dummy_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_PANEL_Z + 0.006)
+    end
+    for i = 1, (LEADERBOARD_DEBUG_ROWS_PER_PAGE * LEADERBOARD_DEBUG_SCORE_DIGITS_PER_ROW) do
+        self.ui.flow_leaderboard_dummy_score_digits[i] = create_ui_marker_sprite(hash("score_0"), FLOW_UI_PANEL_Z + 0.006)
     end
     for i = 1, 8 do
         self.ui.flow_mp_lobby_cards[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
@@ -9108,6 +9147,9 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_panel_header, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_role_header, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
@@ -9154,6 +9196,16 @@ local function set_ui_hidden(self)
     if self.ui.flow_score_team_name_letters then
         for _, letter_id in ipairs(self.ui.flow_score_team_name_letters) do
             set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_leaderboard_dummy_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_leaderboard_dummy_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_leaderboard_dummy_score_digits then
+        for _, digit_id in ipairs(self.ui.flow_leaderboard_dummy_score_digits) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
         end
     end
     if self.ui.flow_mp_lobby_cards then
@@ -9393,6 +9445,108 @@ update_score_flow_team_names = function(self, visible)
         cursor_x = cursor_x + spans[token_index]
         if token_index < #tokens then
             cursor_x = cursor_x + SCORE_FLOW_TEAM_TOKEN_GAP
+        end
+    end
+end
+
+leaderboard_debug_build_dummy_entries = function(self, score_state)
+    if LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED ~= true then
+        return {}
+    end
+    local rows = {}
+    for i = 1, LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT do
+        local score_value = (LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT - i + 1) * 111
+        local name_value = ""
+        if score_state == FLOW_STATE_SCORE_MP then
+            local a = ((i - 1) % 4) + 1
+            local b = (i % 4) + 1
+            name_value = string.format("%s %s", mp_alpha_label_from_network_id("p" .. tostring(a)), mp_alpha_label_from_network_id("p" .. tostring(b)))
+        else
+            name_value = mp_alpha_label_from_network_id("p" .. tostring(((i - 1) % 4) + 1))
+        end
+        rows[#rows + 1] = {
+            score = math.max(0, tonumber(score_value or 0) or 0),
+            name = mp_lobby_sanitize_name(name_value)
+        }
+    end
+    return rows
+end
+
+leaderboard_debug_render_dummy_rows = function(self)
+    if not self.ui then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if self.ui.flow_leaderboard_dummy_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_leaderboard_dummy_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_leaderboard_dummy_score_digits then
+        for _, digit_id in ipairs(self.ui.flow_leaderboard_dummy_score_digits) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
+        end
+    end
+    if LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED ~= true then
+        return
+    end
+    local score_state = self.game_flow_state or FLOW_STATE_GAME
+    if score_state ~= FLOW_STATE_SCORE_SOLO and score_state ~= FLOW_STATE_SCORE_MP then
+        return
+    end
+    local rows = leaderboard_debug_build_dummy_entries(self, score_state)
+    local total_pages = math.max(1, math.ceil(#rows / LEADERBOARD_DEBUG_ROWS_PER_PAGE))
+    self.leaderboard_debug_page = math.max(1, math.min(total_pages, tonumber(self.leaderboard_debug_page or 1) or 1))
+    local start_index = ((self.leaderboard_debug_page - 1) * LEADERBOARD_DEBUG_ROWS_PER_PAGE) + 1
+    local end_index = math.min(#rows, start_index + LEADERBOARD_DEBUG_ROWS_PER_PAGE - 1)
+    local letter_cursor = 1
+    local digit_cursor = 1
+    for idx = start_index, end_index do
+        local row = rows[idx]
+        local row_slot = idx - start_index
+        local row_y = LEADERBOARD_DEBUG_ROW_Y - (row_slot * LEADERBOARD_DEBUG_ROW_GAP)
+        local score_text = string.format("%0" .. tostring(LEADERBOARD_DEBUG_SCORE_DIGITS_PER_ROW) .. "d", math.max(0, tonumber(row.score or 0) or 0))
+        for di = 1, #score_text do
+            local digit_id = self.ui.flow_leaderboard_dummy_score_digits[digit_cursor]
+            if not digit_id then
+                break
+            end
+            local ch = string.sub(score_text, di, di)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+            set_ui_square_transform(
+                self,
+                digit_id,
+                LEADERBOARD_DEBUG_SCORE_X + ((di - 1) * LEADERBOARD_DEBUG_SCORE_DIGIT_SPACING),
+                row_y,
+                FLOW_UI_PANEL_Z + 0.006,
+                vmath.vector4(1, 1, 1, 1),
+                SCORE_HUD_DIGIT_DRAW_W * 0.021 * LEADERBOARD_DEBUG_SCORE_DIGIT_SCALE,
+                SCORE_HUD_DIGIT_DRAW_H * 0.021 * LEADERBOARD_DEBUG_SCORE_DIGIT_SCALE
+            )
+            digit_cursor = digit_cursor + 1
+        end
+        local name_text = mp_lobby_sanitize_name(row.name or "")
+        if #name_text > LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW then
+            name_text = string.sub(name_text, 1, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW)
+        end
+        for ci = 1, #name_text do
+            local glyph_id = self.ui.flow_leaderboard_dummy_name_letters[letter_cursor]
+            if not glyph_id then
+                break
+            end
+            local ch = string.sub(name_text, ci, ci)
+            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+            set_ui_square_transform(
+                self,
+                glyph_id,
+                LEADERBOARD_DEBUG_NAME_X + ((ci - 1) * LEADERBOARD_DEBUG_NAME_LETTER_SPACING),
+                row_y,
+                FLOW_UI_PANEL_Z + 0.006,
+                vmath.vector4(1, 1, 1, 0.98),
+                LEADERBOARD_DEBUG_NAME_LETTER_SCALE,
+                LEADERBOARD_DEBUG_NAME_LETTER_SCALE
+            )
+            letter_cursor = letter_cursor + 1
         end
     end
 end
@@ -11793,6 +11947,7 @@ function enter_score_flow(self)
         score_state = FLOW_STATE_SCORE_MP
     end
     enter_flow_state(self, score_state)
+    self.leaderboard_debug_page = 1
     score_try_auto_publish(self, score_state)
     local s = self.flow_score_breakdown
     print(string.format(
@@ -11904,6 +12059,9 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_panel_header, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_role_header, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
@@ -12186,14 +12344,23 @@ function update_flow_ui(self, dt)
     end
     update_score_flow_digits(self, true)
     update_score_flow_team_names(self, true)
-    local panel_tint = LEADERBOARD_DEBUG_LAYOUT_ENABLED and vmath.vector4(0.15, 0.08, 0.24, 0.30) or vmath.vector4(0.07, 0.13, 0.09, 1)
+    leaderboard_debug_render_dummy_rows(self)
+    local panel_tint = LEADERBOARD_DEBUG_LAYOUT_ENABLED and vmath.vector4(0.15, 0.08, 0.24, 0) or vmath.vector4(0.07, 0.13, 0.09, 1)
     set_ui_square_transform(self, self.ui.flow_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z, panel_tint, LEADERBOARD_DEBUG_PANEL_W, LEADERBOARD_DEBUG_PANEL_H)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
+    set_ui_square_transform(self, self.ui.flow_leaderboard_panel_header, LEADERBOARD_PANEL_HEADER_X, LEADERBOARD_PANEL_HEADER_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1, 1, 1, 1), 1, 1)
+    local role_header_anim = hash("leaderboard_player_header")
+    if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_SCORE_MP then
+        role_header_anim = hash("leaderboard_team_header")
+    end
+    msg.post(msg.url(nil, self.ui.flow_leaderboard_role_header, "sprite"), "play_animation", { id = role_header_anim })
+    set_ui_square_transform(self, self.ui.flow_leaderboard_role_header, LEADERBOARD_ROLE_HEADER_X, LEADERBOARD_ROLE_HEADER_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1, 1, 1, 1), 1, 1)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     if LEADERBOARD_DEBUG_LAYOUT_ENABLED then
-        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, LEADERBOARD_DEBUG_FRAME_X, LEADERBOARD_DEBUG_FRAME_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.8, 1.0, 0.45), LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
-        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, LEADERBOARD_DEBUG_PAGE_UP_X, LEADERBOARD_DEBUG_PAGE_UP_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.86, 0.2, 0.8), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
-        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, LEADERBOARD_DEBUG_PAGE_DOWN_X, LEADERBOARD_DEBUG_PAGE_DOWN_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.72, 0.24, 0.8), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, LEADERBOARD_DEBUG_FRAME_X, LEADERBOARD_DEBUG_FRAME_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.8, 1.0, 0), LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, LEADERBOARD_DEBUG_PAGE_UP_X, LEADERBOARD_DEBUG_PAGE_UP_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.86, 0.2, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, LEADERBOARD_DEBUG_PAGE_DOWN_X, LEADERBOARD_DEBUG_PAGE_DOWN_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.72, 0.24, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.93, 0.36, 0.36, 0.82), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
     else
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
@@ -12526,17 +12693,23 @@ function handle_flow_touch(self, input_x, input_y)
         return true
     end
     if state == FLOW_STATE_SCORE_SOLO or state == FLOW_STATE_SCORE_MP then
+        local row_state = self.game_flow_state or FLOW_STATE_GAME
+        local total_rows = LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED == true and LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT or 0
+        local page_count = math.max(1, math.ceil(total_rows / LEADERBOARD_DEBUG_ROWS_PER_PAGE))
+        self.leaderboard_debug_page = math.max(1, math.min(page_count, tonumber(self.leaderboard_debug_page or 1) or 1))
         if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H) then
             enter_flow_state(self, FLOW_STATE_TITLE)
             self.game_won = false
             return true
         end
         if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_PAGE_UP_X, LEADERBOARD_DEBUG_PAGE_UP_Y, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H) then
-            print("SCORE | leaderboard page up debug pressed.")
+            self.leaderboard_debug_page = math.max(1, self.leaderboard_debug_page - 1)
+            print(string.format("SCORE | leaderboard page up | page=%d state=%s", self.leaderboard_debug_page, tostring(row_state)))
             return true
         end
         if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_PAGE_DOWN_X, LEADERBOARD_DEBUG_PAGE_DOWN_Y, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H) then
-            print("SCORE | leaderboard page down debug pressed.")
+            self.leaderboard_debug_page = math.min(page_count, self.leaderboard_debug_page + 1)
+            print(string.format("SCORE | leaderboard page down | page=%d state=%s", self.leaderboard_debug_page, tostring(row_state)))
             return true
         end
         return true

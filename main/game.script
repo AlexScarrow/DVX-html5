@@ -16316,6 +16316,17 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        multiplayer_lobby_ensure_runtime(self)
+        local active_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+        if active_offer_id ~= "" then
+            multiplayer_lobby_note_offer_removed(self, active_offer_id, get_wall_clock_ms())
+            multiplayer_lobby_apply_offer_remove(self, active_offer_id)
+            table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_remove", {
+                offer_id = active_offer_id,
+                owner_player_id = tostring(self.mp_state.host_player_id or sender or "p1"),
+                removed_at_ms = get_wall_clock_ms()
+            }))
+        end
         config.level_index = select_level_index_for_mission(self, config.mission_type or MISSION_TYPE_ESCAPE)
         table.insert(events, multiplayer_transport_emit_event(self, "match_started", {
             session_config = config

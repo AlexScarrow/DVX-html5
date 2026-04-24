@@ -263,7 +263,7 @@ SCORE_FLOW_TEAM_LETTER_SCALE = 0.35
 SCORE_FLOW_TEAM_LETTER_SPACING = 10
 SCORE_FLOW_TEAM_TOKEN_GAP = 16
 LEADERBOARD_DEBUG_LAYOUT_ENABLED = true
-LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED = true
+LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED = false
 LEADERBOARD_DEBUG_PANEL_TOPLEFT_X = 0
 LEADERBOARD_DEBUG_PANEL_TOPLEFT_Y = 0
 LEADERBOARD_DEBUG_PANEL_W = 1280
@@ -312,6 +312,9 @@ LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO = 24
 LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP = 40
 LEADERBOARD_DEBUG_NAME_LETTER_SPACING = 10
 LEADERBOARD_DEBUG_NAME_LETTER_SCALE = 0.28
+LEADERBOARD_LOCAL_MAX_ENTRIES = 200
+LEADERBOARD_LOCAL_SAVE_KEY_SOLO = "dvx_leaderboard_solo_local"
+LEADERBOARD_LOCAL_SAVE_KEY_MP = "dvx_leaderboard_mp_local"
 RANGED_HIT_PREVIEW_Z = 0.77
 RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
 RANGED_HIT_PREVIEW_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W * 0.66
@@ -9451,30 +9454,44 @@ update_score_flow_team_names = function(self, visible)
     end
 end
 
-leaderboard_debug_build_dummy_entries = function(self, score_state)
-    if LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED ~= true then
-        return {}
+leaderboard_get_rows_for_score_state = function(self, score_state)
+    local entries = nil
+    if score_state == FLOW_STATE_SCORE_MP then
+        entries = self.leaderboard_entries_mp or {}
+    else
+        entries = self.leaderboard_entries_solo or {}
     end
     local rows = {}
-    for i = 1, LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT do
-        local score_value = (LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT - i + 1) * 111
-        local name_value = ""
-        if score_state == FLOW_STATE_SCORE_MP then
-            local a = ((i - 1) % 4) + 1
-            local b = (i % 4) + 1
-            name_value = string.format("%s %s", mp_alpha_label_from_network_id("p" .. tostring(a)), mp_alpha_label_from_network_id("p" .. tostring(b)))
-        else
-            name_value = mp_alpha_label_from_network_id("p" .. tostring(((i - 1) % 4) + 1))
+    for _, entry in ipairs(entries) do
+        local names = type(entry.team_display_names) == "table" and entry.team_display_names or {}
+        local name_text = ""
+        if #names > 0 then
+            for i, nm in ipairs(names) do
+                local clean = mp_lobby_sanitize_name(nm)
+                if clean ~= "" then
+                    if name_text == "" then
+                        name_text = clean
+                    else
+                        name_text = name_text .. " " .. clean
+                    end
+                end
+                if i >= 4 then
+                    break
+                end
+            end
+        end
+        if name_text == "" then
+            name_text = mp_lobby_sanitize_name(mp_alpha_label_from_network_id("p1"))
         end
         rows[#rows + 1] = {
-            score = math.max(0, tonumber(score_value or 0) or 0),
-            name = mp_lobby_sanitize_name(name_value)
+            score = math.max(0, tonumber(entry.score_total or 0) or 0),
+            name = name_text
         }
     end
     return rows
 end
 
-leaderboard_debug_render_dummy_rows = function(self)
+leaderboard_render_rows = function(self)
     if not self.ui then
         return
     end
@@ -9489,14 +9506,11 @@ leaderboard_debug_render_dummy_rows = function(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
         end
     end
-    if LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED ~= true then
-        return
-    end
     local score_state = self.game_flow_state or FLOW_STATE_GAME
     if score_state ~= FLOW_STATE_SCORE_SOLO and score_state ~= FLOW_STATE_SCORE_MP then
         return
     end
-    local rows = leaderboard_debug_build_dummy_entries(self, score_state)
+    local rows = leaderboard_get_rows_for_score_state(self, score_state)
     local total_pages = math.max(1, math.ceil(#rows / LEADERBOARD_DEBUG_ROWS_PER_PAGE))
     self.leaderboard_debug_page = math.max(1, math.min(total_pages, tonumber(self.leaderboard_debug_page or 1) or 1))
     local start_index = ((self.leaderboard_debug_page - 1) * LEADERBOARD_DEBUG_ROWS_PER_PAGE) + 1
@@ -9939,9 +9953,74 @@ score_enqueue_pending_publish = function(self, payload, reason)
     score_persist_pending_uploads(self)
 end
 
+score_get_leaderboard_local_save_key = function(score_state)
+    if score_state == FLOW_STATE_SCORE_MP then
+        return LEADERBOARD_LOCAL_SAVE_KEY_MP
+    end
+    return LEADERBOARD_LOCAL_SAVE_KEY_SOLO
+end
+
+score_sort_leaderboard_entries = function(entries)
+    table.sort(entries, function(a, b)
+        local a_score = tonumber(a and a.score_total or 0) or 0
+        local b_score = tonumber(b and b.score_total or 0) or 0
+        if a_score ~= b_score then
+            return a_score > b_score
+        end
+        local a_ts = tonumber(a and a.created_at_ms or 0) or 0
+        local b_ts = tonumber(b and b.created_at_ms or 0) or 0
+        return a_ts > b_ts
+    end)
+end
+
+score_load_local_leaderboard_entries = function(self, score_state)
+    local key = score_get_leaderboard_local_save_key(score_state)
+    local ok, data = pcall(sys.load, key)
+    if not ok or type(data) ~= "table" then
+        return {}
+    end
+    local entries = type(data.entries) == "table" and data.entries or {}
+    score_sort_leaderboard_entries(entries)
+    return entries
+end
+
+score_persist_local_leaderboard_entries = function(self, score_state, entries)
+    local key = score_get_leaderboard_local_save_key(score_state)
+    local ok = pcall(sys.save, key, { entries = entries })
+    if not ok then
+        print("SCORE | failed to persist local leaderboard entries.")
+    end
+end
+
+score_append_local_leaderboard_entry = function(self, score_state, payload)
+    if not self or type(payload) ~= "table" then
+        return
+    end
+    local entries = score_load_local_leaderboard_entries(self, score_state)
+    entries[#entries + 1] = {
+        match_id = tostring(payload.match_id or ""),
+        score_total = tonumber(payload.score_total or 0) or 0,
+        mission_type = tostring(payload.mission_type or ""),
+        result = tostring(payload.result or ""),
+        team_display_names = multiplayer_clone_simple_table(payload.team_display_names or {}),
+        created_at_ms = get_wall_clock_ms()
+    }
+    score_sort_leaderboard_entries(entries)
+    while #entries > LEADERBOARD_LOCAL_MAX_ENTRIES do
+        table.remove(entries)
+    end
+    score_persist_local_leaderboard_entries(self, score_state, entries)
+    if score_state == FLOW_STATE_SCORE_MP then
+        self.leaderboard_entries_mp = entries
+    else
+        self.leaderboard_entries_solo = entries
+    end
+end
+
 score_try_auto_publish = function(self, score_state)
     local payload = score_build_publish_payload(self, score_state)
     self.flow_score_last_publish_payload = payload
+    score_append_local_leaderboard_entry(self, score_state, payload)
     local simulate_failure = tostring((sys.get_config and sys.get_config("leaderboard.simulate_publish_failure")) or "") == "1"
     if simulate_failure then
         self.flow_submit_done = true
@@ -11952,6 +12031,11 @@ function enter_score_flow(self)
     enter_flow_state(self, score_state)
     self.leaderboard_debug_page = 1
     score_try_auto_publish(self, score_state)
+    if score_state == FLOW_STATE_SCORE_MP then
+        self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
+    else
+        self.leaderboard_entries_solo = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_SOLO)
+    end
     local s = self.flow_score_breakdown
     print(string.format(
         "SCORE | total=%d survivors=%d seated=%d power=%d objectives=%d dead=%d",
@@ -12347,7 +12431,7 @@ function update_flow_ui(self, dt)
     end
     update_score_flow_digits(self, true)
     update_score_flow_team_names(self, true)
-    leaderboard_debug_render_dummy_rows(self)
+    leaderboard_render_rows(self)
     local panel_tint = LEADERBOARD_DEBUG_LAYOUT_ENABLED and vmath.vector4(0.15, 0.08, 0.24, 0) or vmath.vector4(0.07, 0.13, 0.09, 1)
     set_ui_square_transform(self, self.ui.flow_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z, panel_tint, LEADERBOARD_DEBUG_PANEL_W, LEADERBOARD_DEBUG_PANEL_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
@@ -12697,7 +12781,12 @@ function handle_flow_touch(self, input_x, input_y)
     end
     if state == FLOW_STATE_SCORE_SOLO or state == FLOW_STATE_SCORE_MP then
         local row_state = self.game_flow_state or FLOW_STATE_GAME
-        local total_rows = LEADERBOARD_DEBUG_DUMMY_ENTRIES_ENABLED == true and LEADERBOARD_DEBUG_DUMMY_ENTRY_COUNT or 0
+        local total_rows = 0
+        if row_state == FLOW_STATE_SCORE_MP then
+            total_rows = #(self.leaderboard_entries_mp or {})
+        else
+            total_rows = #(self.leaderboard_entries_solo or {})
+        end
         local page_count = math.max(1, math.ceil(total_rows / LEADERBOARD_DEBUG_ROWS_PER_PAGE))
         self.leaderboard_debug_page = math.max(1, math.min(page_count, tonumber(self.leaderboard_debug_page or 1) or 1))
         if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H) then
@@ -12969,6 +13058,8 @@ function reset_and_load_level(self, level_index)
     self.flow_score_publish_status = ""
     self.flow_score_publish_pending_count = 0
     self.flow_score_last_publish_payload = nil
+    self.leaderboard_entries_solo = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_SOLO)
+    self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
     score_load_pending_uploads(self)
     self.outro_slideshow_state = nil
     self.outro_fx_instances = {}

@@ -8388,12 +8388,13 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
         pcall(go.set_rotation, vmath.quat_rotation_z(math.rad(tonumber(rotation_deg) or 0)), go_id)
     end
     local final_color = color
-    local is_title_button = self and self.ui and (
+    local preserve_input_alpha = self and self.ui and (
         go_id == self.ui.flow_title_tutorial_button
         or go_id == self.ui.flow_title_solo_button
         or go_id == self.ui.flow_title_multiplayer_button
+        or go_id == self.ui.flow_mp_back_button
     )
-    if final_color and ui_is_button_node(self, go_id) and (not is_title_button) then
+    if final_color and ui_is_button_node(self, go_id) and (not preserve_input_alpha) then
         final_color = vmath.vector4(final_color.x, final_color.y, final_color.z, 1)
     end
     go.set(msg.url(nil, go_id, "sprite"), "tint", final_color)
@@ -12383,8 +12384,8 @@ function update_flow_ui(self, dt)
         end
         local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
         set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] - 1, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_button, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z, (can_launch and valid) and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 0), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z, (can_launch and valid) and vmath.vector4(1, 1, 1, 0) or vmath.vector4(0.65, 0.65, 0.65, 0), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z - 0.001, (can_launch and valid) and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z + 0.001, (can_launch and valid) and hidden or (can_launch and vmath.vector4(1, 1, 1, 0.92) or hidden), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         if self.ui.flow_mp_unit_buttons then

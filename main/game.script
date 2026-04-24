@@ -308,7 +308,8 @@ LEADERBOARD_ROLE_HEADER_Y = SCREEN_HEIGHT - (LEADERBOARD_ROLE_HEADER_TOPLEFT_Y +
 LEADERBOARD_DEBUG_SCORE_DIGITS_PER_ROW = 6
 LEADERBOARD_DEBUG_SCORE_DIGIT_SPACING = 14
 LEADERBOARD_DEBUG_SCORE_DIGIT_SCALE = 0.7
-LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW = 24
+LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO = 24
+LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP = 40
 LEADERBOARD_DEBUG_NAME_LETTER_SPACING = 10
 LEADERBOARD_DEBUG_NAME_LETTER_SCALE = 0.28
 RANGED_HIT_PREVIEW_Z = 0.77
@@ -8990,7 +8991,8 @@ local function initialize_unit_ui(self)
     for i = 1, 64 do
         self.ui.flow_score_team_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_PANEL_Z + 0.006)
     end
-    for i = 1, (LEADERBOARD_DEBUG_ROWS_PER_PAGE * LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW) do
+    local max_name_chars_alloc = math.max(LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+    for i = 1, (LEADERBOARD_DEBUG_ROWS_PER_PAGE * max_name_chars_alloc) do
         self.ui.flow_leaderboard_dummy_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_PANEL_Z + 0.006)
     end
     for i = 1, (LEADERBOARD_DEBUG_ROWS_PER_PAGE * LEADERBOARD_DEBUG_SCORE_DIGITS_PER_ROW) do
@@ -9526,8 +9528,9 @@ leaderboard_debug_render_dummy_rows = function(self)
             digit_cursor = digit_cursor + 1
         end
         local name_text = mp_lobby_sanitize_name(row.name or "")
-        if #name_text > LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW then
-            name_text = string.sub(name_text, 1, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW)
+        local name_limit = (score_state == FLOW_STATE_SCORE_MP) and LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP or LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO
+        if #name_text > name_limit then
+            name_text = string.sub(name_text, 1, name_limit)
         end
         for ci = 1, #name_text do
             local glyph_id = self.ui.flow_leaderboard_dummy_name_letters[letter_cursor]

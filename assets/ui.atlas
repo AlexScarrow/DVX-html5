@@ -41,6 +41,9 @@ images {
   image: "/assets/images/ready_button.png"
 }
 images {
+  image: "/assets/images/ready_not_button.png"
+}
+images {
   image: "/assets/images/sarge_portrait.png"
 }
 images {

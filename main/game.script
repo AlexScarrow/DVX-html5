@@ -8149,7 +8149,8 @@ update_multiplayer_new_turn_button_visual = function(self)
         end
         local local_ready = self.mp_state.ready_by_player_id and self.mp_state.ready_by_player_id[local_player_id] == true
         if not local_ready then
-            tint = vmath.vector4(1, 0.25, 0.25, 1)
+            anim_id = hash("ready_not_button")
+            tint = vmath.vector4(1, 1, 1, 1)
         end
     end
     pcall(msg.post, msg.url(nil, self.ui.new_turn_button, "sprite"), "play_animation", { id = anim_id })
@@ -8804,6 +8805,7 @@ local function initialize_unit_ui(self)
         purge_timer_digit_icons = {},
         new_turn_button = nil,
         launch_button = nil,
+        launch_button_art = nil,
         aesthetic_toggle_button = nil,
         transport_status_dot = nil,
         reactive_toggle_button = nil,
@@ -8849,6 +8851,7 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_cards = {},
         flow_mp_lobby_status_strips = {},
         flow_mp_lobby_backpanel = nil,
+        flow_mp_lobby_back_button = nil,
         flow_mp_lobby_name_letters = {},
         flow_mp_setup_name_letters = {},
         flow_mp_lobby_pin_keys = {},
@@ -8951,6 +8954,10 @@ local function initialize_unit_ui(self)
         end
     end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+    self.ui.launch_button_art = create_ui_marker_sprite(hash("disabled_button"), LAUNCH_BUTTON_Z + 0.001)
+    if self.ui.launch_button_art then
+        pcall(go.set, msg.url(nil, self.ui.launch_button_art, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     self.ui.realtime_toggle_button = create_ui_marker_sprite(hash("realtime_button_off"), LAUNCH_BUTTON_Z)
     update_realtime_toggle_button_visual(self)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
@@ -9036,6 +9043,10 @@ local function initialize_unit_ui(self)
         self.ui.flow_mp_lobby_status_strips[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
     end
     self.ui.flow_mp_lobby_backpanel = create_ui_marker_sprite(hash("lobby_backpanel"), FLOW_UI_PANEL_Z + 0.001)
+    self.ui.flow_mp_lobby_back_button = create_ui_marker_sprite(hash("back_button"), MP_SETUP_UI_Z + 0.004)
+    if self.ui.flow_mp_lobby_back_button then
+        pcall(go.set, msg.url(nil, self.ui.flow_mp_lobby_back_button, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     for i = 1, (MP_LOBBY_SLOTS_PER_PAGE * MP_LOBBY_NAME_MAX_CHARS) do
         self.ui.flow_mp_lobby_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
     end
@@ -9166,6 +9177,7 @@ local function set_ui_hidden(self)
         end
     end
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+    set_ui_square_transform(self, self.ui.launch_button_art, -9999, -9999, LAUNCH_BUTTON_Z + 0.001, hidden, 1, (LAUNCH_BUTTON_H * 0.021) * 0.75)
     set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
@@ -9251,6 +9263,9 @@ local function set_ui_hidden(self)
     end
     if self.ui.flow_mp_lobby_backpanel then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    end
+    if self.ui.flow_mp_lobby_back_button then
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_back_button, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, MP_LOBBY_BACK_BTN_H * 0.021)
     end
     if self.ui.flow_mp_lobby_name_letters then
         for _, letter_id in ipairs(self.ui.flow_mp_lobby_name_letters) do
@@ -11535,7 +11550,19 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
             set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
         end
     end
-    set_ui_square_transform(self, boxes[1], MP_LOBBY_BACK_BTN_X + 10, mp_lobby_y(MP_LOBBY_BACK_BTN_Y - 25), MP_SETUP_UI_Z, vmath.vector4(0.74, 0.26, 0.26, 0.96), MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H)
+    set_ui_square_transform(self, boxes[1], MP_LOBBY_BACK_BTN_X + 10, mp_lobby_y(MP_LOBBY_BACK_BTN_Y - 25), MP_SETUP_UI_Z, vmath.vector4(0.74, 0.26, 0.26, 0), MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H)
+    if self.ui.flow_mp_lobby_back_button then
+        set_ui_square_transform(
+            self,
+            self.ui.flow_mp_lobby_back_button,
+            MP_LOBBY_BACK_BTN_X + 10,
+            mp_lobby_y(MP_LOBBY_BACK_BTN_Y - 25),
+            MP_SETUP_UI_Z + 0.004,
+            vmath.vector4(1, 1, 1, 1),
+            1,
+            MP_LOBBY_BACK_BTN_H * 0.021
+        )
+    end
     set_ui_square_transform(self, boxes[2], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
     set_ui_square_transform(self, boxes[3], MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
@@ -13263,6 +13290,7 @@ function update_global_ui_buttons(self)
             end
         end
         set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
+        set_ui_square_transform(self, self.ui.launch_button_art, -9999, -9999, LAUNCH_BUTTON_Z + 0.001, hidden, 1, (LAUNCH_BUTTON_H * 0.021) * 0.75)
         set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
@@ -13339,7 +13367,7 @@ function update_global_ui_buttons(self)
         local new_turn_button_h = NEW_TURN_BUTTON_VISUAL_SCALE
         if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
             new_turn_button_w = 1.0
-            new_turn_button_h = 0.8
+            new_turn_button_h = 1.0
         end
         set_ui_square_transform(
             self,
@@ -13406,15 +13434,12 @@ function update_global_ui_buttons(self)
         end
     end
     local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
-    local launch_color = vmath.vector4(0.72, 0.2, 0.2, 0.95)
-    if self.game_won then
-        launch_color = vmath.vector4(0.95, 0.9, 0.2, 0.98)
-    elseif launch_status and launch_status.can_launch then
-        launch_color = vmath.vector4(0.2, 0.78, 0.3, 0.95)
-    end
+    local launch_enabled = self.game_won or (launch_status and launch_status.can_launch)
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
-        launch_color = vmath.vector4(0.35, 0.35, 0.35, 0.95)
+        launch_enabled = false
     end
+    local launch_anim = launch_enabled and hash("launch_button") or hash("disabled_button")
+    pcall(msg.post, msg.url(nil, self.ui.launch_button_art, "sprite"), "play_animation", { id = launch_anim })
     local realtime_btn_color = (REALTIME_TOGGLE_BUTTON_DISABLED == true)
         and vmath.vector4(0.4, 0.4, 0.4, 0.9)
         or vmath.vector4(1, 1, 1, 1)
@@ -13425,9 +13450,19 @@ function update_global_ui_buttons(self)
         LAUNCH_BUTTON_X,
         LAUNCH_BUTTON_Y,
         LAUNCH_BUTTON_Z,
-        launch_color,
+        vmath.vector4(1, 1, 1, 0),
         LAUNCH_BUTTON_W,
         LAUNCH_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.launch_button_art,
+        LAUNCH_BUTTON_X,
+        LAUNCH_BUTTON_Y,
+        LAUNCH_BUTTON_Z + 0.001,
+        vmath.vector4(1, 1, 1, 1),
+        1,
+        (LAUNCH_BUTTON_H * 0.021) * 0.75
     )
     set_ui_square_transform(
         self,

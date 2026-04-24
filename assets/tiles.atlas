@@ -630,6 +630,21 @@ images {
   image: "/assets/images/lobby_backpanel.png"
 }
 images {
+  image: "/assets/images/back_button.png"
+}
+images {
+  image: "/assets/images/disabled_button.png"
+}
+images {
+  image: "/assets/images/launch_button.png"
+}
+images {
+  image: "/assets/images/ready_button.png"
+}
+images {
+  image: "/assets/images/ready_not_button.png"
+}
+images {
   image: "/assets/images/title_screen.png"
 }
 images {

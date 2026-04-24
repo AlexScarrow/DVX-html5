@@ -630,6 +630,9 @@ images {
   image: "/assets/images/lobby_backpanel.png"
 }
 images {
+  image: "/assets/images/title_screen.png"
+}
+images {
   image: "/assets/images/leaderboard_panel.png"
 }
 images {

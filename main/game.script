@@ -356,6 +356,8 @@ TITLE_SOLO_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_SOLO_BUTTON_Y = SCREEN_HEIGHT * 0.52
 TITLE_MULTIPLAYER_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_MULTIPLAYER_BUTTON_Y = SCREEN_HEIGHT * 0.38
+TITLE_SCREEN_ART_W = 1280
+TITLE_SCREEN_ART_H = 720
 TUTORIAL_PANEL_W = 600
 TUTORIAL_PANEL_H = 300
 TUTORIAL_PANEL_Z = FLOW_UI_PANEL_Z + 0.02
@@ -8815,6 +8817,7 @@ local function initialize_unit_ui(self)
         flow_leaderboard_debug_page_up = nil,
         flow_leaderboard_debug_page_down = nil,
         flow_leaderboard_debug_back = nil,
+        flow_title_panel = nil,
         flow_title_tutorial_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
@@ -8977,6 +8980,10 @@ local function initialize_unit_ui(self)
     self.ui.flow_leaderboard_debug_page_up = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     self.ui.flow_leaderboard_debug_page_down = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     self.ui.flow_leaderboard_debug_back = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
+    self.ui.flow_title_panel = create_ui_marker_sprite(hash("title_screen"), FLOW_UI_PANEL_Z + 0.001)
+    if self.ui.flow_title_panel then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
@@ -9175,6 +9182,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
+    set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -12185,7 +12193,17 @@ function update_flow_ui(self, dt)
         if not self.ui.flow_title_tutorial_button then
             self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
         end
-        set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        set_ui_square_transform(
+            self,
+            self.ui.flow_title_panel,
+            SCREEN_WIDTH * 0.5,
+            SCREEN_HEIGHT * 0.5,
+            FLOW_UI_PANEL_Z + 0.001,
+            vmath.vector4(1, 1, 1, 1),
+            FLOW_UI_SCREEN_W / TITLE_SCREEN_ART_W,
+            FLOW_UI_SCREEN_H / TITLE_SCREEN_ART_H
+        )
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.98), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.96), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.96), 280, 70)
@@ -12895,6 +12913,7 @@ local function get_selected_unit(self)
 end
 
 finish_level_load_after_clear = function(self, level_index)
+    local loading_tutorial = (tostring(self.selected_mission_type or "") == MISSION_TYPE_TUTORIAL)
     self.tile_library = require("main.tile_defs").create_tile_library(COMPONENT_UI)
     self.level_library = require("main.level_defs").create_level_library()
     self.world_grid = create_world_grid()
@@ -12966,14 +12985,16 @@ finish_level_load_after_clear = function(self, level_index)
     self.outro_slideshow_state = nil
     self.outro_fx_instances = {}
     self.outro_slide_anim_id = nil
-    self.tutorial_mode = false
+    self.tutorial_mode = loading_tutorial
     self.tutorial_completed = false
-    self.tutorial_overlay_active = false
-    self.tutorial_step_index = nil
-    self.tutorial_anchor_world_x = nil
-    self.tutorial_anchor_world_y = nil
-    self.tutorial_panel_screen_x = nil
-    self.tutorial_panel_screen_y = nil
+    if loading_tutorial ~= true then
+        self.tutorial_overlay_active = false
+        self.tutorial_step_index = nil
+        self.tutorial_anchor_world_x = nil
+        self.tutorial_anchor_world_y = nil
+        self.tutorial_panel_screen_x = nil
+        self.tutorial_panel_screen_y = nil
+    end
     self.nightvision_reveal_unit_id = nil
     self.nightvision_reveal_tile_id = 0
     self.nightvision_reveal_hold_timer = 0
@@ -13024,6 +13045,9 @@ finish_level_load_after_clear = function(self, level_index)
     update_selected_unit_ui(self)
     if self.mp_state and self.mp_state.enabled then
         multiplayer_enforce_controlled_unit(self, true)
+    end
+    if loading_tutorial == true then
+        tutorial_set_current_step(self, self.tutorial_step_index or 1)
     end
     log_runtime_reference_audit(self, "post_load")
     print("Loaded level " .. tostring(level_index))

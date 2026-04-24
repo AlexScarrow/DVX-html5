@@ -310,7 +310,9 @@ LEADERBOARD_DEBUG_SCORE_DIGIT_SPACING = 14
 LEADERBOARD_DEBUG_SCORE_DIGIT_SCALE = 0.7
 LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO = 24
 LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP = 40
-LEADERBOARD_DEBUG_NAME_LETTER_SPACING = 10
+LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER = 8
+LEADERBOARD_DEBUG_NAME_TOKEN_GAP_PX = 10
+LEADERBOARD_DEBUG_NAME_LETTER_SPACING = 6
 LEADERBOARD_DEBUG_NAME_LETTER_SCALE = 0.28
 LEADERBOARD_LOCAL_MAX_ENTRIES = 200
 LEADERBOARD_LOCAL_SAVE_KEY_SOLO = "dvx_leaderboard_solo_local"
@@ -568,6 +570,20 @@ mp_lobby_sanitize_name = function(raw_name)
     end
     if #normalized > MP_LOBBY_NAME_MAX_CHARS then
         normalized = string.sub(normalized, 1, MP_LOBBY_NAME_MAX_CHARS)
+    end
+    return normalized
+end
+
+leaderboard_sanitize_name = function(raw_name, max_chars)
+    local normalized = string.lower(tostring(raw_name or "player"))
+    normalized = string.gsub(normalized, "[^a-z]", "")
+    if normalized == "" then
+        normalized = "player"
+    end
+    local cap = tonumber(max_chars or LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP) or LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP
+    cap = math.max(1, cap)
+    if #normalized > cap then
+        normalized = string.sub(normalized, 1, cap)
     end
     return normalized
 end
@@ -9467,7 +9483,7 @@ leaderboard_get_rows_for_score_state = function(self, score_state)
         local name_text = ""
         if #names > 0 then
             for i, nm in ipairs(names) do
-                local clean = mp_lobby_sanitize_name(nm)
+                local clean = leaderboard_sanitize_name(nm, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
                 if clean ~= "" then
                     if name_text == "" then
                         name_text = clean
@@ -9481,7 +9497,7 @@ leaderboard_get_rows_for_score_state = function(self, score_state)
             end
         end
         if name_text == "" then
-            name_text = mp_lobby_sanitize_name(mp_alpha_label_from_network_id("p1"))
+            name_text = leaderboard_sanitize_name(mp_alpha_label_from_network_id("p1"), LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
         end
         rows[#rows + 1] = {
             score = math.max(0, tonumber(entry.score_total or 0) or 0),
@@ -9541,29 +9557,52 @@ leaderboard_render_rows = function(self)
             )
             digit_cursor = digit_cursor + 1
         end
-        local name_text = mp_lobby_sanitize_name(row.name or "")
         local name_limit = (score_state == FLOW_STATE_SCORE_MP) and LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP or LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO
-        if #name_text > name_limit then
-            name_text = string.sub(name_text, 1, name_limit)
+        local tokens = {}
+        local raw_name_text = tostring(row.name or "")
+        for token in string.gmatch(raw_name_text, "%S+") do
+            local clean = leaderboard_sanitize_name(token, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
+            if clean ~= "" then
+                tokens[#tokens + 1] = clean
+            end
         end
-        for ci = 1, #name_text do
-            local glyph_id = self.ui.flow_leaderboard_dummy_name_letters[letter_cursor]
-            if not glyph_id then
+        if #tokens <= 0 then
+            tokens[1] = leaderboard_sanitize_name(raw_name_text, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
+        end
+        local remaining_chars = name_limit
+        local cursor_x = LEADERBOARD_DEBUG_NAME_X
+        for token_index, token_text in ipairs(tokens) do
+            if remaining_chars <= 0 then
                 break
             end
-            local ch = string.sub(name_text, ci, ci)
-            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
-            set_ui_square_transform(
-                self,
-                glyph_id,
-                LEADERBOARD_DEBUG_NAME_X + ((ci - 1) * LEADERBOARD_DEBUG_NAME_LETTER_SPACING),
-                row_y,
-                FLOW_UI_PANEL_Z + 0.006,
-                vmath.vector4(1, 1, 1, 0.98),
-                LEADERBOARD_DEBUG_NAME_LETTER_SCALE,
-                LEADERBOARD_DEBUG_NAME_LETTER_SCALE
-            )
-            letter_cursor = letter_cursor + 1
+            local draw_token = token_text
+            if #draw_token > remaining_chars then
+                draw_token = string.sub(draw_token, 1, remaining_chars)
+            end
+            for ci = 1, #draw_token do
+                local glyph_id = self.ui.flow_leaderboard_dummy_name_letters[letter_cursor]
+                if not glyph_id then
+                    break
+                end
+                local ch = string.sub(draw_token, ci, ci)
+                msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+                set_ui_square_transform(
+                    self,
+                    glyph_id,
+                    cursor_x + ((ci - 1) * LEADERBOARD_DEBUG_NAME_LETTER_SPACING),
+                    row_y,
+                    FLOW_UI_PANEL_Z + 0.006,
+                    vmath.vector4(1, 1, 1, 0.98),
+                    LEADERBOARD_DEBUG_NAME_LETTER_SCALE,
+                    LEADERBOARD_DEBUG_NAME_LETTER_SCALE
+                )
+                letter_cursor = letter_cursor + 1
+            end
+            cursor_x = cursor_x + (#draw_token * LEADERBOARD_DEBUG_NAME_LETTER_SPACING)
+            remaining_chars = remaining_chars - #draw_token
+            if token_index < #tokens and remaining_chars > 0 then
+                cursor_x = cursor_x + LEADERBOARD_DEBUG_NAME_TOKEN_GAP_PX
+            end
         end
     end
 end
@@ -9906,9 +9945,37 @@ score_build_publish_payload = function(self, score_state)
         team_display_names = {}
     }
     if score_state == FLOW_STATE_SCORE_MP and self.mp_state and self.mp_state.enabled then
-        local host_pid = tostring(self.mp_state.host_player_id or "p1")
-        payload.team_player_ids[1] = host_pid
-        payload.team_display_names[1] = mp_alpha_label_from_network_id(host_pid)
+        local name_seen = {}
+        local id_seen = {}
+        if type(self.flow_score_team_display_names) == "table" then
+            for _, display_name in ipairs(self.flow_score_team_display_names) do
+                local clean = leaderboard_sanitize_name(display_name, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+                if clean ~= "" and name_seen[clean] ~= true then
+                    name_seen[clean] = true
+                    payload.team_display_names[#payload.team_display_names + 1] = clean
+                end
+            end
+        end
+        local configured_player_count = math.max(2, math.min(4, tonumber(self.mp_state.player_count or 2) or 2))
+        for i = 1, configured_player_count do
+            local pid = "p" .. tostring(i)
+            if id_seen[pid] ~= true then
+                id_seen[pid] = true
+                payload.team_player_ids[#payload.team_player_ids + 1] = pid
+            end
+            if #payload.team_display_names < configured_player_count then
+                local fallback_name = leaderboard_sanitize_name(mp_alpha_label_from_network_id(pid), LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+                if fallback_name ~= "" and name_seen[fallback_name] ~= true then
+                    name_seen[fallback_name] = true
+                    payload.team_display_names[#payload.team_display_names + 1] = fallback_name
+                end
+            end
+        end
+        if #payload.team_display_names <= 0 then
+            local host_pid = tostring(self.mp_state.host_player_id or "p1")
+            payload.team_display_names[1] = mp_alpha_label_from_network_id(host_pid)
+            payload.team_player_ids[1] = host_pid
+        end
     else
         local solo_id = tostring((self.mp_state and self.mp_state.local_player_id) or "p1")
         payload.team_player_ids[1] = solo_id
@@ -11922,6 +11989,12 @@ function enter_mission_outro(self, result, reason)
             end
             add_team_id(host_pid)
             add_team_id(local_pid)
+            if self.mp_state then
+                local configured_player_count = math.max(2, math.min(4, tonumber(self.mp_state.player_count or 2) or 2))
+                for i = 1, configured_player_count do
+                    add_team_id("p" .. tostring(i))
+                end
+            end
             if self.mp_state and type(self.mp_state.connected_players) == "table" then
                 local connected_ids = {}
                 for pid, is_connected in pairs(self.mp_state.connected_players) do

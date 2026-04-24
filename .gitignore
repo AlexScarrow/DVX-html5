@@ -8,3 +8,5 @@ Thumbs.db
 /build
 /multiplayer-relay/node_modules/
 /guestPlayer/
+/dvx_leaderboard_solo_local
+/dvx_leaderboard_mp_local

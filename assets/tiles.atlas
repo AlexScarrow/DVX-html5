@@ -645,6 +645,12 @@ images {
   image: "/assets/images/ready_not_button.png"
 }
 images {
+  image: "/assets/images/zoom_slider_track.png"
+}
+images {
+  image: "/assets/images/zoom_slider_knob.png"
+}
+images {
   image: "/assets/images/title_screen.png"
 }
 images {

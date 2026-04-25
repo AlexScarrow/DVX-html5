@@ -391,9 +391,9 @@ function M.extend(runtime, ctx)
                 local mx = x + (machine.offsetX or 0)
                 local my = y + (machine.offsetY or 0)
                 if boardgame_shadows_enabled(self) then
-                    self.machine_shadow_objects[cell_id] = spawn_world_shadow(mx + 5, my - 7, 0.5, 0.62, 0.24, 0.34)
+                    self.machine_shadow_objects[cell_id] = spawn_world_shadow(mx + 5, my - 7, 0.48, 0.62, 0.24, 0.34)
                 end
-                local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(mx, my, 0.62))
+                local marker_id = factory.create("/tile_factory#tile_factory", vmath.vector3(mx, my, 0.49))
                 if marker_id then
                     local anim = hash("wiregap_straight_off")
                     if machine.name == hash("ammo_vending_machine") then

@@ -3356,7 +3356,8 @@ function M.extend(runtime, ctx)
         local state = runtime.refresh_exit_objective_state(self)
         if is_rescue_mission(self) then
             return {
-                can_launch = (state.rescue_civilians_ready or 0) >= 1,
+                can_launch = (state.rescue_civilians_ready or 0) >= 1
+                    and (state.seated_humans or 0) >= 1,
                 seated_humans = state.seated_humans or 0,
                 rescued_civilians = state.rescued_civilians or 0,
                 rescue_civilians_ready = state.rescue_civilians_ready or 0,
@@ -3418,8 +3419,9 @@ function M.extend(runtime, ctx)
         if not status.can_launch then
             if is_rescue_mission(self) then
                 print(string.format(
-                    "Launch blocked | civilians_on_rescue_cell=%d (need >=1)",
-                    tonumber(status.rescue_civilians_ready or 0) or 0
+                    "Launch blocked | civilians_on_rescue_cell=%d (need >=1) humans_on_rescue_cell=%d (need >=1)",
+                    tonumber(status.rescue_civilians_ready or 0) or 0,
+                    tonumber(status.seated_humans or 0) or 0
                 ))
             elseif is_dna_mission(self) then
                 print(string.format(

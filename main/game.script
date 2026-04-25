@@ -6865,15 +6865,6 @@ local function process_civilian_turn(self)
                 civilian.is_dead = true
             else
                 if civilian.is_awake == true and civilian.cell_id then
-                    if civilian.is_rescued ~= true and is_cell_in_any_rescue_entry_tile(self, civilian.cell_id) then
-                        civilian.is_rescued = true
-                        score_record_civilian_escorted(self, civilian.id)
-                        print(string.format(
-                            "CIVILIANS | rescued | id=%d cell=%d",
-                            tonumber(civilian.id or 0) or 0,
-                            tonumber(civilian.cell_id or 0) or 0
-                        ))
-                    end
                     local remaining_ap = tonumber(civilian.current_ap or 0) or 0
                     local nearest = nil
                     local path = nil
@@ -6930,6 +6921,10 @@ local function update_civilian_movement(self, dt)
     local counter_move_enabled = profile and profile.counter_token_move_enabled == true
     local right_lane_slot = #CELL_SLOT_OFFSETS_X
     local right_lane_offset = (CELL_SLOT_OFFSETS_X[right_lane_slot] or 0) * HUMAN_STACK_SPACING_X
+    local rescue_victory_lookup = nil
+    if get_current_mission_type(self) == MISSION_TYPE_RESCUE then
+        rescue_victory_lookup = build_cell_lookup(get_rescue_entry_victory_cell_ids(self))
+    end
     for _, civilian in ipairs(self.civilians or {}) do
         if civilian and civilian.is_dead ~= true and civilian.is_moving and civilian.move_path then
             local civilian_sfx_key = "civ_" .. tostring(civilian.id or 0)
@@ -6948,6 +6943,20 @@ local function update_civilian_movement(self, dt)
                 civilian.shadow_motion_offset = nil
                 civilian.counter_move_total_dist = nil
                 set_civilian_scale(self, civilian, CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE)
+                local civilian_cell_id = tonumber(civilian.cell_id or 0) or 0
+                if civilian.is_rescued ~= true
+                    and civilian_cell_id > 0
+                    and rescue_victory_lookup
+                    and rescue_victory_lookup[civilian_cell_id] == true
+                then
+                    civilian.is_rescued = true
+                    score_record_civilian_escorted(self, civilian.id)
+                    print(string.format(
+                        "CIVILIANS | rescued | id=%d cell=%d",
+                        tonumber(civilian.id or 0) or 0,
+                        tonumber(civilian.cell_id or 0) or 0
+                    ))
+                end
             end
 
             local go_id = self.civilian_visuals and self.civilian_visuals[civilian.id] or nil

@@ -1316,6 +1316,27 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
     return math.min(HUMAN_MAX_ACTION_POINTS, step_cost)
 end
 
+get_human_step_move_cost = function(world_grid, from_cell_id, to_cell_id, allow_closed_door_step)
+    if not world_grid or not from_cell_id or not to_cell_id then
+        return math.huge
+    end
+    if can_human_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
+        return get_step_move_cost(world_grid, from_cell_id, to_cell_id)
+    end
+    if allow_closed_door_step ~= true then
+        return math.huge
+    end
+    local owner_cell, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
+    if not owner_cell or not door_obj or not door_closed then
+        return math.huge
+    end
+    if not is_door_functional_runtime(world_grid, owner_cell, door_obj) then
+        return math.huge
+    end
+    local door_ap_cost = get_ap_cost_value("door_toggle", 1)
+    return get_step_move_cost(world_grid, from_cell_id, to_cell_id) + math.max(0, tonumber(door_ap_cost or 0) or 0)
+end
+
 local function get_alien_step_move_cost(world_grid, from_cell_id, to_cell_id, alien_type)
     local from_cell = world_grid[from_cell_id]
     local to_cell = world_grid[to_cell_id]
@@ -2197,8 +2218,14 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
         if adj_id then
             local cell = world_grid[adj_id]
             -- Check if cell is not VOID (part of a valid tile)
-            if cell.tileID ~= hash("empty") and can_human_cross_between_cells(world_grid, cell_id, adj_id) then
-                table.insert(neighbors, { id = adj_id, cost = get_step_move_cost(world_grid, cell_id, adj_id) })
+            if cell.tileID ~= hash("empty") then
+                local allow_closed_doors = movement_profile == MOVEMENT_PROFILE_HUMAN
+                    and path_context
+                    and path_context.allow_closed_doors == true
+                local step_cost = get_human_step_move_cost(world_grid, cell_id, adj_id, allow_closed_doors)
+                if step_cost < math.huge then
+                    table.insert(neighbors, { id = adj_id, cost = step_cost })
+                end
             end
         end
     end
@@ -17067,7 +17094,8 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        local path, total_cost = find_path(self.world_grid, unit.cell_id, destination_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        local path_context = { allow_closed_doors = true }
+        local path, total_cost = find_path(self.world_grid, unit.cell_id, destination_cell_id, nil, MOVEMENT_PROFILE_HUMAN, path_context)
         if not path then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "move_unit",
@@ -17079,7 +17107,7 @@ multiplayer_transport_handle_command = function(self, command)
         if not total_cost then
             total_cost = 0
             for i = 2, #path do
-                total_cost = total_cost + (get_step_move_cost(self.world_grid, path[i - 1], path[i]) or 0)
+                total_cost = total_cost + (get_human_step_move_cost(self.world_grid, path[i - 1], path[i], true) or 0)
             end
         end
         local ap_before = tonumber(unit.current_ap or 0) or 0
@@ -17093,7 +17121,7 @@ multiplayer_transport_handle_command = function(self, command)
         local approved_path = { path[1] }
         local approved_cost = 0
         for i = 2, #path do
-            local step_cost = tonumber(get_step_move_cost(self.world_grid, path[i - 1], path[i]) or 0) or 0
+            local step_cost = tonumber(get_human_step_move_cost(self.world_grid, path[i - 1], path[i], true) or 0) or 0
             if step_cost <= 0 then
                 break
             end
@@ -21175,6 +21203,65 @@ local function update_single_unit_movement(self, unit, dt)
     local target_x, target_y = get_human_world_pos_for_cell(target_cell)
     target_x = target_x + ((CELL_SLOT_OFFSETS_X[unit.entry_slot_index] or 0) * HUMAN_STACK_SPACING_X)
     target_x = clamp_world_x_to_cell(target_cell, target_x)
+    local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, unit.cell_id, target_cell_id)
+    if door_obj and door_closed then
+        if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+            unit.desired_destination_cell_id = nil
+            unit.desired_destination_slot_index = nil
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+            print(unit.display_name .. " cannot pass: door is not functional.")
+            update_human_visual_state(self)
+            update_human_ap_debug_label(self)
+            return
+        end
+        local door_ap_cost = get_ap_cost_value("door_toggle", 1)
+        if unit.current_ap < door_ap_cost then
+            update_vertical_move_sfx_for_unit(self, unit, false)
+            update_horizontal_move_sfx_for_actor(self, unit.id, false)
+            unit.is_moving = false
+            unit.move_path = nil
+            unit.move_path_index = 0
+            unit.desired_destination_cell_id = nil
+            unit.desired_destination_slot_index = nil
+            unit.micro_target_x = nil
+            unit.micro_target_y = nil
+            unit.micro_move_kind = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            unit.shadow_motion_offset = nil
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+            if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
+                LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "NOT_ENOUGH_AP")
+            end
+            print(unit.display_name .. " cannot pass: no AP to open door.")
+            update_human_visual_state(self)
+            update_human_ap_debug_label(self)
+            return
+        end
+        door_obj.isOpen = true
+        unit.current_ap = math.max(0, unit.current_ap - door_ap_cost)
+        if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+            LOOT_RUNTIME.refresh_door_markers(self)
+        end
+        play_door_toggle_sfx(self)
+    end
     local target_cost = get_step_move_cost(self.world_grid, unit.cell_id, target_cell_id)
     if target_cost > unit.current_ap then
         update_vertical_move_sfx_for_unit(self, unit, false)
@@ -21566,7 +21653,14 @@ multiplayer_apply_move_unit_event = function(self, payload)
         end
     end
     if not path and is_walkable_cell(self.world_grid, destination_cell_id) then
-        path, total_cost = find_path(self.world_grid, unit.cell_id, destination_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        path, total_cost = find_path(
+            self.world_grid,
+            unit.cell_id,
+            destination_cell_id,
+            nil,
+            MOVEMENT_PROFILE_HUMAN,
+            { allow_closed_doors = true }
+        )
     end
     if not path then
         -- Last resort: trust host and force a minimal authoritative path.
@@ -23055,7 +23149,14 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             return true
         end
 
-        local path, total_cost = find_path(self.world_grid, unit.cell_id, clicked_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
+        local path, total_cost = find_path(
+            self.world_grid,
+            unit.cell_id,
+            clicked_cell_id,
+            nil,
+            MOVEMENT_PROFILE_HUMAN,
+            { allow_closed_doors = true }
+        )
         if path then
             local destination_slot_index = nil
             local destination_slot_requested = nil

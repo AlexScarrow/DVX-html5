@@ -94,9 +94,10 @@ CIVILIAN_VISUAL_SCALE = 0.35
 CIVILIAN_VISUAL_Z = 0.5
 CIVILIAN_CAPTURED_ART_W = 90
 CIVILIAN_CAPTURED_ART_H = 120
-CIVILIAN_CAPTURED_OFFSET_LEFT = -45
+CIVILIAN_CAPTURED_OFFSET_LEFT = -80
 CIVILIAN_CAPTURED_OFFSET_MIDDLE = 0
-CIVILIAN_CAPTURED_OFFSET_RIGHT = 45
+CIVILIAN_CAPTURED_OFFSET_RIGHT = 80
+CIVILIAN_CAPTURED_OFFSET_Y = 2
 CIVILIAN_TEST_SPAWN_COUNT = 9
 CIVILIAN_MAX_PER_CELL = 2
 CIVILIAN_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
@@ -6221,7 +6222,7 @@ get_civilian_captured_world_pos = function(self, civilian, cell)
     end
     local base_x, base_y = coords_to_world_pos(cell.xCell, cell.yCell)
     local offset_x = get_civilian_captured_offset_x(civilian)
-    return base_x + offset_x, base_y
+    return base_x + offset_x, base_y + CIVILIAN_CAPTURED_OFFSET_Y
 end
 
 get_clicked_captured_civilian_in_cell = function(self, clicked_cell_id, world_x, world_y)
@@ -6453,7 +6454,10 @@ local function refresh_civilian_visuals(self)
                 local hp_fill_id = self.civilian_hp_bar_fill_visuals[civilian.id]
                 local hp_max = math.max(0, tonumber(civilian.max_health or CIVILIAN_MAX_HEALTH) or CIVILIAN_MAX_HEALTH)
                 local hp_now = math.max(0, tonumber(civilian.current_health or hp_max) or hp_max)
-                local show_hp_bar = civilian.is_dead ~= true and hp_max > 0 and should_show_visual == true
+                local show_hp_bar = civilian.is_dead ~= true
+                    and civilian.is_awake == true
+                    and hp_max > 0
+                    and should_show_visual == true
                 if show_hp_bar then
                     local hp_ratio = math.max(0, math.min(1, hp_now / hp_max))
                     local unit_pos = go.get_position(go_id)

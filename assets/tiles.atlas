@@ -305,6 +305,15 @@ images {
   image: "/assets/images/human_civilian_dead.png"
 }
 images {
+  image: "/assets/images/humans_captured_left.png"
+}
+images {
+  image: "/assets/images/humans_captured_middle.png"
+}
+images {
+  image: "/assets/images/humans_captured_right.png"
+}
+images {
   image: "/assets/images/backdrop_boardgame.png"
 }
 images {

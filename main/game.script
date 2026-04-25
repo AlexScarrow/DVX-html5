@@ -87,8 +87,18 @@ CIVILIAN_MAX_HEALTH = 10
 CIVILIAN_OBJECT_NAME = hash("civilian_spawn")
 CIVILIAN_SPRITE_ANIM = hash("human_civilian")
 CIVILIAN_DEAD_SPRITE_ANIM = hash("human_civilian_dead")
+CIVILIAN_CAPTURED_LEFT_SPRITE_ANIM = hash("humans_captured_left")
+CIVILIAN_CAPTURED_MIDDLE_SPRITE_ANIM = hash("humans_captured_middle")
+CIVILIAN_CAPTURED_RIGHT_SPRITE_ANIM = hash("humans_captured_right")
 CIVILIAN_VISUAL_SCALE = 0.35
 CIVILIAN_VISUAL_Z = 0.5
+CIVILIAN_CAPTURED_ART_W = 90
+CIVILIAN_CAPTURED_ART_H = 120
+CIVILIAN_CAPTURED_OFFSET_LEFT = -45
+CIVILIAN_CAPTURED_OFFSET_MIDDLE = 0
+CIVILIAN_CAPTURED_OFFSET_RIGHT = 45
+CIVILIAN_TEST_SPAWN_COUNT = 9
+CIVILIAN_MAX_PER_CELL = 2
 CIVILIAN_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
 CIVILIAN_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
 CIVILIAN_HP_BAR_ART_W = 197
@@ -3687,7 +3697,12 @@ get_living_alien_targets = function(self)
     end
     if self and self.civilians then
         for _, civilian in ipairs(self.civilians) do
-            if civilian and civilian.cell_id and (civilian.current_health or 0) > 0 and civilian.is_dead ~= true then
+            if civilian
+                and civilian.cell_id
+                and (civilian.current_health or 0) > 0
+                and civilian.is_dead ~= true
+                and civilian.is_awake == true
+            then
                 civilian.target_kind = "civilian"
                 civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
                 table.insert(living, civilian)
@@ -5448,6 +5463,30 @@ local function is_cell_in_any_rescue_entry_tile(self, cell_id)
     return false
 end
 
+is_cell_in_any_entry_tile = function(self, cell_id)
+    local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if type(level) ~= "table" then
+        return false
+    end
+    local cid = tonumber(cell_id or 0) or 0
+    if cid <= 0 then
+        return false
+    end
+    for _, placement in ipairs(level) do
+        if placement and tostring(placement.tile or "") == "entry" then
+            for dy = -1, 1 do
+                for dx = -1, 1 do
+                    local check_id = coords_to_id((placement.x or 0) + dx, (placement.y or 0) + dy)
+                    if check_id == cid then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function get_world_cell_ids_for_tile_local_cells(self, tile_name, local_cells)
     local out = {}
     local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
@@ -6126,6 +6165,122 @@ local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civi
     return best_path
 end
 
+get_civilian_captured_offset_x = function(civilian)
+    local variant = tostring(civilian and civilian.captured_variant or "middle")
+    if variant == "left" then
+        return CIVILIAN_CAPTURED_OFFSET_LEFT
+    end
+    if variant == "right" then
+        return CIVILIAN_CAPTURED_OFFSET_RIGHT
+    end
+    return CIVILIAN_CAPTURED_OFFSET_MIDDLE
+end
+
+get_civilian_captured_anim = function(civilian)
+    local variant = tostring(civilian and civilian.captured_variant or "middle")
+    if variant == "left" then
+        return CIVILIAN_CAPTURED_LEFT_SPRITE_ANIM
+    end
+    if variant == "right" then
+        return CIVILIAN_CAPTURED_RIGHT_SPRITE_ANIM
+    end
+    return CIVILIAN_CAPTURED_MIDDLE_SPRITE_ANIM
+end
+
+get_civilian_captured_world_pos = function(self, civilian, cell)
+    if not (self and civilian and cell) then
+        return nil, nil
+    end
+    local base_x, base_y = coords_to_world_pos(cell.xCell, cell.yCell)
+    local offset_x = get_civilian_captured_offset_x(civilian)
+    return base_x + offset_x, base_y
+end
+
+get_clicked_captured_civilian_in_cell = function(self, clicked_cell_id, world_x, world_y)
+    if not (self and clicked_cell_id and world_x and world_y) then
+        return nil
+    end
+    local cell = self.world_grid and self.world_grid[clicked_cell_id] or nil
+    if not cell or cell.isPowered ~= true then
+        return nil
+    end
+    local best = nil
+    local best_dist = math.huge
+    local half_w = CIVILIAN_CAPTURED_ART_W * 0.5
+    local half_h = CIVILIAN_CAPTURED_ART_H * 0.5
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian
+            and civilian.is_dead ~= true
+            and civilian.is_awake ~= true
+            and tonumber(civilian.cell_id or 0) == tonumber(clicked_cell_id or 0)
+        then
+            local cx, cy = get_civilian_captured_world_pos(self, civilian, cell)
+            if cx and cy then
+                local dx = world_x - cx
+                local dy = world_y - cy
+                if math.abs(dx) <= half_w and math.abs(dy) <= half_h then
+                    local dist = (dx * dx) + (dy * dy)
+                    if dist < best_dist then
+                        best = civilian
+                        best_dist = dist
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+set_civilian_awake_from_release = function(self, civilian, unit_id)
+    if not (self and civilian) then
+        return false
+    end
+    if civilian.is_dead == true or civilian.is_awake == true then
+        return false
+    end
+    local cell = self.world_grid and self.world_grid[civilian.cell_id] or nil
+    if not cell or cell.isPowered ~= true then
+        return false
+    end
+    civilian.is_awake = true
+    civilian.follow_human_id = nil
+    civilian.evacuate_to_exit = true
+    civilian.current_anim_id = nil
+    refresh_civilian_visuals(self)
+    update_human_visual_state(self)
+    update_human_ap_debug_label(self)
+    print(string.format(
+        "CIVILIANS | released | id=%d cell=%d by=%s",
+        tonumber(civilian.id or 0) or 0,
+        tonumber(civilian.cell_id or 0) or 0,
+        tostring(unit_id or "?")
+    ))
+    return true
+end
+
+try_release_captured_civilian_from_click = function(self, unit, clicked_cell_id, world_x, world_y)
+    if not (self and unit and clicked_cell_id and world_x and world_y) then
+        return false
+    end
+    local civilian = get_clicked_captured_civilian_in_cell(self, clicked_cell_id, world_x, world_y)
+    if not civilian then
+        return false
+    end
+    if tonumber(unit.cell_id or 0) ~= tonumber(civilian.cell_id or 0) then
+        print("Civilian release blocked: human must be in same cell.")
+        return true
+    end
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_transport_send_command(self, "release_civilian", {
+            turn_id = self.mp_state.turn_id or 1,
+            unit_id = unit.id,
+            civilian_id = civilian.id
+        }, multiplayer_get_active_player_id_for_commands(self))
+        return true
+    end
+    return set_civilian_awake_from_release(self, civilian, unit.id)
+end
+
 local set_civilian_scale
 local get_civilian_world_pos_in_cell
 
@@ -6176,12 +6331,29 @@ local function refresh_civilian_visuals(self)
     for _, civilian in ipairs(self.civilians or {}) do
         if civilian and civilian.id and civilian.cell_id and self.world_grid and self.world_grid[civilian.cell_id] then
             local cell = self.world_grid[civilian.cell_id]
-            local desired_civilian_anim = (civilian.is_dead == true) and CIVILIAN_DEAD_SPRITE_ANIM or CIVILIAN_SPRITE_ANIM
-            local x, y = get_civilian_world_pos_in_cell(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+            local is_captured = civilian.is_dead ~= true and civilian.is_awake ~= true
+            local powered = cell and cell.isPowered == true
+            local should_show_visual = civilian.is_dead == true or civilian.is_awake == true or powered
+            local desired_civilian_anim = CIVILIAN_SPRITE_ANIM
+            if civilian.is_dead == true then
+                desired_civilian_anim = CIVILIAN_DEAD_SPRITE_ANIM
+            elseif is_captured then
+                desired_civilian_anim = get_civilian_captured_anim(civilian)
+            end
+            local x, y = nil, nil
+            if is_captured then
+                x, y = get_civilian_captured_world_pos(self, civilian, cell)
+            else
+                x, y = get_civilian_world_pos_in_cell(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+            end
             if not (x and y) then
                 local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
                 x = cx
-                y = cy - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                if is_captured then
+                    y = cy
+                else
+                    y = cy - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                end
             end
             local go_id = self.civilian_visuals[civilian.id]
             if not go_id then
@@ -6190,7 +6362,8 @@ local function refresh_civilian_visuals(self)
                     self.civilian_visuals[civilian.id] = go_id
                     pcall(msg.post, msg.url(nil, go_id, "sprite"), "play_animation", { id = desired_civilian_anim })
                     civilian.current_anim_id = desired_civilian_anim
-                    pcall(go.set_scale, vmath.vector3(CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE, 1), go_id)
+                    local spawn_scale = is_captured and 1 or CIVILIAN_VISUAL_SCALE
+                    pcall(go.set_scale, vmath.vector3(spawn_scale, spawn_scale, 1), go_id)
                 end
             end
             if go_id then
@@ -6202,20 +6375,25 @@ local function refresh_civilian_visuals(self)
                 civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
                 local render_x = x
                 local render_y = y
-                if civilian.is_moving ~= true then
+                if civilian.is_moving ~= true or is_captured then
                     pcall(go.set_position, vmath.vector3(x, y, CIVILIAN_VISUAL_Z), go_id)
                 else
                     local pos = go.get_position(go_id)
                     render_x = pos.x
                     render_y = pos.y
                 end
-                if civilian.is_moving ~= true then
-                    pcall(go.set_scale, vmath.vector3(CIVILIAN_VISUAL_SCALE, CIVILIAN_VISUAL_SCALE, 1), go_id)
+                if civilian.is_moving ~= true or is_captured then
+                    local render_scale = is_captured and 1 or CIVILIAN_VISUAL_SCALE
+                    pcall(go.set_scale, vmath.vector3(render_scale, render_scale, 1), go_id)
                 end
+                pcall(go.set, msg.url(nil, go_id, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
                 if civilian.is_dead ~= true then
                     local civilian_tint = civilian.hazard_flash_active == true
                         and (civilian.hazard_flash_tint or vmath.vector4(1.0, 0.78, 0.25, 1))
                         or vmath.vector4(1, 1, 1, 1)
+                    if should_show_visual ~= true then
+                        civilian_tint = vmath.vector4(civilian_tint.x, civilian_tint.y, civilian_tint.z, 0)
+                    end
                     pcall(go.set, msg.url(nil, go_id, "sprite"), "tint", civilian_tint)
                 else
                     pcall(go.set, msg.url(nil, go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
@@ -6237,13 +6415,17 @@ local function refresh_civilian_visuals(self)
                         shadow_pos = civilian.shadow_motion_offset or get_counter_shadow_offset(profile, 0)
                     end
                     pcall(go.set_position, vmath.vector3(render_x + shadow_pos.x, render_y + shadow_pos.y, CIVILIAN_VISUAL_Z - 0.01), shadow_id)
-                    pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", effective_shadow_tint)
+                    local shadow_tint = effective_shadow_tint
+                    if should_show_visual ~= true then
+                        shadow_tint = vmath.vector4(shadow_tint.x, shadow_tint.y, shadow_tint.z, 0)
+                    end
+                    pcall(go.set, msg.url(nil, shadow_id, "sprite"), "tint", shadow_tint)
                 end
                 local hp_bg_id = self.civilian_hp_bar_bg_visuals[civilian.id]
                 local hp_fill_id = self.civilian_hp_bar_fill_visuals[civilian.id]
                 local hp_max = math.max(0, tonumber(civilian.max_health or CIVILIAN_MAX_HEALTH) or CIVILIAN_MAX_HEALTH)
                 local hp_now = math.max(0, tonumber(civilian.current_health or hp_max) or hp_max)
-                local show_hp_bar = civilian.is_dead ~= true and hp_max > 0
+                local show_hp_bar = civilian.is_dead ~= true and hp_max > 0 and should_show_visual == true
                 if show_hp_bar then
                     local hp_ratio = math.max(0, math.min(1, hp_now / hp_max))
                     local unit_pos = go.get_position(go_id)
@@ -6412,38 +6594,152 @@ local function spawn_civilians_for_current_mission(self)
     if not self.world_grid then
         return
     end
+    local rng_state = nil
+    if self.mp_state and self.mp_state.enabled then
+        local seed = tonumber(self.mp_state.civilian_seed or 0) or 0
+        if seed <= 0 then
+            seed = math.random(1, 2147483646)
+            self.mp_state.civilian_seed = seed
+        end
+        rng_state = seed
+    end
+    local function roll_between(min_v, max_v)
+        if rng_state == nil then
+            return math.random(min_v, max_v)
+        end
+        rng_state = ((rng_state * 1103515245) + 12345) % 2147483647
+        local span = (max_v - min_v + 1)
+        return min_v + (rng_state % span)
+    end
+    local human_spawn_cells = {}
+    for _, unit in pairs(self.squad_units or {}) do
+        local spawn_cell_id = tonumber(unit and unit.cell_id or 0) or 0
+        if spawn_cell_id > 0 and self.world_grid[spawn_cell_id] then
+            human_spawn_cells[#human_spawn_cells + 1] = spawn_cell_id
+        end
+    end
     for _, cell in ipairs(self.world_grid) do
-        if cell and cell.tileID ~= hash("empty") then
+        if cell then
             local slots = { cell.object1, cell.object2, cell.object3 }
             for _, obj in ipairs(slots) do
                 if obj and obj.name == CIVILIAN_OBJECT_NAME then
-                    self.next_civilian_id = (self.next_civilian_id or 0) + 1
-                    table.insert(self.civilians, {
-                        id = self.next_civilian_id,
-                        display_name = string.format("Civilian #%d", tonumber(self.next_civilian_id or 0) or 0),
-                        cell_id = cell.idNumber,
-                        is_awake = false,
-                        is_dead = false,
-                        is_rescued = false,
-                        max_ap = CIVILIAN_MAX_ACTION_POINTS,
-                        current_ap = CIVILIAN_MAX_ACTION_POINTS,
-                        max_health = CIVILIAN_MAX_HEALTH,
-                        current_health = CIVILIAN_MAX_HEALTH,
-                        spawn_object_id = tonumber(obj.objectId or 0) or 0,
-                        anim_phase = 0,
-                        shadow_motion_offset = nil,
-                        vertical_prep_done_for_index = nil,
-                        entry_slot_for_index = nil,
-                        entry_slot_index = nil,
-                        micro_target_x = nil,
-                        micro_target_y = nil,
-                        micro_move_kind = nil
-                    })
-                    local civilian_ref = self.civilians[#self.civilians]
-                    ensure_civilian_cell_slot_assignment(self, civilian_ref, cell.idNumber, nil)
                     obj.name = hash("empty")
                     obj.objectId = 0
                 end
+            end
+        end
+    end
+    local candidate_cells = {}
+    for _, cell in ipairs(self.world_grid) do
+        if cell
+            and cell.tileID ~= hash("empty")
+            and cell.tileID ~= hash("corridor1")
+            and cell.tileID ~= hash("passage1")
+            and is_cell_in_any_rescue_entry_tile(self, cell.idNumber) ~= true
+            and is_cell_in_any_entry_tile(self, cell.idNumber) ~= true
+        then
+            local slot_blocked = false
+            local slots = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(slots) do
+                if obj and obj.name ~= hash("empty") then
+                    slot_blocked = true
+                    break
+                end
+            end
+            if not slot_blocked then
+                local reachable = false
+                for _, spawn_cell_id in ipairs(human_spawn_cells) do
+                    local path = find_path(
+                        self.world_grid,
+                        spawn_cell_id,
+                        cell.idNumber,
+                        nil,
+                        MOVEMENT_PROFILE_HUMAN,
+                        nil
+                    )
+                    if path and #path >= 1 then
+                        reachable = true
+                        break
+                    end
+                end
+                if reachable then
+                    candidate_cells[#candidate_cells + 1] = cell
+                end
+            end
+        end
+    end
+    local roll_target = CIVILIAN_TEST_SPAWN_COUNT
+    local available_slots = #candidate_cells * CIVILIAN_MAX_PER_CELL
+    local spawn_target = math.min(roll_target, available_slots)
+    if spawn_target < roll_target then
+        print(string.format(
+            "CIVILIANS | candidate_shortfall | rolled=%d available_slots=%d",
+            roll_target,
+            available_slots
+        ))
+    end
+    if spawn_target <= 0 then
+        print(string.format("CIVILIANS | spawned=0 | mission=%s", tostring(get_current_mission_type(self))))
+        return
+    end
+    local pick_pool = {}
+    for i = 1, #candidate_cells do
+        pick_pool[i] = candidate_cells[i]
+    end
+    local per_cell_variant_count = {}
+    while spawn_target > 0 and #pick_pool > 0 do
+        local pool_index = roll_between(1, #pick_pool)
+        local cell = pick_pool[pool_index]
+        local cell_id = tonumber(cell and cell.idNumber or 0) or 0
+        local variants_left = {}
+        local used = per_cell_variant_count[cell_id] or {}
+        if used.left ~= true then
+            variants_left[#variants_left + 1] = "left"
+        end
+        if used.middle ~= true then
+            variants_left[#variants_left + 1] = "middle"
+        end
+        if used.right ~= true then
+            variants_left[#variants_left + 1] = "right"
+        end
+        if #variants_left <= 0 then
+            table.remove(pick_pool, pool_index)
+        else
+            local variant = variants_left[roll_between(1, #variants_left)]
+            self.next_civilian_id = (self.next_civilian_id or 0) + 1
+            local civilian_row = {
+                id = self.next_civilian_id,
+                display_name = string.format("Civilian #%d", tonumber(self.next_civilian_id or 0) or 0),
+                cell_id = cell_id,
+                is_awake = false,
+                is_dead = false,
+                is_rescued = false,
+                max_ap = CIVILIAN_MAX_ACTION_POINTS,
+                current_ap = CIVILIAN_MAX_ACTION_POINTS,
+                max_health = CIVILIAN_MAX_HEALTH,
+                current_health = CIVILIAN_MAX_HEALTH,
+                spawn_object_id = 0,
+                captured_variant = variant,
+                anim_phase = 0,
+                shadow_motion_offset = nil,
+                vertical_prep_done_for_index = nil,
+                entry_slot_for_index = nil,
+                entry_slot_index = nil,
+                micro_target_x = nil,
+                micro_target_y = nil,
+                micro_move_kind = nil
+            }
+            table.insert(self.civilians, civilian_row)
+            ensure_civilian_cell_slot_assignment(self, civilian_row, cell_id, nil)
+            per_cell_variant_count[cell_id] = per_cell_variant_count[cell_id] or {}
+            per_cell_variant_count[cell_id][variant] = true
+            local used_count = 0
+            for _, _ in pairs(per_cell_variant_count[cell_id]) do
+                used_count = used_count + 1
+            end
+            spawn_target = spawn_target - 1
+            if used_count >= CIVILIAN_MAX_PER_CELL then
+                table.remove(pick_pool, pool_index)
             end
         end
     end
@@ -6567,21 +6863,23 @@ local function process_civilian_turn(self)
                 civilian.current_ap = 0
                 civilian.is_dead = true
             else
-                if civilian.is_awake ~= true then
-                    for _, unit in ipairs(get_living_humans(self)) do
-                        if unit and unit.cell_id and civilian.cell_id and unit.cell_id == civilian.cell_id then
-                            civilian.is_awake = true
-                            civilian.follow_human_id = unit.id
-                            woke_count = woke_count + 1
-                            break
-                        end
-                    end
-                end
                 if civilian.is_awake == true and civilian.cell_id then
+                    if civilian.is_rescued ~= true and is_cell_in_any_rescue_entry_tile(self, civilian.cell_id) then
+                        civilian.is_rescued = true
+                        score_record_civilian_escorted(self, civilian.id)
+                        print(string.format(
+                            "CIVILIANS | rescued | id=%d cell=%d",
+                            tonumber(civilian.id or 0) or 0,
+                            tonumber(civilian.cell_id or 0) or 0
+                        ))
+                    end
                     local remaining_ap = tonumber(civilian.current_ap or 0) or 0
                     local nearest = nil
                     local path = nil
-                    if get_current_mission_type(self) == MISSION_TYPE_RESCUE and is_cell_in_any_rescue_entry_tile(self, civilian.cell_id) then
+                    local evacuate_to_exit = civilian.evacuate_to_exit == true
+                    if evacuate_to_exit then
+                        path = get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
+                    elseif get_current_mission_type(self) == MISSION_TYPE_RESCUE and is_cell_in_any_rescue_entry_tile(self, civilian.cell_id) then
                         path = get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
                     else
                         nearest, path = get_follow_target_path_for_civilian(self, civilian)
@@ -10731,6 +11029,7 @@ function start_multiplayer_game_flow(self, session_config)
         self.mp_state.turn_based_snapshot_accum_s = 0
         self.mp_state.turn_based_heartbeat_mismatch_streak = 0
         self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
+        self.mp_state.civilian_seed = tonumber(session_config and session_config.civilian_seed or 0) or 0
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -10931,7 +11230,8 @@ multiplayer_setup_build_session_config = function(self)
     return {
         player_count = count,
         seat_assignments = compact,
-        mission_type = mission_type
+        mission_type = mission_type,
+        civilian_seed = math.random(1, 2147483646)
     }
 end
 
@@ -16877,6 +17177,84 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "release_civilian" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local civilian_id = tonumber(payload.civilian_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or (unit.current_health or 0) <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        if not civilian_id then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "invalid_civilian_id"
+            }))
+            return events
+        end
+        local target_civilian = nil
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian and tonumber(civilian.id or 0) == civilian_id then
+                target_civilian = civilian
+                break
+            end
+        end
+        if not target_civilian or target_civilian.is_dead == true or target_civilian.is_awake == true then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "civilian_not_releasable"
+            }))
+            return events
+        end
+        if tonumber(unit.cell_id or 0) ~= tonumber(target_civilian.cell_id or 0) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "human_not_same_cell"
+            }))
+            return events
+        end
+        local civ_cell = self.world_grid and self.world_grid[target_civilian.cell_id] or nil
+        if not civ_cell or civ_cell.isPowered ~= true then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "cell_not_powered"
+            }))
+            return events
+        end
+        if not set_civilian_awake_from_release(self, target_civilian, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "release_civilian",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "release_civilian_applied", {
+            civilian_id = civilian_id,
+            unit_id = unit_id,
+            host_applied = true,
+            actor_digest = multiplayer_build_actor_state_digest(self)
+        }))
+        return events
+    end
+
     if cmd_type == "comms_command" then
         local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
         if expected_turn_id ~= (self.mp_state.turn_id or 1) then
@@ -18481,6 +18859,29 @@ multiplayer_transport_on_event = function(self, event)
         else
             multiplayer_sync_trace(self, "apply_event_end", "type=manual_shot_applied ok=true")
         end
+        return
+    end
+    if event.type == "release_civilian_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local ok = true
+        if should_apply_local then
+            ok = multiplayer_apply_release_civilian_event(self, payload)
+        end
+        local reconciled = multiplayer_apply_authoritative_actor_digest(self, payload.actor_digest)
+        if not ok then
+            print("MP COMMAND | release_civilian_applied ignored.")
+        elseif reconciled then
+            multiplayer_sync_trace(self, "apply_event_end", "type=release_civilian_applied ok=true reconciled=true")
+        else
+            multiplayer_sync_trace(self, "apply_event_end", "type=release_civilian_applied ok=true")
+        end
+        multiplayer_broadcast_turn_state_heartbeat_now(self)
         return
     end
     if event.type == "comms_command_applied" then
@@ -22235,6 +22636,22 @@ multiplayer_apply_set_reactive_fire_event = function(self, payload)
     return true
 end
 
+multiplayer_apply_release_civilian_event = function(self, payload)
+    if type(payload) ~= "table" then
+        return false
+    end
+    local civilian_id = tonumber(payload.civilian_id)
+    if not civilian_id then
+        return false
+    end
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and tonumber(civilian.id or 0) == civilian_id then
+            return set_civilian_awake_from_release(self, civilian, payload.unit_id)
+        end
+    end
+    return false
+end
+
 local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
     if not unit or not unit.is_selected then
         return false
@@ -22436,6 +22853,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     end
 
     if unit.is_selected then
+        if try_release_captured_civilian_from_click(self, unit, clicked_cell_id, world_x, world_y) then
+            self.ui_close_on_next_non_unit_click = false
+            return true
+        end
         if try_toggle_door_with_selected_human(self, unit, world_x, world_y) then
             clear_locked_manual_target(self)
             self.ui_close_on_next_non_unit_click = false

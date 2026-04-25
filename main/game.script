@@ -8394,6 +8394,7 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
         or go_id == self.ui.flow_title_solo_button
         or go_id == self.ui.flow_title_multiplayer_button
         or go_id == self.ui.flow_mp_back_button
+        or go_id == self.ui.launch_button
     )
     if final_color and ui_is_button_node(self, go_id) and (not preserve_input_alpha) then
         final_color = vmath.vector4(final_color.x, final_color.y, final_color.z, 1)
@@ -13435,7 +13436,8 @@ function update_global_ui_buttons(self)
     end
     local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
     local launch_enabled = self.game_won or (launch_status and launch_status.can_launch)
-    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+    local client_no_launch_authority = self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+    if client_no_launch_authority then
         launch_enabled = false
     end
     local launch_anim = launch_enabled and hash("launch_button") or hash("disabled_button")
@@ -13444,26 +13446,49 @@ function update_global_ui_buttons(self)
         and vmath.vector4(0.4, 0.4, 0.4, 0.9)
         or vmath.vector4(1, 1, 1, 1)
     update_realtime_toggle_button_visual(self)
-    set_ui_square_transform(
-        self,
-        self.ui.launch_button,
-        LAUNCH_BUTTON_X,
-        LAUNCH_BUTTON_Y,
-        LAUNCH_BUTTON_Z,
-        vmath.vector4(1, 1, 1, 0),
-        LAUNCH_BUTTON_W,
-        LAUNCH_BUTTON_H
-    )
-    set_ui_square_transform(
-        self,
-        self.ui.launch_button_art,
-        LAUNCH_BUTTON_X,
-        LAUNCH_BUTTON_Y,
-        LAUNCH_BUTTON_Z + 0.001,
-        vmath.vector4(1, 1, 1, 1),
-        1,
-        (LAUNCH_BUTTON_H * 0.021) * 0.75
-    )
+    if client_no_launch_authority then
+        set_ui_square_transform(
+            self,
+            self.ui.launch_button,
+            -9999,
+            -9999,
+            LAUNCH_BUTTON_Z,
+            vmath.vector4(1, 1, 1, 0),
+            LAUNCH_BUTTON_W,
+            LAUNCH_BUTTON_H
+        )
+        set_ui_square_transform(
+            self,
+            self.ui.launch_button_art,
+            -9999,
+            -9999,
+            LAUNCH_BUTTON_Z + 0.001,
+            vmath.vector4(1, 1, 1, 0),
+            1,
+            (LAUNCH_BUTTON_H * 0.021) * 0.75
+        )
+    else
+        set_ui_square_transform(
+            self,
+            self.ui.launch_button,
+            LAUNCH_BUTTON_X,
+            LAUNCH_BUTTON_Y,
+            LAUNCH_BUTTON_Z,
+            vmath.vector4(1, 1, 1, 0),
+            LAUNCH_BUTTON_W,
+            LAUNCH_BUTTON_H
+        )
+        set_ui_square_transform(
+            self,
+            self.ui.launch_button_art,
+            LAUNCH_BUTTON_X,
+            LAUNCH_BUTTON_Y,
+            LAUNCH_BUTTON_Z + 0.001,
+            vmath.vector4(1, 1, 1, 1),
+            1,
+            (LAUNCH_BUTTON_H * 0.021) * 0.75
+        )
+    end
     set_ui_square_transform(
         self,
         self.ui.realtime_toggle_button,

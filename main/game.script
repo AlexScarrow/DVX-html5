@@ -17136,6 +17136,7 @@ multiplayer_transport_handle_command = function(self, command)
         local unit = self.squad_units and self.squad_units[unit_id] or nil
         local alien = find_alien_by_id(self, alien_id)
         local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
+        local melee_ap_cost = get_ap_cost_value("melee_attack", 1)
         if not unit or (unit.current_health or 0) <= 0 or unit.is_moving or unit.current_ap < shot_ap_cost then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "manual_shot",
@@ -17157,7 +17158,7 @@ multiplayer_transport_handle_command = function(self, command)
         local ap_before = tonumber(unit.current_ap or 0) or 0
         local ammo_before = tonumber(unit.current_ammo or 0) or 0
         local shot_is_ranged = (tonumber(unit.cell_id or 0) or 0) ~= (tonumber(alien.cell_id or 0) or 0)
-        local ap_cost = shot_is_ranged and shot_ap_cost or 0
+        local ap_cost = shot_is_ranged and shot_ap_cost or melee_ap_cost
         local ammo_cost = shot_is_ranged and 1 or 0
         local ap_after = math.max(0, ap_before - ap_cost)
         local ammo_after = math.max(0, ammo_before - ammo_cost)

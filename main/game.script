@@ -152,6 +152,7 @@ LEVEL_BUTTON_H = 24
 LEVEL1_BUTTON_X = 240
 LEVEL_BUTTON_GAP = 10
 LEVEL_BUTTON_Z = 0.845
+DEBUG_LEVEL_BUTTONS_ENABLED = false
 UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
 UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
@@ -12270,7 +12271,10 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
-    update_score_flow_digits(self, false)
+    local show_score_flow_digits = (state == FLOW_STATE_SCORE_SOLO) or (state == FLOW_STATE_SCORE_MP)
+    if show_score_flow_digits then
+        update_score_flow_digits(self, true)
+    end
     update_score_flow_team_names(self, false)
     if state ~= FLOW_STATE_GAME then
         set_ui_square_transform(self, self.ui.transport_status_dot, -9999, -9999, MP_NET_STATUS_DOT_Z, hidden, MP_NET_STATUS_DOT_W, MP_NET_STATUS_DOT_H)
@@ -14357,6 +14361,9 @@ function request_level_load(self, level_index, source_tag)
 end
 
 function try_select_level_button(self, screen_x, screen_y)
+    if DEBUG_LEVEL_BUTTONS_ENABLED ~= true then
+        return false
+    end
     if not self.ui or not self.ui.level_buttons then
         return false
     end
@@ -14427,10 +14434,14 @@ function update_selected_unit_ui(self)
         local current_idx = self.current_level_index or 1
         for i, btn in ipairs(self.ui.level_buttons) do
             if btn then
-                local bx = get_level_button_screen_x(i)
-                local active = (i == current_idx)
-                local col = active and vmath.vector4(0.2, 0.85, 0.35, 0.95) or vmath.vector4(0.2, 0.6, 0.95, 0.9)
-                set_ui_square_transform(self, btn, bx, LEVEL_BUTTON_Y, LEVEL_BUTTON_Z, col, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                if DEBUG_LEVEL_BUTTONS_ENABLED == true then
+                    local bx = get_level_button_screen_x(i)
+                    local active = (i == current_idx)
+                    local col = active and vmath.vector4(0.2, 0.85, 0.35, 0.95) or vmath.vector4(0.2, 0.6, 0.95, 0.9)
+                    set_ui_square_transform(self, btn, bx, LEVEL_BUTTON_Y, LEVEL_BUTTON_Z, col, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                else
+                    set_ui_square_transform(self, btn, -9999, -9999, LEVEL_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                end
             end
         end
     end
@@ -14442,10 +14453,14 @@ function update_selected_unit_ui(self)
             local current_idx = self.current_level_index or 1
             for i, btn in ipairs(self.ui.level_buttons) do
                 if btn then
-                    local bx = get_level_button_screen_x(i)
-                    local active = (i == current_idx)
-                    local col = active and vmath.vector4(0.2, 0.85, 0.35, 0.95) or vmath.vector4(0.2, 0.6, 0.95, 0.9)
-                    set_ui_square_transform(self, btn, bx, LEVEL_BUTTON_Y, LEVEL_BUTTON_Z, col, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                    if DEBUG_LEVEL_BUTTONS_ENABLED == true then
+                        local bx = get_level_button_screen_x(i)
+                        local active = (i == current_idx)
+                        local col = active and vmath.vector4(0.2, 0.85, 0.35, 0.95) or vmath.vector4(0.2, 0.6, 0.95, 0.9)
+                        set_ui_square_transform(self, btn, bx, LEVEL_BUTTON_Y, LEVEL_BUTTON_Z, col, LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                    else
+                        set_ui_square_transform(self, btn, -9999, -9999, LEVEL_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEVEL_BUTTON_W, LEVEL_BUTTON_H)
+                    end
                 end
             end
         end

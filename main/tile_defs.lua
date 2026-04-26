@@ -1089,6 +1089,128 @@ library["lab"] = lab
     -- }
 
     library["portal"] = portal
+
+
+    -- =====================================================================
+    -- BUNKROOM (where civs slepy, vertical passage acces up/down in the middle)
+    -- =====================================================================
+    local bunkroom = create_tile_prototype("bunkroom")
+    bunkroom.visualTile = "bunkroom_off"
+    bunkroom.powerLightOffAnim = "tile_bunkroom_off"
+    bunkroom.powerLightOnAnim = "tile_bunkroom_on"
+
+    for i = 1, 9 do
+        bunkroom.cells[i].lightValue = 2
+        bunkroom.cells[i].moveValue = 1
+        bunkroom.cells[i].coverValue = 1
+    end
+    bunkroom.cells[3].moveValue = 3
+    bunkroom.cells[6].moveValue = 3
+
+    --portal.cells[1].accessDown = false
+    bunkroom.cells[2].accessDown = true
+    bunkroom.cells[5].accessDown = true
+    bunkroom.cells[7].accessDown = true
+    
+    bunkroom.cells[1].accessRight = true
+    bunkroom.cells[2].accessRight = true
+    bunkroom.cells[4].accessRight = true
+    bunkroom.cells[5].accessRight = true
+    bunkroom.cells[7].accessRight = true
+    bunkroom.cells[8].accessRight = true
+    
+
+    
+    -- bunkroom.cells[6].accessDown = false
+    -- --portal.cells[6].accessRight = false
+    -- bunkroom.cells[7].accessRight = false
+    -- bunkroom.cells[9].accessDown = false
+    -- bunkroom.cells[9].accessRight = false
+
+
+    bunkroom.cells[2].object1 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+
+--     bunkroom.cells[6].object1 = {
+--         name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+--         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+--     }
+-- 
+    -- bunkroom.cells[5].object1 = {
+    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    --     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    -- }
+    -- bunkroom.cells[9].object1 = {
+    --     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+    --     offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    -- }
+
+    library["bunkroom"] = bunkroom
+
+    -- =====================================================================
+    -- JUNGLE (plants/hydroponics, access down 2/2, accesright = 9)
+    -- =====================================================================
+    local jungle = create_tile_prototype("jungle")
+    jungle.visualTile = "jungle_off"
+    jungle.powerLightOffAnim = "tile_jungle_off"
+    jungle.powerLightOnAnim = "tile_jungle_on"
+
+    for i = 1, 9 do
+        jungle.cells[i].lightValue = 2
+        jungle.cells[i].moveValue = 1
+        jungle.cells[i].coverValue = 1
+    end
+    --jungle.cells[3].moveValue = 3
+    --jungle.cells[6].moveValue = 3
+
+    --portal.cells[1].accessDown = false
+    jungle.cells[1].accessDown = true
+    jungle.cells[2].accessDown = true
+    jungle.cells[6].accessDown = false
+    jungle.cells[9].accessDown = false
+    
+
+    jungle.cells[1].accessRight = true
+    jungle.cells[2].accessRight = true
+    jungle.cells[4].accessRight = false
+    jungle.cells[5].accessRight = true
+    jungle.cells[7].accessRight = false
+    jungle.cells[8].accessRight = true
+    jungle.cells[9].accessRight = true
+
+
+
+    -- bunkroom.cells[6].accessDown = false
+    -- --portal.cells[6].accessRight = false
+    -- bunkroom.cells[7].accessRight = false
+    -- bunkroom.cells[9].accessDown = false
+    -- bunkroom.cells[9].accessRight = false
+
+
+    jungle.cells[1].object1 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        powerLoaded = 0, powerRequired = 9
+    }
+
+    --     bunkroom.cells[6].object1 = {
+    --         name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+    --         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
+    --     }
+    -- 
+    -- bunkroom.cells[5].object1 = {
+    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    --     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    -- }
+    -- bunkroom.cells[9].object1 = {
+    --     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+    --     offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    -- }
+
+    library["jungle"] = jungle
     
     return library
 end

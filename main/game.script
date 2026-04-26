@@ -14619,7 +14619,19 @@ apply_aesthetic_mode = function(self)
                     { id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode) }
                 )
                 local always_visible = tile_def and tile_def.alphaOverlayAlwaysVisible == true
-                go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, always_visible and 1 or 0))
+                local now_on = always_visible
+                if not now_on and self.world_grid then
+                    for _, cell in ipairs(self.world_grid) do
+                        if cell.tileInstanceId == placement_index and cell.isPowered then
+                            now_on = true
+                            break
+                        end
+                    end
+                end
+                go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, now_on and 1 or 0))
+                if self.tile_alpha_power_state then
+                    self.tile_alpha_power_state[placement_index] = now_on
+                end
             end
         end
     end

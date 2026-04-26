@@ -14344,6 +14344,8 @@ apply_computer_emissive_accents = function(self, dt)
             local tint = get_instance_tint(tile_instance_id, powered, true)
             if powered and self.tile_light_is_lab and self.tile_light_is_lab[tile_instance_id] then
                 tint = vmath.vector4(base.x * max_mul, base.y * max_mul, base.z * max_mul, 1)
+            elseif powered and self.tile_light_is_jungle and self.tile_light_is_jungle[tile_instance_id] then
+                tint = white_tint
             end
             pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", tint)
         end
@@ -23395,6 +23397,7 @@ end
         self.tile_light_anim_ids = {}
         self.tile_light_is_workshop = {}
         self.tile_light_is_lab = {}
+        self.tile_light_is_jungle = {}
         self.tile_alpha_layers = {}
         self.tile_room_shadows = {}
         self.exterior_detail_objects = {}
@@ -23577,6 +23580,7 @@ end
                     self.tile_light_flicker_state[placement_index] = nil
                     self.tile_light_is_workshop[placement_index] = (placement.tile == "workshop")
                     self.tile_light_is_lab[placement_index] = (placement.tile == "lab")
+                    self.tile_light_is_jungle[placement_index] = (placement.tile == "jungle")
                     self.tile_light_anim_ids[placement_index] = {
                         on = hash(power_light_on_anim),
                         off = hash(power_light_off_anim)

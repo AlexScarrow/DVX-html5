@@ -6179,7 +6179,7 @@ local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civi
                 target_cell_id,
                 nil,
                 MOVEMENT_PROFILE_HUMAN,
-                nil
+                { allow_closed_doors = true }
             )
             if path and #path >= 2 then
                 local cost = tonumber(total_cost or 0) or 0
@@ -6811,7 +6811,7 @@ local function get_nearest_reachable_human_path_for_civilian(self, civilian)
                 unit.cell_id,
                 nil,
                 MOVEMENT_PROFILE_HUMAN,
-                nil
+                { allow_closed_doors = true }
             )
             if path and #path >= 2 then
                 local cost = tonumber(total_cost or 0) or 0
@@ -6844,7 +6844,7 @@ local function get_follow_target_path_for_civilian(self, civilian)
                 preferred.cell_id,
                 nil,
                 MOVEMENT_PROFILE_HUMAN,
-                nil
+                { allow_closed_doors = true }
             )
             if path and #path >= 2 then
                 return preferred, path
@@ -6863,7 +6863,7 @@ local function get_civilian_turn_movement_segment(self, path, max_ap)
     for i = 2, #path do
         local from_cell = path[i - 1]
         local to_cell = path[i]
-        local step_cost = get_step_move_cost(self.world_grid, from_cell, to_cell)
+        local step_cost = get_human_step_move_cost(self.world_grid, from_cell, to_cell, true)
         if ap_spent + step_cost > max_ap then
             break
         end
@@ -7052,6 +7052,24 @@ local function update_civilian_movement(self, dt)
                     if not (go_id and cell) then
                         update_vertical_move_sfx_for_actor(self, civilian_sfx_key, false)
                         update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, false)
+                        local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, civilian.cell_id, target_cell_id)
+                        if door_obj and door_closed then
+                            if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
+                                stop_civilian_motion()
+                                print(string.format(
+                                    "CIVILIANS | blocked_closed_door | id=%d from=%d to=%d",
+                                    tonumber(civilian.id or 0) or 0,
+                                    tonumber(civilian.cell_id or 0) or 0,
+                                    tonumber(target_cell_id or 0) or 0
+                                ))
+                                goto civilian_step_done
+                            end
+                            door_obj.isOpen = true
+                            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+                                LOOT_RUNTIME.refresh_door_markers(self)
+                            end
+                            play_door_toggle_sfx(self)
+                        end
                         if civilian.cell_id and civilian.cell_id ~= target_cell_id then
                             clear_civilian_cell_slot_assignment(self, civilian, civilian.cell_id)
                         end
@@ -7060,6 +7078,24 @@ local function update_civilian_movement(self, dt)
                         trigger_unit_tile_bump_sfx(self, "civ")
                         civilian.move_path_index = (civilian.move_path_index or 0) + 1
                     else
+                        local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, civilian.cell_id, target_cell_id)
+                        if door_obj and door_closed then
+                            if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
+                                stop_civilian_motion()
+                                print(string.format(
+                                    "CIVILIANS | blocked_closed_door | id=%d from=%d to=%d",
+                                    tonumber(civilian.id or 0) or 0,
+                                    tonumber(civilian.cell_id or 0) or 0,
+                                    tonumber(target_cell_id or 0) or 0
+                                ))
+                                goto civilian_step_done
+                            end
+                            door_obj.isOpen = true
+                            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+                                LOOT_RUNTIME.refresh_door_markers(self)
+                            end
+                            play_door_toggle_sfx(self)
+                        end
                         local target_x, target_y, target_slot = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
                         local from_x, from_y = id_to_coords(civilian.cell_id)
                         local to_x, to_y = id_to_coords(target_cell_id)
@@ -7150,6 +7186,7 @@ local function update_civilian_movement(self, dt)
                     if civilian.move_path and civilian.move_path_index > #civilian.move_path and (not civilian.micro_target_x) then
                         stop_civilian_motion()
                     end
+                    ::civilian_step_done::
                 end
             end
         end

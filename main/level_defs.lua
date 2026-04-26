@@ -25,7 +25,8 @@ function M.create_level_library()
         { x = 11, y = 8, tile = "medbay" },
         { x = 2, y = 8, tile = "entry" },
         { x = 5, y = 8, tile = "armoury" },
-        { x = 5, y = 5, tile = "bunkroom" },
+        { x = 5, y = 2, tile = "bunkroom" },
+        { x = 5, y = 5, tile = "jungle" },
         { x = 14, y = 8, tile = "exterior1" },
         --{ x = 11, y = 11, tile = "lab" },
         { x = 14, y = 5, tile = "portal" },
@@ -63,6 +64,7 @@ function M.create_level_library()
         { x = 8, y = 9, tile = "canteen" },
         { x = 11, y = 8, tile = "factory" },
         { x = 5, y = 11, tile = "armoury" },
+        
         { x = 8, y = 12, tile = "coms" },
         { x = 8, y = 6, tile = "workshop" },
         { x = 4, y = 5, tile = "passage1" },

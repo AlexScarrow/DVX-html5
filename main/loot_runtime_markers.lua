@@ -14,6 +14,9 @@ function M.extend(runtime, ctx)
     local BARRICADE_HP_BAR_Z = 0.81
     local BARRICADE_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
     local BARRICADE_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
+    -- Door HP bars sit closer to door art and thinner than barricade bars.
+    local DOOR_HP_BAR_OFFSET_Y = BARRICADE_HP_BAR_OFFSET_Y + 25
+    local DOOR_HP_BAR_SCALE_Y = BARRICADE_HP_BAR_BG_SCALE_Y * 0.55
     local DOOR_HP_DEFAULT = 10
     local DOOR_HP_MAX = 10
     local HAZARD_FX_Y_OFFSET = -35
@@ -1091,7 +1094,7 @@ function M.extend(runtime, ctx)
                         local hp_count = math.max(0, math.min(DOOR_HP_MAX, door.door_hp or DOOR_HP_DEFAULT))
                         local hp_step = hp_count * 0.1
                         local hp_bar_x = dx
-                        local hp_bar_y = dy + BARRICADE_HP_BAR_OFFSET_Y
+                        local hp_bar_y = dy + DOOR_HP_BAR_OFFSET_Y
                         local bar_left = hp_bar_x - (BARRICADE_HP_BAR_BG_FULL_W * 0.5)
                         local bg_id = self.door_hp_bar_bg_objects[cell_id]
                         if not bg_id then
@@ -1100,11 +1103,12 @@ function M.extend(runtime, ctx)
                                 self.door_hp_bar_bg_objects[cell_id] = bg_id
                                 msg.post(msg.url(nil, bg_id, "sprite"), "play_animation", { id = BARRICADE_HP_BAR_BG_ANIM })
                                 pcall(go.set, msg.url(nil, bg_id, "sprite"), "blend_mode", hash("alpha"))
-                                go.set_scale(vmath.vector3(BARRICADE_HP_BAR_BG_SCALE_X, BARRICADE_HP_BAR_BG_SCALE_Y, 1), bg_id)
+                                go.set_scale(vmath.vector3(BARRICADE_HP_BAR_BG_SCALE_X, DOOR_HP_BAR_SCALE_Y, 1), bg_id)
                                 go.set(msg.url(nil, bg_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                             end
                         else
                             go.set_position(vmath.vector3(hp_bar_x, hp_bar_y, BARRICADE_HP_BAR_Z), bg_id)
+                            go.set_scale(vmath.vector3(BARRICADE_HP_BAR_BG_SCALE_X, DOOR_HP_BAR_SCALE_Y, 1), bg_id)
                         end
                         local fill_id = self.door_hp_bar_fill_objects[cell_id]
                         if hp_step > 0 then
@@ -1127,7 +1131,7 @@ function M.extend(runtime, ctx)
                             end
                             if fill_id then
                                 go.set_position(vmath.vector3(fill_x, hp_bar_y, BARRICADE_HP_BAR_Z + 0.0001), fill_id)
-                                go.set_scale(vmath.vector3(fill_scale_x, BARRICADE_HP_BAR_BG_SCALE_Y, 1), fill_id)
+                                go.set_scale(vmath.vector3(fill_scale_x, DOOR_HP_BAR_SCALE_Y, 1), fill_id)
                                 go.set(msg.url(nil, fill_id, "sprite"), "tint", fill_color)
                             end
                         else

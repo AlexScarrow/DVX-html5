@@ -1100,12 +1100,16 @@ library["lab"] = lab
     bunkroom.powerLightOnAnim = "tile_bunkroom_on"
 
     for i = 1, 9 do
-        bunkroom.cells[i].lightValue = 2
+        bunkroom.cells[i].lightValue = 3
         bunkroom.cells[i].moveValue = 1
         bunkroom.cells[i].coverValue = 1
     end
     bunkroom.cells[3].moveValue = 3
     bunkroom.cells[6].moveValue = 3
+
+    bunkroom.cells[2].lightValue = 0
+    bunkroom.cells[5].lightValue = 0
+    bunkroom.cells[8].lightValue = 0
 
     --portal.cells[1].accessDown = false
     bunkroom.cells[2].accessDown = true
@@ -1127,11 +1131,65 @@ library["lab"] = lab
     -- bunkroom.cells[9].accessDown = false
     -- bunkroom.cells[9].accessRight = false
 
-
+    bunkroom.cells[1].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
     bunkroom.cells[2].object1 = {
-        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    bunkroom.cells[4].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    bunkroom.cells[5].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    bunkroom.cells[7].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+    bunkroom.cells[8].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 801,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
+
+    bunkroom.cells[1].object2 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 102,
+        offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "plate","plate","buff_armour", "meds", COMPONENT_UI.component_fuse }
+    }
+
+    bunkroom.cells[3].object2 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+        offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "ammo","power","buff_melee_right", "meds", COMPONENT_UI.component_fuse }
+    }
+
+    bunkroom.cells[5].object2 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 502,
+        offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "ammo","material","ammo", "meds", COMPONENT_UI.component_fuse }
+    }
+
+    bunkroom.cells[2].object2 = {
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
         offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
+    }
+    bunkroom.cells[2].object3 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
+        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    bunkroom.cells[8].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 802,
+        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    bunkroom.cells[5].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 502,
+        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }
 
 --     bunkroom.cells[6].object1 = {
@@ -1159,7 +1217,7 @@ library["lab"] = lab
     jungle.powerLightOnAnim = "tile_jungle_on"
 
     for i = 1, 9 do
-        jungle.cells[i].lightValue = 2
+        jungle.cells[i].lightValue = 3
         jungle.cells[i].moveValue = 1
         jungle.cells[i].coverValue = 1
     end
@@ -1190,25 +1248,36 @@ library["lab"] = lab
     -- bunkroom.cells[9].accessRight = false
 
 
-    jungle.cells[1].object1 = {
+    jungle.cells[6].object1 = {
         name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
-        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil,
+        offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
     }
 
+    jungle.cells[1].hazard_type = "gas"
+    jungle.cells[2].hazard_type = "gas"
+    jungle.cells[3].hazard_type = "gas"
+    jungle.cells[4].hazard_type = "gas"
+    jungle.cells[6].hazard_type = "gas"
+    
     --     bunkroom.cells[6].object1 = {
     --         name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
     --         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
     --     }
     -- 
-    -- bunkroom.cells[5].object1 = {
-    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
-    --     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-    -- }
-    -- bunkroom.cells[9].object1 = {
-    --     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
-    --     offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
-    -- }
+    jungle.cells[6].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    }
+    jungle.cells[6].object3 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+        offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        lootItems = { "wiring_straight","fuse","plate", "buff_hazmat", COMPONENT_UI.component_fuse }
+    }
+    jungle.cells[9].object1 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
+        offsetX = 113, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
 
     library["jungle"] = jungle
     

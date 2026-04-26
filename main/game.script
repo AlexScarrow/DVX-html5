@@ -3027,6 +3027,31 @@ local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
     return true
 end
 
+is_vertical_shot_right_lane_aligned = function(self, shooter_cell_id, target_cell_id, shooter_go_id, target_go_id)
+    if not (self and self.world_grid and shooter_cell_id and target_cell_id) then
+        return false
+    end
+    local from_cell = self.world_grid[shooter_cell_id]
+    local to_cell = self.world_grid[target_cell_id]
+    if not from_cell or not to_cell then
+        return false
+    end
+    local is_vertical_lane = (from_cell.xCell == to_cell.xCell) and (from_cell.yCell ~= to_cell.yCell)
+    if not is_vertical_lane then
+        return true
+    end
+    local from_center_x = coords_to_world_pos(from_cell.xCell, from_cell.yCell)
+    local to_center_x = coords_to_world_pos(to_cell.xCell, to_cell.yCell)
+    local shooter_pos = shooter_go_id and go.get_position(shooter_go_id) or nil
+    local target_pos = target_go_id and go.get_position(target_go_id) or nil
+    local shooter_x = shooter_pos and shooter_pos.x or from_center_x
+    local target_x = target_pos and target_pos.x or to_center_x
+    local right_threshold = CELL_WIDTH * 0.15
+    local shooter_in_right_lane = shooter_x >= (from_center_x + right_threshold)
+    local target_in_right_lane = target_x >= (to_center_x + right_threshold)
+    return shooter_in_right_lane and target_in_right_lane
+end
+
 compute_manual_ranged_hit_chance = function(self, unit, alien)
     if not (self and self.world_grid and unit and alien) then
         return nil
@@ -3839,7 +3864,12 @@ local function choose_spitter_target(self, alien)
     local range_cells = alien.ranged_cells or SPITTER_MAX_RANGE_CELLS
     for _, target in ipairs(get_living_alien_targets(self)) do
         local dist = heuristic(alien.cell_id, target.cell_id)
-        if dist <= range_cells and has_unobstructed_los(self.world_grid, alien.cell_id, target.cell_id) then
+        local target_go_id = target and (target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id])) or nil
+        local vertical_lane_ok = is_vertical_shot_right_lane_aligned(self, alien.cell_id, target.cell_id, alien.go_id, target_go_id)
+        if dist <= range_cells
+            and has_unobstructed_los(self.world_grid, alien.cell_id, target.cell_id)
+            and vertical_lane_ok
+        then
             table.insert(candidates, { unit = target, dist = dist, hp = target.current_health })
         end
     end

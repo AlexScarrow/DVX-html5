@@ -6634,6 +6634,15 @@ local function spawn_civilians_for_current_mission(self)
             self.mp_state.civilian_seed = seed
         end
         rng_state = seed
+    else
+        local wall_ms = tonumber(get_wall_clock_ms and get_wall_clock_ms() or 0) or 0
+        local level_seed = tonumber(self.current_level_index or 0) or 0
+        local turn_seed = tonumber(self.score_turn_counter or 0) or 0
+        local mixed = (wall_ms + (level_seed * 7919) + (turn_seed * 1543)) % 2147483647
+        if mixed <= 0 then
+            mixed = 1
+        end
+        rng_state = mixed
     end
     local function roll_between(min_v, max_v)
         if rng_state == nil then
@@ -7053,6 +7062,7 @@ local function update_civilian_movement(self, dt)
                         update_vertical_move_sfx_for_actor(self, civilian_sfx_key, false)
                         update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, false)
                         local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, civilian.cell_id, target_cell_id)
+                        local blocked_closed_door = false
                         if door_obj and door_closed then
                             if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
                                 stop_civilian_motion()
@@ -7062,23 +7072,27 @@ local function update_civilian_movement(self, dt)
                                     tonumber(civilian.cell_id or 0) or 0,
                                     tonumber(target_cell_id or 0) or 0
                                 ))
-                                goto civilian_step_done
+                                blocked_closed_door = true
+                            else
+                                door_obj.isOpen = true
+                                if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+                                    LOOT_RUNTIME.refresh_door_markers(self)
+                                end
+                                play_door_toggle_sfx(self)
                             end
-                            door_obj.isOpen = true
-                            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
-                                LOOT_RUNTIME.refresh_door_markers(self)
+                        end
+                        if not blocked_closed_door then
+                            if civilian.cell_id and civilian.cell_id ~= target_cell_id then
+                                clear_civilian_cell_slot_assignment(self, civilian, civilian.cell_id)
                             end
-                            play_door_toggle_sfx(self)
+                            civilian.cell_id = target_cell_id or civilian.cell_id
+                            ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+                            trigger_unit_tile_bump_sfx(self, "civ")
+                            civilian.move_path_index = (civilian.move_path_index or 0) + 1
                         end
-                        if civilian.cell_id and civilian.cell_id ~= target_cell_id then
-                            clear_civilian_cell_slot_assignment(self, civilian, civilian.cell_id)
-                        end
-                        civilian.cell_id = target_cell_id or civilian.cell_id
-                        ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
-                        trigger_unit_tile_bump_sfx(self, "civ")
-                        civilian.move_path_index = (civilian.move_path_index or 0) + 1
                     else
                         local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, civilian.cell_id, target_cell_id)
+                        local blocked_closed_door = false
                         if door_obj and door_closed then
                             if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
                                 stop_civilian_motion()
@@ -7088,105 +7102,107 @@ local function update_civilian_movement(self, dt)
                                     tonumber(civilian.cell_id or 0) or 0,
                                     tonumber(target_cell_id or 0) or 0
                                 ))
-                                goto civilian_step_done
-                            end
-                            door_obj.isOpen = true
-                            if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
-                                LOOT_RUNTIME.refresh_door_markers(self)
-                            end
-                            play_door_toggle_sfx(self)
-                        end
-                        local target_x, target_y, target_slot = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
-                        local from_x, from_y = id_to_coords(civilian.cell_id)
-                        local to_x, to_y = id_to_coords(target_cell_id)
-                        local is_vertical_step = (from_x == to_x) and (from_y ~= to_y)
-                        local is_prep_vertical_stage = false
-                        if civilian.entry_slot_for_index ~= civilian.move_path_index then
-                            civilian.entry_slot_index = target_slot
-                            civilian.entry_slot_for_index = civilian.move_path_index
-                        end
-                        if (not counter_move_enabled) and is_vertical_step and civilian.vertical_prep_done_for_index ~= civilian.move_path_index then
-                            local current_cell = self.world_grid[civilian.cell_id]
-                            if current_cell then
-                                local prep_x, prep_y = coords_to_world_pos(current_cell.xCell, current_cell.yCell)
-                                prep_y = prep_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-                                target_x = clamp_world_x_to_cell(current_cell, prep_x + right_lane_offset)
-                                target_y = prep_y
-                                is_prep_vertical_stage = true
-                            end
-                        elseif (not counter_move_enabled) and is_vertical_step then
-                            local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
-                            target_x = clamp_world_x_to_cell(cell, cx + right_lane_offset)
-                            target_y = cy - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
-                        end
-                        local pos = go.get_position(go_id)
-                        local dx = target_x - pos.x
-                        local dy = target_y - pos.y
-                        local is_horizontal_step = not is_vertical_step
-                        update_vertical_move_sfx_for_actor(self, civilian_sfx_key, is_vertical_step)
-                        update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, is_horizontal_step)
-                        local dist = math.sqrt((dx * dx) + (dy * dy))
-                        local step = move_speed * (dt or 0)
-                        civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
-                        local ping = math.sin(civilian.anim_phase)
-                        local scale_x = CIVILIAN_VISUAL_SCALE
-                        local scale_y = CIVILIAN_VISUAL_SCALE
-                        if counter_move_enabled then
-                            if not civilian.counter_move_total_dist or civilian.counter_move_total_dist <= 0 then
-                                civilian.counter_move_total_dist = math.max(dist, 1)
-                            end
-                            local progress = 1 - math.max(0, math.min(1, dist / civilian.counter_move_total_dist))
-                            local lift = math.sin(progress * math.pi)
-                            local move_arc = 4 * progress * (1 - progress)
-                            local wobble = math.sin((civilian.anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
-                            local lift_scale = profile.counter_lift_scale or 0.16
-                            local wobble_scale = profile.counter_wobble_scale or 0.04
-                            scale_x = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) + (wobble * wobble_scale))
-                            scale_y = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
-                            civilian.shadow_motion_offset = get_counter_shadow_offset(profile, move_arc)
-                        else
-                            civilian.shadow_motion_offset = nil
-                            if math.abs(dx) >= math.abs(dy) then
-                                scale_x = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                                blocked_closed_door = true
                             else
-                                scale_y = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
-                            end
-                    end
-                        set_civilian_scale(self, civilian, scale_x, scale_y)
-                        if dist <= step or dist <= 0.001 then
-                            pcall(go.set_position, vmath.vector3(target_x, target_y, CIVILIAN_VISUAL_Z), go_id)
-                            if is_prep_vertical_stage then
-                                civilian.vertical_prep_done_for_index = civilian.move_path_index
-                                civilian.counter_move_total_dist = nil
-                            else
-                                local old_cell_id = civilian.cell_id
-                                if old_cell_id and old_cell_id ~= target_cell_id then
-                                    clear_civilian_cell_slot_assignment(self, civilian, old_cell_id)
+                                door_obj.isOpen = true
+                                if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
+                                    LOOT_RUNTIME.refresh_door_markers(self)
                                 end
-                                civilian.cell_id = target_cell_id
-                                ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
-                                trigger_unit_tile_bump_sfx(self, "civ")
-                                if (not counter_move_enabled) and is_vertical_step then
-                                    local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
-                                    if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
-                                        civilian.micro_target_x = settle_x
-                                        civilian.micro_target_y = settle_y
-                                        civilian.micro_move_kind = "settle_after_vertical"
+                                play_door_toggle_sfx(self)
+                            end
+                        end
+                        if not blocked_closed_door then
+                            local target_x, target_y, target_slot = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
+                            local from_x, from_y = id_to_coords(civilian.cell_id)
+                            local to_x, to_y = id_to_coords(target_cell_id)
+                            local is_vertical_step = (from_x == to_x) and (from_y ~= to_y)
+                            local is_prep_vertical_stage = false
+                            if civilian.entry_slot_for_index ~= civilian.move_path_index then
+                                civilian.entry_slot_index = target_slot
+                                civilian.entry_slot_for_index = civilian.move_path_index
+                            end
+                            if (not counter_move_enabled) and is_vertical_step and civilian.vertical_prep_done_for_index ~= civilian.move_path_index then
+                                local current_cell = self.world_grid[civilian.cell_id]
+                                if current_cell then
+                                    local prep_x, prep_y = coords_to_world_pos(current_cell.xCell, current_cell.yCell)
+                                    prep_y = prep_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                                    target_x = clamp_world_x_to_cell(current_cell, prep_x + right_lane_offset)
+                                    target_y = prep_y
+                                    is_prep_vertical_stage = true
+                                end
+                            elseif (not counter_move_enabled) and is_vertical_step then
+                                local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
+                                target_x = clamp_world_x_to_cell(cell, cx + right_lane_offset)
+                                target_y = cy - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                            end
+                            local pos = go.get_position(go_id)
+                            local dx = target_x - pos.x
+                            local dy = target_y - pos.y
+                            local is_horizontal_step = not is_vertical_step
+                            update_vertical_move_sfx_for_actor(self, civilian_sfx_key, is_vertical_step)
+                            update_horizontal_move_sfx_for_actor(self, civilian_sfx_key, is_horizontal_step)
+                            local dist = math.sqrt((dx * dx) + (dy * dy))
+                            local step = move_speed * (dt or 0)
+                            civilian.anim_phase = (civilian.anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
+                            local ping = math.sin(civilian.anim_phase)
+                            local scale_x = CIVILIAN_VISUAL_SCALE
+                            local scale_y = CIVILIAN_VISUAL_SCALE
+                            if counter_move_enabled then
+                                if not civilian.counter_move_total_dist or civilian.counter_move_total_dist <= 0 then
+                                    civilian.counter_move_total_dist = math.max(dist, 1)
+                                end
+                                local progress = 1 - math.max(0, math.min(1, dist / civilian.counter_move_total_dist))
+                                local lift = math.sin(progress * math.pi)
+                                local move_arc = 4 * progress * (1 - progress)
+                                local wobble = math.sin((civilian.anim_phase or 0) * 2.0 + ((dx < 0) and 1.4 or 0))
+                                local lift_scale = profile.counter_lift_scale or 0.16
+                                local wobble_scale = profile.counter_wobble_scale or 0.04
+                                scale_x = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+                                scale_y = CIVILIAN_VISUAL_SCALE * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+                                civilian.shadow_motion_offset = get_counter_shadow_offset(profile, move_arc)
+                            else
+                                civilian.shadow_motion_offset = nil
+                                if math.abs(dx) >= math.abs(dy) then
+                                    scale_x = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                                else
+                                    scale_y = CIVILIAN_VISUAL_SCALE * (1 + HUMAN_PINGPONG_AMPLITUDE * ping)
+                                end
+                            end
+                            set_civilian_scale(self, civilian, scale_x, scale_y)
+                            if dist <= step or dist <= 0.001 then
+                                pcall(go.set_position, vmath.vector3(target_x, target_y, CIVILIAN_VISUAL_Z), go_id)
+                                if is_prep_vertical_stage then
+                                    civilian.vertical_prep_done_for_index = civilian.move_path_index
+                                    civilian.counter_move_total_dist = nil
+                                else
+                                    local old_cell_id = civilian.cell_id
+                                    if old_cell_id and old_cell_id ~= target_cell_id then
+                                        clear_civilian_cell_slot_assignment(self, civilian, old_cell_id)
                                     end
+                                    civilian.cell_id = target_cell_id
+                                    ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                    trigger_unit_tile_bump_sfx(self, "civ")
+                                    if (not counter_move_enabled) and is_vertical_step then
+                                        local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                        if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
+                                            civilian.micro_target_x = settle_x
+                                            civilian.micro_target_y = settle_y
+                                            civilian.micro_move_kind = "settle_after_vertical"
+                                        end
+                                    end
+                                    civilian.move_path_index = (civilian.move_path_index or 0) + 1
+                                    civilian.counter_move_total_dist = nil
                                 end
-                                civilian.move_path_index = (civilian.move_path_index or 0) + 1
-                                civilian.counter_move_total_dist = nil
+                            else
+                                local nx = pos.x + ((dx / dist) * step)
+                                local ny = pos.y + ((dy / dist) * step)
+                                pcall(go.set_position, vmath.vector3(nx, ny, CIVILIAN_VISUAL_Z), go_id)
                             end
-                        else
-                            local nx = pos.x + ((dx / dist) * step)
-                            local ny = pos.y + ((dy / dist) * step)
-                            pcall(go.set_position, vmath.vector3(nx, ny, CIVILIAN_VISUAL_Z), go_id)
                         end
                     end
                     if civilian.move_path and civilian.move_path_index > #civilian.move_path and (not civilian.micro_target_x) then
                         stop_civilian_motion()
                     end
-                    ::civilian_step_done::
                 end
             end
         end

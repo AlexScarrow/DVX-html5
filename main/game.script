@@ -6225,6 +6225,41 @@ get_civilian_captured_world_pos = function(self, civilian, cell)
     return base_x + offset_x, base_y + CIVILIAN_CAPTURED_OFFSET_Y
 end
 
+spawn_orange_impact_ring_at_world = function(self, world_x, world_y, duration_s)
+    if not (self and world_x and world_y and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world) then
+        return
+    end
+    LOOT_RUNTIME.spawn_impact_ring_at_world(self, world_x, world_y, vmath.vector4(1.0, 0.55, 0.2, 1), duration_s or 0.7)
+end
+
+spawn_orange_impact_ring_for_cell = function(self, cell_id, duration_s)
+    if not (self and self.world_grid and cell_id) then
+        return
+    end
+    local cell = self.world_grid[cell_id]
+    if not cell then
+        return
+    end
+    local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
+    spawn_orange_impact_ring_at_world(self, cx, cy, duration_s)
+end
+
+is_rescue_entry_victory_cell = function(self, cell_id)
+    if not (self and cell_id) then
+        return false
+    end
+    local target = tonumber(cell_id or 0) or 0
+    if target <= 0 then
+        return false
+    end
+    for _, rescue_cell_id in ipairs(get_rescue_entry_victory_cell_ids(self)) do
+        if (tonumber(rescue_cell_id or 0) or 0) == target then
+            return true
+        end
+    end
+    return false
+end
+
 get_clicked_captured_civilian_in_cell = function(self, clicked_cell_id, world_x, world_y)
     if not (self and clicked_cell_id and world_x and world_y) then
         return nil
@@ -6275,6 +6310,7 @@ set_civilian_awake_from_release = function(self, civilian, unit_id)
     civilian.follow_human_id = nil
     civilian.evacuate_to_exit = true
     civilian.current_anim_id = nil
+    spawn_orange_impact_ring_at_world(self, get_civilian_captured_world_pos(self, civilian, cell))
     refresh_civilian_visuals(self)
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
@@ -6989,6 +7025,7 @@ local function update_civilian_movement(self, dt)
                     and rescue_victory_lookup
                     and rescue_victory_lookup[civilian_cell_id] == true
                 then
+                    spawn_orange_impact_ring_for_cell(self, civilian_cell_id, 0.7)
                     civilian.is_rescued = true
                     score_record_civilian_escorted(self, civilian.id)
                     print(string.format(
@@ -21406,6 +21443,9 @@ local function update_single_unit_movement(self, unit, dt)
         move_human_to_cell(self, unit, target_cell_id)
         trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_id)
         trigger_unit_tile_bump_sfx(self, "human")
+        if is_rescue_entry_victory_cell(self, unit.cell_id) then
+            spawn_orange_impact_ring_for_cell(self, unit.cell_id, 0.7)
+        end
         unit.entry_slot_for_index = nil
         unit.entry_slot_index = nil
         unit.vertical_prep_done_for_index = nil

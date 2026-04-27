@@ -766,6 +766,7 @@ SOLO_SETUP_SELECT_W = 220
 SOLO_SETUP_SELECT_H = 300
 SOLO_SETUP_SELECT_OFFSET_X = 50
 SOLO_SETUP_SELECT_OFFSET_Y = -63
+SOLO_SETUP_MISSION_SELECT_X_OFFSETS = { -10, -4, 10, 20 } -- escape, rescue, purge, dna
 AESTHETIC_BUTTON_X = SCREEN_WIDTH - 70
 AESTHETIC_BUTTON_Y = SCREEN_HEIGHT - 20
 AESTHETIC_BUTTON_W = 120
@@ -12990,13 +12991,13 @@ function update_flow_ui(self, dt)
             SOLO_SETUP_EXPLAINER_Y + SOLO_SETUP_SELECT_OFFSET_Y + 35,
             SOLO_SETUP_UI_Z + 0.001,
             vmath.vector4(1, 1, 1, 1),
-            1,
+            1.06,
             1
         )
         set_ui_square_transform(
             self,
             self.ui.flow_solo_mission_select,
-            SOLO_SETUP_EXPLAINER_X[selected_idx] + 9,
+            SOLO_SETUP_EXPLAINER_X[selected_idx] + (SOLO_SETUP_MISSION_SELECT_X_OFFSETS[selected_idx] or 0),
             SOLO_SETUP_EXPLAINER_Y - 63,
             SOLO_SETUP_UI_Z + 0.002,
             vmath.vector4(1, 1, 1, 1),

@@ -57,6 +57,12 @@ emitters {
     }
   }
   properties {
+    key: EMITTER_KEY_PARTICLE_BLUE
+    points {
+      y: 1.0
+    }
+  }
+  properties {
     key: EMITTER_KEY_PARTICLE_ALPHA
     points {
       y: 1.0
@@ -73,28 +79,16 @@ emitters {
     points {
       y: 0.11
     }
-    points {
-      x: 1.0
-      y: 0.11
-    }
   }
   particle_properties {
     key: PARTICLE_KEY_GREEN
     points {
       y: 0.11
     }
-    points {
-      x: 1.0
-      y: 0.11
-    }
   }
   particle_properties {
     key: PARTICLE_KEY_BLUE
     points {
-      y: 0.11
-    }
-    points {
-      x: 1.0
       y: 0.11
     }
   }

@@ -310,7 +310,7 @@ LEADERBOARD_DEBUG_BACK_W = 140
 LEADERBOARD_DEBUG_BACK_H = 52
 LEADERBOARD_DEBUG_BACK_TOPLEFT_X = 90
 LEADERBOARD_DEBUG_BACK_TOPLEFT_Y = 648
-LEADERBOARD_DEBUG_BACK_X = LEADERBOARD_DEBUG_BACK_TOPLEFT_X + (LEADERBOARD_DEBUG_BACK_W * 0.5)
+LEADERBOARD_DEBUG_BACK_X = LEADERBOARD_DEBUG_BACK_TOPLEFT_X + (LEADERBOARD_DEBUG_BACK_W * 0.5) + 30
 LEADERBOARD_DEBUG_BACK_Y = SCREEN_HEIGHT - (LEADERBOARD_DEBUG_BACK_TOPLEFT_Y + (LEADERBOARD_DEBUG_BACK_H * 0.5))
 LEADERBOARD_DEBUG_ROW_TOPLEFT_Y = 200
 LEADERBOARD_DEBUG_ROW_Y = SCREEN_HEIGHT - LEADERBOARD_DEBUG_ROW_TOPLEFT_Y
@@ -12914,7 +12914,7 @@ function update_flow_ui(self, dt)
             SCREEN_HEIGHT * 0.5,
             FLOW_UI_PANEL_Z + 0.001,
             vmath.vector4(1, 1, 1, 1),
-            FLOW_UI_SCREEN_W / TITLE_SCREEN_ART_W,
+            1.05,
             FLOW_UI_SCREEN_H / TITLE_SCREEN_ART_H
         )
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0), 280, 70)
@@ -13256,7 +13256,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, LEADERBOARD_DEBUG_FRAME_X, LEADERBOARD_DEBUG_FRAME_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.8, 1.0, 0), LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, LEADERBOARD_DEBUG_PAGE_UP_X, LEADERBOARD_DEBUG_PAGE_UP_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.86, 0.2, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, LEADERBOARD_DEBUG_PAGE_DOWN_X, LEADERBOARD_DEBUG_PAGE_DOWN_Y, FLOW_UI_BUTTON_Z, vmath.vector4(1.0, 0.72, 0.24, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
-        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.93, 0.36, 0.36, 0.82), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
+        set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.93, 0.36, 0.36, 0), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
     else
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_frame, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_FRAME_H)
         set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_up, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)

@@ -11152,7 +11152,7 @@ function start_solo_game_flow(self)
     self.selected_mission_type = multiplayer_normalize_mission_type(selected)
     self.controlled_unit_id = "sarge"
     local level_index = select_level_index_for_mission(self, self.selected_mission_type)
-    reset_and_load_level(self, level_index, true)
+    reset_and_load_level(self, level_index, false)
     reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)
     enter_flow_state(self, FLOW_STATE_GAME)
@@ -11167,7 +11167,7 @@ local function start_tutorial_game_flow(self)
     end
     self.selected_mission_type = MISSION_TYPE_TUTORIAL
     self.controlled_unit_id = "sarge"
-    reset_and_load_level(self, 5, true)
+    reset_and_load_level(self, 5, false)
     self.tutorial_mode = true
     self.tutorial_completed = false
     local step1 = TUTORIAL_STEP_DEFS[1]
@@ -11224,7 +11224,7 @@ function start_multiplayer_game_flow(self, session_config)
     if level_index < 1 or not (self.level_library and self.level_library[level_index]) then
         level_index = select_level_index_for_mission(self, self.selected_mission_type)
     end
-    reset_and_load_level(self, level_index, true)
+    reset_and_load_level(self, level_index, false)
     multiplayer_enforce_controlled_unit(self, true)
     reset_derple_feedback_runtime(self)
     apply_aesthetic_mode(self)

@@ -340,13 +340,13 @@ RANGED_HIT_PREVIEW_OFFSET_Y = 56
 RANGED_HIT_PREVIEW_FADE_SECONDS = 0.22
 OBJECTIVE_BUTTON_W = 180
 OBJECTIVE_BUTTON_H = 64
-OBJECTIVE_BUTTON_X = SCORE_HUD_CENTER_X + 220
-OBJECTIVE_BUTTON_Y = SCORE_HUD_Y
+OBJECTIVE_BUTTON_X = REALTIME_TOGGLE_BUTTON_X
+OBJECTIVE_BUTTON_Y = REALTIME_TOGGLE_BUTTON_Y
 OBJECTIVE_BUTTON_Z = SCORE_HUD_Z
 OBJECTIVE_REMINDER_W = 750
 OBJECTIVE_REMINDER_H = 450
-OBJECTIVE_REMINDER_X = OBJECTIVE_BUTTON_X
-OBJECTIVE_REMINDER_Y = OBJECTIVE_BUTTON_Y - ((OBJECTIVE_BUTTON_H * 0.5) + (OBJECTIVE_REMINDER_H * 0.5) + 10)
+OBJECTIVE_REMINDER_X = SCREEN_WIDTH * 0.5
+OBJECTIVE_REMINDER_Y = SCREEN_HEIGHT * 0.5
 OBJECTIVE_REMINDER_Z = SCORE_HUD_Z
 PURGE_TIMER_HUD_Z = SCORE_HUD_Z
 PURGE_TIMER_HUD_CENTER_X = SCORE_HUD_CENTER_X
@@ -25039,11 +25039,11 @@ function on_input(self, action_id, action)
                     dismiss_ranged_hit_preview(self)
                     return true
                 end
-                if try_toggle_realtime_button(self, input_x, input_y) then
+                if try_toggle_objective_button(self, input_x, input_y) then
                     dismiss_ranged_hit_preview(self)
                     return true
                 end
-                if try_toggle_objective_button(self, input_x, input_y) then
+                if try_toggle_realtime_button(self, input_x, input_y) then
                     dismiss_ranged_hit_preview(self)
                     return true
                 end

@@ -9272,7 +9272,7 @@ collect_runtime_reference_counts = function(self)
             "panel_art", "panel_shadow", "component_button", "fix_button", "loot_button", "retrieve_button",
             "close_button", "not_enough_ap_icon", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
             "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_panel",
-            "flow_outro_slide", "flow_outro_ship", "flow_outro_skip_button", "flow_score_submit_button", "flow_score_title_button",
+            "flow_outro_slide", "flow_outro_ship", "flow_outro_skip_button", "flow_outro_skip_button_art", "flow_score_submit_button", "flow_score_title_button",
             "flow_title_solo_button", "flow_title_multiplayer_button"
         }
         for _, k in ipairs(named) do
@@ -9369,6 +9369,7 @@ local function initialize_unit_ui(self)
         flow_outro_slide = nil,
         flow_outro_ship = nil,
         flow_outro_skip_button = nil,
+        flow_outro_skip_button_art = nil,
         flow_score_submit_button = nil,
         flow_score_title_button = nil,
         flow_leaderboard_panel = nil,
@@ -9536,6 +9537,10 @@ local function initialize_unit_ui(self)
     self.ui.flow_outro_slide = create_outro_marker_sprite(hash("outro_purge_win_spaceship_fadeBlack"), FLOW_UI_PANEL_Z + 0.001)
     self.ui.flow_outro_ship = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 280, 120)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
+    self.ui.flow_outro_skip_button_art = create_ui_marker_sprite(hash("skip_button"), FLOW_UI_BUTTON_Z + 0.001)
+    if self.ui.flow_outro_skip_button_art then
+        pcall(go.set, msg.url(nil, self.ui.flow_outro_skip_button_art, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     self.ui.flow_score_submit_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_score_title_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 250, 56)
     self.ui.flow_leaderboard_panel = create_ui_marker_sprite(hash("leaderboard_panel"), FLOW_UI_PANEL_Z + 0.002)
@@ -9754,6 +9759,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+    set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_leaderboard_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
@@ -12082,6 +12088,7 @@ multiplayer_lobby_hide_non_lobby_ui = function(self, hidden)
     set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+    set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
     set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
@@ -12749,6 +12756,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -12836,6 +12844,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_leaderboard_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
@@ -12868,6 +12877,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(
@@ -12947,6 +12957,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, MP_SETUP_PANEL_X, MP_SETUP_PANEL_Y, MP_SETUP_PANEL_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
@@ -13080,7 +13091,8 @@ function update_flow_ui(self, dt)
         else
             set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
         end
-        set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0.98), 170, 52)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0), 170, 52)
+        set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -13181,6 +13193,7 @@ function update_flow_ui(self, dt)
     set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
+    set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     if self.ui.flow_score_rows then
         for _, row_id in ipairs(self.ui.flow_score_rows) do
             set_ui_square_transform(self, row_id, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 300, 28)

@@ -764,6 +764,9 @@ images {
 images {
   image: "/assets/images/tile_jungle_on.png"
 }
+images {
+  image: "/assets/images/skip_button.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

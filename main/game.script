@@ -403,7 +403,7 @@ FLOW_STATE_MP_LOBBY = "mp_lobby"
 FLOW_STATE_SOLO_SETUP = "solo_setup"
 FLOW_STATE_LEVEL_EDITOR = "level_editor"
 LEVEL_EDITOR_ENABLED = true
-LEVEL_DEBUG_FORCE_NEWEST_MISSION_LEVEL = true -- temporary test toggle
+LEVEL_DEBUG_FORCE_NEWEST_MISSION_LEVEL = false -- temporary test toggle
 EXIT_TEST_STASH_ENABLED = true
 SFX_TITLE_URL = "main:/sfx_title_screen#sound"
 SFX_PLANET_URL = "main:/sfx_planet_surface#sound"
@@ -9132,7 +9132,22 @@ select_level_index_for_mission = function(self, mission_type)
         table.sort(candidates, function(a, b) return a > b end)
         return candidates[1]
     end
-    return candidates[math.random(1, #candidates)]
+    self.mission_last_level_pick = self.mission_last_level_pick or {}
+    local last_pick = self.mission_last_level_pick[requested]
+    if #candidates > 1 and last_pick then
+        local filtered = {}
+        for _, idx in ipairs(candidates) do
+            if idx ~= last_pick then
+                filtered[#filtered + 1] = idx
+            end
+        end
+        if #filtered > 0 then
+            candidates = filtered
+        end
+    end
+    local picked = candidates[math.random(1, #candidates)]
+    self.mission_last_level_pick[requested] = picked
+    return picked
 end
 
 multiplayer_get_slot_count_for_player = function(player_count, player_id)
@@ -23924,6 +23939,7 @@ end
                 -- Exterior details are only for truly exposed silhouettes:
                 -- roof: no overlapping tile anywhere above; walls: no overlapping tile anywhere to each side.
                 local has_tile_above = false
+                local has_tile_below = false
                 local has_tile_left = false
                 local has_tile_right = false
                 local p_left = placement.x - 1
@@ -23941,13 +23957,16 @@ end
                         if (not has_tile_above) and overlaps_x and scan.y > placement.y then
                             has_tile_above = true
                         end
+                        if (not has_tile_below) and overlaps_x and scan.y == (placement.y - 3) then
+                            has_tile_below = true
+                        end
                         if (not has_tile_left) and overlaps_y and scan.x < placement.x then
                             has_tile_left = true
                         end
                         if (not has_tile_right) and overlaps_y and scan.x > placement.x then
                             has_tile_right = true
                         end
-                        if has_tile_above and has_tile_left and has_tile_right then
+                        if has_tile_above and has_tile_below and has_tile_left and has_tile_right then
                             break
                         end
                     end
@@ -23995,6 +24014,22 @@ end
                         go.set(msg.url(nil, right_wall_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         table.insert(tile_objects, right_wall_id)
                         table.insert(self.exterior_detail_objects, right_wall_id)
+                    end
+                end
+                if not has_tile_below then
+                    local floor_id = factory.create(
+                        "/tile_factory#tile_factory",
+                        vmath.vector3(center_x, center_y - (CELL_HEIGHT * 3), 0.02),
+                        nil,
+                        {},
+                        vmath.vector3(1, 1, 1)
+                    )
+                    if floor_id then
+                        msg.post(msg.url(nil, floor_id, "sprite"), "play_animation", { id = hash("exterior_floor") })
+                        pcall(go.set, msg.url(nil, floor_id, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+                        go.set(msg.url(nil, floor_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+                        table.insert(tile_objects, floor_id)
+                        table.insert(self.exterior_detail_objects, floor_id)
                     end
                 end
             end

@@ -802,7 +802,7 @@ library["canteen"] = canteen
 
 
 -- =====================================================================
--- PASSAGE 1 (vertical on right hand side)
+-- PASSAGE 1 (vertical only in middle)
 -- =====================================================================
     local passage1 = create_tile_prototype("passage1")
     passage1.visualTile = "passage1_off"
@@ -815,7 +815,7 @@ library["canteen"] = canteen
         passage1.cells[i].coverValue = 0
     end
 
-    passage1.cells[4].lightValue = 1
+    passage1.cells[5].lightValue = 2
     passage1.cells[4].moveValue = 1
     passage1.cells[3].moveValue = 3
     passage1.cells[6].moveValue = 3
@@ -919,12 +919,14 @@ lab.alphaOverlayMode = "specified"
 lab.alphaOverlay = "tile_lab_overlay"
 
 for i = 1, 9 do
-    lab.cells[i].lightValue = 0
+    lab.cells[i].lightValue = 3
     lab.cells[i].moveValue = 0
     lab.cells[i].coverValue = 0
 end
 
--- lab.cells[4].lightValue = 1
+--lab.cells[1].lightValue = 3
+--lab.cells[2].lightValue = 3
+
 -- lab.cells[4].moveValue = 1
 -- lab.cells[3].moveValue = 3
 -- lab.cells[6].moveValue = 3
@@ -958,9 +960,14 @@ lab.cells[4].object1 = {
     offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
 }
 
-lab.cells[4].object1 = {
-    name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+lab.cells[4].object2 = {
+    name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 402,
     offsetX = 110, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate,
+    isSecureAlienProof = true
+}
+lab.cells[6].object2 = {
+    name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 402,
+    offsetX = 115, offsetY = 5, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate,
     isSecureAlienProof = true
 }
 

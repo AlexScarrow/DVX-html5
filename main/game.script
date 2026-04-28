@@ -76,7 +76,7 @@ HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM = 58
 HUMAN_PINGPONG_AMPLITUDE = 0.18
 HUMAN_PINGPONG_SPEED = 7
 HUMAN_VERTICAL_ROCK_DEGREES = 5
-HUMAN_MAX_ACTION_POINTS = 5
+HUMAN_MAX_ACTION_POINTS = 10
 SPEED_STIM_REFRESH_AP = 6
 NIGHTVISION_UNPOWERED_TINT = vmath.vector4(0.16, 0.36, 0.18, 1)
 NIGHTVISION_POWER_NODE_TINT = vmath.vector4(0.45, 1.0, 0.55, 1)
@@ -3404,6 +3404,18 @@ local function spawn_alien(self, alien_type, cell_id)
     local cfg = ALIEN_TYPE_CONFIG[alien_type]
     if not cfg then
         return nil
+    end
+    local active_alien_cap = tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
+    if active_alien_cap > 0 then
+        local alive_count = 0
+        for _, alien in ipairs(self.aliens or {}) do
+            if alien and alien.is_dead ~= true then
+                alive_count = alive_count + 1
+            end
+        end
+        if alive_count >= active_alien_cap then
+            return nil
+        end
     end
 
     self.next_alien_id = (self.next_alien_id or 0) + 1
@@ -7951,15 +7963,21 @@ local function apply_start_of_turn_environment_damage(self)
             local has_oxygen_mask = unit_has_equipped_buff_kind(unit, "oxygen_mask")
             local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
             local damage = 0
+            local ap_penalty = 0
             local has_fire, has_gas, has_outside = get_cell_hazard_flags(cell)
             if has_outside and not has_oxygen_mask then
                 damage = damage + outside_damage
             end
             if has_fire and not has_hazmat then
                 damage = damage + fire_damage
+                ap_penalty = ap_penalty + 1
             end
             if has_gas and not has_hazmat then
                 damage = damage + gas_damage
+                ap_penalty = ap_penalty + 1
+            end
+            if ap_penalty > 0 then
+                unit.current_ap = math.max(0, (tonumber(unit.current_ap or 0) or 0) - ap_penalty)
             end
             if damage > 0 then
                 unit.current_health = math.max(0, (unit.current_health or 0) - damage)
@@ -15627,7 +15645,33 @@ try_select_human_portrait = function(self, screen_x, screen_y)
                 self.selected_start_cell = nil
                 close_comms_panel(self)
                 play_human_confirm_select_sfx(self, unit)
-                center_camera_on_unit(self, unit)
+                local unit_world_x = nil
+                local unit_world_y = nil
+                if unit.go_path then
+                    local pos = go.get_position(unit.go_path)
+                    unit_world_x = pos and pos.x or nil
+                    unit_world_y = pos and pos.y or nil
+                end
+                if (not unit_world_x or not unit_world_y) and unit.cell_id then
+                    local ucx, ucy = id_to_coords(unit.cell_id)
+                    if ucx and ucy then
+                        unit_world_x = ((ucx - 1) * CELL_WIDTH) + (CELL_WIDTH * 0.5)
+                        unit_world_y = ((ucy - 1) * CELL_HEIGHT) + (CELL_HEIGHT * 0.5)
+                    end
+                end
+                local unit_on_screen = false
+                if unit_world_x and unit_world_y and self.camera_pos and self.camera_zoom then
+                    local screen_unit_x = ((unit_world_x - self.camera_pos.x) * self.camera_zoom) + (SCREEN_WIDTH * 0.5)
+                    local screen_unit_y = ((unit_world_y - self.camera_pos.y) * self.camera_zoom) + (SCREEN_HEIGHT * 0.5)
+                    local margin = 48
+                    unit_on_screen = screen_unit_x >= margin
+                        and screen_unit_x <= (SCREEN_WIDTH - margin)
+                        and screen_unit_y >= margin
+                        and screen_unit_y <= (SCREEN_HEIGHT - margin)
+                end
+                if not unit_on_screen then
+                    center_camera_on_unit(self, unit)
+                end
                 update_human_visual_state(self)
                 update_selected_unit_ui(self)
             end
@@ -21942,6 +21986,62 @@ local function update_single_unit_movement(self, unit, dt)
         move_human_to_cell(self, unit, target_cell_id)
         trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_id)
         trigger_unit_tile_bump_sfx(self, "human")
+        local moved_cell = self.world_grid and self.world_grid[target_cell_id] or nil
+        local has_fire, has_gas = get_cell_hazard_flags(moved_cell)
+        local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
+        local step_fire_damage = 0
+        local step_gas_damage = 0
+        if has_fire and not has_hazmat then
+            step_fire_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
+        end
+        if has_gas and not has_hazmat then
+            step_gas_damage = math.max(0, tonumber(HAZARD_DAMAGE.gas_per_turn or 1) or 1)
+        end
+        local step_hazard_damage = step_fire_damage + step_gas_damage
+        if step_hazard_damage > 0 then
+            unit.current_health = math.max(0, (unit.current_health or 0) - step_hazard_damage)
+            if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
+                for i = 1, step_fire_damage do
+                    LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "WARNING_HAZARD_FIRE_HP")
+                end
+                for i = 1, step_gas_damage do
+                    LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "WARNING_HAZARD_GAS_HP")
+                end
+            end
+            print(string.format(
+                "MOVE HAZARD | %s took %d damage on cell %d [fire=%d gas=%d] (HP=%d)",
+                unit.display_name or tostring(unit.id),
+                step_hazard_damage,
+                target_cell_id or 0,
+                step_fire_damage,
+                step_gas_damage,
+                unit.current_health or 0
+            ))
+            if unit.current_health <= 0 then
+                update_vertical_move_sfx_for_unit(self, unit, false)
+                update_horizontal_move_sfx_for_actor(self, unit.id, false)
+                unit.is_moving = false
+                unit.move_path = nil
+                unit.move_path_index = 0
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
+                unit.micro_target_x = nil
+                unit.micro_target_y = nil
+                unit.micro_move_kind = nil
+                unit.vertical_prep_done_for_index = nil
+                unit.entry_slot_for_index = nil
+                unit.entry_slot_index = nil
+                unit.last_completed_step_vertical = false
+                unit.shadow_motion_offset = nil
+                unit.counter_move_total_dist = nil
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+                set_unit_rotation_degrees(unit, 0)
+                handle_human_death_loot_drop(self, unit, "environment_hazard")
+                update_human_visual_state(self)
+                update_human_ap_debug_label(self)
+                return
+            end
+        end
         if is_rescue_entry_victory_cell(self, unit.cell_id) then
             spawn_orange_impact_ring_for_cell(self, unit.cell_id, 0.7)
         end

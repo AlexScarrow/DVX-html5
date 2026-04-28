@@ -243,7 +243,9 @@ function M.create_level_library()
         { x = 5, y = 8, tile = "armoury" },
         { x = 14, y = 8, tile = "jungle" },
         { x = 4, y = 5, tile = "passage1" },
+        { x = 14, y = 5, tile = "passage1" },
         { x = 5, y = 2, tile = "portal" },
+        { x = 15, y = 2, tile = "portal" },
     }
     levels[6].mission_type = "dna_sample"
     levels[6].spawn_tile = "rescue_entry"

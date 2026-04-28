@@ -3086,7 +3086,7 @@ compute_manual_ranged_hit_chance = function(self, unit, alien)
     return math.max(ranged_model.min_hit_chance, math.min(ranged_model.max_hit_chance, base_hit_chance + class_bonus - range_penalty))
 end
 
-local function get_edge_spawn_cell_ids(world_grid)
+get_edge_spawn_cell_ids = function(world_grid)
     local ids = {}
     local fallback_edge_ids = {}
     for cell_id, cell in ipairs(world_grid) do
@@ -3115,6 +3115,40 @@ local function get_edge_spawn_cell_ids(world_grid)
         return fallback_edge_ids
     end
     return ids
+end
+
+get_portal_spawn_cell_ids = function(self)
+    local ids = {}
+    local seen = {}
+    local levels = self and self.level_library or nil
+    local level_index = self and self.current_level_index or nil
+    local level_def = (type(levels) == "table" and level_index and levels[level_index]) or nil
+    if type(level_def) ~= "table" then
+        return ids
+    end
+    for _, p in ipairs(level_def) do
+        if type(p) == "table" and p.tile == "portal" and tonumber(p.x) and tonumber(p.y) then
+            local sx = tonumber(p.x) + 1
+            local sy = tonumber(p.y)
+            local id = coords_to_id(sx, sy)
+            if not id then
+                id = coords_to_id(tonumber(p.x), tonumber(p.y))
+            end
+            if id and not seen[id] then
+                seen[id] = true
+                ids[#ids + 1] = id
+            end
+        end
+    end
+    return ids
+end
+
+get_active_blip_spawn_sources = function(self)
+    local portal_ids = get_portal_spawn_cell_ids(self)
+    if #portal_ids > 0 then
+        return portal_ids
+    end
+    return get_edge_spawn_cell_ids(self and self.world_grid or nil)
 end
 
 local function ensure_spitter_bottom_visual(self, alien)
@@ -5408,8 +5442,8 @@ local function spawn_initial_blips(self, count)
     if tutorial_rules_locked and tutorial_rules_locked(self) then
         return
     end
-    local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
-    if #edge_cells == 0 then
+    local spawn_cells = get_active_blip_spawn_sources(self)
+    if #spawn_cells == 0 then
         return
     end
 
@@ -5423,16 +5457,16 @@ local function spawn_initial_blips(self, count)
     local cap_active = self.mp_state and self.mp_state.enabled and mp_cap > 0
 
     local used = {}
-    for i = 1, math.min(count, #edge_cells) do
+    for i = 1, math.min(count, #spawn_cells) do
         if cap_active and active_count >= mp_cap then
             break
         end
-        local idx = math.random(1, #edge_cells)
+        local idx = math.random(1, #spawn_cells)
         while used[idx] do
-            idx = math.random(1, #edge_cells)
+            idx = math.random(1, #spawn_cells)
         end
         used[idx] = true
-        if spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx]) then
+        if spawn_alien(self, ALIEN_TYPE_BLIP, spawn_cells[idx]) then
             active_count = active_count + 1
         end
     end
@@ -5992,13 +6026,16 @@ get_spawn_pressure_profile = function(self)
 end
 
 spawn_blip_wave_for_pressure = function(self, reason_tag)
-    local edge_cells = get_edge_spawn_cell_ids(self.world_grid)
-    if #edge_cells <= 0 then
+    local spawn_cells = get_active_blip_spawn_sources(self)
+    if #spawn_cells <= 0 then
         print(string.format("%s: no eligible unpowered blip spawn cells.", tostring(reason_tag or "Spawn event")))
         return 0
     end
     local pressure = get_spawn_pressure_profile(self)
     local spawn_total = 1 + math.max(0, tonumber(pressure.spawn_delta or 0) or 0)
+    local spawn_source_count = math.max(1, #spawn_cells)
+    -- Scale wave size by active spawn sources so each portal contributes output.
+    spawn_total = spawn_total * spawn_source_count
     if math.random() <= (tonumber(pressure.burst_chance or 0) or 0) then
         spawn_total = spawn_total + 1
     end
@@ -6020,21 +6057,30 @@ spawn_blip_wave_for_pressure = function(self, reason_tag)
         ))
         return 0
     end
-    for _ = 1, math.max(1, spawn_total) do
+    local spawn_cycle = {}
+    for i = 1, #spawn_cells do
+        spawn_cycle[i] = spawn_cells[i]
+    end
+    for i = #spawn_cycle, 2, -1 do
+        local j = math.random(1, i)
+        spawn_cycle[i], spawn_cycle[j] = spawn_cycle[j], spawn_cycle[i]
+    end
+    for i = 1, math.max(1, spawn_total) do
         if cap_active and active_count >= mp_cap then
             break
         end
-        local idx = math.random(1, #edge_cells)
-        if spawn_alien(self, ALIEN_TYPE_BLIP, edge_cells[idx]) then
+        local spawn_cell = spawn_cycle[((i - 1) % #spawn_cycle) + 1]
+        if spawn_alien(self, ALIEN_TYPE_BLIP, spawn_cell) then
             spawned = spawned + 1
             active_count = active_count + 1
         end
     end
     print(string.format(
-        "%s: spawned %d blip(s) | tier=%d",
+        "%s: spawned %d blip(s) | tier=%d | sources=%d",
         tostring(reason_tag or "Spawn event"),
         spawned,
-        tonumber(pressure.tier or 0) or 0
+        tonumber(pressure.tier or 0) or 0,
+        spawn_source_count
     ))
     return spawned
 end

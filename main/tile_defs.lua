@@ -228,6 +228,66 @@ function M.create_tile_library(COMPONENT_UI)
     }
     library["exterior1"] = exterior1
 
+    -- =====================================================================
+    -- EXRERIOR2 TILE (some outside space)
+    -- =====================================================================
+
+    local exterior2 = create_tile_prototype("exterior2")
+    exterior2.visualTile = "exterior2_computerGame"
+    exterior2.visualTileComputer = "exterior2_computerGame"
+    exterior2.visualTileBoardgame = "exterior2_boardGame"
+    for i = 1, 9 do
+        exterior2.cells[i].lightValue = 0
+        exterior2.cells[i].moveValue = 1
+        exterior2.cells[i].coverValue = 1
+        exterior2.cells[i].isOutside = true
+    end
+    exterior2.cells[3].moveValue = 3
+    exterior2.cells[6].moveValue = 3
+
+    exterior2.cells[1].hazard_type = "outside"
+    exterior2.cells[2].hazard_type = "outside"
+    exterior2.cells[3].hazard_type = "outside"
+    exterior2.cells[4].hazard_type = "outside"
+    exterior2.cells[5].hazard_type = "outside"
+    exterior2.cells[6].hazard_type = "outside"
+    exterior2.cells[7].hazard_type = "outside"
+    exterior2.cells[8].hazard_type = "outside"
+    exterior2.cells[9].hazard_type = "outside"
+
+
+
+    exterior2.cells[1].accessDown = true
+    exterior2.cells[1].accessRight = true
+    exterior2.cells[2].accessDown = true
+    exterior2.cells[2].accessRight = true
+    exterior2.cells[3].accessRight = true
+    exterior2.cells[3].accessDown = false
+    exterior2.cells[4].accessRight = false
+    exterior2.cells[4].accessDown = true
+    exterior2.cells[5].accessDown = true
+    exterior2.cells[5].accessRight = false
+    exterior2.cells[6].accessDown = false
+    exterior2.cells[6].accessRight = false
+    exterior2.cells[7].accessDown = true
+    exterior2.cells[7].accessRight = false
+    exterior2.cells[8].accessDown = false
+    exterior2.cells[8].accessRight = false
+    --exterior2.cells[9].accessDown = false
+    exterior2.cells[9].accessRight = false
+    exterior2.cells[9].accessDown = false
+
+
+
+    -- exterior2.cells[8].accessDown = false
+    --rescue_entry.cells[5].accessRight = false
+    --exterior2.cells[6].accessRight = false
+    -- exterior2.cells[9].object1 = {
+    --     name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
+    --     offsetX = 115, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    -- }
+    library["exterior2"] = exterior2
+
 -- =====================================================================
 -- COMS (acquire Nav data)
 -- =====================================================================
@@ -821,9 +881,9 @@ corridor1.cells[6].lightValue = 3
 -- - Single isolated accessible cell: 4
 -- - Cell 4 remains enterable from left neighbor tile via edge rules.
 corridor1.cells[1].accessDown = false   -- blocks 2 <-> 3
-corridor1.cells[1].accessRight = false   -- blocks 2 <-> 3
+corridor1.cells[1].accessRight = true   -- blocks 2 <-> 3
 corridor1.cells[2].accessDown = true   -- blocks 2 <-> 3
-corridor1.cells[2].accessRight = false   -- blocks 2 <-> 3
+corridor1.cells[2].accessRight = true   -- blocks 2 <-> 3
 corridor1.cells[3].accessRight = false   -- blocks right boundary from 3
 corridor1.cells[3].accessDown = false
 corridor1.cells[4].accessRight = true   -- blocks 4 <-> 5
@@ -832,10 +892,10 @@ corridor1.cells[5].accessDown = true
 corridor1.cells[5].accessRight = true   -- blocks 5 <-> 6
 corridor1.cells[6].accessRight = true   -- blocks right boundary from 6
 corridor1.cells[6].accessDown = false     -- allows 6 <-> 3
-corridor1.cells[7].accessRight = false   -- blocks 7 <-> 8
+corridor1.cells[7].accessRight = true   -- blocks 7 <-> 8
 corridor1.cells[7].accessDown = false    -- blocks 7 <-> 4
 corridor1.cells[8].accessDown = true
-corridor1.cells[8].accessRight = false   -- blocks 8 <-> 9
+corridor1.cells[8].accessRight = true   -- blocks 8 <-> 9
 corridor1.cells[9].accessRight = false   -- blocks right boundary from 9
 corridor1.cells[9].accessDown = false     -- allows 9 <-> 6
 

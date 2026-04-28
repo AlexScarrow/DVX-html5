@@ -1980,9 +1980,15 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
         return false
     end
+    local speedy_ignores_barricades = alien_type == ALIEN_TYPE_SPEEDY
     local from_cell = world_grid and world_grid[from_cell_id] or nil
     local to_cell = world_grid and world_grid[to_cell_id] or nil
-    if from_cell and to_cell and from_cell.yCell == to_cell.yCell and from_cell.xCell ~= to_cell.xCell then
+    if (not speedy_ignores_barricades)
+        and from_cell
+        and to_cell
+        and from_cell.yCell == to_cell.yCell
+        and from_cell.xCell ~= to_cell.xCell
+    then
         local dir = (to_cell.xCell > from_cell.xCell) and 1 or -1
         local from_anchor = get_barricade_anchor_x_for_cell(from_cell)
         local to_anchor = get_barricade_anchor_x_for_cell(to_cell)
@@ -2004,7 +2010,7 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
         end
     end
     if is_cell_barricaded(world_grid, to_cell_id) then
-        return alien_type == ALIEN_TYPE_BRUTE
+        return alien_type == ALIEN_TYPE_BRUTE or alien_type == ALIEN_TYPE_SPEEDY
     end
     local _, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
     if not door_obj or not door_closed then
@@ -3970,9 +3976,11 @@ local function choose_spitter_target(self, alien)
         local dist = heuristic(alien.cell_id, target.cell_id)
         local target_go_id = target and (target.go_path or (self.civilian_visuals and target.id and self.civilian_visuals[target.id])) or nil
         local vertical_lane_ok = is_vertical_shot_right_lane_aligned(self, alien.cell_id, target.cell_id, alien.go_id, target_go_id)
+        local shot_blocked_by_barricade = spitter_shot_blocked_by_barricade(self, alien, target)
         if dist <= range_cells
             and has_unobstructed_los(self.world_grid, alien.cell_id, target.cell_id)
             and vertical_lane_ok
+            and (not shot_blocked_by_barricade)
         then
             table.insert(candidates, { unit = target, dist = dist, hp = target.current_health })
         end
@@ -4967,7 +4975,11 @@ local function update_alien_movement(self, dt)
                 local from_cell_before_step = alien.cell_id
                 local from_cell = self.world_grid[from_cell_before_step]
                 local to_cell = self.world_grid[target_cell_id]
-                if to_cell and is_cell_barricaded(self.world_grid, target_cell_id) and alien.type ~= ALIEN_TYPE_BRUTE then
+                if to_cell
+                    and is_cell_barricaded(self.world_grid, target_cell_id)
+                    and alien.type ~= ALIEN_TYPE_BRUTE
+                    and alien.type ~= ALIEN_TYPE_SPEEDY
+                then
                     alien.counter_shadow_offset = nil
                     alien.counter_move_total_dist = nil
                     alien.is_moving = false

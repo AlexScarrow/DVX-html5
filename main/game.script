@@ -185,6 +185,10 @@ HUMAN_PORTRAIT_GAP_Y = 26
 HUMAN_PORTRAIT_Z = 0.846
 HUMAN_PORTRAIT_HIT_W = 90
 HUMAN_PORTRAIT_HIT_H = 90
+HUMAN_PORTRAIT_HIT_FLASH_DURATION = 0.38
+HUMAN_PORTRAIT_HIT_RED_BLEND_MAX = 1.0
+HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX = 0.14
+HUMAN_PORTRAIT_HIT_FLICKER_HZ = 12
 COMMS_PANEL_W = 300
 COMMS_PANEL_H = 470
 COMMS_PANEL_Z = 0.842
@@ -4342,6 +4346,7 @@ local function resolve_turret_pending_shot(self, shot_id)
             local unit = self.squad_units and self.squad_units[shot.target_id]
             if unit and (unit.current_health or 0) > 0 then
                 unit.current_health = math.max(0, (unit.current_health or 0) - 1)
+                trigger_human_portrait_hit_feedback(self, unit, 1)
                 if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
                     MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, unit)
                 end
@@ -4750,6 +4755,9 @@ local function update_spitter_attack_phase(self, dt)
     local roll = math.random(1, 100)
     if roll <= hit_chance then
         target.current_health = math.max(0, target.current_health - 1)
+        if target.target_kind ~= "civilian" then
+            trigger_human_portrait_hit_feedback(self, target, 1)
+        end
         if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
             MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
         end
@@ -7955,32 +7963,22 @@ local function apply_start_of_turn_environment_damage(self)
         return
     end
     local outside_damage = math.max(0, tonumber(HAZARD_DAMAGE.outside_per_turn or 2) or 2)
-    local fire_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
-    local gas_damage = math.max(0, tonumber(HAZARD_DAMAGE.gas_per_turn or 1) or 1)
     for _, unit in pairs(self.squad_units) do
         if unit and (unit.current_health or 0) > 0 and unit.cell_id then
             local cell = self.world_grid[unit.cell_id]
             local has_oxygen_mask = unit_has_equipped_buff_kind(unit, "oxygen_mask")
             local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
             local damage = 0
-            local ap_penalty = 0
             local has_fire, has_gas, has_outside = get_cell_hazard_flags(cell)
             if has_outside and not has_oxygen_mask then
                 damage = damage + outside_damage
             end
-            if has_fire and not has_hazmat then
-                damage = damage + fire_damage
-                ap_penalty = ap_penalty + 1
-            end
-            if has_gas and not has_hazmat then
-                damage = damage + gas_damage
-                ap_penalty = ap_penalty + 1
-            end
-            if ap_penalty > 0 then
-                unit.current_ap = math.max(0, (tonumber(unit.current_ap or 0) or 0) - ap_penalty)
+            if (has_fire or has_gas) and not has_hazmat then
+                damage = damage + 1
             end
             if damage > 0 then
                 unit.current_health = math.max(0, (unit.current_health or 0) - damage)
+                trigger_human_portrait_hit_feedback(self, unit, damage)
                 local hazard_feedback_event_type = nil
                 if has_fire and not has_hazmat then
                     hazard_feedback_event_type = "WARNING_HAZARD_FIRE_HP"
@@ -15614,9 +15612,66 @@ update_human_portrait_ui = function(self)
             if not alive then
                 tint = vmath.vector4(0.4, 0.4, 0.4, 0.7)
             end
-            set_ui_square_transform(self, icon, sx, sy, HUMAN_PORTRAIT_Z, tint, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+            local portrait_scale = 1
+            if alive and unit and (tonumber(unit.portrait_hit_flash_timer or 0) or 0) > 0 then
+                local duration = math.max(0.001, tonumber(unit.portrait_hit_flash_duration or HUMAN_PORTRAIT_HIT_FLASH_DURATION) or HUMAN_PORTRAIT_HIT_FLASH_DURATION)
+                local remaining = math.max(0, tonumber(unit.portrait_hit_flash_timer or 0) or 0)
+                local progress = 1 - math.max(0, math.min(1, remaining / duration))
+                local fade = math.max(0, math.min(1, remaining / duration))
+                local flicker_phase = tonumber(unit.portrait_hit_flash_phase or 0) or 0
+                local flicker = 0.5 + (0.5 * math.sin(flicker_phase))
+                local red_blend = HUMAN_PORTRAIT_HIT_RED_BLEND_MAX * fade * (0.45 + (0.55 * flicker))
+                tint = vmath.vector4(
+                    tint.x + ((1 - tint.x) * red_blend),
+                    tint.y * (1 - red_blend),
+                    tint.z * (1 - red_blend),
+                    tint.w
+                )
+                portrait_scale = 1 + (HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX * math.sin(progress * math.pi))
+            end
+            set_ui_square_transform(
+                self,
+                icon,
+                sx,
+                sy,
+                HUMAN_PORTRAIT_Z,
+                tint,
+                (HUMAN_PORTRAIT_DRAW_W * 0.021) * portrait_scale,
+                (HUMAN_PORTRAIT_DRAW_H * 0.021) * portrait_scale
+            )
         else
             set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+        end
+    end
+end
+
+trigger_human_portrait_hit_feedback = function(self, unit, damage_amount)
+    if not (self and unit and (unit.current_health or 0) > 0) then
+        return
+    end
+    local damage = math.max(0, math.floor((tonumber(damage_amount or 0) or 0) + 0.0001))
+    if damage <= 0 then
+        return
+    end
+    unit.portrait_hit_flash_duration = HUMAN_PORTRAIT_HIT_FLASH_DURATION
+    unit.portrait_hit_flash_timer = HUMAN_PORTRAIT_HIT_FLASH_DURATION
+    unit.portrait_hit_flash_phase = 0
+end
+
+local function tick_human_portrait_hit_feedback(self, dt)
+    if not (self and self.squad_units) then
+        return
+    end
+    local dt_step = math.max(0, tonumber(dt or 0) or 0)
+    if dt_step <= 0 then
+        return
+    end
+    local flicker_speed = (math.pi * 2) * HUMAN_PORTRAIT_HIT_FLICKER_HZ
+    for _, unit in pairs(self.squad_units) do
+        local remaining = math.max(0, tonumber(unit and unit.portrait_hit_flash_timer or 0) or 0)
+        if remaining > 0 and unit then
+            unit.portrait_hit_flash_timer = math.max(0, remaining - dt_step)
+            unit.portrait_hit_flash_phase = (tonumber(unit.portrait_hit_flash_phase or 0) or 0) + (dt_step * flicker_speed)
         end
     end
 end
@@ -21155,6 +21210,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     play_melee_hit_human_sfx = function(self_ref)
         play_melee_hit_human_sfx(self_ref)
     end,
+    on_human_damaged = function(self_ref, unit, damage)
+        trigger_human_portrait_hit_feedback(self_ref, unit, damage)
+    end,
     handle_human_death_loot_drop = function(self_ref, unit)
         handle_human_death_loot_drop(self_ref, unit, "alien_melee")
     end
@@ -21989,32 +22047,21 @@ local function update_single_unit_movement(self, unit, dt)
         local moved_cell = self.world_grid and self.world_grid[target_cell_id] or nil
         local has_fire, has_gas = get_cell_hazard_flags(moved_cell)
         local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
-        local step_fire_damage = 0
-        local step_gas_damage = 0
-        if has_fire and not has_hazmat then
-            step_fire_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
-        end
-        if has_gas and not has_hazmat then
-            step_gas_damage = math.max(0, tonumber(HAZARD_DAMAGE.gas_per_turn or 1) or 1)
-        end
-        local step_hazard_damage = step_fire_damage + step_gas_damage
+        local step_hazard_damage = ((has_fire or has_gas) and not has_hazmat) and 1 or 0
         if step_hazard_damage > 0 then
             unit.current_health = math.max(0, (unit.current_health or 0) - step_hazard_damage)
+            trigger_human_portrait_hit_feedback(self, unit, step_hazard_damage)
             if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
-                for i = 1, step_fire_damage do
-                    LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "WARNING_HAZARD_FIRE_HP")
-                end
-                for i = 1, step_gas_damage do
-                    LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "WARNING_HAZARD_GAS_HP")
-                end
+                local move_hazard_event = has_fire and "WARNING_HAZARD_FIRE_HP" or "WARNING_HAZARD_GAS_HP"
+                LOOT_RUNTIME.emit_derple_feedback(self, unit.id, move_hazard_event)
             end
             print(string.format(
-                "MOVE HAZARD | %s took %d damage on cell %d [fire=%d gas=%d] (HP=%d)",
+                "MOVE HAZARD | %s took %d damage on cell %d [fire=%s gas=%s] (HP=%d)",
                 unit.display_name or tostring(unit.id),
                 step_hazard_damage,
                 target_cell_id or 0,
-                step_fire_damage,
-                step_gas_damage,
+                has_fire and "y" or "n",
+                has_gas and "y" or "n",
                 unit.current_health or 0
             ))
             if unit.current_health <= 0 then
@@ -24772,6 +24819,7 @@ function update(self, dt)
     end
     update_escape_pod_ready_sfx(self)
     update_sparking_wire_ambient_sfx(self, dt)
+    tick_human_portrait_hit_feedback(self, dt)
     if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
     end

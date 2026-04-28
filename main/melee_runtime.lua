@@ -572,6 +572,9 @@ function M.create(ctx)
             end
             local damage = get_alien_melee_damage(alien and alien.type)
             target.current_health = math.max(0, (target.current_health or 0) - damage)
+            if target.target_kind ~= "civilian" and ctx and ctx.on_human_damaged then
+                ctx.on_human_damaged(self, target, damage)
+            end
             mark_target_hit(self, target)
             spawn_human_blood_splatter_fx(self, target)
             print(string.format(

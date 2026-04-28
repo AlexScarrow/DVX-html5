@@ -2967,6 +2967,9 @@ local function has_unobstructed_los(world_grid, from_id, to_id)
     if not from_cell or not to_cell then
         return false
     end
+    if from_cell.tileID == hash("empty") or to_cell.tileID == hash("empty") then
+        return false
+    end
 
     if from_cell.xCell ~= to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
         return false
@@ -2977,6 +2980,13 @@ local function has_unobstructed_los(world_grid, from_id, to_id)
         local current_id = from_id
         while current_id ~= to_id do
             local next_id = current_id + (GRID_COLS * step)
+            local current_cell = world_grid[current_id]
+            local next_cell = world_grid[next_id]
+            if (current_cell and current_cell.tileID == hash("empty"))
+                or (next_cell and next_cell.tileID == hash("empty"))
+            then
+                return false
+            end
             if not can_human_cross_between_cells(world_grid, current_id, next_id) then
                 return false
             end
@@ -2989,6 +2999,13 @@ local function has_unobstructed_los(world_grid, from_id, to_id)
     local current_id = from_id
     while current_id ~= to_id do
         local next_id = current_id + step
+        local current_cell = world_grid[current_id]
+        local next_cell = world_grid[next_id]
+        if (current_cell and current_cell.tileID == hash("empty"))
+            or (next_cell and next_cell.tileID == hash("empty"))
+        then
+            return false
+        end
         if not can_human_cross_between_cells(world_grid, current_id, next_id) then
             return false
         end
@@ -3003,6 +3020,9 @@ local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
     if not from_cell or not to_cell then
         return false
     end
+    if from_cell.tileID == hash("empty") or to_cell.tileID == hash("empty") then
+        return false
+    end
 
     if from_cell.xCell ~= to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
         return false
@@ -3013,6 +3033,13 @@ local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
         local current_id = from_id
         while current_id ~= to_id do
             local next_id = current_id + (GRID_COLS * step)
+            local current_cell = world_grid[current_id]
+            local next_cell = world_grid[next_id]
+            if (current_cell and current_cell.tileID == hash("empty"))
+                or (next_cell and next_cell.tileID == hash("empty"))
+            then
+                return false
+            end
             if not can_cross_between_cells(world_grid, current_id, next_id) then
                 return false
             end
@@ -3030,6 +3057,13 @@ local function has_unobstructed_human_ranged_los(world_grid, from_id, to_id)
     local current_id = from_id
     while current_id ~= to_id do
         local next_id = current_id + step
+        local current_cell = world_grid[current_id]
+        local next_cell = world_grid[next_id]
+        if (current_cell and current_cell.tileID == hash("empty"))
+            or (next_cell and next_cell.tileID == hash("empty"))
+        then
+            return false
+        end
         if not can_cross_between_cells(world_grid, current_id, next_id) then
             return false
         end

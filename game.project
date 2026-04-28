@@ -36,7 +36,7 @@ max_count = 2500
 max_component_count = 128
 
 [collection]
-max_instances = 2048
+max_instances = 4096
 
 [html5]
 htmlfile = /web/index.html

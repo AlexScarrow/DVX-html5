@@ -18,7 +18,7 @@
 -- luacheck: globals NEW_TURN_BUTTON_X NEW_TURN_BUTTON_Y NEW_TURN_BUTTON_W NEW_TURN_BUTTON_H NEW_TURN_BUTTON_Z
 -- luacheck: globals LAUNCH_BUTTON_X LAUNCH_BUTTON_Y LAUNCH_BUTTON_W LAUNCH_BUTTON_H LAUNCH_BUTTON_Z
 -- luacheck: globals FLOW_UI_OVERLAY_Z FLOW_UI_PANEL_Z FLOW_UI_BUTTON_Z FLOW_UI_SCREEN_W FLOW_UI_SCREEN_H
--- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE FLOW_STATE_SCORE_SOLO FLOW_STATE_SCORE_MP FLOW_STATE_MP_SETUP FLOW_STATE_MP_LOBBY EXIT_TEST_STASH_ENABLED
+-- luacheck: globals FLOW_STATE_TITLE FLOW_STATE_GAME FLOW_STATE_OUTRO FLOW_STATE_SCORE FLOW_STATE_SCORE_SOLO FLOW_STATE_SCORE_MP FLOW_STATE_MP_SETUP FLOW_STATE_MP_LOBBY FLOW_STATE_LEVEL_EDITOR EXIT_TEST_STASH_ENABLED
 -- luacheck: globals AESTHETIC_BUTTON_X AESTHETIC_BUTTON_Y AESTHETIC_BUTTON_W AESTHETIC_BUTTON_H AESTHETIC_BUTTON_Z
 -- luacheck: globals ZOOM_IN_BUTTON_X ZOOM_IN_BUTTON_Y ZOOM_IN_BUTTON_W ZOOM_IN_BUTTON_H ZOOM_IN_BUTTON_Z
 -- luacheck: globals ZOOM_OUT_BUTTON_X ZOOM_OUT_BUTTON_Y ZOOM_OUT_BUTTON_W ZOOM_OUT_BUTTON_H ZOOM_OUT_BUTTON_Z
@@ -377,6 +377,10 @@ TITLE_SOLO_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_SOLO_BUTTON_Y = (SCREEN_HEIGHT * 0.52) + TITLE_BUTTON_Y_OFFSET
 TITLE_MULTIPLAYER_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_MULTIPLAYER_BUTTON_Y = (SCREEN_HEIGHT * 0.38) + TITLE_BUTTON_Y_OFFSET
+TITLE_DEBUG_BUTTON_X = TITLE_TUTORIAL_BUTTON_X - 300
+TITLE_DEBUG_BUTTON_Y = TITLE_TUTORIAL_BUTTON_Y
+TITLE_DEBUG_BUTTON_W = 220
+TITLE_DEBUG_BUTTON_H = 70
 TITLE_SCREEN_ART_W = 1280
 TITLE_SCREEN_ART_H = 720
 TUTORIAL_PANEL_W = 600
@@ -397,6 +401,9 @@ FLOW_STATE_SCORE = FLOW_STATE_SCORE_SOLO
 FLOW_STATE_MP_SETUP = "mp_setup"
 FLOW_STATE_MP_LOBBY = "mp_lobby"
 FLOW_STATE_SOLO_SETUP = "solo_setup"
+FLOW_STATE_LEVEL_EDITOR = "level_editor"
+LEVEL_EDITOR_ENABLED = true
+LEVEL_DEBUG_FORCE_NEWEST_MISSION_LEVEL = true -- temporary test toggle
 EXIT_TEST_STASH_ENABLED = true
 SFX_TITLE_URL = "main:/sfx_title_screen#sound"
 SFX_PLANET_URL = "main:/sfx_planet_surface#sound"
@@ -881,6 +888,7 @@ MP_TRANSPORT = require("main.multiplayer_transport")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
+LEVEL_EDITOR = require("main.level_editor")
 local TUTORIAL_STEP_DEFS = {
     { anim = hash("tutorial1"), tile = "entry", cell = 7 },
     { anim = hash("tutorial2"), tile = "canteen", cell = 9 },
@@ -9048,28 +9056,35 @@ select_level_index_for_mission = function(self, mission_type)
     local levels = self and self.level_library or nil
     local candidates = {}
     if type(levels) == "table" then
-        for level_index, level_def in ipairs(levels) do
-            if type(level_def) == "table" and get_level_mission_type(level_def) == requested then
-                table.insert(candidates, level_index)
+        for level_index, level_def in pairs(levels) do
+            local idx = tonumber(level_index)
+            if idx and type(level_def) == "table" and get_level_mission_type(level_def) == requested then
+                table.insert(candidates, idx)
             end
         end
     end
     if #candidates == 0 and requested ~= MISSION_TYPE_ESCAPE and type(levels) == "table" then
-        for level_index, level_def in ipairs(levels) do
-            if type(level_def) == "table" and get_level_mission_type(level_def) == MISSION_TYPE_ESCAPE then
-                table.insert(candidates, level_index)
+        for level_index, level_def in pairs(levels) do
+            local idx = tonumber(level_index)
+            if idx and type(level_def) == "table" and get_level_mission_type(level_def) == MISSION_TYPE_ESCAPE then
+                table.insert(candidates, idx)
             end
         end
     end
     if #candidates == 0 and type(levels) == "table" then
-        for level_index, level_def in ipairs(levels) do
-            if type(level_def) == "table" then
-                table.insert(candidates, level_index)
+        for level_index, level_def in pairs(levels) do
+            local idx = tonumber(level_index)
+            if idx and type(level_def) == "table" then
+                table.insert(candidates, idx)
             end
         end
     end
     if #candidates == 0 then
         return 1
+    end
+    if LEVEL_DEBUG_FORCE_NEWEST_MISSION_LEVEL == true then
+        table.sort(candidates, function(a, b) return a > b end)
+        return candidates[1]
     end
     return candidates[math.random(1, #candidates)]
 end
@@ -9584,6 +9599,7 @@ local function initialize_unit_ui(self)
     self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
+    self.ui.flow_title_debug_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
     self.ui.tutorial_panel = create_outro_marker_sprite(hash("tutorial1"), TUTORIAL_PANEL_Z)
     self.ui.flow_solo_setup_panel = create_ui_marker_sprite(hash("solo_setup_panel"), SOLO_SETUP_UI_Z + 0.001)
     self.ui.flow_solo_mission_select = create_ui_marker_sprite(hash("solo_selected_mission_frame"), SOLO_SETUP_UI_Z + 0.002)
@@ -9791,6 +9807,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
     set_ui_square_transform(self, self.ui.tutorial_panel, -9999, -9999, TUTORIAL_PANEL_Z, hidden, TUTORIAL_PANEL_W, TUTORIAL_PANEL_H)
     set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
     set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
@@ -10947,6 +10964,7 @@ refresh_ambient_sfx_state = function(self)
         or (state == FLOW_STATE_SOLO_SETUP)
         or (state == FLOW_STATE_MP_SETUP)
         or (state == FLOW_STATE_MP_LOBBY)
+        or (state == FLOW_STATE_LEVEL_EDITOR)
         or (state == FLOW_STATE_SCORE_SOLO)
         or (state == FLOW_STATE_SCORE_MP)
         or is_title_outro
@@ -12189,6 +12207,7 @@ multiplayer_lobby_hide_non_lobby_ui = function(self, hidden)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
     set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
@@ -12866,6 +12885,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
         if self.ui.flow_mp_mission_buttons then
             for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
@@ -12920,6 +12940,16 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0), 280, 70)
+        set_ui_square_transform(
+            self,
+            self.ui.flow_title_debug_button,
+            TITLE_DEBUG_BUTTON_X,
+            TITLE_DEBUG_BUTTON_Y,
+            FLOW_UI_BUTTON_Z,
+            LEVEL_EDITOR_ENABLED and vmath.vector4(0.25, 0.45, 0.95, 0.65) or hidden,
+            TITLE_DEBUG_BUTTON_W,
+            TITLE_DEBUG_BUTTON_H
+        )
         set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
@@ -12965,6 +12995,23 @@ function update_flow_ui(self, dt)
         end
         return
     end
+    if state == FLOW_STATE_LEVEL_EDITOR then
+        set_ui_square_transform(self, self.ui.flow_overlay, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_OVERLAY_Z, vmath.vector4(0.1, 0.1, 0.1, 1), SCREEN_WIDTH, SCREEN_HEIGHT)
+        set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.1, 0.1, 0.1, 1), SCREEN_WIDTH, SCREEN_HEIGHT)
+        pcall(go.set, msg.url(nil, self.ui.flow_overlay, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1.05, FLOW_UI_SCREEN_H / TITLE_SCREEN_ART_H)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
+        set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
+        set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
+        if LEVEL_EDITOR and LEVEL_EDITOR.update then
+            LEVEL_EDITOR.update(self, dt)
+        end
+        return
+    end
     if state == FLOW_STATE_SOLO_SETUP then
         local mission_type = multiplayer_normalize_mission_type(self.solo_setup and self.solo_setup.mission_type or MISSION_TYPE_ESCAPE)
         local selected_idx = 1
@@ -12978,6 +13025,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
@@ -13058,6 +13106,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
@@ -13200,6 +13249,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
         if self.ui.flow_mp_mission_buttons then
             for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
@@ -13266,6 +13316,7 @@ function update_flow_ui(self, dt)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
     if self.ui.flow_mp_mission_buttons then
         for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
@@ -13568,6 +13619,18 @@ function handle_flow_touch(self, input_x, input_y)
             end
             return true
         end
+        if LEVEL_EDITOR_ENABLED
+            and is_point_in_screen_rect(input_x, input_y, TITLE_DEBUG_BUTTON_X, TITLE_DEBUG_BUTTON_Y, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
+        then
+            if LEVEL_EDITOR and LEVEL_EDITOR.enter then
+                LEVEL_EDITOR.enter(self)
+            end
+            enter_flow_state(self, FLOW_STATE_LEVEL_EDITOR)
+            return true
+        end
+        return true
+    end
+    if state == FLOW_STATE_LEVEL_EDITOR then
         return true
     end
     if state == FLOW_STATE_MP_LOBBY then
@@ -14908,6 +14971,9 @@ set_aesthetic_mode = function(self, mode)
     apply_aesthetic_mode(self)
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
         LOOT_RUNTIME.refresh_world_item_visuals(self)
+    end
+    if LEVEL_EDITOR and LEVEL_EDITOR.on_aesthetic_changed then
+        LEVEL_EDITOR.on_aesthetic_changed(self)
     end
     if LOOT_RUNTIME then
         if LOOT_RUNTIME.refresh_loot_markers then
@@ -24314,6 +24380,34 @@ function init(self)
     apply_aesthetic_mode(self)
     initialize_unit_ui(self)
     set_ui_hidden(self)
+    if LEVEL_EDITOR and LEVEL_EDITOR.init then
+        LEVEL_EDITOR.init(self, {
+            FLOW_STATE_LEVEL_EDITOR = FLOW_STATE_LEVEL_EDITOR,
+            FLOW_STATE_TITLE = FLOW_STATE_TITLE,
+            AESTHETIC_MODE_COMPUTER = AESTHETIC_MODE_COMPUTER,
+            AESTHETIC_MODE_BOARDGAME = AESTHETIC_MODE_BOARDGAME,
+            SCREEN_WIDTH = SCREEN_WIDTH,
+            SCREEN_HEIGHT = SCREEN_HEIGHT,
+            GRID_COLS = GRID_COLS,
+            GRID_ROWS = GRID_ROWS,
+            MOVEMENT_PROFILE_HUMAN = MOVEMENT_PROFILE_HUMAN,
+            coords_to_id = coords_to_id,
+            coords_to_world_pos = coords_to_world_pos,
+            world_pos_to_coords = world_pos_to_coords,
+            screen_to_world = screen_to_world,
+            create_world_grid = create_world_grid,
+            bake_level_to_world_grid = bake_level_to_world_grid,
+            get_neighbors = get_neighbors,
+            get_adjacent_cell = get_adjacent_cell,
+            set_ui_square_transform = set_ui_square_transform,
+            create_ui_square = create_ui_square,
+            create_ui_marker_sprite = create_ui_marker_sprite,
+            apply_cell_tint = apply_cell_tint,
+            enter_flow_state = enter_flow_state,
+            toggle_aesthetic_mode = toggle_aesthetic_mode,
+            apply_camera_transform = apply_camera_transform
+        })
+    end
     self.selected_start_cell = nil
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
@@ -25131,10 +25225,16 @@ function update(self, dt)
         end
     end
     update_backdrop_cloud_fx(self)
+    local suppress_aesthetic_sheen = ((self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_LEVEL_EDITOR)
     if self.table_sweep_shadow_overlay then
         local profile = get_aesthetic_profile(self)
         local pan_speed_x = (profile and profile.table_sweep_shadow_pan_speed_x) or 0
         local pan_speed_y = (profile and profile.table_sweep_shadow_pan_speed_y) or 0
+        local table_sweep_shadow_tint = (profile and profile.table_sweep_shadow_tint) or vmath.vector4(0.2, 0.17, 0.13, 0.2)
+        if suppress_aesthetic_sheen then
+            table_sweep_shadow_tint = vmath.vector4(table_sweep_shadow_tint.x, table_sweep_shadow_tint.y, table_sweep_shadow_tint.z, 0)
+        end
+        go.set(msg.url(nil, self.table_sweep_shadow_overlay, "sprite"), "tint", table_sweep_shadow_tint)
         -- Treat sweep offsets/speed as screen-space so motion feels identical across zoom levels.
         local start_x = (-SCREEN_WIDTH * 0.6) - 1000
         local end_x = (SCREEN_WIDTH * 0.6) + 1000
@@ -25163,6 +25263,8 @@ function update(self, dt)
         go.set_scale(vmath.vector3(sx, sy, 1), self.table_sweep_shadow_overlay)
     end
     if self.sheen_overlay then
+        local sheen_alpha = suppress_aesthetic_sheen and 0 or (self.sheen_alpha or 0.4)
+        go.set(msg.url(nil, self.sheen_overlay, "sprite"), "tint", vmath.vector4(1, 1, 1, sheen_alpha))
         local sx = (SCREEN_WIDTH / self.camera_zoom) / (self.sheen_art_w or 768)
         local sy = (SCREEN_HEIGHT / self.camera_zoom) / (self.sheen_art_h or 576)
         local ox = self.sheen_offset_x or 0
@@ -25216,6 +25318,16 @@ function on_input(self, action_id, action)
             and self.mp_state.client_alien_activity_visible == true)
     if action_id == hash("touch") then
         local input_x, input_y, inside_view = map_window_input_to_logical(action.x, action.y, action.screen_x, action.screen_y)
+        if self.level_editor then
+            self.level_editor.last_input_x = input_x
+            self.level_editor.last_input_y = input_y
+        end
+        if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_LEVEL_EDITOR then
+            if LEVEL_EDITOR and LEVEL_EDITOR.handle_input then
+                return LEVEL_EDITOR.handle_input(self, action, input_x, input_y, inside_view)
+            end
+            return true
+        end
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             if action.released and inside_view and input_x and input_y then
                 handle_flow_touch(self, input_x, input_y)
@@ -25437,6 +25549,12 @@ function on_input(self, action_id, action)
             return true
         end
     elseif action_id == hash("zoom_in") then
+        if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_LEVEL_EDITOR then
+            if LEVEL_EDITOR and LEVEL_EDITOR.handle_wheel then
+                LEVEL_EDITOR.handle_wheel(self, 1)
+            end
+            return true
+        end
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
@@ -25455,6 +25573,12 @@ function on_input(self, action_id, action)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
         request_zoom_delta(self, 0.12, focus_x, focus_y)
     elseif action_id == hash("zoom_out") then
+        if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_LEVEL_EDITOR then
+            if LEVEL_EDITOR and LEVEL_EDITOR.handle_wheel then
+                LEVEL_EDITOR.handle_wheel(self, -1)
+            end
+            return true
+        end
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
         end
@@ -25472,6 +25596,20 @@ function on_input(self, action_id, action)
         focus_x = focus_x or (SCREEN_WIDTH * 0.5)
         focus_y = focus_y or (SCREEN_HEIGHT * 0.5)
         request_zoom_delta(self, -0.12, focus_x, focus_y)
+    elseif action_id == hash("mouse_wheel_up") then
+        if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_LEVEL_EDITOR then
+            if LEVEL_EDITOR and LEVEL_EDITOR.handle_wheel then
+                LEVEL_EDITOR.handle_wheel(self, 1)
+            end
+            return true
+        end
+    elseif action_id == hash("mouse_wheel_down") then
+        if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_LEVEL_EDITOR then
+            if LEVEL_EDITOR and LEVEL_EDITOR.handle_wheel then
+                LEVEL_EDITOR.handle_wheel(self, -1)
+            end
+            return true
+        end
     elseif action_id == hash("toggle_aesthetic_mode") and action.pressed then
         if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
             return true
@@ -25602,6 +25740,9 @@ function on_message(self, message_id, message, sender)
 end
 
 function final(self)
+    if LEVEL_EDITOR and LEVEL_EDITOR.final then
+        LEVEL_EDITOR.final(self)
+    end
     if self and self.sfx_state then
         self.sfx_state.vertical_active_by_unit = {}
         self.sfx_state.vertical_active_count = 0

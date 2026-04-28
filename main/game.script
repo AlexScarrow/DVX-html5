@@ -3475,6 +3475,10 @@ apply_blip_pulse_scale = function(alien, dt)
     if not alien or alien.type ~= ALIEN_TYPE_BLIP or alien.is_dead or not alien.go_id then
         return
     end
+    local alive = pcall(go.get_position, alien.go_id)
+    if not alive then
+        return
+    end
     if alien.blip_pulse_phase == nil then
         alien.blip_pulse_phase = math.random() * math.pi * 2
     end
@@ -3495,7 +3499,7 @@ apply_blip_pulse_scale = function(alien, dt)
     alien.blip_pulse_phase = alien.blip_pulse_phase + (dt * alien.blip_pulse_speed * speed_mul * math.pi * 2)
     local wave = math.sin(alien.blip_pulse_phase)
     local s = alien.blip_pulse_base_scale * (1 + (wave * alien.blip_pulse_amount)) * scale_mul
-    go.set_scale(vmath.vector3(s, s, 1), alien.go_id)
+    pcall(go.set_scale, vmath.vector3(s, s, 1), alien.go_id)
 end
 
 update_spitter_idle_visual = function(self, alien, dt)
@@ -5486,9 +5490,11 @@ local function update_ladder_tints(self)
 end
 
 local function is_valid_ladder_cell(cell)
+    local tile_id = cell and cell.tileID or nil
+    local outside_allowed = (tile_id == hash("exterior1"))
     return cell
-        and cell.tileID ~= hash("empty")
-        and (cell.isOutside ~= true)
+        and tile_id ~= hash("empty")
+        and ((cell.isOutside ~= true) or outside_allowed)
         and ((tonumber(cell.moveValue) or 0) > 0)
 end
 

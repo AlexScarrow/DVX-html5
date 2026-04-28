@@ -177,7 +177,7 @@ function M.create_tile_library(COMPONENT_UI)
     exterior1.visualTileComputer = "exterior1_computerGame"
     exterior1.visualTileBoardgame = "exterior1_boardGame"
     for i = 1, 9 do
-        exterior1.cells[i].lightValue = 2
+        exterior1.cells[i].lightValue = 0
         exterior1.cells[i].moveValue = 1
         exterior1.cells[i].coverValue = 1
         exterior1.cells[i].isOutside = true
@@ -185,6 +185,17 @@ function M.create_tile_library(COMPONENT_UI)
     exterior1.cells[3].moveValue = 3
     exterior1.cells[6].moveValue = 3
 
+    exterior1.cells[1].hazard_type = "outside"
+    exterior1.cells[2].hazard_type = "outside"
+    exterior1.cells[3].hazard_type = "outside"
+    exterior1.cells[4].hazard_type = "outside"
+    exterior1.cells[5].hazard_type = "outside"
+    exterior1.cells[6].hazard_type = "outside"
+    exterior1.cells[7].hazard_type = "outside"
+    exterior1.cells[8].hazard_type = "outside"
+    exterior1.cells[9].hazard_type = "outside"
+
+    
     
     exterior1.cells[1].accessDown = true
     exterior1.cells[1].accessRight = true
@@ -196,7 +207,7 @@ function M.create_tile_library(COMPONENT_UI)
     exterior1.cells[4].accessDown = true
     exterior1.cells[5].accessDown = true
     exterior1.cells[5].accessRight = true
-    exterior1.cells[6].accessDown = false
+    exterior1.cells[6].accessDown = true
     exterior1.cells[6].accessRight = false
     exterior1.cells[7].accessDown = true
     exterior1.cells[7].accessRight = false
@@ -250,7 +261,7 @@ function M.create_tile_library(COMPONENT_UI)
     coms.cells[8].accessDown = false
     coms.cells[8].accessRight = true
     coms.cells[9].accessDown = false
-    coms.cells[9].accessRight = false
+    coms.cells[9].accessRight = true
 
 --     coms.cells[4].object1 = {
 --         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
@@ -774,10 +785,10 @@ library["canteen"] = canteen
     passage1.cells[9].accessDown = false     -- allows 9 <-> 6
 
 
--- passage1.cells[6].object1 = {
---     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
---     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
--- }
+passage1.cells[5].object1 = {
+    name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+}
 
 library["passage1"] = passage1
 
@@ -791,9 +802,13 @@ corridor1.powerLightOnAnim = "tile_corridor1_on"
 
 for i = 1, 9 do
     corridor1.cells[i].lightValue = 0
-    corridor1.cells[i].moveValue = 0
-    corridor1.cells[i].coverValue = 0
+    corridor1.cells[i].moveValue = 1
+    corridor1.cells[i].coverValue = 1
 end
+
+corridor1.cells[4].lightValue = 3
+corridor1.cells[5].lightValue = 3
+corridor1.cells[6].lightValue = 3
 
 -- passage1.cells[4].lightValue = 1
 -- passage1.cells[4].moveValue = 1
@@ -807,28 +822,28 @@ end
 -- - Cell 4 remains enterable from left neighbor tile via edge rules.
 corridor1.cells[1].accessDown = false   -- blocks 2 <-> 3
 corridor1.cells[1].accessRight = false   -- blocks 2 <-> 3
-corridor1.cells[2].accessDown = false   -- blocks 2 <-> 3
+corridor1.cells[2].accessDown = true   -- blocks 2 <-> 3
 corridor1.cells[2].accessRight = false   -- blocks 2 <-> 3
 corridor1.cells[3].accessRight = false   -- blocks right boundary from 3
 corridor1.cells[3].accessDown = false
 corridor1.cells[4].accessRight = true   -- blocks 4 <-> 5
 corridor1.cells[4].accessDown = false    -- blocks 4 <-> 1
-corridor1.cells[5].accessDown = false
+corridor1.cells[5].accessDown = true
 corridor1.cells[5].accessRight = true   -- blocks 5 <-> 6
 corridor1.cells[6].accessRight = true   -- blocks right boundary from 6
 corridor1.cells[6].accessDown = false     -- allows 6 <-> 3
 corridor1.cells[7].accessRight = false   -- blocks 7 <-> 8
 corridor1.cells[7].accessDown = false    -- blocks 7 <-> 4
-corridor1.cells[8].accessDown = false
+corridor1.cells[8].accessDown = true
 corridor1.cells[8].accessRight = false   -- blocks 8 <-> 9
 corridor1.cells[9].accessRight = false   -- blocks right boundary from 9
 corridor1.cells[9].accessDown = false     -- allows 9 <-> 6
 
 
--- corridor1.cells[6].object1 = {
---     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
---     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
--- }
+corridor1.cells[5].object1 = {
+    name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+}
 
 library["corridor1"] = corridor1
 
@@ -1118,10 +1133,13 @@ library["lab"] = lab
     
     bunkroom.cells[1].accessRight = true
     bunkroom.cells[2].accessRight = true
+    bunkroom.cells[3].accessRight = false
     bunkroom.cells[4].accessRight = true
     bunkroom.cells[5].accessRight = true
+    bunkroom.cells[6].accessRight = false
     bunkroom.cells[7].accessRight = true
     bunkroom.cells[8].accessRight = true
+    bunkroom.cells[9].accessRight = false
     
 
     

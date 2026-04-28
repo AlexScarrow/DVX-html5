@@ -5073,11 +5073,7 @@ function M.extend(runtime, ctx)
                         local self_dist = math.sqrt(sdx * sdx + sdy * sdy)
                         if self_dist <= self_drop_radius then
                             target_unit = source_unit
-                        elseif not target_unit then
-                            target_unit = source_unit
                         end
-                    elseif not target_unit then
-                        target_unit = source_unit
                     end
                 end
                 if target_unit then

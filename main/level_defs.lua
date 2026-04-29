@@ -328,6 +328,28 @@ levels[3].unit_loadouts = {
     levels[8].spawn_cell = 2
     levels[8].unit_loadouts = levels[1].unit_loadouts
 
+    levels[9] = {
+        { x = 2, y = 12, tile = "coms" },
+        { x = 14, y = 11, tile = "coms" },
+        { x = 2, y = 9, tile = "canteen" },
+        { x = 5, y = 9, tile = "lab" },
+        { x = 8, y = 8, tile = "exterior2" },
+        { x = 11, y = 8, tile = "rescue_entry" },
+        { x = 14, y = 8, tile = "armoury" },
+        { x = 2, y = 6, tile = "corridor1" },
+        { x = 5, y = 5, tile = "bunkroom" },
+        { x = 8, y = 5, tile = "corridor1" },
+        { x = 11, y = 5, tile = "corridor1" },
+        { x = 14, y = 5, tile = "workshop" },
+        { x = 2, y = 3, tile = "portal" },
+        { x = 11, y = 2, tile = "portal" },
+        { x = 14, y = 2, tile = "factory" },
+    }
+    levels[9].mission_type = "rescue"
+    levels[9].spawn_tile = "rescue_entry"
+    levels[9].spawn_cell = 2
+    levels[9].unit_loadouts = levels[1].unit_loadouts
+
     return levels
 end
 

@@ -297,10 +297,16 @@ function M.create_tile_library(COMPONENT_UI)
     coms.powerLightOnAnim = "tile_coms_on"
    
     for i = 1, 9 do
-        coms.cells[i].lightValue = 2
+        coms.cells[i].lightValue = 3
         coms.cells[i].moveValue = 1
         coms.cells[i].coverValue = 1
     end
+    coms.cells[1].lightValue = 0
+    coms.cells[2].lightValue = 1
+    coms.cells[3].lightValue = 0
+    coms.cells[4].lightValue = 2
+    coms.cells[5].lightValue = 2
+    
     coms.cells[3].moveValue = 3
     coms.cells[6].moveValue = 3
 
@@ -396,10 +402,13 @@ canteen.powerLightOffAnim = "tile_canteen_off"
 canteen.powerLightOnAnim = "tile_canteen_on"
 
 for i = 1, 9 do
-    canteen.cells[i].lightValue = 2
+    canteen.cells[i].lightValue = 3
     canteen.cells[i].moveValue = 1
     canteen.cells[i].coverValue = 1
 end
+canteen.cells[5].lightValue = 0
+canteen.cells[6].lightValue = 0
+
 canteen.cells[3].moveValue = 3
 canteen.cells[6].moveValue = 3
 
@@ -411,10 +420,10 @@ canteen.cells[3].accessDown = false
 --canteen.cells[4].accessDown = false
 canteen.cells[4].accessRight = false
 --canteen.cells[4].accessDown = false
-canteen.cells[5].accessRight = false
+canteen.cells[5].accessRight = true
 canteen.cells[5].accessDown = false
 canteen.cells[6].accessRight = false
-canteen.cells[6].accessDown = false
+canteen.cells[6].accessDown = true
 canteen.cells[8].accessDown = false
 canteen.cells[9].accessDown = false
 canteen.cells[9].accessRight = false
@@ -439,7 +448,7 @@ canteen.cells[1].object1 = {
 --canteen.cells[3].hazard_type = "gas"
 canteen.cells[4].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
-    offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+    offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
     lootItems = {
         "power",
         "wiring_straight",
@@ -460,18 +469,41 @@ canteen.cells[4].object2 = {
     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
     offsetX = 50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
 }
+canteen.cells[6].object1 = {
+    name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+    offsetX = 40, offsetY = 0, hitW = 32, hitH = 32, requiredComponent = nil
+}
+canteen.cells[5].object1 = {
+    name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
+    offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+    lootItems = {
+        "power",
+        "wiring_straight",
+        "plate",
+        "ammo",
+        "meds",
+        --"material"
+        -- "buff_armour",
+         "buff_hazmat",
+        -- "buff_oxygen_mask",
+        -- "buff_speed_stims",
+        --"buff_night_vision",
+        "buff_melee_left",
+        -- "buff_melee_right"
+    }
+}
 canteen.cells[2].object1 = {
-    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 551,
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
     offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
 canteen.cells[2].object2 = {
-    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 552,
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
     offsetX = 0, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
 canteen.cells[2].object3 = {
-    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 553,
+    name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
     offsetX = 32, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
     stackCount = 1, obstacleCount = 1
 }
@@ -518,14 +550,14 @@ canteen.cells[9].object2 = {
     isWelded = false, isOpen = false, dependsOn = 901, isDependentOn = {}, objectId = 902,
     offsetX = 70, offsetY = 3, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 56, hitH = 56, requiredComponent = COMPONENT_UI.component_food_supplies
 }
-canteen.cells[9].object3 = {
-    name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
-    offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
-}
-canteen.cells[7].object1 = {
-    name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
-    offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
-}
+-- canteen.cells[9].object3 = {
+--     name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 903,
+--     offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
+-- }
+-- canteen.cells[7].object1 = {
+--     name = hash("civilian_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
+--     offsetX = -40, offsetY = -4, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 40, hitH = 60, requiredComponent = nil
+-- }
 --canteen.cells[7].hazard_type = "fire"
 -- 
 -- 
@@ -722,10 +754,17 @@ library["canteen"] = canteen
     medbay.alphaOverlay = "tile_medbay_overlay"
     
      for i = 1, 9 do
-         medbay.cells[i].lightValue = 4
+         medbay.cells[i].lightValue = 1
          medbay.cells[i].moveValue = 1
          medbay.cells[i].coverValue = 2
-     end
+    end
+
+    medbay.cells[1].lightValue = 3
+    medbay.cells[2].lightValue = 3
+    medbay.cells[4].lightValue = 3
+    medbay.cells[7].lightValue = 3
+    medbay.cells[8].lightValue = 2
+    medbay.cells[9].lightValue = 2
     
      -- Example access pattern edits:
     medbay.cells[2].accessDown = false
@@ -866,9 +905,9 @@ for i = 1, 9 do
     corridor1.cells[i].coverValue = 1
 end
 
-corridor1.cells[4].lightValue = 3
+corridor1.cells[4].lightValue = 1
 corridor1.cells[5].lightValue = 3
-corridor1.cells[6].lightValue = 3
+corridor1.cells[6].lightValue = 1
 
 -- passage1.cells[4].lightValue = 1
 -- passage1.cells[4].moveValue = 1
@@ -883,7 +922,7 @@ corridor1.cells[6].lightValue = 3
 corridor1.cells[1].accessDown = false   -- blocks 2 <-> 3
 corridor1.cells[1].accessRight = true   -- blocks 2 <-> 3
 corridor1.cells[2].accessDown = true   -- blocks 2 <-> 3
-corridor1.cells[2].accessRight = true   -- blocks 2 <-> 3
+corridor1.cells[2].accessRight = false   -- blocks 2 <-> 3
 corridor1.cells[3].accessRight = false   -- blocks right boundary from 3
 corridor1.cells[3].accessDown = false
 corridor1.cells[4].accessRight = true   -- blocks 4 <-> 5
@@ -987,13 +1026,15 @@ library["lab"] = lab
     factory.powerLightOnAnim = "tile_factory_on"
 
     for i = 1, 9 do
-        factory.cells[i].lightValue = 2
+        factory.cells[i].lightValue = 3
         factory.cells[i].moveValue = 1
         factory.cells[i].coverValue = 1
         factory.cells[i].accessRight = false
         factory.cells[i].accessDown = false
     end
 
+    factory.cells[2].lightValue = 1
+    factory.cells[3].lightValue = 1
     -- Requested internal connectivity:
     -- 2: right, 4: right, 5: right, 6: right + down
     factory.cells[2].accessRight = true
@@ -1002,6 +1043,7 @@ library["lab"] = lab
     factory.cells[5].accessRight = true
     factory.cells[6].accessRight = true
     factory.cells[6].accessDown = true
+    factory.cells[8].accessDown = true
 
     -- Power node lane (cell 4)
     factory.cells[4].object1 = {
@@ -1189,9 +1231,9 @@ library["lab"] = lab
     bunkroom.cells[3].moveValue = 3
     bunkroom.cells[6].moveValue = 3
 
-    bunkroom.cells[2].lightValue = 0
-    bunkroom.cells[5].lightValue = 0
-    bunkroom.cells[8].lightValue = 0
+    bunkroom.cells[2].lightValue = 1
+    bunkroom.cells[5].lightValue = 1
+    bunkroom.cells[8].lightValue = 1
 
     --portal.cells[1].accessDown = false
     bunkroom.cells[2].accessDown = true
@@ -1320,6 +1362,7 @@ library["lab"] = lab
     jungle.cells[2].accessRight = true
     jungle.cells[4].accessRight = false
     jungle.cells[5].accessRight = true
+    jungle.cells[6].accessRight = false
     jungle.cells[7].accessRight = false
     jungle.cells[8].accessRight = true
     jungle.cells[9].accessRight = true

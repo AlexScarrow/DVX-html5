@@ -3377,6 +3377,43 @@ local function refresh_alien_visual(self, alien)
     end
 
     local cfg = ALIEN_TYPE_CONFIG[alien.type]
+    local cell_light_tint_scale = 1.0
+    local apply_cell_light_tint = self
+        and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
+        and (alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON)
+    if apply_cell_light_tint and self.world_grid and alien.cell_id then
+        local alien_cell = self.world_grid[alien.cell_id]
+        if alien_cell then
+            if alien_cell.isPowered ~= true then
+                cell_light_tint_scale = 0.25
+            else
+                local light_value = math.max(0, math.min(3, tonumber(alien_cell.lightValue or 0) or 0))
+                if light_value <= 0 then
+                    cell_light_tint_scale = 0.25
+                elseif light_value == 1 then
+                    cell_light_tint_scale = 0.5
+                elseif light_value == 2 then
+                    cell_light_tint_scale = 0.75
+                else
+                    cell_light_tint_scale = 1.0
+                end
+            end
+        end
+    end
+    local function apply_alien_cell_light_tint(color)
+        if not color then
+            return color
+        end
+        if apply_cell_light_tint ~= true then
+            return color
+        end
+        return vmath.vector4(
+            (color.x or 1) * cell_light_tint_scale,
+            (color.y or 1) * cell_light_tint_scale,
+            (color.z or 1) * cell_light_tint_scale,
+            color.w or 1
+        )
+    end
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     local position_type = get_alien_effective_position_type(alien)
     x = x + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
@@ -3406,7 +3443,58 @@ local function refresh_alien_visual(self, alien)
             go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
         end
     elseif (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
-        go.set(msg.url(nil, alien.go_id, "sprite"), "tint", cfg.marker_tint)
+        local sprite_tint = apply_alien_cell_light_tint(cfg.marker_tint)
+        go.set(msg.url(nil, alien.go_id, "sprite"), "tint", sprite_tint)
+        if alien.type == ALIEN_TYPE_SPITTER and alien.spitter_bottom_go_id then
+            go.set(msg.url(nil, alien.spitter_bottom_go_id, "sprite"), "tint", sprite_tint)
+        end
+    end
+end
+
+update_alien_cell_light_tint = function(self, alien)
+    if not (self and alien and alien.go_id) then
+        return
+    end
+    if alien.type ~= ALIEN_TYPE_SPITTER and alien.type ~= ALIEN_TYPE_SPEEDY and alien.type ~= ALIEN_TYPE_CANNON then
+        return
+    end
+    if self.aesthetic_mode ~= AESTHETIC_MODE_COMPUTER then
+        return
+    end
+    if alien.melee_flash_active == true then
+        return
+    end
+    local cfg = ALIEN_TYPE_CONFIG[alien.type]
+    if not (cfg and cfg.marker_tint) then
+        return
+    end
+    local tint_scale = 1.0
+    local cell = self.world_grid and alien.cell_id and self.world_grid[alien.cell_id] or nil
+    if cell then
+        if cell.isPowered ~= true then
+            tint_scale = 0.25
+        else
+            local light_value = math.max(0, math.min(3, tonumber(cell.lightValue or 0) or 0))
+            if light_value <= 0 then
+                tint_scale = 0.25
+            elseif light_value == 1 then
+                tint_scale = 0.5
+            elseif light_value == 2 then
+                tint_scale = 0.75
+            else
+                tint_scale = 1.0
+            end
+        end
+    end
+    local sprite_tint = vmath.vector4(
+        tint_scale,
+        tint_scale,
+        tint_scale,
+        cfg.marker_tint.w or 1
+    )
+    pcall(go.set, msg.url(nil, alien.go_id, "sprite"), "tint", sprite_tint)
+    if alien.type == ALIEN_TYPE_SPITTER and alien.spitter_bottom_go_id then
+        pcall(go.set, msg.url(nil, alien.spitter_bottom_go_id, "sprite"), "tint", sprite_tint)
     end
 end
 
@@ -4846,6 +4934,7 @@ local function update_alien_movement(self, dt)
         end
         apply_blip_pulse_scale(alien, dt)
         update_spitter_idle_visual(self, alien, dt)
+        update_alien_cell_light_tint(self, alien)
         if (not alien.is_dead) and alien.is_moving and alien.move_path and alien.go_id then
             local target_cell_id = alien.move_path[alien.move_path_index]
             if not target_cell_id then
@@ -6406,6 +6495,37 @@ spawn_orange_impact_ring_for_cell = function(self, cell_id, duration_s)
     end
     local cx, cy = coords_to_world_pos(cell.xCell, cell.yCell)
     spawn_orange_impact_ring_at_world(self, cx, cy, duration_s)
+end
+
+spawn_green_impact_ring_for_unit = function(self, unit, duration_s)
+    if not (self and self.world_grid and unit and unit.cell_id and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world) then
+        return
+    end
+    if self.aesthetic_mode ~= AESTHETIC_MODE_COMPUTER then
+        return
+    end
+    local cell = self.world_grid[unit.cell_id]
+    if not cell or cell.isPowered == true then
+        return
+    end
+    local world_x = nil
+    local world_y = nil
+    if unit.go_path then
+        local ok, pos = pcall(go.get_position, unit.go_path)
+        if ok and pos then
+            world_x = pos.x
+            world_y = pos.y
+        end
+    end
+    if (not world_x or not world_y) and get_unit_world_pos_in_cell then
+        local ux, uy = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
+        world_x = ux or world_x
+        world_y = uy or world_y
+    end
+    if not world_x or not world_y then
+        world_x, world_y = coords_to_world_pos(cell.xCell, cell.yCell)
+    end
+    LOOT_RUNTIME.spawn_impact_ring_at_world(self, world_x, world_y, vmath.vector4(0.2, 1.0, 0.3, 1), duration_s or 0.6)
 end
 
 is_rescue_entry_victory_cell = function(self, cell_id)
@@ -15734,6 +15854,7 @@ try_select_human_portrait = function(self, screen_x, screen_y)
                 return true
             end
             if unit and (unit.current_health or 0) > 0 then
+                local was_selected = self.controlled_unit_id == unit_id and unit.is_selected == true
                 if self.controlled_unit_id ~= unit_id then
                     clear_locked_manual_target(self)
                 end
@@ -15771,6 +15892,9 @@ try_select_human_portrait = function(self, screen_x, screen_y)
                 end
                 if not unit_on_screen then
                     center_camera_on_unit(self, unit)
+                end
+                if not was_selected then
+                    spawn_green_impact_ring_for_unit(self, unit, 0.6)
                 end
                 update_human_visual_state(self)
                 update_selected_unit_ui(self)
@@ -23787,6 +23911,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             deselect_all_units(self)
             clicked_unit.is_selected = true
             play_human_confirm_select_sfx(self, clicked_unit)
+            spawn_green_impact_ring_for_unit(self, clicked_unit, 0.6)
             print(clicked_unit.display_name .. " selected. Click destination cell.")
         end
         self.ui_close_on_next_non_unit_click = false

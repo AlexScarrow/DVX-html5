@@ -1360,6 +1360,7 @@ library["lab"] = lab
 
     jungle.cells[1].accessRight = true
     jungle.cells[2].accessRight = true
+    jungle.cells[3].accessRight = false
     jungle.cells[4].accessRight = false
     jungle.cells[5].accessRight = true
     jungle.cells[6].accessRight = false
@@ -1377,7 +1378,7 @@ library["lab"] = lab
 
 
     jungle.cells[6].object1 = {
-        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
         offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
     }
@@ -1397,9 +1398,9 @@ library["lab"] = lab
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
         offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }
-    jungle.cells[6].object3 = {
-        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
-        offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+    jungle.cells[4].object1 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+        offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
         lootItems = { "wiring_straight","fuse","plate", "buff_hazmat", COMPONENT_UI.component_fuse }
     }
     jungle.cells[9].object1 = {

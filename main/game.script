@@ -3949,11 +3949,16 @@ get_living_alien_targets = function(self)
     end
     if self and self.civilians then
         for _, civilian in ipairs(self.civilians) do
+            local is_evacuated = false
+            if is_rescue_entry_victory_cell and civilian and civilian.cell_id then
+                is_evacuated = is_rescue_entry_victory_cell(self, civilian.cell_id) == true
+            end
             if civilian
                 and civilian.cell_id
                 and (civilian.current_health or 0) > 0
                 and civilian.is_dead ~= true
                 and civilian.is_awake == true
+                and is_evacuated ~= true
             then
                 civilian.target_kind = "civilian"
                 civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)
@@ -8095,6 +8100,8 @@ local function apply_start_of_turn_environment_damage(self)
         return
     end
     local outside_damage = math.max(0, tonumber(HAZARD_DAMAGE.outside_per_turn or 2) or 2)
+    local fire_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
+    local gas_damage = math.max(0, tonumber(HAZARD_DAMAGE.gas_per_turn or 1) or 1)
     for _, unit in pairs(self.squad_units) do
         if unit and (unit.current_health or 0) > 0 and unit.cell_id then
             local cell = self.world_grid[unit.cell_id]
@@ -15821,6 +15828,22 @@ trigger_human_portrait_hit_feedback = function(self, unit, damage_amount)
     unit.portrait_hit_flash_duration = HUMAN_PORTRAIT_HIT_FLASH_DURATION
     unit.portrait_hit_flash_timer = HUMAN_PORTRAIT_HIT_FLASH_DURATION
     unit.portrait_hit_flash_phase = 0
+    if LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world and self.camera_pos and self.camera_zoom then
+        local portrait_slot = nil
+        for i, unit_id in ipairs(HUMAN_PORTRAIT_IDS or {}) do
+            if tostring(unit_id) == tostring(unit.id) then
+                portrait_slot = i
+                break
+            end
+        end
+        if portrait_slot then
+            local px, py = get_human_portrait_screen_pos(portrait_slot)
+            local wx, wy = screen_to_world(px, py, self.camera_pos, self.camera_zoom)
+            if wx and wy then
+                LOOT_RUNTIME.spawn_impact_ring_at_world(self, wx, wy, vmath.vector4(1.0, 0.16, 0.16, 1), 0.6)
+            end
+        end
+    end
 end
 
 local function tick_human_portrait_hit_feedback(self, dt)

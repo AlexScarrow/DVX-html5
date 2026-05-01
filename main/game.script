@@ -13264,6 +13264,92 @@ function enter_score_flow(self)
     ))
 end
 
+update_flow_title_space_grid_background = function(self, dt)
+    self.title_space_scroll_x = self.title_space_scroll_x or 0
+    self.title_space_scroll_y = self.title_space_scroll_y or 0
+    self.title_space_scroll_x = self.title_space_scroll_x - (TITLE_SPACE_SCROLL_SPEED_X * (dt or 0))
+    self.title_space_scroll_y = self.title_space_scroll_y + (TITLE_SPACE_SCROLL_SPEED_Y * (dt or 0))
+    while self.title_space_scroll_x <= -TITLE_SPACE_TILE_W do
+        self.title_space_scroll_x = self.title_space_scroll_x + TITLE_SPACE_TILE_W
+    end
+    while self.title_space_scroll_y >= TITLE_SPACE_TILE_H do
+        self.title_space_scroll_y = self.title_space_scroll_y - TITLE_SPACE_TILE_H
+    end
+    self.title_grid_scroll_x = self.title_grid_scroll_x or 0
+    self.title_grid_scroll_y = self.title_grid_scroll_y or 0
+    self.title_grid_scroll_x = self.title_grid_scroll_x + (TITLE_GRID_SCROLL_SPEED_X * (dt or 0))
+    self.title_grid_scroll_y = self.title_grid_scroll_y - (TITLE_GRID_SCROLL_SPEED_Y * (dt or 0))
+    while self.title_grid_scroll_x >= TITLE_GRID_TILE_W do
+        self.title_grid_scroll_x = self.title_grid_scroll_x - TITLE_GRID_TILE_W
+    end
+    while self.title_grid_scroll_y <= -TITLE_GRID_TILE_H do
+        self.title_grid_scroll_y = self.title_grid_scroll_y + TITLE_GRID_TILE_H
+    end
+    set_ui_square_transform(
+        self,
+        self.ui.flow_title_panel,
+        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
+        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
+        FLOW_UI_PANEL_Z + 0.001,
+        vmath.vector4(1, 1, 1, 1),
+        1,
+        1
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.flow_title_panel_2,
+        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
+        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
+        FLOW_UI_PANEL_Z + 0.001,
+        vmath.vector4(1, 1, 1, 1),
+        1,
+        1
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.flow_title_panel_3,
+        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
+        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
+        FLOW_UI_PANEL_Z + 0.001,
+        vmath.vector4(1, 1, 1, 1),
+        1,
+        1
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.flow_title_panel_4,
+        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
+        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
+        FLOW_UI_PANEL_Z + 0.001,
+        vmath.vector4(1, 1, 1, 1),
+        1,
+        1
+    )
+    if self.ui.flow_title_grid_tiles then
+        local base_grid_x = (SCREEN_WIDTH * 0.5) - (((TITLE_GRID_TILE_COLS - 1) * TITLE_GRID_TILE_W) * 0.5) + self.title_grid_scroll_x
+        local base_grid_y = (SCREEN_HEIGHT * 0.5) - (((TITLE_GRID_TILE_ROWS - 1) * TITLE_GRID_TILE_H) * 0.5) + self.title_grid_scroll_y
+        local grid_index = 1
+        for row = 1, TITLE_GRID_TILE_ROWS do
+            for col = 1, TITLE_GRID_TILE_COLS do
+                local grid_tile = self.ui.flow_title_grid_tiles[grid_index]
+                if grid_tile then
+                    set_ui_square_transform(
+                        self,
+                        grid_tile,
+                        base_grid_x + ((col - 1) * TITLE_GRID_TILE_W),
+                        base_grid_y + ((row - 1) * TITLE_GRID_TILE_H),
+                        TITLE_GRID_LAYER_Z,
+                        vmath.vector4(1, 1, 1, 0.25),
+                        TITLE_GRID_TILE_SCALE,
+                        TITLE_GRID_TILE_SCALE
+                    )
+                end
+                grid_index = grid_index + 1
+            end
+        end
+    end
+end
+
 function update_flow_ui(self, dt)
     if not self.ui then
         return
@@ -13272,7 +13358,7 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
-    if state ~= FLOW_STATE_TITLE then
+    if state ~= FLOW_STATE_TITLE and state ~= FLOW_STATE_SOLO_SETUP then
         set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
@@ -13349,89 +13435,7 @@ function update_flow_ui(self, dt)
             self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
         end
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
-        self.title_space_scroll_x = self.title_space_scroll_x or 0
-        self.title_space_scroll_y = self.title_space_scroll_y or 0
-        self.title_space_scroll_x = self.title_space_scroll_x - (TITLE_SPACE_SCROLL_SPEED_X * (dt or 0))
-        self.title_space_scroll_y = self.title_space_scroll_y + (TITLE_SPACE_SCROLL_SPEED_Y * (dt or 0))
-        while self.title_space_scroll_x <= -TITLE_SPACE_TILE_W do
-            self.title_space_scroll_x = self.title_space_scroll_x + TITLE_SPACE_TILE_W
-        end
-        while self.title_space_scroll_y >= TITLE_SPACE_TILE_H do
-            self.title_space_scroll_y = self.title_space_scroll_y - TITLE_SPACE_TILE_H
-        end
-        self.title_grid_scroll_x = self.title_grid_scroll_x or 0
-        self.title_grid_scroll_y = self.title_grid_scroll_y or 0
-        self.title_grid_scroll_x = self.title_grid_scroll_x + (TITLE_GRID_SCROLL_SPEED_X * (dt or 0))
-        self.title_grid_scroll_y = self.title_grid_scroll_y - (TITLE_GRID_SCROLL_SPEED_Y * (dt or 0))
-        while self.title_grid_scroll_x >= TITLE_GRID_TILE_W do
-            self.title_grid_scroll_x = self.title_grid_scroll_x - TITLE_GRID_TILE_W
-        end
-        while self.title_grid_scroll_y <= -TITLE_GRID_TILE_H do
-            self.title_grid_scroll_y = self.title_grid_scroll_y + TITLE_GRID_TILE_H
-        end
-        set_ui_square_transform(
-            self,
-            self.ui.flow_title_panel,
-            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
-            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
-            FLOW_UI_PANEL_Z + 0.001,
-            vmath.vector4(1, 1, 1, 1),
-            1,
-            1
-        )
-        set_ui_square_transform(
-            self,
-            self.ui.flow_title_panel_2,
-            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
-            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
-            FLOW_UI_PANEL_Z + 0.001,
-            vmath.vector4(1, 1, 1, 1),
-            1,
-            1
-        )
-        set_ui_square_transform(
-            self,
-            self.ui.flow_title_panel_3,
-            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
-            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
-            FLOW_UI_PANEL_Z + 0.001,
-            vmath.vector4(1, 1, 1, 1),
-            1,
-            1
-        )
-        set_ui_square_transform(
-            self,
-            self.ui.flow_title_panel_4,
-            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
-            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
-            FLOW_UI_PANEL_Z + 0.001,
-            vmath.vector4(1, 1, 1, 1),
-            1,
-            1
-        )
-        if self.ui.flow_title_grid_tiles then
-            local base_grid_x = (SCREEN_WIDTH * 0.5) - (((TITLE_GRID_TILE_COLS - 1) * TITLE_GRID_TILE_W) * 0.5) + self.title_grid_scroll_x
-            local base_grid_y = (SCREEN_HEIGHT * 0.5) - (((TITLE_GRID_TILE_ROWS - 1) * TITLE_GRID_TILE_H) * 0.5) + self.title_grid_scroll_y
-            local grid_index = 1
-            for row = 1, TITLE_GRID_TILE_ROWS do
-                for col = 1, TITLE_GRID_TILE_COLS do
-                    local grid_tile = self.ui.flow_title_grid_tiles[grid_index]
-                    if grid_tile then
-                        set_ui_square_transform(
-                            self,
-                            grid_tile,
-                            base_grid_x + ((col - 1) * TITLE_GRID_TILE_W),
-                            base_grid_y + ((row - 1) * TITLE_GRID_TILE_H),
-                            TITLE_GRID_LAYER_Z,
-                            vmath.vector4(1, 1, 1, 0.25),
-                            TITLE_GRID_TILE_SCALE,
-                            TITLE_GRID_TILE_SCALE
-                        )
-                    end
-                    grid_index = grid_index + 1
-                end
-            end
-        end
+        update_flow_title_space_grid_background(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_planet, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_xenos_word, (SCREEN_WIDTH * 0.5) - 40, (SCREEN_HEIGHT * 0.5) + 160, FLOW_UI_PANEL_Z + 0.003, vmath.vector4(1, 1, 1, 0.5), 0.75, 0.75)
         set_ui_square_transform(self, self.ui.flow_title_derples_word, SCREEN_WIDTH * 0.5, (SCREEN_HEIGHT * 0.5) + 180, FLOW_UI_PANEL_Z + 0.004, vmath.vector4(1, 1, 1, 1), 0.5, 0.5)
@@ -13542,6 +13546,11 @@ function update_flow_ui(self, dt)
                 break
             end
         end
+        update_flow_title_space_grid_background(self, dt)
+        set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -13585,10 +13594,10 @@ function update_flow_ui(self, dt)
             end
         end
         set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_button, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z - 0.001, vmath.vector4(1, 1, 1, 0.95), MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         if self.ui.flow_mp_unit_buttons then
             for _, btn in ipairs(self.ui.flow_mp_unit_buttons) do
                 set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)

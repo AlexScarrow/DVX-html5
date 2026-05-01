@@ -1,7 +1,7 @@
 # Atlas Purge Helper Report
 
-- Atlas IDs scanned: **256**
-- Literal matches outside atlas: **256**
+- Atlas IDs scanned: **255**
+- Literal matches outside atlas: **255**
 - Dynamic allowlist matches: **0**
 - Strict unmatched candidates: **0**
 
@@ -205,7 +205,6 @@ None.
 - `skip_button` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
 - `smokeParticle` (13): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/crash_spaceship_fire.particlefx, main/escape_pod_green_smoke.particlefx, ...
 - `smokeParticle_dark` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/factory_steam.particlefx, main/gas_black.particlefx, ...
-- `solo_mission_select` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
 - `solo_selected_mission_frame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
 - `solo_setup_panel` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
 - `speed_stim_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua

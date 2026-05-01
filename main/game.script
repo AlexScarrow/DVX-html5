@@ -917,15 +917,15 @@ OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
 LEVEL_EDITOR = require("main.level_editor")
 local TUTORIAL_STEP_DEFS = {
-    { anim = hash("tutorial1"), tile = "entry", cell = 7 },
-    { anim = hash("tutorial2"), tile = "canteen", cell = 9 },
-    { anim = hash("tutorial3"), tile = "canteen", cell = 3 },
-    { anim = hash("tutorial4"), tile = "escape", cell = 6 },
-    { anim = hash("tutorial5"), tile = "escape", cell = 1 },
-    { anim = hash("tutorial6"), tile = "coms", cell = 5 },
-    { anim = hash("tutorial7"), tile = "workshop", cell = 6 },
-    { anim = hash("tutorial8"), tile = "factory", cell = 6 },
-    { anim = hash("tutorial9"), tile = "factory", cell = 6 }
+    { anim = hash("tutorial1"), tile = "entry", cell = 7, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial2"), tile = "coms", cell = 2, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial3"), tile = "canteen", cell = 5, offset_x = 65, offset_y = 0 },
+    { anim = hash("tutorial4"), tile = "canteen", cell = 5, offset_x = 65, offset_y = 0 },
+    { anim = hash("tutorial5"), tile = "escape", cell = 1, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial6"), tile = "coms", cell = 5, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial7"), tile = "workshop", cell = 6, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial8"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial9"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 }
 }
 LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
@@ -5874,6 +5874,10 @@ local function get_tutorial_step_screen_center(self, step_def)
     if not (wx and wy) then
         return SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5
     end
+    local offset_x = (type(step_def) == "table") and (tonumber(step_def.offset_x or 0) or 0) or 0
+    local offset_y = (type(step_def) == "table") and (tonumber(step_def.offset_y or 0) or 0) or 0
+    wx = wx + offset_x
+    wy = wy + offset_y
     return tutorial_world_to_screen(self, wx, wy)
 end
 
@@ -5896,8 +5900,12 @@ local function tutorial_set_current_step(self, step_index)
     self.tutorial_step_index = idx
     self.tutorial_overlay_active = true
     local wx, wy = get_tutorial_step_world_center(self, step_def)
-    self.tutorial_anchor_world_x = wx
-    self.tutorial_anchor_world_y = wy
+    local offset_x = (type(step_def) == "table") and (tonumber(step_def.offset_x or 0) or 0) or 0
+    local offset_y = (type(step_def) == "table") and (tonumber(step_def.offset_y or 0) or 0) or 0
+    local panel_wx = wx and (wx + offset_x) or nil
+    local panel_wy = wy and (wy + offset_y) or nil
+    self.tutorial_anchor_world_x = panel_wx
+    self.tutorial_anchor_world_y = panel_wy
     if wx and wy then
         self.camera_pos.x = wx
         self.camera_pos.y = wy

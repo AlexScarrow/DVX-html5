@@ -452,7 +452,7 @@ canteen.cells[4].object1 = {
     lootItems = {
         "power",
         "wiring_straight",
-        "wiring_straight",
+        "plate",
         "ammo",
         "meds",
         --"material"

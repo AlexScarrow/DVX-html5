@@ -1,0 +1,274 @@
+# Atlas Purge Helper Report
+
+- Atlas IDs scanned: **257**
+- Literal matches outside atlas: **257**
+- Dynamic allowlist matches: **0**
+- Strict unmatched candidates: **0**
+
+## Strict Unmatched Candidates
+
+No strict unmatched IDs found.
+
+## Dynamic-Only (No Literal Match)
+
+None.
+
+## Literal Evidence Snapshot
+
+- `alien_blip` (5): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_blip.go, main/game.script, ...
+- `alien_blood_drop` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_blood_splatter1.particlefx, main/sparks_small.particlefx
+- `alien_brute` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/melee_runtime.lua
+- `alien_brute_boardgame` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/melee_runtime.lua
+- `alien_brute_shadow` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `alien_brute_side` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/melee_runtime.lua
+- `alien_brute_side_boardgame` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/melee_runtime.lua
+- `alien_cannonFodder` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_cannonFodder.go, main/game.script, ...
+- `alien_cannonFodder_boardgame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `alien_cannonFodder_shadow` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_cannonFodder.go, main/game.script
+- `alien_meleeSwipe_1` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/melee_runtime.lua
+- `alien_speedy` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_speedy.go, main/game.script, ...
+- `alien_speedy_boardgame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `alien_speedy_shadow` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_speedy.go, main/game.script
+- `alien_spitter` (5): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_spitter.go, main/alien_spitter_bottom.go, ...
+- `alien_spitter_boardgame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `alien_spitter_bottom` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_spitter_bottom.go, main/game.script, ...
+- `alien_spitter_shadow` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/alien_spitter.go, main/game.script
+- `alien_turn_overlay` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `ammo_unit` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_utils.lua
+- `ammo_vend_machine` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `ammo_vend_machine_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `ammo_vend_machine_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `armor_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
+- `back_button` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `backdrop_boardgame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `backdrop_computer` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/outro_sequences.lua
+- `barricade` (9): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/barricade_broken.particlefx, main/barricade_broken_fx.go, ...
+- `barricade_particle` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/barricade_broken.particlefx
+- `bomb` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua, ...
+- `bubble` (6): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua, ...
+- `buff_armour` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `buff_hazmat` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `buff_melee_left` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `buff_melee_right` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `buff_night_vision` (6): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/game.script, ...
+- `buff_oxygen_mask` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `buff_speed_stims` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `command_star` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua
+- `coms_give_ammo` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_give_command` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_give_material` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_give_meds` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_give_power` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_need_ammo` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_need_command` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua
+- `coms_need_material` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_need_meds` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `coms_need_power` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `derples_comms_alienSpotted` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `derples_comms_itemRecieved` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `derples_comms_lowHealth` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `derples_comms_notEnough_AP` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua
+- `derples_comms_turret_fullPack` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `dice` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `disabled_button` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `dna_research_bar_pip` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `dna_sample` (8): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_defs.lua, ...
+- `door_closed_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `door_closed_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `door_open` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_markers.lua
+- `exit_button` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `exterior_floor` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `exterior_leftWall1` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `exterior_rightWall1` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `exterior_roof1` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `food_supplies` (6): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `fuse` (7): Docs/ATLAS_PURGE_HELPER_REPORT.md, Docs/ONLINE_STRESS_TEST_GUIDE_CHILD_FRIENDLY.md, OBJECTS_AND_COMPONENTS_SPEC.md, ...
+- `gun_turret` (6): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua, ...
+- `gun_turret_dropped` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `gun_turret_icon` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_utils.lua
+- `gun_turret_tripod` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `hazmat_suit_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
+- `healthBar_backdrop` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_markers.lua
+- `healthBar_fillAmount` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_markers.lua
+- `human_blood_drop` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/human_blood_splatter1.particlefx
+- `human_civilian` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `human_civilian_dead` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `human_coms_panel` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `human_dead` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `human_dead_boardgame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `human_dead_ui` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `human_dropShadow` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/main.collection
+- `humans_captured_left` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `humans_captured_middle` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `humans_captured_right` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `impactRing` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/outro_sequences.lua
+- `ladder` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, TECHNICAL_ROADMAP_TODAY_TO_STEAM_LAUNCH.md, main/game.script, ...
+- `launch_button` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `leaderboard_panel` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `leaderboard_panel_header` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `leaderboard_player_header` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `leaderboard_team_header` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `letter_a` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `letter_b` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_c` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `letter_d` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_e` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_f` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_g` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_h` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_i` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `letter_j` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_k` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_l` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_m` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_n` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_o` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_p` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_q` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_r` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_s` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_t` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_u` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_v` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_w` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `letter_x` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/level_editor.lua
+- `letter_y` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/level_editor.lua
+- `letter_z` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `lobby_backpanel` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `lootCrate` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_marker.go
+- `material_unit` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_utils.lua
+- `med_unit` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_utils.lua
+- `med_vend_machine` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `med_vend_machine_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `med_vend_machine_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `melee_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
+- `mp_btn_2p` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_3p` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_4p` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_back` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_count_active_ring` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_mission_dna` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_mission_escape` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_mission_purge` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_mission_rescue` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_start` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_start_disabled_overlay` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_btn_start_enabled_glow` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_setup_panel` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_unit_gunner` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_unit_medic` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_unit_sarge` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `mp_unit_techie` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `nav_data` (6): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua, ...
+- `night_vision_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
+- `objective_button` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `objective_dna` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `objective_escape` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `objective_purge` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `objective_rescue` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `obstacle1` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_markers.lua, ...
+- `obstacle2` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_markers.lua, ...
+- `obstacle3` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_markers.lua, ...
+- `obstacle_icon` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua, main/loot_runtime_utils.lua
+- `oxygen_mask_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
+- `pin_1` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_2` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_3` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_4` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_5` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_6` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_7` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_8` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_9` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `pin_panel` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/main.collection, ...
+- `plate` (10): DEFOLD_README.md, DEV_LOG.md, Docs/ATLAS_PURGE_HELPER_REPORT.md, ...
+- `powerNode_off` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua, main/main.collection, ...
+- `powerNode_on` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua, main/main.collection
+- `power_unit` (5): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua, ...
+- `ready_button` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `ready_not_button` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `realtime_button_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `realtime_button_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `score_0` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `score_1` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_2` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_3` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_4` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_5` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_6` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_7` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_8` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_9` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `score_percent` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `score_period` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `sensor` (5): Docs/ATLAS_PURGE_HELPER_REPORT.md, OBJECTS_AND_COMPONENTS_SPEC.md, main/config.lua, ...
+- `skip_button` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `smokeParticle` (13): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/crash_spaceship_fire.particlefx, main/escape_pod_green_smoke.particlefx, ...
+- `smokeParticle_dark` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/factory_steam.particlefx, main/gas_black.particlefx, ...
+- `solo_mission_select` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `solo_selected_mission_frame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `solo_setup_panel` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `speed_stim_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
+- `sweep_shadow` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua, ...
+- `tile_armoury_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_armoury_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_bunkroom_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_bunkroom_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_canteen_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_canteen_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_coms_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_coms_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_corridor1_off` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile.go, main/tile_defs.lua
+- `tile_corridor1_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_drop_shadow` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/shadow_box.go
+- `tile_entry_boardGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_entry_computerGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_exit_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_exit_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_exterior1_boardGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_exterior1_computerGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_exterior2_boardGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_exterior2_computerGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_factory_belt` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_factory_cog` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_factory_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_factory_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_factory_piston` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_generic_alpha_layer` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
+- `tile_jungle_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_jungle_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_lab_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_lab_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_lab_overlay` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_medbay_blade` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_medbay_embryo` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_medbay_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_medbay_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_medbay_overlay` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_medbay_ripple` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_passage1_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_passage1_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_portal_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_portal_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_rescue_entry_boardGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_rescue_entry_computerGame` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `tile_rescue_entry_overlay` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_workshop_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_workshop_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_workshop_overlay` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/tile_defs.lua
+- `tile_workshop_printer` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_workshop_printerGlow` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `tile_workshop_printerOff` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `title_screen` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/main.collection
+- `vent_unwelded` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `vent_welded` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `warning_O2_HP-90e05440-d33d-411a-a4d1-a0cc135ec652` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `warning_fire_HP-1238217d-2248-4b90-8db6-687fbeab5835` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `warning_gas_HP-da9eac34-b415-43b9-9748-de79679476a4` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
+- `weld_overlay` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua, main/main.collection, ...
+- `wiregap_corner_off` (1): Docs/ATLAS_PURGE_HELPER_REPORT.md
+- `wiregap_corner_on` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_utils.lua
+- `wiregap_straight_off` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
+- `wiregap_straight_on` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua, main/loot_runtime_utils.lua
+- `zoom_slider_knob` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
+- `zoom_slider_track` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua

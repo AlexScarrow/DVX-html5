@@ -533,6 +533,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "backdrop_computer_factory"
+  data: "embedded_components {\n"
+  "  id: \"backdrop_computer_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/backdrop_computer.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "human_shadow_proxy_factory"
   data: "embedded_components {\n"
   "  id: \"human_shadow_proxy_factory\"\n"

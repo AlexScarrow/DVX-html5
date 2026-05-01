@@ -1,0 +1,18 @@
+images {
+  image: "/assets/images/backdrop_computer.png"
+}
+images {
+  image: "/assets/images/backdrop_computer_amber.png"
+}
+images {
+  image: "/assets/images/backdrop_computer_blue.png"
+}
+images {
+  image: "/assets/images/backdrop_computer_grey.png"
+}
+images {
+  image: "/assets/images/backdrop_computer_purple.png"
+}
+margin: 2
+extrude_borders: 2
+inner_padding: 2

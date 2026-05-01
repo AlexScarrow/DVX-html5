@@ -30,7 +30,7 @@ debug = 0
 shared_state = 1
 
 [sprite]
-max_count = 2500
+max_count = 5000
 
 [sound]
 max_component_count = 128

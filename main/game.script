@@ -5679,12 +5679,24 @@ local function can_spawn_ladder_between(world_grid, source_cell_id, below_cell_i
 end
 
 get_current_mission_type = function(self)
-    local selected = self.selected_mission_type or (self.mp_state and self.mp_state.mission_type)
+    local selected = self.current_mission_type or self.selected_mission_type or (self.mp_state and self.mp_state.mission_type)
     if selected then
         return multiplayer_normalize_mission_type(selected)
     end
     local level_def = self.level_library and self.level_library[self.current_level_index or 1] or nil
     return get_level_mission_type(level_def)
+end
+
+get_computer_backdrop_anim_for_mission = function(self)
+    local mission_type = tostring(get_current_mission_type(self) or MISSION_TYPE_ESCAPE)
+    if mission_type == MISSION_TYPE_RESCUE then
+        return "backdrop_computer_blue"
+    elseif mission_type == MISSION_TYPE_PURGE then
+        return "backdrop_computer_grey"
+    elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
+        return "backdrop_computer_purple"
+    end
+    return "backdrop_computer_amber"
 end
 
 local function is_rescue_entry_tile_name(tile_name)
@@ -14943,10 +14955,17 @@ apply_aesthetic_mode = function(self)
     local backdrop_clouds_enabled = profile and profile.backdrop_clouds_enabled == true
     local table_sweep_shadow_enabled = profile and profile.table_sweep_shadow_enabled == true
     local backdrop_anim = (profile and profile.backdrop_anim) or "tile_generic_alpha_layer"
+    if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+        backdrop_anim = get_computer_backdrop_anim_for_mission(self)
+    end
     local backdrop_tint = (profile and profile.backdrop_tint) or vmath.vector4(1, 1, 1, 0.2)
     local table_sweep_shadow_anim = (profile and profile.table_sweep_shadow_anim) or "tile_generic_alpha_layer"
     local table_sweep_shadow_tint = (profile and profile.table_sweep_shadow_tint) or vmath.vector4(0.2, 0.17, 0.13, 0.2)
     local table_sweep_shadow_factory = "/tile_factory#tile_factory"
+    local backdrop_factory = "/tile_factory#tile_factory"
+    if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER and backdrop_tiled ~= true then
+        backdrop_factory = "/backdrop_computer_factory#backdrop_computer_factory"
+    end
     local boardgame_dice_enabled = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME) and backdrop_enabled == true
 
     if backdrop_enabled then
@@ -14966,6 +14985,7 @@ apply_aesthetic_mode = function(self)
                 if not tile_id then
                     break
                 end
+                pcall(go.set, msg.url(nil, tile_id, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
                 table.insert(self.world_backdrop_tiles, tile_id)
             end
             while #self.world_backdrop_tiles > needed do
@@ -14990,7 +15010,10 @@ apply_aesthetic_mode = function(self)
                 end
             end
             if not self.world_backdrop then
-                self.world_backdrop = factory.create("/tile_factory#tile_factory", vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.world_backdrop_z or -0.2))
+                self.world_backdrop = factory.create(backdrop_factory, vmath.vector3(self.camera_pos.x, self.camera_pos.y, self.world_backdrop_z or -0.2))
+                if self.world_backdrop then
+                    pcall(go.set, msg.url(nil, self.world_backdrop, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+                end
             end
             if self.world_backdrop then
                 if self.world_backdrop_anim ~= backdrop_anim then
@@ -25601,6 +25624,13 @@ function update(self, dt)
         local bx = backdrop_cam_x + (self.world_backdrop_base_offset_x or 0) + (self.world_backdrop_pan_x or 0)
         local by = backdrop_cam_y + (self.world_backdrop_base_offset_y or 0) + (self.world_backdrop_pan_y or 0)
         if self.world_backdrop then
+            if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+                local mission_backdrop_anim = get_computer_backdrop_anim_for_mission(self)
+                if self.world_backdrop_anim ~= mission_backdrop_anim then
+                    msg.post(msg.url(nil, self.world_backdrop, "sprite"), "play_animation", { id = hash(mission_backdrop_anim) })
+                    self.world_backdrop_anim = mission_backdrop_anim
+                end
+            end
             local backdrop_scale = (profile and profile.backdrop_scale) or 1
             local sx = (SCREEN_WIDTH / (self.world_backdrop_art_w or 256)) * backdrop_scale
             local sy = (SCREEN_HEIGHT / (self.world_backdrop_art_h or 256)) * backdrop_scale

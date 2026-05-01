@@ -441,6 +441,7 @@ SFX_CANNONFODDER_DIES_URL = "main:/sfx_cannonfodder_dies#sound"
 SFX_SPEEDY_DIES_URL = "main:/sfx_speedy_dies#sound"
 SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
 SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
+SFX_SPITTER_FIRES_URL = "main:/sfx_spitter_fires#sound"
 SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
 SFX_MELEE_HIT_HUMAN_URL = "main:/sfx_melee_hit_human#sound"
@@ -4864,6 +4865,7 @@ local function update_spitter_attack_phase(self, dt)
     end
 
     spitter.turn_ap_remaining = math.max(0, (spitter.turn_ap_remaining or 0) - SPITTER_SHOT_AP_COST)
+    play_spitter_fires_sfx(self)
     spawn_spitter_projectile(self, spitter, target)
     record_alien_turn_ap_spend(self, spitter.id, "ranged_spent", SPITTER_SHOT_AP_COST)
 
@@ -4880,6 +4882,7 @@ local function update_spitter_attack_phase(self, dt)
         target.current_health = math.max(0, target.current_health - 1)
         if target.target_kind ~= "civilian" then
             trigger_human_portrait_hit_feedback(self, target, 1)
+            play_melee_hit_human_sfx(self)
         end
         if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
             MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
@@ -11184,6 +11187,10 @@ end
 
 play_melee_hit_human_sfx = function(self)
     play_sfx_one_shot(self, "melee_hit_human")
+end
+
+play_spitter_fires_sfx = function(self)
+    play_sfx_one_shot(self, "spitter_fires")
 end
 
 play_civ_melee_hit_sfx = function(self)
@@ -19605,6 +19612,7 @@ multiplayer_transport_on_event = function(self, event)
         if not (from_x and from_y and to_x and to_y) then
             return
         end
+        play_spitter_fires_sfx(self)
         local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
         if not projectile_id then
             return
@@ -25052,6 +25060,7 @@ function init(self)
             speedy_dies = true,
             brute_dies = true,
             spitter_dies = true,
+            spitter_fires = true,
             brute_damage = true,
             melee_hit_alien = true,
             melee_hit_human = true,
@@ -25097,6 +25106,7 @@ function init(self)
         speedy_dies = { url = msg.url(SFX_SPEEDY_DIES_URL), playing = false },
         brute_dies = { url = msg.url(SFX_BRUTE_DIES_URL), playing = false },
         spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
+        spitter_fires = { url = msg.url(SFX_SPITTER_FIRES_URL), playing = false },
         brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },
         melee_hit_human = { url = msg.url(SFX_MELEE_HIT_HUMAN_URL), playing = false },

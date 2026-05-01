@@ -387,8 +387,18 @@ TITLE_DEBUG_BUTTON_W = 220
 TITLE_DEBUG_BUTTON_H = 70
 TITLE_SPACE_TILE_W = 1260
 TITLE_SPACE_TILE_H = 720
-TITLE_SPACE_SCROLL_SPEED_X = 8
-TITLE_SPACE_SCROLL_SPEED_Y = 4
+TITLE_SPACE_SCROLL_SPEED_X = 16
+TITLE_SPACE_SCROLL_SPEED_Y = 8
+TITLE_GRID_TILE_ART_W = 300
+TITLE_GRID_TILE_ART_H = 200
+TITLE_GRID_TILE_SCALE = 2
+TITLE_GRID_TILE_W = TITLE_GRID_TILE_ART_W * TITLE_GRID_TILE_SCALE
+TITLE_GRID_TILE_H = TITLE_GRID_TILE_ART_H * TITLE_GRID_TILE_SCALE
+TITLE_GRID_TILE_COLS = 4
+TITLE_GRID_TILE_ROWS = 4
+TITLE_GRID_SCROLL_SPEED_X = 12
+TITLE_GRID_SCROLL_SPEED_Y = 6
+TITLE_GRID_LAYER_Z = FLOW_UI_PANEL_Z + 0.0025
 TITLE_SCREEN_ART_W = 1280
 TITLE_SCREEN_ART_H = 720
 TUTORIAL_PANEL_W = 600
@@ -9718,6 +9728,7 @@ local function initialize_unit_ui(self)
         flow_title_panel_3 = nil,
         flow_title_panel_4 = nil,
         flow_title_planet = nil,
+        flow_title_grid_tiles = {},
         flow_title_xenos_word = nil,
         flow_title_derples_word = nil,
         flow_title_tutorial_button = nil,
@@ -9923,6 +9934,15 @@ local function initialize_unit_ui(self)
         pcall(go.set, msg.url(nil, self.ui.flow_title_panel_4, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
         pcall(go.set, msg.url(nil, self.ui.flow_title_panel_4, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
     end
+    self.ui.flow_title_grid_tiles = self.ui.flow_title_grid_tiles or {}
+    for i = 1, (TITLE_GRID_TILE_COLS * TITLE_GRID_TILE_ROWS) do
+        local grid_tile = create_outro_marker_sprite(hash("outro_grid_space"), TITLE_GRID_LAYER_Z)
+        if grid_tile then
+            pcall(go.set, msg.url(nil, grid_tile, "sprite"), "blend_mode", (render and render.BLEND_ADD) or 0)
+                pcall(go.set, msg.url(nil, grid_tile, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.25))
+            table.insert(self.ui.flow_title_grid_tiles, grid_tile)
+        end
+    end
     self.ui.flow_title_planet = create_outro_marker_sprite(hash("outro_purge_win_planet"), FLOW_UI_PANEL_Z + 0.002)
     if self.ui.flow_title_planet then
         pcall(go.set, msg.url(nil, self.ui.flow_title_planet, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
@@ -9930,8 +9950,8 @@ local function initialize_unit_ui(self)
     end
     self.ui.flow_title_xenos_word = create_outro_marker_sprite(hash("outro_title_xenos_word"), FLOW_UI_PANEL_Z + 0.003)
     if self.ui.flow_title_xenos_word then
-        pcall(go.set, msg.url(nil, self.ui.flow_title_xenos_word, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
-        pcall(go.set, msg.url(nil, self.ui.flow_title_xenos_word, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        pcall(go.set, msg.url(nil, self.ui.flow_title_xenos_word, "sprite"), "blend_mode", (render and render.BLEND_ADD) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_xenos_word, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.5))
     end
     self.ui.flow_title_derples_word = create_outro_marker_sprite(hash("outro_title_derples_word"), FLOW_UI_PANEL_Z + 0.004)
     if self.ui.flow_title_derples_word then
@@ -10149,6 +10169,11 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_panel_4, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    if self.ui.flow_title_grid_tiles then
+        for _, grid_tile in ipairs(self.ui.flow_title_grid_tiles) do
+            set_ui_square_transform(self, grid_tile, -9999, -9999, TITLE_GRID_LAYER_Z, hidden, 1, 1)
+        end
+    end
     set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
@@ -10854,6 +10879,8 @@ function enter_flow_state(self, next_state)
     if self.game_flow_state == FLOW_STATE_TITLE then
         self.title_space_scroll_x = 0
         self.title_space_scroll_y = 0
+        self.title_grid_scroll_x = 0
+        self.title_grid_scroll_y = 0
     end
 end
 
@@ -13217,6 +13244,20 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
+    if state ~= FLOW_STATE_TITLE then
+        set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_panel_4, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        if self.ui.flow_title_grid_tiles then
+            for _, grid_tile in ipairs(self.ui.flow_title_grid_tiles) do
+                set_ui_square_transform(self, grid_tile, -9999, -9999, TITLE_GRID_LAYER_Z, hidden, 1, 1)
+            end
+        end
+        set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
+    end
     local show_score_flow_digits = (state == FLOW_STATE_SCORE_SOLO) or (state == FLOW_STATE_SCORE_MP)
     if show_score_flow_digits then
         update_score_flow_digits(self, true)
@@ -13289,6 +13330,16 @@ function update_flow_ui(self, dt)
         while self.title_space_scroll_y >= TITLE_SPACE_TILE_H do
             self.title_space_scroll_y = self.title_space_scroll_y - TITLE_SPACE_TILE_H
         end
+        self.title_grid_scroll_x = self.title_grid_scroll_x or 0
+        self.title_grid_scroll_y = self.title_grid_scroll_y or 0
+        self.title_grid_scroll_x = self.title_grid_scroll_x + (TITLE_GRID_SCROLL_SPEED_X * (dt or 0))
+        self.title_grid_scroll_y = self.title_grid_scroll_y - (TITLE_GRID_SCROLL_SPEED_Y * (dt or 0))
+        while self.title_grid_scroll_x >= TITLE_GRID_TILE_W do
+            self.title_grid_scroll_x = self.title_grid_scroll_x - TITLE_GRID_TILE_W
+        end
+        while self.title_grid_scroll_y <= -TITLE_GRID_TILE_H do
+            self.title_grid_scroll_y = self.title_grid_scroll_y + TITLE_GRID_TILE_H
+        end
         set_ui_square_transform(
             self,
             self.ui.flow_title_panel,
@@ -13329,9 +13380,32 @@ function update_flow_ui(self, dt)
             1,
             1
         )
+        if self.ui.flow_title_grid_tiles then
+            local base_grid_x = (SCREEN_WIDTH * 0.5) - (((TITLE_GRID_TILE_COLS - 1) * TITLE_GRID_TILE_W) * 0.5) + self.title_grid_scroll_x
+            local base_grid_y = (SCREEN_HEIGHT * 0.5) - (((TITLE_GRID_TILE_ROWS - 1) * TITLE_GRID_TILE_H) * 0.5) + self.title_grid_scroll_y
+            local grid_index = 1
+            for row = 1, TITLE_GRID_TILE_ROWS do
+                for col = 1, TITLE_GRID_TILE_COLS do
+                    local grid_tile = self.ui.flow_title_grid_tiles[grid_index]
+                    if grid_tile then
+                        set_ui_square_transform(
+                            self,
+                            grid_tile,
+                            base_grid_x + ((col - 1) * TITLE_GRID_TILE_W),
+                            base_grid_y + ((row - 1) * TITLE_GRID_TILE_H),
+                            TITLE_GRID_LAYER_Z,
+                            vmath.vector4(1, 1, 1, 0.25),
+                            TITLE_GRID_TILE_SCALE,
+                            TITLE_GRID_TILE_SCALE
+                        )
+                    end
+                    grid_index = grid_index + 1
+                end
+            end
+        end
         set_ui_square_transform(self, self.ui.flow_title_planet, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
-        set_ui_square_transform(self, self.ui.flow_title_xenos_word, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.003, vmath.vector4(1, 1, 1, 1), 1, 1)
-        set_ui_square_transform(self, self.ui.flow_title_derples_word, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.004, vmath.vector4(1, 1, 1, 1), 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, (SCREEN_WIDTH * 0.5) - 40, (SCREEN_HEIGHT * 0.5) + 160, FLOW_UI_PANEL_Z + 0.003, vmath.vector4(1, 1, 1, 0.5), 0.75, 0.75)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, SCREEN_WIDTH * 0.5, (SCREEN_HEIGHT * 0.5) + 180, FLOW_UI_PANEL_Z + 0.004, vmath.vector4(1, 1, 1, 1), 0.5, 0.5)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.35), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.35), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.35), 280, 70)
@@ -13399,6 +13473,11 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_4, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        if self.ui.flow_title_grid_tiles then
+            for _, grid_tile in ipairs(self.ui.flow_title_grid_tiles) do
+                set_ui_square_transform(self, grid_tile, -9999, -9999, TITLE_GRID_LAYER_Z, hidden, 1, 1)
+            end
+        end
         set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
@@ -25064,6 +25143,8 @@ function init(self)
     self.flow_submit_done = false
     self.title_space_scroll_x = 0
     self.title_space_scroll_y = 0
+    self.title_grid_scroll_x = 0
+    self.title_grid_scroll_y = 0
     enter_flow_state(self, FLOW_STATE_TITLE)
     local preview_enabled, preview_sequence, preview_result = read_debug_outro_preview_settings()
     if preview_enabled == true then

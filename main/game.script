@@ -482,7 +482,7 @@ MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
 MP_SETUP_PANEL_H = 640
-MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z
+MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z + 0.005
 MP_SETUP_UI_Z = FLOW_UI_BUTTON_Z
 MP_SETUP_MISSION_BTN_X = { 169, 297, 425, 553 }
 MP_SETUP_MISSION_BTN_Y = 528
@@ -10001,7 +10001,10 @@ local function initialize_unit_ui(self)
     self.ui.flow_mp_count_buttons[2] = create_ui_marker_sprite(hash("mp_btn_3p"), MP_SETUP_UI_Z)
     self.ui.flow_mp_count_buttons[3] = create_ui_marker_sprite(hash("mp_btn_4p"), MP_SETUP_UI_Z)
     self.ui.flow_mp_back_button = create_ui_marker_sprite(hash("mp_btn_back"), MP_SETUP_UI_Z)
-    self.ui.flow_mp_start_button = create_ui_marker_sprite(hash("mp_btn_start"), MP_SETUP_UI_Z)
+    self.ui.flow_mp_start_button = create_ui_marker_sprite(hash("launch_button"), MP_SETUP_UI_Z)
+    if self.ui.flow_mp_start_button then
+        pcall(go.set, msg.url(nil, self.ui.flow_mp_start_button, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     self.ui.flow_mp_start_disabled_overlay = create_ui_marker_sprite(hash("mp_btn_start_disabled_overlay"), MP_SETUP_UI_Z + 0.001)
     self.ui.flow_mp_start_enabled_glow = create_ui_marker_sprite(hash("mp_btn_start_enabled_glow"), MP_SETUP_UI_Z - 0.001)
     for i, unit_id in ipairs(MP_SETUP_UNIT_IDS) do
@@ -13358,7 +13361,7 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
-    if state ~= FLOW_STATE_TITLE and state ~= FLOW_STATE_SOLO_SETUP then
+    if state ~= FLOW_STATE_TITLE and state ~= FLOW_STATE_SOLO_SETUP and state ~= FLOW_STATE_MP_SETUP then
         set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
@@ -13620,6 +13623,11 @@ function update_flow_ui(self, dt)
     if state == FLOW_STATE_MP_SETUP then
         local valid = multiplayer_setup_is_valid(self)
         local can_launch = multiplayer_lobby_is_local_offer_owner(self)
+        update_flow_title_space_grid_background(self, dt)
+        set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         if self.mp_state and self.mp_state.enabled then
             set_ui_square_transform(
                 self,
@@ -13673,9 +13681,10 @@ function update_flow_ui(self, dt)
         local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
         set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] - 1, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
         set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 0), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_button, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z, (can_launch and valid) and vmath.vector4(1, 1, 1, 0) or vmath.vector4(0.65, 0.65, 0.65, 0), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z - 0.001, (can_launch and valid) and vmath.vector4(1, 1, 1, 0.95) or hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
-        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z + 0.001, (can_launch and valid) and hidden or (can_launch and vmath.vector4(1, 1, 1, 0.92) or hidden), MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
+        pcall(msg.post, msg.url(nil, self.ui.flow_mp_start_button, "sprite"), "play_animation", { id = valid and hash("launch_button") or hash("disabled_button") })
+        set_ui_square_transform(self, self.ui.flow_mp_start_button, can_launch and MP_SETUP_START_BTN_X or -9999, can_launch and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z, can_launch and vmath.vector4(1, 1, 1, 1) or hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
+        set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_SCALE_X, MP_SETUP_START_GLOW_SCALE_Y)
+        set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
         if self.ui.flow_mp_unit_buttons then
             local pulse = 1 + (0.06 * math.sin((self.flow_overlay_phase or 0) * 8))
             for i, btn in ipairs(self.ui.flow_mp_unit_buttons) do
@@ -13935,11 +13944,11 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         end
     end
     if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
-        if multiplayer_setup_is_valid(self) then
+        if multiplayer_lobby_is_local_offer_owner(self) and multiplayer_setup_is_valid(self) then
             multiplayer_transport_send_command(self, "start_match_request", {
                 session_config = multiplayer_setup_build_session_config(self)
             }, self.mp_state and self.mp_state.local_player_id or "p1")
-        else
+        elseif multiplayer_lobby_is_local_offer_owner(self) then
             print("MP SETUP | invalid assignment: each active seat must be filled, unique units, and Sarge must stay on p1.")
         end
         return true

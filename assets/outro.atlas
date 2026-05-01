@@ -80,6 +80,9 @@ images {
   image: "/assets/images/outro_grid_space.png"
 }
 images {
+  image: "/assets/images/title_screen_buttons.png"
+}
+images {
   image: "/assets/images/tutorial1.png"
 }
 images {

@@ -16078,7 +16078,7 @@ update_human_portrait_ui = function(self)
     end
 end
 
-trigger_human_portrait_hit_feedback = function(self, unit, damage_amount)
+trigger_human_portrait_hit_feedback = function(self, unit, damage_amount, suppress_mp_emit)
     if not (self and unit and (unit.current_health or 0) > 0) then
         return
     end
@@ -16104,6 +16104,13 @@ trigger_human_portrait_hit_feedback = function(self, unit, damage_amount)
                 LOOT_RUNTIME.spawn_impact_ring_at_world(self, wx, wy, vmath.vector4(1.0, 0.16, 0.16, 1), 0.6)
             end
         end
+    end
+    if suppress_mp_emit ~= true then
+        multiplayer_emit_combat_fx_event(self, {
+            fx_type = "human_damage_feedback",
+            target_id = unit.id,
+            damage = damage
+        })
     end
 end
 
@@ -21184,6 +21191,13 @@ multiplayer_apply_combat_fx_event = function(self, payload)
             end
         end)
         return true
+    elseif fx_type == "human_damage_feedback" then
+        local unit = self.squad_units and self.squad_units[payload.target_id] or nil
+        if unit and (unit.current_health or 0) > 0 then
+            trigger_human_portrait_hit_feedback(self, unit, tonumber(payload.damage or 1) or 1, true)
+            return true
+        end
+        return false
     elseif fx_type == "brute_damage_flash" then
         local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
         if alien and (not alien.is_dead) then

@@ -567,7 +567,11 @@ function M.create(ctx)
         play_alien_melee_lurch(self, alien, target)
 
         if roll <= hit_chance then
-            if ctx and ctx.play_melee_hit_human_sfx then
+            if target.target_kind == "civilian" then
+                if ctx and ctx.play_civ_melee_hit_sfx then
+                    ctx.play_civ_melee_hit_sfx(self)
+                end
+            elseif ctx and ctx.play_melee_hit_human_sfx then
                 ctx.play_melee_hit_human_sfx(self)
             end
             local damage = get_alien_melee_damage(alien and alien.type)

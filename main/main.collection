@@ -179,6 +179,22 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_civ_melee_hit"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/civ_melee_hit.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_civ_rescued"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/civ_rescued.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_sarge_alien_alert"
   data: "components {\n"
   "  id: \"sound\"\n"

@@ -444,6 +444,8 @@ SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
 SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
 SFX_MELEE_HIT_HUMAN_URL = "main:/sfx_melee_hit_human#sound"
+SFX_CIV_MELEE_HIT_URL = "main:/sfx_civ_melee_hit#sound"
+SFX_CIV_RESCUED_URL = "main:/sfx_civ_rescued#sound"
 SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
 SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
 SFX_MEDIC_ALIEN_ALERT_URL = "main:/sfx_medic_alien_alert#sound"
@@ -6631,6 +6633,7 @@ set_civilian_awake_from_release = function(self, civilian, unit_id)
     civilian.follow_human_id = nil
     civilian.evacuate_to_exit = true
     civilian.current_anim_id = nil
+    play_civ_rescued_sfx(self)
     spawn_orange_impact_ring_at_world(self, get_civilian_captured_world_pos(self, civilian, cell))
     refresh_civilian_visuals(self)
     update_human_visual_state(self)
@@ -11181,6 +11184,14 @@ end
 
 play_melee_hit_human_sfx = function(self)
     play_sfx_one_shot(self, "melee_hit_human")
+end
+
+play_civ_melee_hit_sfx = function(self)
+    play_sfx_one_shot(self, "civ_melee_hit")
+end
+
+play_civ_rescued_sfx = function(self)
+    play_sfx_one_shot(self, "civ_rescued")
 end
 
 play_human_alien_alert_sfx = function(self, unit)
@@ -21688,6 +21699,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     play_melee_hit_human_sfx = function(self_ref)
         play_melee_hit_human_sfx(self_ref)
     end,
+    play_civ_melee_hit_sfx = function(self_ref)
+        play_civ_melee_hit_sfx(self_ref)
+    end,
     on_human_damaged = function(self_ref, unit, damage)
         trigger_human_portrait_hit_feedback(self_ref, unit, damage)
     end,
@@ -25041,6 +25055,8 @@ function init(self)
             brute_damage = true,
             melee_hit_alien = true,
             melee_hit_human = true,
+            civ_melee_hit = true,
+            civ_rescued = true,
             sarge_alien_alert = true,
             techie_alien_alert = true,
             medic_alien_alert = true,
@@ -25084,6 +25100,8 @@ function init(self)
         brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },
         melee_hit_human = { url = msg.url(SFX_MELEE_HIT_HUMAN_URL), playing = false },
+        civ_melee_hit = { url = msg.url(SFX_CIV_MELEE_HIT_URL), playing = false },
+        civ_rescued = { url = msg.url(SFX_CIV_RESCUED_URL), playing = false },
         sarge_alien_alert = { url = msg.url(SFX_SARGE_ALIEN_ALERT_URL), playing = false },
         techie_alien_alert = { url = msg.url(SFX_TECHIE_ALIEN_ALERT_URL), playing = false },
         medic_alien_alert = { url = msg.url(SFX_MEDIC_ALIEN_ALERT_URL), playing = false },

@@ -385,6 +385,10 @@ TITLE_DEBUG_BUTTON_X = TITLE_TUTORIAL_BUTTON_X - 300
 TITLE_DEBUG_BUTTON_Y = TITLE_TUTORIAL_BUTTON_Y
 TITLE_DEBUG_BUTTON_W = 220
 TITLE_DEBUG_BUTTON_H = 70
+TITLE_SPACE_TILE_W = 1260
+TITLE_SPACE_TILE_H = 720
+TITLE_SPACE_SCROLL_SPEED_X = 8
+TITLE_SPACE_SCROLL_SPEED_Y = 4
 TITLE_SCREEN_ART_W = 1280
 TITLE_SCREEN_ART_H = 720
 TUTORIAL_PANEL_W = 600
@@ -9710,6 +9714,12 @@ local function initialize_unit_ui(self)
         flow_leaderboard_debug_page_down = nil,
         flow_leaderboard_debug_back = nil,
         flow_title_panel = nil,
+        flow_title_panel_2 = nil,
+        flow_title_panel_3 = nil,
+        flow_title_panel_4 = nil,
+        flow_title_planet = nil,
+        flow_title_xenos_word = nil,
+        flow_title_derples_word = nil,
         flow_title_tutorial_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
@@ -9893,9 +9903,40 @@ local function initialize_unit_ui(self)
     self.ui.flow_leaderboard_debug_page_up = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     self.ui.flow_leaderboard_debug_page_down = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     self.ui.flow_leaderboard_debug_back = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
-    self.ui.flow_title_panel = create_ui_marker_sprite(hash("title_screen"), FLOW_UI_PANEL_Z + 0.001)
+    self.ui.flow_title_panel = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
     if self.ui.flow_title_panel then
         pcall(go.set, msg.url(nil, self.ui.flow_title_panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
+    self.ui.flow_title_panel_2 = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
+    if self.ui.flow_title_panel_2 then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel_2, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel_2, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
+    self.ui.flow_title_panel_3 = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
+    if self.ui.flow_title_panel_3 then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel_3, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel_3, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
+    self.ui.flow_title_panel_4 = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
+    if self.ui.flow_title_panel_4 then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel_4, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_panel_4, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
+    self.ui.flow_title_planet = create_outro_marker_sprite(hash("outro_purge_win_planet"), FLOW_UI_PANEL_Z + 0.002)
+    if self.ui.flow_title_planet then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_planet, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_planet, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
+    self.ui.flow_title_xenos_word = create_outro_marker_sprite(hash("outro_title_xenos_word"), FLOW_UI_PANEL_Z + 0.003)
+    if self.ui.flow_title_xenos_word then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_xenos_word, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_xenos_word, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
+    self.ui.flow_title_derples_word = create_outro_marker_sprite(hash("outro_title_derples_word"), FLOW_UI_PANEL_Z + 0.004)
+    if self.ui.flow_title_derples_word then
+        pcall(go.set, msg.url(nil, self.ui.flow_title_derples_word, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        pcall(go.set, msg.url(nil, self.ui.flow_title_derples_word, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
     end
     self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
@@ -10105,6 +10146,12 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_page_down, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_PAGE_BTN_W, LEADERBOARD_DEBUG_PAGE_BTN_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_debug_back, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H)
     set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_panel_4, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -10804,6 +10851,10 @@ function enter_flow_state(self, next_state)
     self.game_flow_state = next_state or FLOW_STATE_GAME
     self.flow_overlay_phase = 0
     self.flow_submit_done = false
+    if self.game_flow_state == FLOW_STATE_TITLE then
+        self.title_space_scroll_x = 0
+        self.title_space_scroll_y = 0
+    end
 end
 
 set_sound_loop_state = function(self, key, should_play)
@@ -13228,26 +13279,69 @@ function update_flow_ui(self, dt)
             self.ui.flow_title_tutorial_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
         end
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
+        self.title_space_scroll_x = self.title_space_scroll_x or 0
+        self.title_space_scroll_y = self.title_space_scroll_y or 0
+        self.title_space_scroll_x = self.title_space_scroll_x - (TITLE_SPACE_SCROLL_SPEED_X * (dt or 0))
+        self.title_space_scroll_y = self.title_space_scroll_y + (TITLE_SPACE_SCROLL_SPEED_Y * (dt or 0))
+        while self.title_space_scroll_x <= -TITLE_SPACE_TILE_W do
+            self.title_space_scroll_x = self.title_space_scroll_x + TITLE_SPACE_TILE_W
+        end
+        while self.title_space_scroll_y >= TITLE_SPACE_TILE_H do
+            self.title_space_scroll_y = self.title_space_scroll_y - TITLE_SPACE_TILE_H
+        end
         set_ui_square_transform(
             self,
             self.ui.flow_title_panel,
-            SCREEN_WIDTH * 0.5,
-            SCREEN_HEIGHT * 0.5,
+            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
+            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
             FLOW_UI_PANEL_Z + 0.001,
             vmath.vector4(1, 1, 1, 1),
-            1.05,
-            FLOW_UI_SCREEN_H / TITLE_SCREEN_ART_H
+            1,
+            1
         )
-        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0), 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0), 280, 70)
+        set_ui_square_transform(
+            self,
+            self.ui.flow_title_panel_2,
+            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
+            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
+            FLOW_UI_PANEL_Z + 0.001,
+            vmath.vector4(1, 1, 1, 1),
+            1,
+            1
+        )
+        set_ui_square_transform(
+            self,
+            self.ui.flow_title_panel_3,
+            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
+            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
+            FLOW_UI_PANEL_Z + 0.001,
+            vmath.vector4(1, 1, 1, 1),
+            1,
+            1
+        )
+        set_ui_square_transform(
+            self,
+            self.ui.flow_title_panel_4,
+            (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
+            (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
+            FLOW_UI_PANEL_Z + 0.001,
+            vmath.vector4(1, 1, 1, 1),
+            1,
+            1
+        )
+        set_ui_square_transform(self, self.ui.flow_title_planet, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.003, vmath.vector4(1, 1, 1, 1), 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.004, vmath.vector4(1, 1, 1, 1), 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.35), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.35), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.35), 280, 70)
         set_ui_square_transform(
             self,
             self.ui.flow_title_debug_button,
             TITLE_DEBUG_BUTTON_X,
             TITLE_DEBUG_BUTTON_Y,
             FLOW_UI_BUTTON_Z,
-            LEVEL_EDITOR_ENABLED and vmath.vector4(0.25, 0.45, 0.95, 0.65) or hidden,
+            vmath.vector4(0.25, 0.45, 0.95, 0.65),
             TITLE_DEBUG_BUTTON_W,
             TITLE_DEBUG_BUTTON_H
         )
@@ -13301,7 +13395,13 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.1, 0.1, 0.1, 1), SCREEN_WIDTH, SCREEN_HEIGHT)
         pcall(go.set, msg.url(nil, self.ui.flow_overlay, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
         pcall(go.set, msg.url(nil, self.ui.flow_panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
-        set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1.05, FLOW_UI_SCREEN_H / TITLE_SCREEN_ART_H)
+        set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_panel_4, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -24962,6 +25062,8 @@ function init(self)
     self.flow_score_breakdown = { total = 0, survivors = 0, seated = 0, dead = 0, power_units = 0, objectives = 0 }
     self.flow_outro_timer = 0
     self.flow_submit_done = false
+    self.title_space_scroll_x = 0
+    self.title_space_scroll_y = 0
     enter_flow_state(self, FLOW_STATE_TITLE)
     local preview_enabled, preview_sequence, preview_result = read_debug_outro_preview_settings()
     if preview_enabled == true then

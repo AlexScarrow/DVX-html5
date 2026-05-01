@@ -1,7 +1,7 @@
 # Atlas Purge Helper Report
 
-- Atlas IDs scanned: **257**
-- Literal matches outside atlas: **257**
+- Atlas IDs scanned: **256**
+- Literal matches outside atlas: **256**
 - Dynamic allowlist matches: **0**
 - Strict unmatched candidates: **0**
 
@@ -41,7 +41,7 @@ None.
 - `armor_info` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/config.lua, main/loot_runtime_actions.lua
 - `back_button` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/level_editor.lua
 - `backdrop_boardgame` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script
-- `backdrop_computer` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/outro_sequences.lua
+- `backdrop_computer` (5): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/backdrop_computer.go, main/game.script, ...
 - `barricade` (9): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/barricade_broken.particlefx, main/barricade_broken_fx.go, ...
 - `barricade_particle` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/barricade_broken.particlefx
 - `bomb` (4): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/loot_runtime_actions.lua, ...
@@ -259,7 +259,6 @@ None.
 - `tile_workshop_printer` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
 - `tile_workshop_printerGlow` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
 - `tile_workshop_printerOff` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua
-- `title_screen` (3): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/game.script, main/main.collection
 - `vent_unwelded` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
 - `vent_welded` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_markers.lua
 - `warning_O2_HP-90e05440-d33d-411a-a4d1-a0cc135ec652` (2): Docs/ATLAS_PURGE_HELPER_REPORT.md, main/loot_runtime_actions.lua

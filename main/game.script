@@ -189,6 +189,8 @@ HUMAN_PORTRAIT_HIT_FLASH_DURATION = 0.38
 HUMAN_PORTRAIT_HIT_RED_BLEND_MAX = 1.0
 HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX = 0.14
 HUMAN_PORTRAIT_HIT_FLICKER_HZ = 12
+HUMAN_SELECTION_GREEN_FLASH_DURATION = 1.0
+HUMAN_SELECTION_GREEN_FLASH_COLOR = vmath.vector4(0.25, 1.45, 0.25, 1)
 COMMS_PANEL_W = 300
 COMMS_PANEL_H = 470
 COMMS_PANEL_Z = 0.842
@@ -8791,15 +8793,30 @@ local function update_human_visual_state(self)
                 end
             elseif unit.hazard_flash_active == true then
                 safe_set_tint(unit.hazard_flash_tint or vmath.vector4(1.0, 0.78, 0.25, 1))
-            elseif unit.current_ap <= 0 then
-                safe_set_tint(apply_cell_light_tint(HUMAN_TINT_NO_AP))
             else
-                local base_tint = get_unit_base_tint(unit)
-                if unit.is_selected then
-                    safe_set_tint(apply_cell_light_tint(get_selected_tint(base_tint)))
+                local target_tint = nil
+                if unit.current_ap <= 0 then
+                    target_tint = apply_cell_light_tint(HUMAN_TINT_NO_AP)
                 else
-                    safe_set_tint(apply_cell_light_tint(base_tint))
+                    local base_tint = get_unit_base_tint(unit)
+                    if unit.is_selected then
+                        target_tint = apply_cell_light_tint(get_selected_tint(base_tint))
+                    else
+                        target_tint = apply_cell_light_tint(base_tint)
+                    end
                 end
+                local selection_green_timer = math.max(0, tonumber(unit.selection_green_flash_timer or 0) or 0)
+                if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER and selection_green_timer > 0 and target_tint then
+                    local duration = math.max(0.001, tonumber(unit.selection_green_flash_duration or HUMAN_SELECTION_GREEN_FLASH_DURATION) or HUMAN_SELECTION_GREEN_FLASH_DURATION)
+                    local blend_t = math.max(0, math.min(1, selection_green_timer / duration))
+                    target_tint = vmath.vector4(
+                        ((target_tint.x or 1) * (1 - blend_t)) + ((HUMAN_SELECTION_GREEN_FLASH_COLOR.x or 0) * blend_t),
+                        ((target_tint.y or 1) * (1 - blend_t)) + ((HUMAN_SELECTION_GREEN_FLASH_COLOR.y or 1) * blend_t),
+                        ((target_tint.z or 1) * (1 - blend_t)) + ((HUMAN_SELECTION_GREEN_FLASH_COLOR.z or 0) * blend_t),
+                        ((target_tint.w or 1) * (1 - blend_t)) + ((HUMAN_SELECTION_GREEN_FLASH_COLOR.w or 1) * blend_t)
+                    )
+                end
+                safe_set_tint(target_tint or vmath.vector4(1, 1, 1, 1))
             end
         end
         if unit.shadow_path then
@@ -16087,6 +16104,10 @@ local function tick_human_portrait_hit_feedback(self, dt)
             unit.portrait_hit_flash_timer = math.max(0, remaining - dt_step)
             unit.portrait_hit_flash_phase = (tonumber(unit.portrait_hit_flash_phase or 0) or 0) + (dt_step * flicker_speed)
         end
+        local selection_green_remaining = math.max(0, tonumber(unit and unit.selection_green_flash_timer or 0) or 0)
+        if selection_green_remaining > 0 and unit then
+            unit.selection_green_flash_timer = math.max(0, selection_green_remaining - dt_step)
+        end
     end
 end
 
@@ -16144,6 +16165,8 @@ try_select_human_portrait = function(self, screen_x, screen_y)
                 end
                 if not was_selected then
                     spawn_green_impact_ring_for_unit(self, unit, 0.6)
+                    unit.selection_green_flash_duration = HUMAN_SELECTION_GREEN_FLASH_DURATION
+                    unit.selection_green_flash_timer = HUMAN_SELECTION_GREEN_FLASH_DURATION
                 end
                 update_human_visual_state(self)
                 update_selected_unit_ui(self)
@@ -24161,6 +24184,8 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             clicked_unit.is_selected = true
             play_human_confirm_select_sfx(self, clicked_unit)
             spawn_green_impact_ring_for_unit(self, clicked_unit, 0.6)
+            clicked_unit.selection_green_flash_duration = HUMAN_SELECTION_GREEN_FLASH_DURATION
+            clicked_unit.selection_green_flash_timer = HUMAN_SELECTION_GREEN_FLASH_DURATION
             print(clicked_unit.display_name .. " selected. Click destination cell.")
         end
         self.ui_close_on_next_non_unit_click = false

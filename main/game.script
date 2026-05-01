@@ -10033,7 +10033,7 @@ local function initialize_unit_ui(self)
         self.ui.flow_mp_lobby_cards[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
         self.ui.flow_mp_lobby_status_strips[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
     end
-    self.ui.flow_mp_lobby_backpanel = create_ui_marker_sprite(hash("lobby_backpanel"), FLOW_UI_PANEL_Z + 0.001)
+    self.ui.flow_mp_lobby_backpanel = create_ui_marker_sprite(hash("lobby_backpanel"), FLOW_UI_PANEL_Z + 0.005)
     self.ui.flow_mp_lobby_back_button = create_ui_marker_sprite(hash("back_button"), MP_SETUP_UI_Z + 0.004)
     if self.ui.flow_mp_lobby_back_button then
         pcall(go.set, msg.url(nil, self.ui.flow_mp_lobby_back_button, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
@@ -12819,7 +12819,7 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
     end
     set_ui_square_transform(self, self.ui.flow_panel, MP_LOBBY_PANEL_X, mp_lobby_y(MP_LOBBY_PANEL_Y), FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PANEL_W, MP_LOBBY_PANEL_H)
     if self.ui.flow_mp_lobby_backpanel then
-        set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, MP_LOBBY_PANEL_X - 21, mp_lobby_y(MP_LOBBY_PANEL_Y - 90), FLOW_UI_PANEL_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, MP_LOBBY_PANEL_X - 21, mp_lobby_y(MP_LOBBY_PANEL_Y - 90), FLOW_UI_PANEL_Z + 0.005, vmath.vector4(1, 1, 1, 1), 1, 1)
     end
     if self.ui.flow_mp_lobby_pin_modal_bg then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_pin_modal_bg, -9999, -9999, MP_LOBBY_PIN_MODAL_Z, hidden, MP_LOBBY_PIN_MODAL_W, MP_LOBBY_PIN_MODAL_H)
@@ -13361,7 +13361,7 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
-    if state ~= FLOW_STATE_TITLE and state ~= FLOW_STATE_SOLO_SETUP and state ~= FLOW_STATE_MP_SETUP then
+    if state ~= FLOW_STATE_TITLE and state ~= FLOW_STATE_SOLO_SETUP and state ~= FLOW_STATE_MP_SETUP and state ~= FLOW_STATE_MP_LOBBY then
         set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
@@ -13771,6 +13771,11 @@ function update_flow_ui(self, dt)
         return
     end
     if state == FLOW_STATE_MP_LOBBY then
+        update_flow_title_space_grid_background(self, dt)
+        set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         multiplayer_lobby_render_ui(self, dt, hidden)
         return
     end

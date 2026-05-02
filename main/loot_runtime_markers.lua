@@ -799,6 +799,7 @@ function M.extend(runtime, ctx)
         self.wiregap_objects = self.wiregap_objects or {}
         self.wiregap_shadow_objects = self.wiregap_shadow_objects or {}
         self.wiregap_fx_objects = self.wiregap_fx_objects or {}
+        self.wiregap_fx_retrigger_timers = self.wiregap_fx_retrigger_timers or {}
         for _, marker in ipairs(self.wiregap_shadow_objects) do
             if marker then
                 go.delete(marker)
@@ -817,6 +818,7 @@ function M.extend(runtime, ctx)
         self.wiregap_shadow_objects = {}
         self.wiregap_objects = {}
         self.wiregap_fx_objects = {}
+        self.wiregap_fx_retrigger_timers = {}
 
         if not self.world_grid then
             return
@@ -866,18 +868,39 @@ function M.extend(runtime, ctx)
                             go.set_scale(vmath.vector3(1, 1, 1), marker_id)
                             table.insert(self.wiregap_objects, marker_id)
                         end
-                        if obj.isFixed ~= true and obj.fxFactory then
+                        if obj.isFixed ~= true then
                             local fx_x = wx + (obj.fxOffsetX or 0)
                             local fx_y = wy + (obj.fxOffsetY or 0)
-                            local fx_id = factory.create(obj.fxFactory, vmath.vector3(fx_x, fx_y, 0.57))
+                            local fx_id = factory.create("/weld_sparks_fx_factory#weld_sparks_fx_factory", vmath.vector3(fx_x, fx_y, 0.57))
                             if fx_id then
                                 go.set_rotation(vmath.quat_rotation_z(math.rad(obj.fxRotation or 0)), fx_id)
                                 particlefx.play(msg.url(nil, fx_id, "particlefx"))
                                 table.insert(self.wiregap_fx_objects, fx_id)
+                                self.wiregap_fx_retrigger_timers[fx_id] = 0.55 + (math.random() * 0.85)
                             end
                         end
                     end
                 end
+            end
+        end
+    end
+
+    runtime.update_wiregap_fx_retrigger = function(self, dt)
+        if not (self and self.wiregap_fx_objects and self.wiregap_fx_retrigger_timers) then
+            return
+        end
+        local dt_step = math.max(0, tonumber(dt or 0) or 0)
+        if dt_step <= 0 then
+            return
+        end
+        for _, fx_id in ipairs(self.wiregap_fx_objects) do
+            if fx_id then
+                local remaining = (tonumber(self.wiregap_fx_retrigger_timers[fx_id] or 0) or 0) - dt_step
+                if remaining <= 0 then
+                    pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+                    remaining = 0.55 + (math.random() * 0.85)
+                end
+                self.wiregap_fx_retrigger_timers[fx_id] = remaining
             end
         end
     end

@@ -760,8 +760,8 @@ function M.extend(runtime, ctx)
     end
 
     local function fill_backpack_with_packed_turret(unit, cap)
-        unit.backpack_items = {}
-        for _ = 1, math.min(cap or 0, 6) do
+        unit.backpack_items = unit.backpack_items or {}
+        for _ = 1, 1 do
             table.insert(unit.backpack_items, TURRET_PACKED_ITEM)
         end
         unit.backpack_used = #unit.backpack_items
@@ -4165,8 +4165,10 @@ function M.extend(runtime, ctx)
         end
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
-        if #unit.backpack_items > 0 then
-            print("Backpack must be emptied before carrying a turret.")
+        local used = #unit.backpack_items
+        local free_slots = math.max(0, cap - used)
+        if free_slots < 1 then
+            print("Need at least 1 free backpack slot to carry a turret.")
             runtime.emit_derple_feedback(self, unit.id, "TURRET_BACKPACK_NOT_EMPTY")
             flash_invalid_drag_units(unit, nil)
             return true

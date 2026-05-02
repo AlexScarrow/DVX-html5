@@ -10,9 +10,9 @@ M.STEPS = {
     { anim = hash("tutorial7"), tile = "canteen", cell = 5, offset_x = 0, offset_y = 0 },
     { anim = hash("tutorial8"), tile = "canteen", cell = 5, offset_x = 0, offset_y = 0 },
     { anim = hash("tutorial9"), tile = "canteen", cell = 6, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial10"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial11"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial12"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 }
+    { anim = hash("tutorial10"), tile = "canteen", cell = 6, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial11"), tile = "canteen", cell = 6, offset_x = 0, offset_y = 0 },
+    { anim = hash("tutorial12"), tile = "canteen", cell = 6, offset_x = 0, offset_y = 0 }
 }
 
 return M

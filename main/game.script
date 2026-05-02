@@ -3457,6 +3457,9 @@ local function refresh_alien_visual(self, alien)
         end
     elseif (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
         local sprite_tint = apply_alien_cell_light_tint(cfg.marker_tint)
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            sprite_tint = vmath.vector4(1, 1, 1, cfg.marker_tint.w or 1)
+        end
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", sprite_tint)
         if alien.type == ALIEN_TYPE_SPITTER and alien.spitter_bottom_go_id then
             go.set(msg.url(nil, alien.spitter_bottom_go_id, "sprite"), "tint", sprite_tint)
@@ -8799,7 +8802,9 @@ local function update_human_visual_state(self)
                 safe_set_tint(unit.hazard_flash_tint or vmath.vector4(1.0, 0.78, 0.25, 1))
             else
                 local target_tint = nil
-                if unit.current_ap <= 0 then
+                if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+                    target_tint = vmath.vector4(1, 1, 1, 1)
+                elseif unit.current_ap <= 0 then
                     target_tint = apply_cell_light_tint(HUMAN_TINT_NO_AP)
                 else
                     local base_tint = get_unit_base_tint(unit)
@@ -25841,6 +25846,9 @@ function update(self, dt)
     end
     LOOT_RUNTIME.update_derple_feedback_bubbles(self, dt)
     LOOT_RUNTIME.update_power_node_flicker(self, dt)
+    if LOOT_RUNTIME.update_wiregap_fx_retrigger then
+        LOOT_RUNTIME.update_wiregap_fx_retrigger(self, dt)
+    end
     enforce_tutorial_infinite_ap(self)
     enforce_realtime_ap_regen(self, dt)
     process_realtime_world_ticks(self, dt)

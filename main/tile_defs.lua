@@ -467,7 +467,7 @@ canteen.cells[4].object1 = {
 }
 canteen.cells[4].object2 = {
     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
-    offsetX = 50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    offsetX = 0, offsetY = 40, hitW = 32, hitH = 32, requiredComponent = nil
 }
 canteen.cells[6].object1 = {
     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 601,

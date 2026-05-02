@@ -916,17 +916,7 @@ MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
 LEVEL_EDITOR = require("main.level_editor")
-local TUTORIAL_STEP_DEFS = {
-    { anim = hash("tutorial1"), tile = "entry", cell = 7, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial2"), tile = "coms", cell = 2, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial3"), tile = "canteen", cell = 5, offset_x = 65, offset_y = 0 },
-    { anim = hash("tutorial4"), tile = "canteen", cell = 5, offset_x = 65, offset_y = 0 },
-    { anim = hash("tutorial5"), tile = "escape", cell = 1, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial6"), tile = "coms", cell = 5, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial7"), tile = "workshop", cell = 6, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial8"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 },
-    { anim = hash("tutorial9"), tile = "factory", cell = 6, offset_x = 0, offset_y = 0 }
-}
+local TUTORIAL_STEP_DEFS = require("main.tutorial_step_defs").STEPS
 LOOT_RUNTIME = {}
 MELEE_RUNTIME = {}
 HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)

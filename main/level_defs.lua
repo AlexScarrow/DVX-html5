@@ -247,7 +247,7 @@ levels[3].unit_loadouts = {
             }
         },
         techie = {
-            starting_backpack_items = { "power","power","power","power" },
+            starting_backpack_items = { "power","wiring_straight","power" },
             starting_equipped_buffs = {}
         },
         medic = {

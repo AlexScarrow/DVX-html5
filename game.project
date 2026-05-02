@@ -49,3 +49,10 @@ outro_preview = 0
 outro_preview_sequence = title
 outro_preview_result = win
 
+[dvx]
+env_name = LOCAL
+net_protocol_version = 1
+transport_mode = websocket
+transport_ws_url = ws://127.0.0.1:8080/ws
+transport_room_id = dvx_local_room
+

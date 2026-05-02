@@ -232,9 +232,12 @@ NEW_TURN_BUTTON_VISUAL_SCALE = 1.0
 MULTIPLAYER_ENABLED = true
 MULTIPLAYER_HOST_PLAYER_ID = "p1"
 MULTIPLAYER_LOCAL_PLAYER_ID = "p1"
-MULTIPLAYER_TRANSPORT_MODE = "websocket"--loopback" -- "loopback" (default) or "websocket"
-MULTIPLAYER_TRANSPORT_WS_URL = "ws://192.168.0.74:8080/ws"
-MULTIPLAYER_TRANSPORT_ROOM_ID = "dvx_local_room"
+ENV_NAME = tostring((sys.get_config and sys.get_config("dvx.env_name")) or "LOCAL")
+GAME_VERSION_LABEL = tostring((sys.get_config and sys.get_config("project.version")) or "0")
+NET_PROTOCOL_VERSION = tostring((sys.get_config and sys.get_config("dvx.net_protocol_version")) or "1")
+MULTIPLAYER_TRANSPORT_MODE = tostring((sys.get_config and sys.get_config("dvx.transport_mode")) or "websocket") -- "loopback" or "websocket"
+MULTIPLAYER_TRANSPORT_WS_URL = tostring((sys.get_config and sys.get_config("dvx.transport_ws_url")) or "ws://127.0.0.1:8080/ws")
+MULTIPLAYER_TRANSPORT_ROOM_ID = tostring((sys.get_config and sys.get_config("dvx.transport_room_id")) or "dvx_local_room")
 MULTIPLAYER_READY_BUTTON_W = 28
 MULTIPLAYER_READY_BUTTON_H = 28
 MULTIPLAYER_READY_BUTTON_GAP = 22
@@ -424,6 +427,7 @@ ADVISORY_MSG_HAZARD_GAS = "poisonous gas causing health damage"
 ADVISORY_MSG_HAZARD_FIRE = "fire is causing health damage"
 ADVISORY_MSG_FIX_WIRE_FIRST = "fix the broken wire first"
 ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = "needs power on and fuse installed"
+ADVISORY_MSG_PROTOCOL_MISMATCH = "network version mismatch. update to same build."
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -432,6 +436,7 @@ ADVISORY_ANIM_HAZARD_GAS = hash("advisory_poisonGas")
 ADVISORY_ANIM_HAZARD_FIRE = hash("advisory_fireDamage")
 ADVISORY_ANIM_FIX_WIRE_FIRST = hash("advisory_fixWireFirst")
 ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE = hash("advisory_needPowerAndFuse")
+ADVISORY_ANIM_PROTOCOL_MISMATCH = hash("advisory_networkVersionMismatchWarning")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -715,6 +720,11 @@ mp_setup_get_joined_slot_lookup = function(self)
         for _, network_player_id in ipairs(joined_player_ids) do
             local slot_player_id = multiplayer_get_slot_player_id_for_network(self, network_player_id)
             joined_slots[tostring(slot_player_id or "")] = true
+        end
+        local local_network_id = tostring(self.mp_state.local_player_id or "")
+        if local_network_id ~= "" then
+            local local_slot_id = multiplayer_get_slot_player_id_for_network(self, local_network_id)
+            joined_slots[tostring(local_slot_id or "")] = true
         end
         return joined_slots
     end
@@ -10371,6 +10381,8 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_FIX_WIRE_FIRST
     elseif text == ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE then
         anim_id = ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE
+    elseif text == ADVISORY_MSG_PROTOCOL_MISMATCH then
+        anim_id = ADVISORY_ANIM_PROTOCOL_MISMATCH
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -10387,11 +10399,18 @@ update_advisory_ui = function(self, dt)
     end
     local hidden = vmath.vector4(0, 0, 0, 0)
     self.advisory_timer_s = math.max(0, (tonumber(self.advisory_timer_s or 0) or 0) - (tonumber(dt or 0) or 0))
-    local should_show = (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME
+    local flow_state = (self.game_flow_state or FLOW_STATE_GAME)
+    local can_show_for_flow = (flow_state == FLOW_STATE_GAME)
+        or (flow_state == FLOW_STATE_MP_LOBBY and self.advisory_anim_id == ADVISORY_ANIM_PROTOCOL_MISMATCH)
+    local advisory_z = ADVISORY_TEXT_Z
+    if flow_state == FLOW_STATE_MP_LOBBY then
+        advisory_z = FLOW_UI_BUTTON_Z + 0.02
+    end
+    local should_show = can_show_for_flow
         and self.advisory_timer_s > 0
         and self.advisory_anim_id ~= nil
     if not should_show then
-        set_ui_square_transform(self, self.ui.advisory_sprite, -9999, -9999, ADVISORY_TEXT_Z, hidden, ADVISORY_TEXT_SCALE, ADVISORY_TEXT_SCALE)
+        set_ui_square_transform(self, self.ui.advisory_sprite, -9999, -9999, advisory_z, hidden, ADVISORY_TEXT_SCALE, ADVISORY_TEXT_SCALE)
         return
     end
     if self.advisory_anim_active ~= self.advisory_anim_id then
@@ -10403,7 +10422,7 @@ update_advisory_ui = function(self, dt)
         self.ui.advisory_sprite,
         SCREEN_WIDTH * 0.5,
         ADVISORY_TEXT_Y,
-        ADVISORY_TEXT_Z,
+        advisory_z,
         vmath.vector4(1, 1, 1, 1),
         ADVISORY_TEXT_SCALE,
         ADVISORY_TEXT_SCALE
@@ -12514,7 +12533,7 @@ multiplayer_lobby_create_host_draft = function(self)
         lobby.local_active_offer_id = ""
     end
     lobby.session_counter = (tonumber(lobby.session_counter or 0) or 0) + 1
-    local session_id = string.format("offer_%s_%d", owner_player_id, lobby.session_counter)
+    local session_id = string.format("offer_%s_%d_%d", owner_player_id, get_wall_clock_ms(), lobby.session_counter)
     local session = {
         id = session_id,
         owner_player_id = owner_player_id,
@@ -12648,7 +12667,8 @@ multiplayer_lobby_submit_pin_entry = function(self)
         if target_session_id ~= "" and #lobby.pin_buffer == MP_LOBBY_MAX_PIN_LEN then
             multiplayer_transport_send_command(self, "lobby_join_session", {
                 session_id = target_session_id,
-                pin = lobby.pin_buffer
+                pin = lobby.pin_buffer,
+                protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
             }, self.mp_state and self.mp_state.local_player_id or "p1")
             lobby.pending_join_session_id = target_session_id
             lobby.pin_mode = ""
@@ -14245,7 +14265,8 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
                     return true
                 end
                 multiplayer_transport_send_command(self, "lobby_join_session", {
-                    session_id = tostring(session.id or "")
+                    session_id = tostring(session.id or ""),
+                    protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
                 }, self.mp_state and self.mp_state.local_player_id or "p1")
                 lobby.pending_join_session_id = tostring(session.id or "")
                 return true
@@ -17919,6 +17940,8 @@ multiplayer_transport_handle_command = function(self, command)
         local offer_id = tostring(self.mp_lobby.local_active_offer_id or "")
         local session = multiplayer_lobby_get_session_by_id(self, offer_id)
         if session and target_player_id ~= "" then
+            local refresh_ms = get_wall_clock_ms()
+            session.updated_at_ms = refresh_ms
             table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_upsert", {
                 target_player_id = target_player_id,
                 offer = {
@@ -17930,7 +17953,7 @@ multiplayer_transport_handle_command = function(self, command)
                     max_players = math.max(2, tonumber(session.max_players or 2) or 2),
                     is_locked = session.is_locked == true,
                     joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
-                    updated_at_ms = tonumber(session.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
+                    updated_at_ms = refresh_ms
                 }
             }))
         end
@@ -17940,7 +17963,33 @@ multiplayer_transport_handle_command = function(self, command)
     if cmd_type == "lobby_join_session" then
         multiplayer_lobby_ensure_runtime(self)
         local session_id = tostring(payload.session_id or "")
+        local requested_protocol_version = tostring(payload.protocol_version or "")
         local session = multiplayer_lobby_get_session_by_id(self, session_id)
+        local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+        local owner_player_id = tostring(session and session.owner_player_id or "")
+        if owner_player_id ~= "" and owner_player_id ~= local_player_id then
+            -- Relay broadcasts commands to all peers; only the offer owner may authorize joins.
+            return events
+        end
+        local expected_protocol_version = tostring(session and session.protocol_version or NET_PROTOCOL_VERSION or "1")
+        if requested_protocol_version == "" then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "protocol_version_missing",
+                expected_protocol_version = expected_protocol_version,
+                received_protocol_version = ""
+            }))
+            return events
+        end
+        if requested_protocol_version ~= expected_protocol_version then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "protocol_mismatch",
+                expected_protocol_version = expected_protocol_version,
+                received_protocol_version = tostring(requested_protocol_version)
+            }))
+            return events
+        end
         if not session or session.status == "draft" then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_join_session",
@@ -17955,10 +18004,75 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_join_request", {
+        local requester_player_id = tostring(sender or "")
+        if requester_player_id == "" then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "requester_missing"
+            }))
+            return events
+        end
+        if session.is_locked == true then
+            local expected_pin = tostring(session.pin or "")
+            local received_pin = tostring(payload.pin or "")
+            if expected_pin == "" or received_pin ~= expected_pin then
+                table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_join_reject", {
+                    target_player_id = requester_player_id,
+                    offer_id = session_id,
+                    session_id = session_id,
+                    reason = "pin_invalid"
+                }))
+                return events
+            end
+        end
+        session.joined_player_ids = session.joined_player_ids or {}
+        local already_joined = false
+        for _, joined_id in ipairs(session.joined_player_ids) do
+            if tostring(joined_id or "") == requester_player_id then
+                already_joined = true
+                break
+            end
+        end
+        if not already_joined then
+            session.joined_player_ids[#session.joined_player_ids + 1] = requester_player_id
+        end
+        local session_max_players = math.max(2, math.min(4, tonumber(session.max_players or 4) or 4))
+        session.players = math.min(session_max_players, tonumber(#session.joined_player_ids) or 1)
+        session.updated_at_ms = get_wall_clock_ms()
+        self.mp_lobby.offers_by_id[session_id] = session
+        multiplayer_lobby_sync_sessions_from_offers(self)
+        table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_upsert", {
+            offer = {
+                id = tostring(session.id or ""),
+                owner_player_id = tostring(session.owner_player_id or "p1"),
+                host_name = tostring(session.host_name or "Host"),
+                status = tostring(session.status or "published_open"),
+                players = math.max(1, tonumber(session.players or 1) or 1),
+                max_players = session_max_players,
+                is_locked = session.is_locked == true,
+                joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
+                updated_at_ms = tonumber(session.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
+            }
+        }))
+        table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_join_accept", {
+            target_player_id = requester_player_id,
             offer_id = session_id,
-            requester_player_id = tostring(sender or ""),
-            pin = tostring(payload.pin or "")
+            session_id = session_id
+        }))
+        local desired_player_count = math.max(2, math.min(session_max_players, tonumber(#(session.joined_player_ids or {})) or 1))
+        local setup_config = multiplayer_setup_build_session_config(self)
+        setup_config.player_count = desired_player_count
+        table.insert(events, multiplayer_transport_emit_event(self, "setup_state_updated", {
+            session_config = setup_config
+        }))
+        if self.mp_state then
+            self.mp_state.player_count = setup_config.player_count
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
+            target_player_id = requester_player_id,
+            session_id = tostring(session.id or ""),
+            session_max_players = session_max_players,
+            session_config = setup_config
         }))
         return events
     end
@@ -20033,8 +20147,18 @@ multiplayer_transport_on_event = function(self, event)
         if session then
             multiplayer_lobby_enter_mp_setup_from_session(self, session)
         else
+            local host_player_id = tostring(self.mp_state and self.mp_state.host_player_id or "p1")
+            local local_network_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+            local joined_ids = { host_player_id }
+            if local_network_player_id ~= "" and local_network_player_id ~= host_player_id then
+                joined_ids[#joined_ids + 1] = local_network_player_id
+            end
             local synthetic = {
                 id = session_id ~= "" and session_id or "remote_session",
+                owner_player_id = host_player_id,
+                status = "published_open",
+                joined_player_ids = joined_ids,
+                players = #joined_ids,
                 max_players = tonumber(event.payload and event.payload.session_max_players or 2) or 2
             }
             multiplayer_lobby_enter_mp_setup_from_session(self, synthetic)
@@ -20704,6 +20828,10 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_lobby.pin_mode = ""
             self.mp_lobby.pin_feedback = "bad"
             self.mp_lobby.pin_feedback_timer = 0.45
+            if reason == "protocol_mismatch" or reason == "protocol_version_missing" then
+                show_advisory(self, ADVISORY_MSG_PROTOCOL_MISMATCH, 1.8)
+                self.mp_lobby.pin_feedback_timer = 0.75
+            end
         end
         if cmd == "lobby_offer_join_response" and self.mp_lobby then
             self.mp_lobby.pending_join_session_id = ""
@@ -20721,6 +20849,12 @@ multiplayer_transport_on_event = function(self, event)
         self.mp_state.event_seq = 0
         self.mp_state.pending_turn_state_snapshot_turn_id = 0
         self.mp_state.last_turn_state_snapshot_broadcast_turn_id = 0
+        multiplayer_lobby_ensure_runtime(self)
+        if self.mp_lobby then
+            self.mp_lobby.offer_removed_at_ms_by_id = {}
+            self.mp_lobby.offers_by_id = {}
+            self.mp_lobby.sessions = {}
+        end
         self.mp_state.connected_players = {}
         local players = event.payload and event.payload.players or {}
         for _, player_id in ipairs(players) do

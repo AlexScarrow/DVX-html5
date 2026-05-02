@@ -12142,6 +12142,7 @@ multiplayer_lobby_ensure_runtime = function(self)
     lobby.host_draft_session_id = tostring(lobby.host_draft_session_id or "")
     lobby.local_username = tostring(lobby.local_username or ((self.mp_state and self.mp_state.local_player_id) or "Player"))
     lobby.pending_cancel_confirm = lobby.pending_cancel_confirm == true
+    lobby.protocol_mismatch_hint_active = lobby.protocol_mismatch_hint_active == true
     if type(lobby.sessions) ~= "table" then
         lobby.sessions = {}
     end
@@ -12507,6 +12508,25 @@ multiplayer_lobby_get_visible_sessions = function(self)
         end
     end
     return out
+end
+
+multiplayer_session_protocol_is_compatible = function(self, session)
+    if not session then
+        return false
+    end
+    return tostring(session.protocol_version or NET_PROTOCOL_VERSION or "1") == tostring(NET_PROTOCOL_VERSION or "1")
+end
+
+multiplayer_lobby_count_compatible_published_sessions = function(self)
+    local published = multiplayer_lobby_get_published_sessions(self)
+    local published_total = #published
+    local compatible_total = 0
+    for _, session in ipairs(published) do
+        if multiplayer_session_protocol_is_compatible(self, session) then
+            compatible_total = compatible_total + 1
+        end
+    end
+    return published_total, compatible_total
 end
 
 multiplayer_lobby_enter_mp_setup_from_session = function(self, session)
@@ -12951,6 +12971,7 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
     local page_count = multiplayer_lobby_page_count(self)
     lobby.page_index = math.max(1, math.min(page_count, tonumber(lobby.page_index or 1) or 1))
     local visible_sessions = multiplayer_lobby_get_visible_sessions(self)
+    local published_total, compatible_total = multiplayer_lobby_count_compatible_published_sessions(self)
     local card_bg = vmath.vector4(0.18, 0.24, 0.34, 0.94)
     local open_bg = vmath.vector4(0.2, 0.58, 0.28, 0.92)
     local locked_bg = vmath.vector4(0.58, 0.26, 0.26, 0.92)
@@ -12990,6 +13011,15 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
         page_btn_tint,
         host_info_tint
     )
+    local only_incompatible_published = published_total > 0 and compatible_total == 0
+    if only_incompatible_published and lobby.pin_mode == "" then
+        if lobby.protocol_mismatch_hint_active ~= true then
+            show_advisory(self, ADVISORY_MSG_PROTOCOL_MISMATCH, 1.8)
+            lobby.protocol_mismatch_hint_active = true
+        end
+    else
+        lobby.protocol_mismatch_hint_active = false
+    end
     multiplayer_lobby_render_session_cards(self, visible_sessions, card_bg, open_bg, locked_bg, empty_bg)
     if lobby.pin_mode ~= "" then
         multiplayer_lobby_render_host_publish_buttons(self, host_open_tint, host_private_tint, hidden)

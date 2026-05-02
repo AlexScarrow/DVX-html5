@@ -62,6 +62,17 @@ Before starting a session, confirm all of these:
 
 If host/client builds differ, stop and align versions first.
 
+Local dual-client test note (single machine):
+
+- Defold runtime should use `p1`
+- Browser runtime should use `?player=p2`
+- Do not run both clients as the same player id
+
+Protocol mismatch expected behavior:
+
+- If host/client `dvx.net_protocol_version` values differ, join should be blocked
+- Client should see the network version mismatch advisory in lobby
+
 ---
 
 ## 4) Quick test flow (every session)

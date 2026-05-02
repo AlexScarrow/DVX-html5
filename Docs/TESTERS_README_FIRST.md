@@ -5,6 +5,8 @@ Please read this once before testing.
 
 This document is the complete tester guide.
 
+Release operators: use `Docs/TEST_BUILD_RELEASE_CHECKLIST.md` before sending any new test build.
+
 ---
 
 ## 0) 2-minute quick start

@@ -333,6 +333,12 @@ function M.extend(runtime, ctx)
         return pos.x + (x_offset or 0), pos.y + (y_offset or 70)
     end
 
+    local function emit_advisory(self, text, duration_s)
+        if ctx and ctx.show_advisory and text and text ~= "" then
+            ctx.show_advisory(self, text, duration_s)
+        end
+    end
+
     local function try_consume_drag_ap(source_unit, target_unit, ap_cost_override)
         if not source_unit then
             return false
@@ -4439,6 +4445,7 @@ function M.extend(runtime, ctx)
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if not runtime.is_object_dependency_met(self.world_grid, nav_obj) then
             print("Nav computer dependency is not met.")
+            emit_advisory(self, ctx.ADVISORY_MSG_FIX_WIRE_FIRST)
             flash_invalid_drag_units(unit, nil)
             return true
         end
@@ -4542,6 +4549,7 @@ function M.extend(runtime, ctx)
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
         if not runtime.is_object_dependency_met(self.world_grid, loader_obj) then
             print("Supply loader dependency is not met.")
+            emit_advisory(self, ctx.ADVISORY_MSG_FIX_WIRE_FIRST)
             flash_invalid_drag_units(unit, nil)
             return true
         end
@@ -5248,10 +5256,13 @@ function M.extend(runtime, ctx)
                                     flash_invalid_drag_units(source_unit, nil)
                                 elseif drop_cell.isPowered ~= true then
                                     print("Vending machine is offline (tile has no power).")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE)
                                 elseif vending_machine.isFixed ~= true then
                                     print("Vending machine is broken and must be fixed first.")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE)
                                 elseif not runtime.is_object_dependency_met(self.world_grid, vending_machine) then
                                     print("Vending machine dependency is not met.")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE)
                                 else
                                     if not try_consume_current_drag_ap(nil) then
                                         self.drag_resource = { active = false }
@@ -5591,6 +5602,7 @@ function M.extend(runtime, ctx)
                             if vent_target then
                                 if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE then
                                     print("Only the Techie can fix objects.")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_TECHIE_ONLY)
                                     flash_invalid_drag_units(source_unit, nil)
                                     self.drag_resource = { active = false }
                                     return true
@@ -5671,6 +5683,7 @@ function M.extend(runtime, ctx)
                                     or component_target.name == hash("nav_computer")
                                 if source_unit.class_id ~= ctx.UNIT_CLASS_TECHIE and not is_class_agnostic_machine_target then
                                     print("Only the Techie can fix objects.")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_TECHIE_ONLY)
                                     flash_invalid_drag_units(source_unit, nil)
                                     self.drag_resource = { active = false }
                                     return true

@@ -412,6 +412,26 @@ TUTORIAL_PANEL_H = 300
 TUTORIAL_PANEL_Z = FLOW_UI_PANEL_Z + 0.02
 TUTORIAL_NEXT_HOTSPOT_SIZE = 128
 TUTORIAL_PANEL_DRAW_SCALE = 0.8
+ADVISORY_TEXT_Z = 0.86
+ADVISORY_TEXT_SCALE = 1.5
+ADVISORY_TEXT_Y = 36
+ADVISORY_DEFAULT_DURATION = 1.8
+ADVISORY_MSG_NO_AMMO = "no ammo loaded. add ammo clip."
+ADVISORY_MSG_TECHIE_ONLY = "only techie can do this job"
+ADVISORY_MSG_NO_AP = "no action points left"
+ADVISORY_MSG_HAZARD_O2 = "low oxygen is causing health damage"
+ADVISORY_MSG_HAZARD_GAS = "poisonous gas causing health damage"
+ADVISORY_MSG_HAZARD_FIRE = "fire is causing health damage"
+ADVISORY_MSG_FIX_WIRE_FIRST = "fix the broken wire first"
+ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = "needs power on and fuse installed"
+ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
+ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
+ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
+ADVISORY_ANIM_HAZARD_O2 = hash("advisory_noOxygen")
+ADVISORY_ANIM_HAZARD_GAS = hash("advisory_poisonGas")
+ADVISORY_ANIM_HAZARD_FIRE = hash("advisory_fireDamage")
+ADVISORY_ANIM_FIX_WIRE_FIRST = hash("advisory_fixWireFirst")
+ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE = hash("advisory_needPowerAndFuse")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -8168,6 +8188,13 @@ local function apply_start_of_turn_environment_damage(self)
                 if hazard_feedback_event_type and LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
                     LOOT_RUNTIME.emit_derple_feedback(self, unit.id, hazard_feedback_event_type)
                 end
+                if has_fire and not has_hazmat then
+                    show_advisory(self, ADVISORY_MSG_HAZARD_FIRE)
+                elseif has_gas and not has_hazmat then
+                    show_advisory(self, ADVISORY_MSG_HAZARD_GAS)
+                elseif has_outside and not has_oxygen_mask then
+                    show_advisory(self, ADVISORY_MSG_HAZARD_O2)
+                end
                 local hazard_flash_tint = vmath.vector4(1.0, 0.78, 0.25, 1)
                 if has_gas and (not has_hazmat) and not (has_fire and (not has_hazmat)) then
                     hazard_flash_tint = vmath.vector4(0.58, 1.0, 0.66, 1)
@@ -9793,6 +9820,7 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_pin_modal_bg = nil,
         flow_mp_lobby_pin_display = nil,
         flow_mp_lobby_pin_enter = nil,
+        advisory_sprite = nil,
         ready_buttons = {},
         mp_debug_player_buttons = {},
         human_portrait_icons = {}
@@ -10053,6 +10081,10 @@ local function initialize_unit_ui(self)
     for i = 1, (#MP_SETUP_PLAYER_IDS * MP_SETUP_NAME_MAX_CHARS) do
         self.ui.flow_mp_setup_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
     end
+    self.ui.advisory_sprite = create_ui_marker_sprite(ADVISORY_ANIM_NO_AMMO, ADVISORY_TEXT_Z)
+    if self.ui.advisory_sprite then
+        pcall(go.set, msg.url(nil, self.ui.advisory_sprite, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     for i = 1, 8 do
         self.ui.flow_mp_lobby_boxes[i] = create_ui_square(0, 0, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
     end
@@ -10293,6 +10325,9 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
         end
     end
+    if self.ui.advisory_sprite then
+        set_ui_square_transform(self, self.ui.advisory_sprite, -9999, -9999, ADVISORY_TEXT_Z, hidden, ADVISORY_TEXT_SCALE, ADVISORY_TEXT_SCALE)
+    end
     if self.ui.flow_mp_lobby_status_strips then
         for _, strip_id in ipairs(self.ui.flow_mp_lobby_status_strips) do
             set_ui_square_transform(self, strip_id, -9999, -9999, MP_SETUP_UI_Z + 0.003, hidden, MP_LOBBY_CARD_W - 34, 56)
@@ -10313,6 +10348,66 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, key_id, -9999, -9999, MP_LOBBY_PIN_KEYS_Z, hidden, 1, 1)
         end
     end
+end
+
+show_advisory = function(self, text, duration_s)
+    if not self then
+        return
+    end
+    local anim_id = nil
+    if text == ADVISORY_MSG_NO_AMMO then
+        anim_id = ADVISORY_ANIM_NO_AMMO
+    elseif text == ADVISORY_MSG_TECHIE_ONLY then
+        anim_id = ADVISORY_ANIM_TECHIE_ONLY
+    elseif text == ADVISORY_MSG_NO_AP then
+        anim_id = ADVISORY_ANIM_NO_AP
+    elseif text == ADVISORY_MSG_HAZARD_O2 then
+        anim_id = ADVISORY_ANIM_HAZARD_O2
+    elseif text == ADVISORY_MSG_HAZARD_GAS then
+        anim_id = ADVISORY_ANIM_HAZARD_GAS
+    elseif text == ADVISORY_MSG_HAZARD_FIRE then
+        anim_id = ADVISORY_ANIM_HAZARD_FIRE
+    elseif text == ADVISORY_MSG_FIX_WIRE_FIRST then
+        anim_id = ADVISORY_ANIM_FIX_WIRE_FIRST
+    elseif text == ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE then
+        anim_id = ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE
+    end
+    if not anim_id then
+        self.advisory_anim_id = nil
+        self.advisory_timer_s = 0
+        return
+    end
+    self.advisory_anim_id = anim_id
+    self.advisory_timer_s = tonumber(duration_s or ADVISORY_DEFAULT_DURATION) or ADVISORY_DEFAULT_DURATION
+end
+
+update_advisory_ui = function(self, dt)
+    if not (self and self.ui and self.ui.advisory_sprite) then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    self.advisory_timer_s = math.max(0, (tonumber(self.advisory_timer_s or 0) or 0) - (tonumber(dt or 0) or 0))
+    local should_show = (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME
+        and self.advisory_timer_s > 0
+        and self.advisory_anim_id ~= nil
+    if not should_show then
+        set_ui_square_transform(self, self.ui.advisory_sprite, -9999, -9999, ADVISORY_TEXT_Z, hidden, ADVISORY_TEXT_SCALE, ADVISORY_TEXT_SCALE)
+        return
+    end
+    if self.advisory_anim_active ~= self.advisory_anim_id then
+        msg.post(msg.url(nil, self.ui.advisory_sprite, "sprite"), "play_animation", { id = self.advisory_anim_id })
+        self.advisory_anim_active = self.advisory_anim_id
+    end
+    set_ui_square_transform(
+        self,
+        self.ui.advisory_sprite,
+        SCREEN_WIDTH * 0.5,
+        ADVISORY_TEXT_Y,
+        ADVISORY_TEXT_Z,
+        vmath.vector4(1, 1, 1, 1),
+        ADVISORY_TEXT_SCALE,
+        ADVISORY_TEXT_SCALE
+    )
 end
 
 function is_point_in_screen_rect(screen_x, screen_y, cx, cy, w, h)
@@ -21678,7 +21773,14 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     end,
     play_task_done_sfx = function(self_ref)
         play_task_done_sfx(self_ref)
-    end
+    end,
+    show_advisory = function(self_ref, text, duration_s)
+        show_advisory(self_ref, text, duration_s)
+    end,
+    ADVISORY_MSG_TECHIE_ONLY = ADVISORY_MSG_TECHIE_ONLY,
+    ADVISORY_MSG_FIX_WIRE_FIRST = ADVISORY_MSG_FIX_WIRE_FIRST,
+    ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE,
+    ADVISORY_MSG_NO_AP = ADVISORY_MSG_NO_AP
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
@@ -22801,6 +22903,11 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_out
     try_realtime_auto_load_ammo_from_backpack(self, unit)
     if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
         print("unable to fire no ammo/ap")
+        if (tonumber(unit.current_ammo or 0) or 0) <= 0 then
+            show_advisory(self, ADVISORY_MSG_NO_AMMO)
+        else
+            show_advisory(self, ADVISORY_MSG_NO_AP)
+        end
         return false
     end
     if not unit.go_path or not alien.go_id then
@@ -24165,6 +24272,11 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
     if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
         print("unable to fire no ammo/ap")
+        if (tonumber(unit.current_ammo or 0) or 0) <= 0 then
+            show_advisory(self, ADVISORY_MSG_NO_AMMO)
+        else
+            show_advisory(self, ADVISORY_MSG_NO_AP)
+        end
         dismiss_ranged_hit_preview(self)
         return true
     end
@@ -24388,6 +24500,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         end
         if unit.current_ap <= 0 then
             print(unit.display_name .. " has no AP. Click next turn to refresh.")
+            show_advisory(self, ADVISORY_MSG_NO_AP)
             update_human_visual_state(self)
             return true
         end
@@ -25160,6 +25273,9 @@ function init(self)
     apply_aesthetic_mode(self)
     initialize_unit_ui(self)
     set_ui_hidden(self)
+    self.advisory_anim_id = nil
+    self.advisory_anim_active = nil
+    self.advisory_timer_s = 0
     if LEVEL_EDITOR and LEVEL_EDITOR.init then
         LEVEL_EDITOR.init(self, {
             FLOW_STATE_LEVEL_EDITOR = FLOW_STATE_LEVEL_EDITOR,
@@ -25878,6 +25994,7 @@ function update(self, dt)
     update_selected_unit_pulse(self, dt)
     update_selected_unit_ui(self)
     update_flow_ui(self, dt)
+    update_advisory_ui(self, dt)
     refresh_ambient_sfx_state(self)
     update_outro_slideshow_runtime(self, dt)
     update_tutorial_overlay_ui(self)

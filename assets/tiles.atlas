@@ -764,6 +764,30 @@ images {
 images {
   image: "/assets/images/tile_exterior2_computerGame.png"
 }
+images {
+  image: "/assets/images/advisory_noAmmo.png"
+}
+images {
+  image: "/assets/images/advisory_onlyTechieCanDoThis.png"
+}
+images {
+  image: "/assets/images/advisory_noActionPointsLeft.png"
+}
+images {
+  image: "/assets/images/advisory_noOxygen.png"
+}
+images {
+  image: "/assets/images/advisory_poisonGas.png"
+}
+images {
+  image: "/assets/images/advisory_fireDamage.png"
+}
+images {
+  image: "/assets/images/advisory_fixWireFirst.png"
+}
+images {
+  image: "/assets/images/advisory_needPowerAndFuse.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

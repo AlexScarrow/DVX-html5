@@ -19805,8 +19805,9 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         if LOOT_RUNTIME and LOOT_RUNTIME.apply_workshop_sync_state then
-            LOOT_RUNTIME.apply_workshop_sync_state(self, event.payload and event.payload.workshop_state or {})
-            self.mp_state.workshop_state_sync_signature = workshop_state_signature(event.payload and event.payload.workshop_state or {})
+            local workshop_state = event.payload and event.payload.workshop_state or {}
+            LOOT_RUNTIME.apply_workshop_sync_state(self, workshop_state)
+            self.mp_state.workshop_state_sync_signature = workshop_state_signature(workshop_state)
         end
         return
     end
@@ -21346,13 +21347,15 @@ workshop_state_signature = function(workshop_state)
     for _, tile_id in ipairs(tile_ids) do
         local state = workshop_state[tile_id] or workshop_state[tostring(tile_id)] or {}
         parts[#parts + 1] = string.format(
-            "%d:%d:%d:%d:%.3f:%.3f",
+            "%d:%d:%d:%d:%.3f:%.3f:%d:%d",
             tile_id,
             tonumber(state.selected_slot or 0) or 0,
             tonumber(state.paid_units or 0) or 0,
             state.payment_locked == true and 1 or 0,
             tonumber(state.production_time_left or 0) or 0,
-            tonumber(state.payment_confirm_flash or 0) or 0
+            tonumber(state.payment_confirm_flash or 0) or 0,
+            state.powered == true and 1 or 0,
+            state.functional == true and 1 or 0
         )
     end
     return table.concat(parts, "|")

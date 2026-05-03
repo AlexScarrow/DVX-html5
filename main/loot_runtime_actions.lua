@@ -940,6 +940,7 @@ function M.extend(runtime, ctx)
         self.factory_debug_cell_markers = self.factory_debug_cell_markers or {}
         self.workshop_underlay_visuals = self.workshop_underlay_visuals or {}
         self.workshop_conveyor_tokens = self.workshop_conveyor_tokens or {}
+        self.workshop_sync_state_override = self.workshop_sync_state_override or {}
         self.workshop_states = self.workshop_states or {}
         self.medbay_states = self.medbay_states or {}
         self.medbay_underlay_visuals = self.medbay_underlay_visuals or {}
@@ -1276,15 +1277,19 @@ function M.extend(runtime, ctx)
     runtime.build_workshop_sync_state = function(self)
         runtime.ensure_item_runtime_state(self)
         local sync_state = {}
+        local instances = get_workshop_instances(self)
         for tile_instance_id, state in pairs(self.workshop_states or {}) do
             local tile_id = tonumber(tile_instance_id)
             if tile_id and state then
+                local instance = instances and instances[tile_id] or nil
                 sync_state[tile_id] = {
                     selected_slot = tonumber(state.selected_slot or 0) or 0,
                     paid_units = tonumber(state.paid_units or 0) or 0,
                     payment_locked = state.payment_locked == true,
                     production_time_left = tonumber(state.production_time_left or 0) or 0,
-                    payment_confirm_flash = tonumber(state.payment_confirm_flash or 0) or 0
+                    payment_confirm_flash = tonumber(state.payment_confirm_flash or 0) or 0,
+                    powered = instance and instance.powered == true or false,
+                    functional = instance and instance.functional == true or false
                 }
             end
         end
@@ -1296,8 +1301,67 @@ function M.extend(runtime, ctx)
         self.workshop_states = self.workshop_states or {}
         local incoming = sync_state or {}
         local next_states = {}
+        local next_overrides = {}
+        local local_instances = get_workshop_instances(self)
+        local incoming_entries = {}
         for tile_instance_id, payload in pairs(incoming) do
             local tile_id = tonumber(tile_instance_id)
+            if tile_id and type(payload) == "table" then
+                table.insert(incoming_entries, {
+                    incoming_tile_id = tile_id,
+                    payload = payload
+                })
+            end
+        end
+        table.sort(incoming_entries, function(a, b)
+            return (a.incoming_tile_id or 0) < (b.incoming_tile_id or 0)
+        end)
+        local local_tile_ids = {}
+        for tile_instance_id, _ in pairs(local_instances or {}) do
+            local local_tile_id = tonumber(tile_instance_id)
+            if local_tile_id then
+                table.insert(local_tile_ids, local_tile_id)
+            end
+        end
+        table.sort(local_tile_ids)
+        local matched_local_ids = {}
+        local remapped_entries = {}
+        -- Pass 1: direct ID matches.
+        for _, entry in ipairs(incoming_entries) do
+            local incoming_tile_id = entry.incoming_tile_id
+            if local_instances and local_instances[incoming_tile_id] then
+                table.insert(remapped_entries, {
+                    local_tile_id = incoming_tile_id,
+                    payload = entry.payload
+                })
+                matched_local_ids[incoming_tile_id] = true
+                entry._mapped = true
+            end
+        end
+        -- Pass 2: positional fallback by sorted order for unmatched entries.
+        local fallback_local_ids = {}
+        for _, local_tile_id in ipairs(local_tile_ids) do
+            if matched_local_ids[local_tile_id] ~= true then
+                table.insert(fallback_local_ids, local_tile_id)
+            end
+        end
+        local fallback_idx = 1
+        for _, entry in ipairs(incoming_entries) do
+            if entry._mapped ~= true then
+                local local_tile_id = fallback_local_ids[fallback_idx]
+                fallback_idx = fallback_idx + 1
+                if local_tile_id then
+                    table.insert(remapped_entries, {
+                        local_tile_id = local_tile_id,
+                        payload = entry.payload
+                    })
+                    matched_local_ids[local_tile_id] = true
+                end
+            end
+        end
+        for _, entry in ipairs(remapped_entries) do
+            local tile_id = tonumber(entry.local_tile_id)
+            local payload = entry.payload
             if tile_id and type(payload) == "table" then
                 next_states[tile_id] = {
                     selected_slot = tonumber(payload.selected_slot or 0) or 0,
@@ -1306,9 +1370,14 @@ function M.extend(runtime, ctx)
                     production_time_left = tonumber(payload.production_time_left or 0) or 0,
                     payment_confirm_flash = tonumber(payload.payment_confirm_flash or 0) or 0
                 }
+                next_overrides[tile_id] = {
+                    powered = payload.powered == true,
+                    functional = payload.functional == true
+                }
             end
         end
         self.workshop_states = next_states
+        self.workshop_sync_state_override = next_overrides
     end
 
     local function get_medbay_instances(self)
@@ -2029,7 +2098,8 @@ function M.extend(runtime, ctx)
         local instances = get_workshop_instances(self)
         for tile_instance_id, entry in pairs(self.workshop_underlay_visuals or {}) do
             local instance = instances[tile_instance_id]
-            local functional = instance and instance.functional == true
+            local sync_override = self.workshop_sync_state_override and self.workshop_sync_state_override[tile_instance_id] or nil
+            local functional = (sync_override and sync_override.functional == true) or (instance and instance.functional == true)
             local speed = functional and 1.0 or 0.22
             local state = get_workshop_state(self, tile_instance_id)
             local is_producing = (state.production_time_left or 0) > 0

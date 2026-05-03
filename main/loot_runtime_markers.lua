@@ -967,7 +967,39 @@ function M.extend(runtime, ctx)
         self.door_hp_bar_bg_objects = self.door_hp_bar_bg_objects or {}
         self.door_hp_bar_fill_objects = self.door_hp_bar_fill_objects or {}
 
+        local function clear_door_hp_bar(cell_id)
+            local bg = self.door_hp_bar_bg_objects[cell_id]
+            if bg then
+                go.delete(bg)
+                self.door_hp_bar_bg_objects[cell_id] = nil
+            end
+            local fill = self.door_hp_bar_fill_objects[cell_id]
+            if fill then
+                go.delete(fill)
+                self.door_hp_bar_fill_objects[cell_id] = nil
+            end
+        end
+
         if not self.world_grid then
+            for cell_id, marker in pairs(self.door_objects) do
+                if marker then
+                    go.delete(marker)
+                end
+                self.door_objects[cell_id] = nil
+                self.door_visual_state[cell_id] = nil
+                local shadow_id = self.door_shadow_objects[cell_id]
+                if shadow_id then
+                    go.delete(shadow_id)
+                end
+                self.door_shadow_objects[cell_id] = nil
+                clear_door_hp_bar(cell_id)
+            end
+            for cell_id, _ in pairs(self.door_hp_bar_bg_objects) do
+                clear_door_hp_bar(cell_id)
+            end
+            for cell_id, _ in pairs(self.door_hp_bar_fill_objects) do
+                clear_door_hp_bar(cell_id)
+            end
             return
         end
 
@@ -1001,18 +1033,6 @@ function M.extend(runtime, ctx)
         end
 
         local seen = {}
-        local function clear_door_hp_bar(cell_id)
-            local bg = self.door_hp_bar_bg_objects[cell_id]
-            if bg then
-                go.delete(bg)
-                self.door_hp_bar_bg_objects[cell_id] = nil
-            end
-            local fill = self.door_hp_bar_fill_objects[cell_id]
-            if fill then
-                go.delete(fill)
-                self.door_hp_bar_fill_objects[cell_id] = nil
-            end
-        end
         for cell_id, cell in ipairs(self.world_grid) do
             if cell.tileID ~= hash("empty") and cell.isPowered == true then
                 local door = get_door_obj(cell)
@@ -1182,6 +1202,16 @@ function M.extend(runtime, ctx)
                     go.delete(shadow_id)
                 end
                 self.door_shadow_objects[cell_id] = nil
+                clear_door_hp_bar(cell_id)
+            end
+        end
+        for cell_id, _ in pairs(self.door_hp_bar_bg_objects) do
+            if not seen[cell_id] then
+                clear_door_hp_bar(cell_id)
+            end
+        end
+        for cell_id, _ in pairs(self.door_hp_bar_fill_objects) do
+            if not seen[cell_id] then
                 clear_door_hp_bar(cell_id)
             end
         end

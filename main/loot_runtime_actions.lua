@@ -7,7 +7,7 @@ function M.extend(runtime, ctx)
     local OBSTACLE_STACK_CAP = 4
     local OBSTACLE_DROP_FLOOR_Y_OFFSET = -30
     local OBSTACLE_SLOT_X_BY_INDEX = { -70, 0, 70 }
-    local TURRET_ARMING_TURNS_ON_DEPLOY = 2
+    local TURRET_ARMING_TURNS_ON_DEPLOY = 0
     local WELD_SPARKS_Z = 0.62
     local RECEIVE_PULSE_DURATION = 0.24
     local SHUTTLE_HIDE_POS = vmath.vector3(-9999, -9999, 0.5)
@@ -5856,12 +5856,20 @@ function M.extend(runtime, ctx)
                                             runtime.refresh_fix_markers(self)
                                             runtime.refresh_world_item_visuals(self)
                                             consumed = true
-                                            print(string.format(
-                                                "%s deployed a turret (arming %d turns). (AP -%d)",
-                                                source_unit.display_name,
-                                                TURRET_ARMING_TURNS_ON_DEPLOY,
-                                                drag_ap_override or get_drag_ap_cost()
-                                            ))
+                                            if TURRET_ARMING_TURNS_ON_DEPLOY > 0 then
+                                                print(string.format(
+                                                    "%s deployed a turret (arming %d turns). (AP -%d)",
+                                                    source_unit.display_name,
+                                                    TURRET_ARMING_TURNS_ON_DEPLOY,
+                                                    drag_ap_override or get_drag_ap_cost()
+                                                ))
+                                            else
+                                                print(string.format(
+                                                    "%s deployed an active turret. (AP -%d)",
+                                                    source_unit.display_name,
+                                                    drag_ap_override or get_drag_ap_cost()
+                                                ))
+                                            end
                                         end
                                     end
                                 end

@@ -5536,7 +5536,12 @@ local function process_alien_turn(self)
                 --     alien.barricade_pause_turns = math.max(0, (alien.barricade_pause_turns or 0) - 1)
                 --     ap_budget = 0
                 -- elseif try_brute_break_adjacent_barricade(self, alien) then
-                if try_brute_break_adjacent_barricade(self, alien) then
+                local brute_should_force_break = true
+                if alien.type == ALIEN_TYPE_BRUTE then
+                    local reachable_human_cell_id = select(1, get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id, alien.hidden_reveal_type))
+                    brute_should_force_break = reachable_human_cell_id == nil
+                end
+                if brute_should_force_break and try_brute_break_adjacent_barricade(self, alien) then
                     ap_budget = 0
                 end
                 alien.turn_ap_remaining = ap_budget

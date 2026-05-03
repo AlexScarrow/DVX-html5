@@ -2865,11 +2865,14 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
     local can_use_vent = alien_type ~= ALIEN_TYPE_BRUTE and (not hidden_brute_blip) and not blip_in_void
     for _, human_cell_id in ipairs(human_ids) do
         local normal_path, normal_cost
-        if alien_type == ALIEN_TYPE_BLIP or alien_type == ALIEN_TYPE_BRUTE then
-            normal_path, normal_cost = find_alien_path(self.world_grid, alien_type, from_cell_id, human_cell_id, nil, hidden_reveal_type)
-        else
-            normal_path, normal_cost = find_path(self.world_grid, from_cell_id, human_cell_id, nil, MOVEMENT_PROFILE_HUMAN, nil)
-        end
+        normal_path, normal_cost = find_alien_path(
+            self.world_grid,
+            alien_type,
+            from_cell_id,
+            human_cell_id,
+            nil,
+            hidden_reveal_type
+        )
         local chosen_path = normal_path
         local chosen_cost = normal_cost or math.huge
         if can_use_vent then

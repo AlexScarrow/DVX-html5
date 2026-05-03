@@ -428,6 +428,7 @@ ADVISORY_MSG_HAZARD_FIRE = "fire is causing health damage"
 ADVISORY_MSG_FIX_WIRE_FIRST = "fix the broken wire first"
 ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = "needs power on and fuse installed"
 ADVISORY_MSG_PROTOCOL_MISMATCH = "network version mismatch. update to same build."
+ADVISORY_MSG_NO_CLEAR_SHOT = "no clear shot"
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -437,6 +438,7 @@ ADVISORY_ANIM_HAZARD_FIRE = hash("advisory_fireDamage")
 ADVISORY_ANIM_FIX_WIRE_FIRST = hash("advisory_fixWireFirst")
 ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE = hash("advisory_needPowerAndFuse")
 ADVISORY_ANIM_PROTOCOL_MISMATCH = hash("advisory_networkVersionMismatchWarning")
+ADVISORY_ANIM_NO_CLEAR_SHOT = hash("advisory_noClearShot")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -10396,6 +10398,8 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE
     elseif text == ADVISORY_MSG_PROTOCOL_MISMATCH then
         anim_id = ADVISORY_ANIM_PROTOCOL_MISMATCH
+    elseif text == ADVISORY_MSG_NO_CLEAR_SHOT then
+        anim_id = ADVISORY_ANIM_NO_CLEAR_SHOT
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -24634,6 +24638,7 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     end
     if not has_unobstructed_human_ranged_los(self.world_grid, unit.cell_id, alien.cell_id) then
         print("Unable to fire: no line of sight.")
+        show_advisory(self, ADVISORY_MSG_NO_CLEAR_SHOT)
         dismiss_ranged_hit_preview(self)
         return true
     end
@@ -24653,6 +24658,7 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
             local target_in_right_lane = target_x >= (target_center_x + right_threshold)
             if (not shooter_in_right_lane) or (not target_in_right_lane) then
                 print("Unable to fire: vertical shot requires both shooter and target in right lane.")
+                show_advisory(self, ADVISORY_MSG_NO_CLEAR_SHOT)
                 dismiss_ranged_hit_preview(self)
                 return true
             end

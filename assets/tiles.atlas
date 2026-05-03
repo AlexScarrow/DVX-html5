@@ -794,6 +794,9 @@ images {
 images {
   image: "/assets/images/advisory_networkVersionMismatchWarning.png"
 }
+images {
+  image: "/assets/images/advisory_noClearShot.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

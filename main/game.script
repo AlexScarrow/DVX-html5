@@ -429,6 +429,7 @@ ADVISORY_MSG_FIX_WIRE_FIRST = "fix the broken wire first"
 ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = "needs power on and fuse installed"
 ADVISORY_MSG_PROTOCOL_MISMATCH = "network version mismatch. update to same build."
 ADVISORY_MSG_NO_CLEAR_SHOT = "no clear shot"
+ADVISORY_MSG_ONLY_SARGE_FAB = "only sarge can use this!"
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -439,6 +440,7 @@ ADVISORY_ANIM_FIX_WIRE_FIRST = hash("advisory_fixWireFirst")
 ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE = hash("advisory_needPowerAndFuse")
 ADVISORY_ANIM_PROTOCOL_MISMATCH = hash("advisory_networkVersionMismatchWarning")
 ADVISORY_ANIM_NO_CLEAR_SHOT = hash("advisory_noClearShot")
+ADVISORY_ANIM_ONLY_SARGE_FAB = hash("advisory_onlySargeAuthorized")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -10400,6 +10402,8 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_PROTOCOL_MISMATCH
     elseif text == ADVISORY_MSG_NO_CLEAR_SHOT then
         anim_id = ADVISORY_ANIM_NO_CLEAR_SHOT
+    elseif text == ADVISORY_MSG_ONLY_SARGE_FAB then
+        anim_id = ADVISORY_ANIM_ONLY_SARGE_FAB
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -22143,7 +22147,8 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     ADVISORY_MSG_TECHIE_ONLY = ADVISORY_MSG_TECHIE_ONLY,
     ADVISORY_MSG_FIX_WIRE_FIRST = ADVISORY_MSG_FIX_WIRE_FIRST,
     ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE,
-    ADVISORY_MSG_NO_AP = ADVISORY_MSG_NO_AP
+    ADVISORY_MSG_NO_AP = ADVISORY_MSG_NO_AP,
+    ADVISORY_MSG_ONLY_SARGE_FAB = ADVISORY_MSG_ONLY_SARGE_FAB
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,

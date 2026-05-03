@@ -5002,6 +5002,15 @@ function M.extend(runtime, ctx)
         if not unit or not cell or not cell.tileInstanceId then
             return false
         end
+        local sarge_key = tostring(ctx.UNIT_CLASS_SARGE or "sarge")
+        local is_sarge_operator = tostring(unit.class_id or "") == sarge_key
+            or tostring(unit.id or "") == sarge_key
+        if not is_sarge_operator then
+            print("Only Sarge can operate the fabricator.")
+            emit_advisory(self, ctx.ADVISORY_MSG_ONLY_SARGE_FAB)
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
         if unit.cell_id ~= cell.idNumber then
             print("too far away")
             flash_invalid_drag_units(unit, nil)
@@ -5130,6 +5139,15 @@ function M.extend(runtime, ctx)
     runtime.try_interact_workshop_menu_selected_unit_on_cell = function(self, unit, cell, workshop_menu_obj, world_x, world_y)
         if not unit or not cell or not workshop_menu_obj or not cell.tileInstanceId then
             return false
+        end
+        local sarge_key = tostring(ctx.UNIT_CLASS_SARGE or "sarge")
+        local is_sarge_operator = tostring(unit.class_id or "") == sarge_key
+            or tostring(unit.id or "") == sarge_key
+        if not is_sarge_operator then
+            print("Only Sarge can operate the fabricator.")
+            emit_advisory(self, ctx.ADVISORY_MSG_ONLY_SARGE_FAB)
+            flash_invalid_drag_units(unit, nil)
+            return true
         end
         if unit.cell_id ~= cell.idNumber then
             print("too far away")

@@ -5477,10 +5477,6 @@ function M.extend(runtime, ctx)
                 if not force_barricade_drop then
                     target_unit = runtime.find_human_drop_target(self, world_x, world_y, source_unit.id)
                 end
-                if source_item == TURRET_PACKED_ITEM then
-                    -- Packed turret deployment is cell-targeted, not human-targeted.
-                    target_unit = nil
-                end
                 if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                     -- Prioritize self-heal when the drop lands on/near the medic sprite.
                     -- This avoids nearby allies stealing the target in crowded cells.
@@ -5496,10 +5492,6 @@ function M.extend(runtime, ctx)
                     end
                 end
                 if target_unit then
-                    if source_item == TURRET_PACKED_ITEM then
-                        print("Packed turret cannot be handed to another unit. Drop on your current cell to deploy.")
-                        flash_invalid_drag_units(source_unit, target_unit)
-                    else
                     if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
                             if (target_unit.current_health or 0) <= 0 then
@@ -5560,7 +5552,6 @@ function M.extend(runtime, ctx)
                     else
                         print("too far away")
                         flash_invalid_drag_units(source_unit, target_unit)
-                    end
                     end
                 else
                     if source_item == TURRET_PACKED_ITEM then

@@ -9897,6 +9897,11 @@ local function initialize_unit_ui(self)
     self.ui.ranged_hit_preview_percent = create_ui_marker_sprite(hash("score_percent"), RANGED_HIT_PREVIEW_Z)
     self.ui.objective_button = create_ui_marker_sprite(hash("objective_button"), OBJECTIVE_BUTTON_Z)
     self.ui.objective_reminder = create_ui_marker_sprite(hash("objective_escape"), OBJECTIVE_REMINDER_Z)
+    self.ui.fabricator_transaction_panel = create_ui_marker_sprite(hash("fabricator_panel"), NEW_TURN_BUTTON_Z)
+    self.ui.fabricator_transaction_cost_digit = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, NEW_TURN_BUTTON_Z + 0.001))
+    if self.ui.fabricator_transaction_cost_digit then
+        msg.post(msg.url(nil, self.ui.fabricator_transaction_cost_digit, "sprite"), "play_animation", { id = hash("score_0") })
+    end
     for i = 1, PURGE_TIMER_HUD_DIGIT_COUNT do
         self.ui.purge_timer_digit_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, PURGE_TIMER_HUD_Z))
         if self.ui.purge_timer_digit_icons[i] then
@@ -15822,6 +15827,15 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
     UI_BAR_HP_X = UI_BAR_HP_X,
     UI_PANEL_X = UI_PANEL_X,
     UI_PANEL_Y = UI_PANEL_Y,
+    UI_PANEL_W = UI_PANEL_W,
+    UI_PANEL_H = UI_PANEL_H,
+    SCREEN_WIDTH = SCREEN_WIDTH,
+    SCREEN_HEIGHT = SCREEN_HEIGHT,
+    NEW_TURN_BUTTON_X = NEW_TURN_BUTTON_X,
+    NEW_TURN_BUTTON_Y = NEW_TURN_BUTTON_Y,
+    NEW_TURN_BUTTON_W = NEW_TURN_BUTTON_W,
+    NEW_TURN_BUTTON_H = NEW_TURN_BUTTON_H,
+    FABRICATOR_PANEL_UI_Z = NEW_TURN_BUTTON_Z,
     BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
     BUFF_DROP_ZONE_OFFSET_X = BUFF_DROP_ZONE_OFFSET_X,
     BUFF_DROP_ZONE_OFFSET_Y = BUFF_DROP_ZONE_OFFSET_Y,
@@ -19130,6 +19144,102 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "workshop_cancel" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_cancel",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_cancel",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_cancel",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        if not multiplayer_apply_workshop_cancel_event(self, {
+            unit_id = unit_id,
+            cell_id = cell_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_cancel",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "workshop_cancel_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
+        }))
+        return events
+    end
+
+    if cmd_type == "workshop_pay_material" then
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_pay_material",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        local unit_id = payload.unit_id
+        local cell_id = tonumber(payload.cell_id)
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_pay_material",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_pay_material",
+                reason = "invalid_payload"
+            }))
+            return events
+        end
+        if not multiplayer_apply_workshop_pay_material_event(self, {
+            unit_id = unit_id,
+            cell_id = cell_id
+        }) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "workshop_pay_material",
+                reason = "apply_failed_on_host"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "workshop_pay_material_applied", {
+            unit_id = unit_id,
+            cell_id = cell_id,
+            host_applied = true,
+            unit_digest = multiplayer_build_unit_state_digest(self),
+            world_digest = multiplayer_build_world_state_digest(self),
+            item_digest = multiplayer_build_item_state_digest(self)
+        }))
+        return events
+    end
+
     if cmd_type == "supply_loader_interact" then
         local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
         if expected_turn_id ~= (self.mp_state.turn_id or 1) then
@@ -20706,6 +20816,54 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "workshop_cancel_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_workshop_cancel_event(self, payload)
+        end
+        if not applied_ok then
+            print("MP COMMAND | workshop_cancel_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
+        end
+        return
+    end
+    if event.type == "workshop_pay_material_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        local payload = event.payload or {}
+        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local applied_ok = true
+        if should_apply_local then
+            applied_ok = multiplayer_apply_workshop_pay_material_event(self, payload)
+        end
+        if not applied_ok then
+            print("MP COMMAND | workshop_pay_material_applied ignored.")
+        end
+        local reconciled = false
+        reconciled = multiplayer_apply_authoritative_unit_digest(self, payload.unit_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_world_digest(self, payload.world_digest) or reconciled
+        reconciled = multiplayer_apply_authoritative_item_digest(self, payload.item_digest) or reconciled
+        if (not applied_ok) and (not reconciled) then
+            return
+        end
+        return
+    end
     if event.type == "supply_loader_interact_applied" then
         if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
             multiplayer_queue_pending_event(self, event)
@@ -21347,10 +21505,11 @@ workshop_state_signature = function(workshop_state)
     for _, tile_id in ipairs(tile_ids) do
         local state = workshop_state[tile_id] or workshop_state[tostring(tile_id)] or {}
         parts[#parts + 1] = string.format(
-            "%d:%d:%d:%d:%.3f:%.3f:%d:%d",
+            "%d:%d:%d:%d:%d:%.3f:%.3f:%d:%d",
             tile_id,
             tonumber(state.selected_slot or 0) or 0,
             tonumber(state.paid_units or 0) or 0,
+            state.transaction_locked == true and 1 or 0,
             state.payment_locked == true and 1 or 0,
             tonumber(state.production_time_left or 0) or 0,
             tonumber(state.payment_confirm_flash or 0) or 0,
@@ -24262,6 +24421,36 @@ multiplayer_apply_workshop_select_event = function(self, payload)
     return ok
 end
 
+multiplayer_apply_workshop_cancel_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    if not (unit_id and cell_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_cancel_workshop_transaction_by_ids(self, unit_id, cell_id) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
+multiplayer_apply_workshop_pay_material_event = function(self, payload)
+    if not payload or type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local cell_id = tonumber(payload.cell_id)
+    if not (unit_id and cell_id) then
+        return false
+    end
+    self.mp_state.applying_remote_event = true
+    local ok = LOOT_RUNTIME.try_workshop_pay_material_by_ids(self, unit_id, cell_id) == true
+    self.mp_state.applying_remote_event = false
+    return ok
+end
+
 multiplayer_apply_supply_loader_interact_event = function(self, payload)
     if not payload or type(payload) ~= "table" then
         return false
@@ -26198,6 +26387,9 @@ function update(self, dt)
     refresh_ambient_sfx_state(self)
     update_outro_slideshow_runtime(self, dt)
     update_tutorial_overlay_ui(self)
+    if LOOT_RUNTIME.update_workshop_transaction_panel_ui then
+        LOOT_RUNTIME.update_workshop_transaction_panel_ui(self)
+    end
     LOOT_RUNTIME.update_drag_visual(self)
     update_human_ap_debug_label(self)
     if self.world_backdrop or (self.world_backdrop_tiles and #self.world_backdrop_tiles > 0) then

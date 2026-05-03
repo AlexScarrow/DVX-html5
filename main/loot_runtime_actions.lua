@@ -941,6 +941,7 @@ function M.extend(runtime, ctx)
         self.workshop_underlay_visuals = self.workshop_underlay_visuals or {}
         self.workshop_conveyor_tokens = self.workshop_conveyor_tokens or {}
         self.workshop_sync_state_override = self.workshop_sync_state_override or {}
+        self.workshop_transaction_panel = self.workshop_transaction_panel or { active = false }
         self.workshop_states = self.workshop_states or {}
         self.medbay_states = self.medbay_states or {}
         self.medbay_underlay_visuals = self.medbay_underlay_visuals or {}
@@ -1267,6 +1268,7 @@ function M.extend(runtime, ctx)
         self.workshop_states[tile_instance_id] = self.workshop_states[tile_instance_id] or {
             selected_slot = nil,
             paid_units = 0,
+            transaction_locked = false,
             payment_locked = false,
             production_time_left = 0,
             payment_confirm_flash = 0
@@ -1285,6 +1287,7 @@ function M.extend(runtime, ctx)
                 sync_state[tile_id] = {
                     selected_slot = tonumber(state.selected_slot or 0) or 0,
                     paid_units = tonumber(state.paid_units or 0) or 0,
+                    transaction_locked = state.transaction_locked == true,
                     payment_locked = state.payment_locked == true,
                     production_time_left = tonumber(state.production_time_left or 0) or 0,
                     payment_confirm_flash = tonumber(state.payment_confirm_flash or 0) or 0,
@@ -1366,6 +1369,7 @@ function M.extend(runtime, ctx)
                 next_states[tile_id] = {
                     selected_slot = tonumber(payload.selected_slot or 0) or 0,
                     paid_units = tonumber(payload.paid_units or 0) or 0,
+                    transaction_locked = payload.transaction_locked == true,
                     payment_locked = payload.payment_locked == true,
                     production_time_left = tonumber(payload.production_time_left or 0) or 0,
                     payment_confirm_flash = tonumber(payload.payment_confirm_flash or 0) or 0
@@ -1605,6 +1609,258 @@ function M.extend(runtime, ctx)
         pcall(go.set, msg.url(nil, marker_id, "sprite"), "blend_mode", hash("add"))
         pcall(go.set, msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0))
         return marker_id
+    end
+
+    runtime.open_workshop_transaction_panel = function(self, unit_id, cell_id, tile_instance_id)
+        runtime.ensure_item_runtime_state(self)
+        self.workshop_transaction_panel = {
+            active = true,
+            unit_id = unit_id,
+            cell_id = cell_id,
+            tile_instance_id = tile_instance_id
+        }
+    end
+
+    runtime.try_select_workshop_slot_from_panel = function(self, unit, cell_id, panel_col_index)
+        if not (unit and cell_id) then
+            return false
+        end
+        local panel_to_slot = { 1, 2, 4, 3, 8 }
+        local slot_idx = panel_to_slot[tonumber(panel_col_index or 0) or 0]
+        if not slot_idx then
+            return false
+        end
+        if send_mp_resource_command(self, "workshop_select", {
+            unit_id = unit.id,
+            cell_id = cell_id,
+            slot_idx = slot_idx
+        }) then
+            return true
+        end
+        return runtime.try_interact_workshop_menu_by_ids(self, unit.id, cell_id, slot_idx)
+    end
+
+    runtime.try_cancel_workshop_transaction_by_ids = function(self, unit_id, cell_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not (unit and cell and cell.tileInstanceId) then
+            return false
+        end
+        local state = get_workshop_state(self, cell.tileInstanceId)
+        if (state.production_time_left or 0) > 0 then
+            return true
+        end
+        local refund_count = math.max(0, tonumber(state.paid_units or 0) or 0)
+        unit.backpack_items = unit.backpack_items or {}
+        for _ = 1, refund_count do
+            table.insert(unit.backpack_items, "material")
+        end
+        unit.backpack_used = #unit.backpack_items
+        state.paid_units = 0
+        state.transaction_locked = false
+        state.selected_slot = nil
+        state.payment_locked = false
+        state.payment_confirm_flash = 0
+        if self.workshop_transaction_panel and self.workshop_transaction_panel.active == true then
+            if self.workshop_transaction_panel.unit_id == unit_id and self.workshop_transaction_panel.cell_id == cell_id then
+                self.workshop_transaction_panel.active = false
+            end
+        end
+        if refund_count > 0 then
+            print(string.format("Workshop transaction cancelled. Refunded %d material.", refund_count))
+        else
+            print("Workshop transaction cancelled.")
+        end
+        return true
+    end
+
+    runtime.try_cancel_workshop_transaction_from_panel = function(self, unit, cell_id)
+        if not (unit and cell_id) then
+            return false
+        end
+        if send_mp_resource_command(self, "workshop_cancel", {
+            unit_id = unit.id,
+            cell_id = cell_id
+        }) then
+            return true
+        end
+        return runtime.try_cancel_workshop_transaction_by_ids(self, unit.id, cell_id)
+    end
+
+    runtime.try_handle_workshop_transaction_panel_click = function(self, unit, screen_x, screen_y)
+        runtime.ensure_item_runtime_state(self)
+        local panel_state = self.workshop_transaction_panel or {}
+        if panel_state.active ~= true then
+            return false
+        end
+        if not (unit and panel_state.cell_id and unit.id == panel_state.unit_id and unit.cell_id == panel_state.cell_id) then
+            return false
+        end
+        local panel_x = tonumber(panel_state.screen_x or 0) or 0
+        local panel_y = tonumber(panel_state.screen_y or 0) or 0
+        if panel_x == 0 and panel_y == 0 then
+            return true
+        end
+        local local_x = (tonumber(screen_x or 0) or 0) - (panel_x - 150)
+        local local_y = (tonumber(screen_y or 0) or 0) - (panel_y - 50)
+        if local_x < 0 or local_x > 300 or local_y < 0 or local_y > 100 then
+            return true
+        end
+        if local_y >= 5 and local_y <= 45 and local_x >= 255 and local_x <= 295 then
+            return runtime.try_cancel_workshop_transaction_from_panel(self, unit, panel_state.cell_id)
+        end
+        if local_y >= 55 and local_y <= 95 then
+            local slot_w = 40
+            local slot_step = 50
+            local start_x = 10
+            for col = 1, 5 do
+                local left = start_x + ((col - 1) * slot_step)
+                if local_x >= left and local_x <= (left + slot_w) then
+                    return runtime.try_select_workshop_slot_from_panel(self, unit, panel_state.cell_id, col)
+                end
+            end
+        end
+        return true
+    end
+
+    runtime.get_workshop_panel_payment_cell_id = function(self, unit, screen_x, screen_y)
+        runtime.ensure_item_runtime_state(self)
+        local panel_state = self.workshop_transaction_panel or {}
+        if panel_state.active ~= true then
+            return nil
+        end
+        if not (unit and panel_state.cell_id and unit.id == panel_state.unit_id and unit.cell_id == panel_state.cell_id) then
+            return nil
+        end
+        local panel_x = tonumber(panel_state.screen_x or 0) or 0
+        local panel_y = tonumber(panel_state.screen_y or 0) or 0
+        if panel_x == 0 and panel_y == 0 then
+            return nil
+        end
+        local local_x = (tonumber(screen_x or 0) or 0) - (panel_x - 150)
+        local local_y = (tonumber(screen_y or 0) or 0) - (panel_y - 50)
+        if local_x < 0 or local_x > 300 or local_y < 0 or local_y > 100 then
+            return nil
+        end
+        if not (local_y >= 5 and local_y <= 45) then
+            return nil
+        end
+        local tile_instance_id = tonumber(panel_state.tile_instance_id or 0) or 0
+        if tile_instance_id <= 0 then
+            return nil
+        end
+        local state = get_workshop_state(self, tile_instance_id)
+        local selected_slot = tonumber(state and state.selected_slot or 0) or 0
+        local slot_to_col = { [1] = 1, [2] = 2, [4] = 3, [3] = 4, [8] = 5 }
+        local selected_col = slot_to_col[selected_slot]
+        if not selected_col then
+            return nil
+        end
+        local slot_w = 40
+        local slot_step = 50
+        local start_x = 10
+        local left = start_x + ((selected_col - 1) * slot_step)
+        if local_x < left or local_x > (left + slot_w) then
+            return nil
+        end
+        return panel_state.cell_id
+    end
+
+    runtime.update_workshop_transaction_panel_ui = function(self)
+        runtime.ensure_item_runtime_state(self)
+        if not (self and self.ui and self.ui.fabricator_transaction_panel and ctx.set_ui_square_transform) then
+            return
+        end
+        local panel_w = 300
+        local panel_h = 100
+        local panel_margin = 8
+        local panel_ui_offset_x = 24
+        local panel_ui_offset_y = -116
+        local avoid_new_turn_pad = 12
+        local function rects_overlap(center_ax, center_ay, width_a, height_a, center_bx, center_by, width_b, height_b)
+            local dx = math.abs((center_ax or 0) - (center_bx or 0))
+            local dy = math.abs((center_ay or 0) - (center_by or 0))
+            return dx < (((width_a or 0) * 0.5) + ((width_b or 0) * 0.5))
+                and dy < (((height_a or 0) * 0.5) + ((height_b or 0) * 0.5))
+        end
+        local panel_go = self.ui.fabricator_transaction_panel
+        local digit_go = self.ui.fabricator_transaction_cost_digit
+        local panel_state = self.workshop_transaction_panel or {}
+        if panel_state.active ~= true then
+            ctx.set_ui_square_transform(self, panel_go, -9999, -9999, ctx.FABRICATOR_PANEL_UI_Z or 0.845, vmath.vector4(0, 0, 0, 0), 1, 1)
+            if digit_go then
+                ctx.set_ui_square_transform(self, digit_go, -9999, -9999, (ctx.FABRICATOR_PANEL_UI_Z or 0.845) + 0.001, vmath.vector4(0, 0, 0, 0), 1, 1)
+            end
+            return
+        end
+        local screen_w = tonumber(ctx.SCREEN_WIDTH or 1280) or 1280
+        local screen_h = tonumber(ctx.SCREEN_HEIGHT or 720) or 720
+        local ui_x = tonumber(ctx.UI_PANEL_X or 0) or 0
+        local ui_y = tonumber(ctx.UI_PANEL_Y or 0) or 0
+        local ui_w = tonumber(ctx.UI_PANEL_W or 320) or 320
+        local ui_h = tonumber(ctx.UI_PANEL_H or 260) or 260
+        local px = ui_x + (ui_w * 0.5) + (panel_w * 0.5) + panel_ui_offset_x
+        local py = ui_y + panel_ui_offset_y
+        local min_x = (panel_w * 0.5) + panel_margin
+        local max_x = screen_w - (panel_w * 0.5) - panel_margin
+        local min_y = (panel_h * 0.5) + panel_margin
+        local max_y = screen_h - (panel_h * 0.5) - panel_margin
+        px = math.max(min_x, math.min(max_x, px))
+        py = math.max(min_y, math.min(max_y, py))
+        if rects_overlap(px, py, panel_w, panel_h, ui_x, ui_y, ui_w, ui_h) then
+            px = ui_x + (ui_w * 0.5) + (panel_w * 0.5) + panel_ui_offset_x
+            px = math.max(min_x, math.min(max_x, px))
+        end
+        local turn_x = tonumber(ctx.NEW_TURN_BUTTON_X or 110) or 110
+        local turn_y = tonumber(ctx.NEW_TURN_BUTTON_Y or 64) or 64
+        local turn_w = tonumber(ctx.NEW_TURN_BUTTON_W or 180) or 180
+        local turn_h = tonumber(ctx.NEW_TURN_BUTTON_H or 64) or 64
+        if rects_overlap(px, py, panel_w, panel_h, turn_x, turn_y, turn_w, turn_h) then
+            py = turn_y + (turn_h * 0.5) + (panel_h * 0.5) + avoid_new_turn_pad
+            py = math.max(min_y, math.min(max_y, py))
+        end
+        local tile_instance_id_for_state = tonumber(panel_state.tile_instance_id or 0) or 0
+        if tile_instance_id_for_state > 0 then
+            local panel_workshop_state = get_workshop_state(self, tile_instance_id_for_state)
+            if (tonumber(panel_workshop_state.production_time_left or 0) or 0) > 0 then
+                panel_state.active = false
+            end
+        end
+        panel_state.screen_x = px
+        panel_state.screen_y = py
+        self.workshop_transaction_panel = panel_state
+        if panel_state.active ~= true then
+            ctx.set_ui_square_transform(self, panel_go, -9999, -9999, ctx.FABRICATOR_PANEL_UI_Z or 0.845, vmath.vector4(0, 0, 0, 0), 1, 1)
+            if digit_go then
+                ctx.set_ui_square_transform(self, digit_go, -9999, -9999, (ctx.FABRICATOR_PANEL_UI_Z or 0.845) + 0.001, vmath.vector4(0, 0, 0, 0), 1, 1)
+            end
+            return
+        end
+        ctx.set_ui_square_transform(self, panel_go, px, py, ctx.FABRICATOR_PANEL_UI_Z or 0.845, vmath.vector4(1, 1, 1, 1), 1, 1)
+        if digit_go then
+            local selected_slot = 0
+            local paid_units = 0
+            local tile_instance_id = tonumber(panel_state.tile_instance_id or 0) or 0
+            if tile_instance_id > 0 then
+                local state = get_workshop_state(self, tile_instance_id)
+                selected_slot = tonumber(state and state.selected_slot or 0) or 0
+                paid_units = tonumber(state and state.paid_units or 0) or 0
+            end
+            local slot_to_col = { [1] = 1, [2] = 2, [4] = 3, [3] = 4, [8] = 5 }
+            local selected_col = slot_to_col[selected_slot]
+            local selected_product = get_workshop_product_for_slot(selected_slot)
+            if selected_col and selected_product then
+                local required_total = tonumber(selected_product.price or 0) or 0
+                local remaining = math.max(0, required_total - math.max(0, paid_units))
+                local digit_char = tostring(math.min(9, remaining))
+                msg.post(msg.url(nil, digit_go, "sprite"), "play_animation", { id = hash("score_" .. digit_char) })
+                local center_x = (px - 150) + 10 + ((selected_col - 1) * 50) + 20
+                local center_y = (py - 50) + 5 + 20
+                ctx.set_ui_square_transform(self, digit_go, center_x, center_y, (ctx.FABRICATOR_PANEL_UI_Z or 0.845) + 0.001, vmath.vector4(1, 1, 1, 1), 0.5, 0.5)
+            else
+                ctx.set_ui_square_transform(self, digit_go, -9999, -9999, (ctx.FABRICATOR_PANEL_UI_Z or 0.845) + 0.001, vmath.vector4(0, 0, 0, 0), 1, 1)
+            end
+        end
     end
 
     local function count_factory_stock(self, tile_instance_id)
@@ -4776,14 +5032,98 @@ function M.extend(runtime, ctx)
             print("Workshop is currently producing. Wait for output.")
             return true
         end
+        if state.transaction_locked == true and state.selected_slot then
+            if state.selected_slot ~= slot_idx then
+                print("Workshop transaction is locked. Complete payment or cancel.")
+            end
+            return true
+        end
         state.selected_slot = slot_idx
         state.paid_units = 0
+        state.transaction_locked = true
         state.payment_locked = false
         state.payment_confirm_flash = 0
         if ctx and ctx.play_task_done_sfx then
             ctx.play_task_done_sfx(self)
         end
         print(string.format("Workshop selection: %s (%d material).", product.label, product.price))
+        return true
+    end
+
+    runtime.try_workshop_pay_material_by_ids = function(self, unit_id, cell_id)
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+        if not unit or not cell or not cell.tileInstanceId then
+            return false
+        end
+        if unit.cell_id ~= cell.idNumber then
+            print("too far away")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local instances = get_workshop_instances(self)
+        local instance = instances[cell.tileInstanceId]
+        if not instance or instance.functional ~= true then
+            print("Workshop is offline or not yet repaired.")
+            return true
+        end
+        local state = get_workshop_state(self, cell.tileInstanceId)
+        local selected = get_workshop_product_for_slot(state.selected_slot)
+        if not selected then
+            print("Select an item in the workshop panel first.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        if (state.production_time_left or 0) > 0 then
+            print("Workshop is currently producing. Wait for output.")
+            return true
+        end
+        if state.transaction_locked ~= true then
+            print("Select an item in the workshop panel first.")
+            return true
+        end
+        unit.backpack_items = unit.backpack_items or {}
+        local material_slot = nil
+        for i, item in ipairs(unit.backpack_items) do
+            if item == "material" then
+                material_slot = i
+                break
+            end
+        end
+        if not material_slot then
+            print("No material available for workshop payment.")
+            flash_invalid_drag_units(unit, nil)
+            return true
+        end
+        local workshop_pay_ap_cost = get_workshop_pay_material_ap_cost()
+        if not try_consume_drag_ap(unit, nil, workshop_pay_ap_cost) then
+            return true
+        end
+        table.remove(unit.backpack_items, material_slot)
+        unit.backpack_used = #unit.backpack_items
+        state.paid_units = (state.paid_units or 0) + 1
+        print(string.format(
+            "%s paid 1 material to workshop: %d/%d. (AP -%d)",
+            unit.display_name,
+            state.paid_units,
+            selected.price,
+            workshop_pay_ap_cost
+        ))
+        if state.paid_units >= selected.price then
+            state.payment_locked = true
+            state.transaction_locked = false
+            state.production_time_left = WORKSHOP_PRODUCTION_DURATION
+            state.payment_confirm_flash = WORKSHOP_PAY_CONFIRM_FLASH_SECONDS
+            if self.workshop_transaction_panel and self.workshop_transaction_panel.active == true then
+                if self.workshop_transaction_panel.unit_id == unit.id and self.workshop_transaction_panel.cell_id == cell.idNumber then
+                    self.workshop_transaction_panel.active = false
+                end
+            end
+            if ctx and ctx.play_fabricator_working_sfx then
+                ctx.play_fabricator_working_sfx(self)
+            end
+            print(string.format("Workshop production started for %s.", selected.label))
+        end
         return true
     end
 
@@ -4805,27 +5145,19 @@ function M.extend(runtime, ctx)
             print("Workshop is offline or not yet repaired.")
             return true
         end
-        local slot_idx = get_workshop_menu_slot_by_world_point(cell, workshop_menu_obj, world_x, world_y)
-        if not slot_idx then
-            return true
+        if runtime.open_workshop_transaction_panel then
+            runtime.open_workshop_transaction_panel(self, unit.id, cell.idNumber, cell.tileInstanceId)
         end
-        if slot_idx == 9 then
-            return true
-        end
-        if send_mp_resource_command(self, "workshop_select", {
-            unit_id = unit.id,
-            cell_id = cell.idNumber,
-            slot_idx = slot_idx
-        }) then
-            return true
-        end
-        return runtime.try_interact_workshop_menu_by_ids(self, unit.id, cell.idNumber, slot_idx)
+        return true
     end
 
     runtime.handle_world_click_selected_unit = function(self, screen_x, screen_y, clicked_cell_id)
         local unit = ctx.get_selected_unit(self)
         if not unit or not unit.cell_id then
             return false
+        end
+        if runtime.try_handle_workshop_transaction_panel_click and runtime.try_handle_workshop_transaction_panel_click(self, unit, screen_x, screen_y) then
+            return true
         end
         local world_x, world_y = ctx.screen_to_world(screen_x, screen_y, self.camera_pos, self.camera_zoom)
         local object_kind, clicked_cell, clicked_obj = runtime.get_clicked_interactive_object(self, world_x, world_y, clicked_cell_id)
@@ -5102,6 +5434,13 @@ function M.extend(runtime, ctx)
             else
                 local world_x, world_y = get_drop_world_point()
                 local drop_cell_id = runtime.find_cell_id_at_world_point(self, world_x, world_y)
+                local panel_payment_cell_id = nil
+                if source_item == "material" and runtime.get_workshop_panel_payment_cell_id then
+                    panel_payment_cell_id = runtime.get_workshop_panel_payment_cell_id(self, source_unit, screen_x, screen_y)
+                    if panel_payment_cell_id then
+                        drop_cell_id = panel_payment_cell_id
+                    end
+                end
                 local vending_attempted = false
                 local force_barricade_drop = false
                 if is_obstacle_backpack_item(source_item) and drop_cell_id then
@@ -5253,7 +5592,8 @@ function M.extend(runtime, ctx)
                             local instance = instances[tile_instance_id]
                             local inside_menu_panel = is_point_in_object_hitbox(drop_cell, workshop_menu, world_x, world_y)
                             local pay_slot_idx = get_workshop_menu_slot_by_world_point(drop_cell, workshop_menu, world_x, world_y)
-                            local is_pay_hotspot = (pay_slot_idx == 9)
+                            local is_pay_hotspot = ((panel_payment_cell_id ~= nil) and (panel_payment_cell_id == drop_cell_id))
+                                or (pay_slot_idx == 9)
                                 or is_workshop_payment_hotspot(drop_cell, workshop_menu, world_x, world_y)
                                 or inside_menu_panel
                             if is_pay_hotspot then
@@ -5274,33 +5614,20 @@ function M.extend(runtime, ctx)
                                         flash_invalid_drag_units(source_unit, nil)
                                     elseif (state.production_time_left or 0) > 0 then
                                         print("Workshop is currently producing. Wait for output.")
-                                    elseif state.payment_locked == true then
-                                        print("Workshop payment is locked. Select an item again to start a new order.")
+                                    elseif state.transaction_locked ~= true then
+                                        print("Select an item in the workshop panel first.")
                                     else
-                                        local workshop_pay_ap_cost = get_workshop_pay_material_ap_cost()
-                                        if not try_consume_drag_ap(source_unit, nil, workshop_pay_ap_cost) then
+                                        if send_mp_resource_command(self, "workshop_pay_material", {
+                                            unit_id = source_unit.id,
+                                            cell_id = drop_cell_id
+                                        }) then
+                                            consumed = true
+                                        elseif not runtime.try_workshop_pay_material_by_ids(self, source_unit.id, drop_cell_id) then
                                             self.drag_resource = { active = false }
                                             return true
+                                        else
+                                            consumed = true
                                         end
-                                        remove_source_item()
-                                        state.paid_units = (state.paid_units or 0) + 1
-                                        print(string.format(
-                                            "%s paid 1 material to workshop: %d/%d. (AP -%d)",
-                                            source_unit.display_name,
-                                            state.paid_units,
-                                            selected.price,
-                                            workshop_pay_ap_cost
-                                        ))
-                                        if state.paid_units >= selected.price then
-                                            state.payment_locked = true
-                                            state.production_time_left = WORKSHOP_PRODUCTION_DURATION
-                                            state.payment_confirm_flash = WORKSHOP_PAY_CONFIRM_FLASH_SECONDS
-                                            if ctx and ctx.play_fabricator_working_sfx then
-                                                ctx.play_fabricator_working_sfx(self)
-                                            end
-                                            print(string.format("Workshop production started for %s.", selected.label))
-                                        end
-                                        consumed = true
                                     end
                                 end
                             end

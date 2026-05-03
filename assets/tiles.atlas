@@ -380,6 +380,9 @@ images {
   image: "/assets/images/tile_workshop_printerOff.png"
 }
 images {
+  image: "/assets/images/fabricator_panel.png"
+}
+images {
   image: "/assets/images/healthBar_backdrop.png"
 }
 images {

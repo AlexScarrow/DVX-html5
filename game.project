@@ -53,6 +53,6 @@ outro_preview_result = win
 env_name = LOCAL
 net_protocol_version = 1
 transport_mode = websocket
-transport_ws_url = ws://127.0.0.1:8080/ws
+transport_ws_url = ws://90.192.116.103:8080/ws
 transport_room_id = dvx_local_room
 

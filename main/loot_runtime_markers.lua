@@ -432,23 +432,23 @@ function M.extend(runtime, ctx)
         local turret_tripod_objects = ctx.get_turret_tripod_objects(self)
         local turret_gun_objects = ctx.get_turret_gun_objects(self)
         self.turret_shadow_objects = self.turret_shadow_objects or {}
-        for cell_id, marker in pairs(self.turret_shadow_objects) do
+        for marker_key, marker in pairs(self.turret_shadow_objects) do
             if marker then
                 go.delete(marker)
             end
-            self.turret_shadow_objects[cell_id] = nil
+            self.turret_shadow_objects[marker_key] = nil
         end
-        for cell_id, marker in pairs(turret_tripod_objects) do
+        for marker_key, marker in pairs(turret_tripod_objects) do
             if marker then
                 go.delete(marker)
             end
-            turret_tripod_objects[cell_id] = nil
+            turret_tripod_objects[marker_key] = nil
         end
-        for cell_id, marker in pairs(turret_gun_objects) do
+        for marker_key, marker in pairs(turret_gun_objects) do
             if marker then
                 go.delete(marker)
             end
-            turret_gun_objects[cell_id] = nil
+            turret_gun_objects[marker_key] = nil
         end
 
         if not self.world_grid then
@@ -458,8 +458,9 @@ function M.extend(runtime, ctx)
         for cell_id, cell in ipairs(self.world_grid) do
             if cell.tileID ~= hash("empty") then
                 local objects = { cell.object1, cell.object2, cell.object3 }
-                for _, obj in ipairs(objects) do
+                for slot_idx, obj in ipairs(objects) do
                     if obj and obj.name == hash("gun_turret") then
+                        local marker_key = string.format("%d:%d", cell_id, slot_idx)
                         local x, y = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                         local tx = x + (obj.offsetX or 0)
                         local ty = y + (obj.offsetY or 0)
@@ -467,7 +468,7 @@ function M.extend(runtime, ctx)
                             and vmath.vector4(1, 1, 1, 1)
                             or vmath.vector4(0.14, 0.14, 0.14, 1)
                         if boardgame_shadows_enabled(self) then
-                            self.turret_shadow_objects[cell_id] = spawn_world_shadow(tx + 7, ty - 10, 0.5, 0.74, 0.3, 0.36)
+                            self.turret_shadow_objects[marker_key] = spawn_world_shadow(tx + 7, ty - 10, 0.5, 0.74, 0.3, 0.36)
                         end
                         local tripod_id = factory.create("/tile_factory#tile_factory", vmath.vector3(tx, ty, 0.56))
                         local gun_id = factory.create("/tile_factory#tile_factory", vmath.vector3(tx, ty, 0.561))
@@ -475,7 +476,7 @@ function M.extend(runtime, ctx)
                             msg.post(msg.url(nil, tripod_id, "sprite"), "play_animation", { id = hash("gun_turret_tripod") })
                             go.set(msg.url(nil, tripod_id, "sprite"), "tint", turret_tint)
                             go.set_scale(vmath.vector3(1, 1, 1), tripod_id)
-                            turret_tripod_objects[cell_id] = tripod_id
+                            turret_tripod_objects[marker_key] = tripod_id
                         end
                         if gun_id then
                             msg.post(msg.url(nil, gun_id, "sprite"), "play_animation", { id = hash("gun_turret") })
@@ -483,7 +484,7 @@ function M.extend(runtime, ctx)
                             go.set_scale(vmath.vector3(1, 1, 1), gun_id)
                             -- Rotation hook: update this z-angle when turret acquires/fires at target.
                             go.set_rotation(vmath.quat_rotation_z(0), gun_id)
-                            turret_gun_objects[cell_id] = gun_id
+                            turret_gun_objects[marker_key] = gun_id
                         end
                     end
                 end

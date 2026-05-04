@@ -4673,7 +4673,7 @@ function process_turret_reactive_fire(self, dt)
     for turret_cell_id, cell in ipairs(self.world_grid) do
         if cell and cell.tileID ~= hash("empty") and cell.isPowered then
             local objects = { cell.object1, cell.object2, cell.object3 }
-            for _, turret_obj in ipairs(objects) do
+            for turret_slot_idx, turret_obj in ipairs(objects) do
                 if turret_obj
                     and turret_obj.name == hash("gun_turret")
                     and turret_obj.isFixed == true
@@ -4696,7 +4696,8 @@ function process_turret_reactive_fire(self, dt)
                                 play_turret_gun_sfx(self)
                                 spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
                                 local gun_markers = self.turret_gun_objects or {}
-                                local gun_go = gun_markers[turret_cell_id]
+                                local marker_key = string.format("%d:%d", turret_cell_id, turret_slot_idx)
+                                local gun_go = gun_markers[marker_key]
                                 if gun_go then
                                     local gx = target_pos.x - turret_pos.x
                                     local gy = target_pos.y - turret_pos.y
@@ -4709,7 +4710,7 @@ function process_turret_reactive_fire(self, dt)
                                             pcall(go.animate, gun_go, "euler.z", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INOUTSINE, 0.35, return_delay)
                                         else
                                             -- Turret marker may have been rebuilt this frame; skip rotation safely.
-                                            gun_markers[turret_cell_id] = nil
+                                            gun_markers[marker_key] = nil
                                         end
                                     end
                                 end

@@ -899,27 +899,29 @@ function M.extend(runtime, ctx)
         local best_dist = math.huge
         for _, cell in ipairs(self.world_grid) do
             if cell and cell.tileID ~= hash("empty") and (not required_cell_id or required_cell_id == cell.idNumber) then
-                local turret = get_turret_object_on_cell(cell)
-                if turret then
-                    local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                    local tx = cx + (turret.offsetX or 0)
-                    local ty = cy + (turret.offsetY or 0)
-                    local hit_w = math.max(turret.hitW or 42, 84)
-                    local hit_h = math.max(turret.hitH or 72, 84)
-                    local half_w = hit_w * 0.5
-                    local half_h = hit_h * 0.5
-                    local inside = world_x >= (tx - half_w)
-                        and world_x <= (tx + half_w)
-                        and world_y >= (ty - half_h)
-                        and world_y <= (ty + half_h)
-                    if inside then
-                        local dx = tx - world_x
-                        local dy = ty - world_y
-                        local dist = math.sqrt(dx * dx + dy * dy)
-                        if dist < best_dist then
-                            best_dist = dist
-                            best_cell = cell
-                            best_obj = turret
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                for _, turret in ipairs(objects) do
+                    if turret and turret.name == hash("gun_turret") then
+                        local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                        local tx = cx + (turret.offsetX or 0)
+                        local ty = cy + (turret.offsetY or 0)
+                        local hit_w = math.max(turret.hitW or 42, 84)
+                        local hit_h = math.max(turret.hitH or 72, 84)
+                        local half_w = hit_w * 0.5
+                        local half_h = hit_h * 0.5
+                        local inside = world_x >= (tx - half_w)
+                            and world_x <= (tx + half_w)
+                            and world_y >= (ty - half_h)
+                            and world_y <= (ty + half_h)
+                        if inside then
+                            local dx = tx - world_x
+                            local dy = ty - world_y
+                            local dist = math.sqrt(dx * dx + dy * dy)
+                            if dist < best_dist then
+                                best_dist = dist
+                                best_cell = cell
+                                best_obj = turret
+                            end
                         end
                     end
                 end
@@ -5815,79 +5817,73 @@ function M.extend(runtime, ctx)
                                     print("Invalid turret deploy cell.")
                                     flash_invalid_drag_units(source_unit, nil)
                                 else
-                                    local turret_on_cell = get_turret_object_on_cell(drop_cell)
-                                    if turret_on_cell then
-                                        print("A turret is already deployed on this cell.")
+                                    local slot = find_clicked_drop_slot(drop_cell, world_x, world_y)
+                                    if slot and slot.name ~= hash("empty")
+                                        and slot.name ~= hash("blip_spawn")
+                                        and slot.name ~= hash("blip")
+                                    then
+                                        print("Clicked slot is occupied. Choose another slot for turret deploy.")
+                                        flash_invalid_drag_units(source_unit, nil)
+                                        slot = nil
+                                    end
+                                    if not slot then
+                                        print("No valid clicked slot for turret deploy.")
                                         flash_invalid_drag_units(source_unit, nil)
                                     else
-                                        local slot = find_clicked_drop_slot(drop_cell, world_x, world_y)
-                                        if slot and slot.name ~= hash("empty")
-                                            and slot.name ~= hash("blip_spawn")
-                                            and slot.name ~= hash("blip")
-                                        then
-                                            print("Clicked slot is occupied. Choose another slot for turret deploy.")
-                                            flash_invalid_drag_units(source_unit, nil)
-                                            slot = nil
+                                        if not try_consume_current_drag_ap(nil) then
+                                            self.drag_resource = { active = false }
+                                            return true
                                         end
-                                        if not slot then
-                                            print("No valid clicked slot for turret deploy.")
-                                            flash_invalid_drag_units(source_unit, nil)
-                                        else
-                                            if not try_consume_current_drag_ap(nil) then
-                                                self.drag_resource = { active = false }
-                                                return true
-                                            end
-                                            if not remove_source_item() then
-                                                -- Fallback safety: remove one packed turret if drag slot changed mid-action.
-                                                for i, item in ipairs(source_unit.backpack_items or {}) do
-                                                    if item == TURRET_PACKED_ITEM then
-                                                        table.remove(source_unit.backpack_items, i)
-                                                        source_unit.backpack_used = #source_unit.backpack_items
-                                                        break
-                                                    end
+                                        if not remove_source_item() then
+                                            -- Fallback safety: remove one packed turret if drag slot changed mid-action.
+                                            for i, item in ipairs(source_unit.backpack_items or {}) do
+                                                if item == TURRET_PACKED_ITEM then
+                                                    table.remove(source_unit.backpack_items, i)
+                                                    source_unit.backpack_used = #source_unit.backpack_items
+                                                    break
                                                 end
                                             end
-                                            local replacing_spawn_marker = slot.name == hash("blip_spawn") or slot.name == hash("blip")
-                                            if replacing_spawn_marker then
-                                                -- Preserve spawn capability even if its marker slot is reused.
-                                                drop_cell.blipSpawnEnabled = true
-                                            end
-                                            slot.name = hash("gun_turret")
-                                            slot.isFixed = true
-                                            slot.isWelded = false
-                                            slot.isOpen = false
-                                            slot.dependsOn = 0
-                                            slot.isDependentOn = {}
-                                            slot.objectId = allocate_runtime_object_id(self.world_grid)
-                                            local turret_slot_index = get_cell_object_slot_index(drop_cell, slot) or 2
-                                            slot.offsetX = OBSTACLE_SLOT_X_BY_INDEX[turret_slot_index] or 0
-                                            slot.offsetY = 0
-                                            slot.fxOffsetX = 0
-                                            slot.fxOffsetY = 0
-                                            slot.fxRotation = 0
-                                            slot.fxFactory = nil
-                                            slot.hitW = 48
-                                            slot.hitH = 48
-                                            slot.requiredComponent = nil
-                                            slot.turretArmingTurns = TURRET_ARMING_TURNS_ON_DEPLOY
-                                            runtime.refresh_turret_markers(self)
-                                            runtime.refresh_fix_markers(self)
-                                            runtime.refresh_world_item_visuals(self)
-                                            consumed = true
-                                            if TURRET_ARMING_TURNS_ON_DEPLOY > 0 then
-                                                print(string.format(
-                                                    "%s deployed a turret (arming %d turns). (AP -%d)",
-                                                    source_unit.display_name,
-                                                    TURRET_ARMING_TURNS_ON_DEPLOY,
-                                                    drag_ap_override or get_drag_ap_cost()
-                                                ))
-                                            else
-                                                print(string.format(
-                                                    "%s deployed an active turret. (AP -%d)",
-                                                    source_unit.display_name,
-                                                    drag_ap_override or get_drag_ap_cost()
-                                                ))
-                                            end
+                                        end
+                                        local replacing_spawn_marker = slot.name == hash("blip_spawn") or slot.name == hash("blip")
+                                        if replacing_spawn_marker then
+                                            -- Preserve spawn capability even if its marker slot is reused.
+                                            drop_cell.blipSpawnEnabled = true
+                                        end
+                                        slot.name = hash("gun_turret")
+                                        slot.isFixed = true
+                                        slot.isWelded = false
+                                        slot.isOpen = false
+                                        slot.dependsOn = 0
+                                        slot.isDependentOn = {}
+                                        slot.objectId = allocate_runtime_object_id(self.world_grid)
+                                        local turret_slot_index = get_cell_object_slot_index(drop_cell, slot) or 2
+                                        slot.offsetX = OBSTACLE_SLOT_X_BY_INDEX[turret_slot_index] or 0
+                                        slot.offsetY = 0
+                                        slot.fxOffsetX = 0
+                                        slot.fxOffsetY = 0
+                                        slot.fxRotation = 0
+                                        slot.fxFactory = nil
+                                        slot.hitW = 48
+                                        slot.hitH = 48
+                                        slot.requiredComponent = nil
+                                        slot.turretArmingTurns = TURRET_ARMING_TURNS_ON_DEPLOY
+                                        runtime.refresh_turret_markers(self)
+                                        runtime.refresh_fix_markers(self)
+                                        runtime.refresh_world_item_visuals(self)
+                                        consumed = true
+                                        if TURRET_ARMING_TURNS_ON_DEPLOY > 0 then
+                                            print(string.format(
+                                                "%s deployed a turret (arming %d turns). (AP -%d)",
+                                                source_unit.display_name,
+                                                TURRET_ARMING_TURNS_ON_DEPLOY,
+                                                drag_ap_override or get_drag_ap_cost()
+                                            ))
+                                        else
+                                            print(string.format(
+                                                "%s deployed an active turret. (AP -%d)",
+                                                source_unit.display_name,
+                                                drag_ap_override or get_drag_ap_cost()
+                                            ))
                                         end
                                     end
                                 end

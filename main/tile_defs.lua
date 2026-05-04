@@ -154,8 +154,8 @@ function M.create_tile_library(COMPONENT_UI)
     rescue_entry.cells[2].accessDown = false
     rescue_entry.cells[3].accessRight = false
     rescue_entry.cells[3].accessDown = false
-    rescue_entry.cells[4].accessRight = true
-    rescue_entry.cells[4].accessDown = true
+    rescue_entry.cells[4].accessRight = false
+    rescue_entry.cells[4].accessDown = false
     rescue_entry.cells[5].accessDown = false
     rescue_entry.cells[7].accessDown = false
     rescue_entry.cells[8].accessDown = false
@@ -1354,18 +1354,20 @@ library["lab"] = lab
     --portal.cells[1].accessDown = false
     jungle.cells[1].accessDown = true
     jungle.cells[2].accessDown = true
-    jungle.cells[6].accessDown = false
-    jungle.cells[9].accessDown = false
+    jungle.cells[5].accessDown = false
+    jungle.cells[6].accessDown = true
+    jungle.cells[8].accessDown = false
+    jungle.cells[9].accessDown = true
     
 
     jungle.cells[1].accessRight = true
     jungle.cells[2].accessRight = true
     jungle.cells[3].accessRight = false
     jungle.cells[4].accessRight = false
-    jungle.cells[5].accessRight = true
+    jungle.cells[5].accessRight = false
     jungle.cells[6].accessRight = false
     jungle.cells[7].accessRight = false
-    jungle.cells[8].accessRight = true
+    jungle.cells[8].accessRight = false
     jungle.cells[9].accessRight = true
 
 
@@ -1377,9 +1379,9 @@ library["lab"] = lab
     -- bunkroom.cells[9].accessRight = false
 
 
-    jungle.cells[6].object1 = {
+    jungle.cells[3].object1 = {
         name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
-        offsetX = 80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil,
+        offsetX = -90, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil,
         powerLoaded = 0, powerRequired = 9
     }
 
@@ -1394,10 +1396,10 @@ library["lab"] = lab
     --         offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
     --     }
     -- 
-    jungle.cells[6].object2 = {
-        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
-        offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-    }
+    -- jungle.cells[6].object2 = {
+    --     name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+    --     offsetX = 20, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+    -- }
     jungle.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,

@@ -8642,7 +8642,25 @@ end
 
 local function set_unit_scale(unit, scale_x, scale_y)
     if unit and unit.go_path then
-        local ok = pcall(go.set_scale, vmath.vector3(scale_x, scale_y, 1), unit.go_path)
+        local draw_scale_x = scale_x
+        local draw_scale_y = scale_y
+        local class_id = tostring(unit.class_id or "")
+        local is_playable_human_class = class_id == tostring(UNIT_CLASS_SARGE or "")
+            or class_id == tostring(UNIT_CLASS_TECHIE or "")
+            or class_id == tostring(UNIT_CLASS_MEDIC or "")
+            or class_id == tostring(UNIT_CLASS_GUNNER or "")
+        if is_playable_human_class then
+            local in_boardgame_variant = unit.current_aesthetic_anim == hash("human_sarge_boardgame")
+                or unit.current_aesthetic_anim == hash("human_techie_boardgame")
+                or unit.current_aesthetic_anim == hash("human_medic_boardgame")
+                or unit.current_aesthetic_anim == hash("human_gunner_boardgame")
+            if not in_boardgame_variant then
+                local sarge_scale_mul = 0.4 / math.max(0.001, HUMAN_VISUAL_SCALE)
+                draw_scale_x = draw_scale_x * sarge_scale_mul
+                draw_scale_y = draw_scale_y * sarge_scale_mul
+            end
+        end
+        local ok = pcall(go.set_scale, vmath.vector3(draw_scale_x, draw_scale_y, 1), unit.go_path)
         if not ok then
             unit.go_path = nil
             unit.sprite_path = nil
@@ -8806,6 +8824,15 @@ local function update_human_visual_state(self)
                 if not use_cell_light_tint then
                     return color
                 end
+                local class_id = tostring(unit.class_id or "")
+                if class_id == tostring(UNIT_CLASS_SARGE or "")
+                    or class_id == tostring(UNIT_CLASS_TECHIE or "")
+                    or class_id == tostring(UNIT_CLASS_MEDIC or "")
+                    or class_id == tostring(UNIT_CLASS_GUNNER or "")
+                then
+                    -- Human lighting experiment uses authored brightness sprites, not runtime light scaling.
+                    return color
+                end
                 if not (self and self.world_grid and unit and unit.cell_id) then
                     return color
                 end
@@ -8833,12 +8860,15 @@ local function update_human_visual_state(self)
                     color.w or 1
                 )
             end
+            local desired_anim = get_human_anim_for_aesthetic(self, unit)
+            if desired_anim and unit.current_aesthetic_anim ~= desired_anim then
+                pcall(msg.post, unit.sprite_path, "play_animation", { id = desired_anim })
+                unit.current_aesthetic_anim = desired_anim
+            elseif not desired_anim then
+                unit.current_aesthetic_anim = nil
+            end
             local flash_timer = unit.hit_flash_timer or 0
             if not (unit and (unit.current_health or 0) > 0) then
-                local dead_anim = get_human_anim_for_aesthetic(self, unit)
-                if dead_anim then
-                    pcall(msg.post, unit.sprite_path, "play_animation", { id = dead_anim })
-                end
                 safe_set_tint(vmath.vector4(1, 1, 1, 1))
             elseif flash_timer > 0 and unit.is_moving ~= true then
                 local flash_band = math.floor(flash_timer * 24) % 2
@@ -9386,15 +9416,15 @@ end
 
 multiplayer_get_unit_anim_id = function(unit_id)
     if unit_id == "sarge" then
-        return hash("mp_unit_sarge")
+        return hash("human_sarge_normal")
     elseif unit_id == "techie" then
-        return hash("mp_unit_techie")
+        return hash("human_techie_normal")
     elseif unit_id == "medic" then
-        return hash("mp_unit_medic")
+        return hash("human_medic_normal")
     elseif unit_id == "gunner" then
-        return hash("mp_unit_gunner")
+        return hash("human_gunner_normal")
     end
-    return hash("mp_unit_sarge")
+    return hash("human_sarge_normal")
 end
 
 multiplayer_normalize_mission_type = function(mission_type)
@@ -13905,7 +13935,7 @@ function update_flow_ui(self, dt)
                 end
                 local chip_scale = selected and pulse or 1
                 local unit_pool_y = MP_SETUP_UNIT_POOL_Y_BY_INDEX[i] or MP_SETUP_UNIT_POOL_Y_BY_INDEX[1] or 114
-                set_ui_square_transform(self, btn, MP_SETUP_UNIT_POOL_X[i], unit_pool_y, MP_SETUP_UI_Z, tint, (MP_SETUP_UNIT_POOL_W * 0.021) * chip_scale, (MP_SETUP_UNIT_POOL_H * 0.021) * chip_scale)
+                set_ui_square_transform(self, btn, MP_SETUP_UNIT_POOL_X[i], unit_pool_y, MP_SETUP_UI_Z, tint, 0.4 * chip_scale, 0.4 * chip_scale)
             end
         end
         if self.ui.flow_mp_slot_icons then
@@ -13917,12 +13947,12 @@ function update_flow_ui(self, dt)
                         local unit_id = self.mp_setup and self.mp_setup.seat_slots and self.mp_setup.seat_slots[player_id] and self.mp_setup.seat_slots[player_id][slot_index] or false
                         if unit_id and unit_id ~= false then
                             msg.post(msg.url(nil, slot_icon, "sprite"), "play_animation", { id = multiplayer_get_unit_anim_id(unit_id) })
-                            set_ui_square_transform(self, slot_icon, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_UI_Z + 0.002, vmath.vector4(1, 1, 1, 1), MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                            set_ui_square_transform(self, slot_icon, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_UI_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.4, 0.4)
                         else
-                            set_ui_square_transform(self, slot_icon, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                            set_ui_square_transform(self, slot_icon, slot_x, MP_SETUP_SLOT_Y[slot_index], MP_SETUP_UI_Z + 0.002, hidden, 0.4, 0.4)
                         end
                     else
-                        set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_SETUP_SLOT_W * 0.021, MP_SETUP_SLOT_H * 0.021)
+                        set_ui_square_transform(self, slot_icon, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, 0.4, 0.4)
                     end
                 end
             end
@@ -15120,26 +15150,44 @@ get_human_anim_for_aesthetic = function(self, unit)
         end
         return hash("human_dead")
     end
-    if unit.class_id == UNIT_CLASS_SARGE then
+    local class_id = tostring(unit.class_id or "")
+    local base_name = nil
+    if class_id == tostring(UNIT_CLASS_SARGE or "") then
+        base_name = "sarge"
+    elseif class_id == tostring(UNIT_CLASS_TECHIE or "") then
+        base_name = "techie"
+    elseif class_id == tostring(UNIT_CLASS_MEDIC or "") then
+        base_name = "medic"
+    elseif class_id == tostring(UNIT_CLASS_GUNNER or "") then
+        base_name = "gunner"
+    end
+    if base_name then
         if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
-            return hash("human_sarge_boardgame")
+            return hash("human_" .. base_name .. "_boardgame")
         end
-        return hash("human_sarge")
-    elseif unit.class_id == UNIT_CLASS_TECHIE then
-        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
-            return hash("human_techie_boardgame")
+        local cell = self.world_grid and unit.cell_id and self.world_grid[unit.cell_id] or nil
+        if cell then
+            local is_outside = (cell.isOutside == true)
+                or (cell.isOutsideHazard == true)
+                or (cell.has_outside_hazard == true)
+                or (cell.hasOutsideHazard == true)
+            if is_outside then
+                return hash("human_" .. base_name .. "_outside")
+            end
+            if cell.isPowered ~= true then
+                return hash("human_" .. base_name .. "_25")
+            end
+            local light_value = math.max(0, math.min(3, tonumber(cell.lightValue or 0) or 0))
+            if light_value <= 0 then
+                return hash("human_" .. base_name .. "_25")
+            elseif light_value == 1 then
+                return hash("human_" .. base_name .. "_50")
+            elseif light_value == 2 then
+                return hash("human_" .. base_name .. "_75")
+            end
+            return hash("human_" .. base_name .. "_normal")
         end
-        return hash("human_techie")
-    elseif unit.class_id == UNIT_CLASS_MEDIC then
-        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
-            return hash("human_medic_boardgame")
-        end
-        return hash("human_medic")
-    elseif unit.class_id == UNIT_CLASS_GUNNER then
-        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
-            return hash("human_gunner_boardgame")
-        end
-        return hash("human_gunner")
+        return hash("human_" .. base_name .. "_normal")
     end
     return nil
 end
@@ -15153,6 +15201,9 @@ apply_human_aesthetic_animations = function(self)
             local anim = get_human_anim_for_aesthetic(self, unit)
             if anim then
                 pcall(msg.post, unit.sprite_path, "play_animation", { id = anim })
+                unit.current_aesthetic_anim = anim
+            else
+                unit.current_aesthetic_anim = nil
             end
         end
     end

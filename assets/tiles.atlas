@@ -482,6 +482,18 @@ images {
   image: "/assets/images/mp_unit_techie.png"
 }
 images {
+  image: "/assets/images/human_sarge_normal.png"
+}
+images {
+  image: "/assets/images/human_techie_normal.png"
+}
+images {
+  image: "/assets/images/human_medic_normal.png"
+}
+images {
+  image: "/assets/images/human_gunner_normal.png"
+}
+images {
   image: "/assets/images/tile_exterior1_boardGame.png"
 }
 images {

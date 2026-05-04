@@ -8,13 +8,73 @@ images {
   image: "/assets/images/human_sarge.png"
 }
 images {
+  image: "/assets/images/human_sarge_25.png"
+}
+images {
+  image: "/assets/images/human_sarge_50.png"
+}
+images {
+  image: "/assets/images/human_sarge_75.png"
+}
+images {
+  image: "/assets/images/human_sarge_normal.png"
+}
+images {
+  image: "/assets/images/human_sarge_outside.png"
+}
+images {
   image: "/assets/images/human_medic.png"
+}
+images {
+  image: "/assets/images/human_medic_25.png"
+}
+images {
+  image: "/assets/images/human_medic_50.png"
+}
+images {
+  image: "/assets/images/human_medic_75.png"
+}
+images {
+  image: "/assets/images/human_medic_normal.png"
+}
+images {
+  image: "/assets/images/human_medic_outside.png"
 }
 images {
   image: "/assets/images/human_gunner.png"
 }
 images {
+  image: "/assets/images/human_gunner_25.png"
+}
+images {
+  image: "/assets/images/human_gunner_50.png"
+}
+images {
+  image: "/assets/images/human_gunner_75.png"
+}
+images {
+  image: "/assets/images/human_gunner_normal.png"
+}
+images {
+  image: "/assets/images/human_gunner_outside.png"
+}
+images {
   image: "/assets/images/human_techie.png"
+}
+images {
+  image: "/assets/images/human_techie_25.png"
+}
+images {
+  image: "/assets/images/human_techie_50.png"
+}
+images {
+  image: "/assets/images/human_techie_75.png"
+}
+images {
+  image: "/assets/images/human_techie_normal.png"
+}
+images {
+  image: "/assets/images/human_techie_outside.png"
 }
 images {
   image: "/assets/images/human_sarge_boardgame.png"

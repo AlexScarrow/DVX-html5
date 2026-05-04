@@ -144,6 +144,11 @@ UI_FOOTER_X = 244
 UI_FOOTER_Y = 220
 UI_FOOTER_W = 118
 UI_FOOTER_H = 146
+HUMAN_UI_BASE_Z = 0.83
+HUMAN_UI_COMMAND_ICON_Z = HUMAN_UI_BASE_Z + 0.002
+HUMAN_UI_BACKPACK_ICON_Z = HUMAN_UI_BASE_Z + 0.005
+HUMAN_UI_BUFF_SLOT_Z = HUMAN_UI_BASE_Z + 0.003
+HUMAN_UI_BUFF_ICON_Z = HUMAN_UI_BASE_Z + 0.006
 BUFF_SLOT_FRAME_SIZE = 38
 BUFF_SLOT_HIT_SIZE = 44
 BUFF_DROP_ZONE_OFFSET_X = 74
@@ -455,7 +460,7 @@ FLOW_STATE_MP_SETUP = "mp_setup"
 FLOW_STATE_MP_LOBBY = "mp_lobby"
 FLOW_STATE_SOLO_SETUP = "solo_setup"
 FLOW_STATE_LEVEL_EDITOR = "level_editor"
-LEVEL_EDITOR_ENABLED = false
+LEVEL_EDITOR_ENABLED = true
 LEVEL_DEBUG_FORCE_NEWEST_MISSION_LEVEL = false -- temporary test toggle
 EXIT_TEST_STASH_ENABLED = true
 SFX_TITLE_URL = "main:/sfx_title_screen#sound"
@@ -1087,7 +1092,7 @@ ALIEN_REVEAL_WEIGHT_CANNON = tonumber(ALIEN_REVEAL_WEIGHTS.cannon_fodder or 10) 
 ALIEN_REVEAL_WEIGHT_SPEEDY = tonumber(ALIEN_REVEAL_WEIGHTS.speedy or 2) or 2
 ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
-SFX_TEST_FAVOR_SPEEDY_REVEAL = false
+SFX_TEST_FAVOR_SPEEDY_REVEAL = true
 TILE_OPACITY = 1
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
@@ -9882,26 +9887,26 @@ local function initialize_unit_ui(self)
     self.ui.panel_shadow = create_ui_panel_sprite(UI_PANEL_X + 14, UI_PANEL_Y - 12, 0.79, UI_PANEL_W, UI_PANEL_H)
 
     for i = 1, UI_MAX_PIPS do
-        self.ui.ap_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_AP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        self.ui.hp_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_HP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        self.ui.ammo_pips[i] = create_ui_square(0, 0, 0.81, UI_COLOR_AMMO, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        self.ui.ap_pips[i] = create_ui_square(0, 0, HUMAN_UI_BASE_Z, UI_COLOR_AP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        self.ui.hp_pips[i] = create_ui_square(0, 0, HUMAN_UI_BASE_Z, UI_COLOR_HP, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        self.ui.ammo_pips[i] = create_ui_square(0, 0, HUMAN_UI_BASE_Z, UI_COLOR_AMMO, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
     end
 
     for i = 1, COMMAND_UI.max_pips do
-        self.ui.command_pips[i] = create_ui_square(0, 0, 0.81, COMMAND_UI.inactive_color, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
-        self.ui.command_pip_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.812))
+        self.ui.command_pips[i] = create_ui_square(0, 0, HUMAN_UI_BASE_Z, COMMAND_UI.inactive_color, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        self.ui.command_pip_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, HUMAN_UI_COMMAND_ICON_Z))
         if self.ui.command_pip_icons[i] then
             msg.post(msg.url(nil, self.ui.command_pip_icons[i], "sprite"), "play_animation", { id = hash("command_star") })
         end
     end
 
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
-        self.ui.backpack_slots[i] = create_ui_square(0, 0, 0.81, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
-        self.ui.backpack_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.815))
+        self.ui.backpack_slots[i] = create_ui_square(0, 0, HUMAN_UI_BASE_Z, UI_COLOR_SLOT, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        self.ui.backpack_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, HUMAN_UI_BACKPACK_ICON_Z))
     end
     for i = 1, #BUFF_SLOT_ORDER do
-        self.ui.buff_slots[i] = create_ui_square(0, 0, 0.813, vmath.vector4(0.16, 0.2, 0.18, 0.85), BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
-        self.ui.buff_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.816))
+        self.ui.buff_slots[i] = create_ui_square(0, 0, HUMAN_UI_BUFF_SLOT_Z, vmath.vector4(0.16, 0.2, 0.18, 0.85), BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        self.ui.buff_item_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, HUMAN_UI_BUFF_ICON_Z))
     end
     self.ui.component_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.button_color, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     self.ui.fix_button = create_ui_square(0, 0, 0.82, COMPONENT_UI.fix_button_color, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
@@ -10175,21 +10180,21 @@ local function set_ui_hidden(self)
     set_ui_panel_transform(self, self.ui.panel_art, -9999, -9999, 0.8, UI_PANEL_W, UI_PANEL_H, vmath.vector4(1, 1, 1, 1))
     set_ui_panel_transform(self, self.ui.panel_shadow, -9999, -9999, 0.79, UI_PANEL_W, UI_PANEL_H, vmath.vector4(0, 0, 0, 0))
     for i = 1, UI_MAX_PIPS do
-        set_ui_square_transform(self, self.ui.ap_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        set_ui_square_transform(self, self.ui.hp_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
-        set_ui_square_transform(self, self.ui.ammo_pips[i], -9999, -9999, 0.81, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.ap_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.hp_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.ammo_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
     end
     for i = 1, COMMAND_UI.max_pips do
-        set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, 0.81, hidden, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
-        set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, 0.812, hidden, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
+        set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, HUMAN_UI_COMMAND_ICON_Z, hidden, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
     end
     for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
-        set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, 0.81, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
-        set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, hidden, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+        set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, HUMAN_UI_BACKPACK_ICON_Z, hidden, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
     end
     for i = 1, #BUFF_SLOT_ORDER do
-        set_ui_square_transform(self, self.ui.buff_slots[i], -9999, -9999, 0.813, hidden, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
-        set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, 0.816, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.buff_slots[i], -9999, -9999, HUMAN_UI_BUFF_SLOT_Z, hidden, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, HUMAN_UI_BUFF_ICON_Z, hidden, 1, 1)
     end
     set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
     set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
@@ -16040,9 +16045,9 @@ function update_selected_unit_ui(self)
         local hp_color = hp_on and UI_COLOR_HP or vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0.2)
         local ammo_color = ammo_on and UI_COLOR_AMMO or vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, 0.2)
 
-        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, 0.81, ap_color, UI_BAR_PIP_SIZE, pip_h)
-        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, 0.81, hp_color, UI_BAR_PIP_SIZE, pip_h)
-        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, 0.81, ammo_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, HUMAN_UI_BASE_Z, ap_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, HUMAN_UI_BASE_Z, hp_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, HUMAN_UI_BASE_Z, ammo_color, UI_BAR_PIP_SIZE, pip_h)
     end
 
     local show_command = unit.class_id == UNIT_CLASS_SARGE
@@ -16054,11 +16059,11 @@ function update_selected_unit_ui(self)
             command_color = vmath.vector4(command_color.x, command_color.y, command_color.z, 0.25)
         end
         if show_command then
-            set_ui_square_transform(self, self.ui.command_pips[i], cx, cy, 0.81, vmath.vector4(0.08, 0.08, 0.1, 0.22), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
-            set_ui_square_transform(self, self.ui.command_pip_icons[i], cx, cy, 0.812, command_color, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
+            set_ui_square_transform(self, self.ui.command_pips[i], cx, cy, HUMAN_UI_BASE_Z, vmath.vector4(0.08, 0.08, 0.1, 0.22), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+            set_ui_square_transform(self, self.ui.command_pip_icons[i], cx, cy, HUMAN_UI_COMMAND_ICON_Z, command_color, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
         else
-            set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, 0.81, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
-            set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, 0.812, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
+            set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+            set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, HUMAN_UI_COMMAND_ICON_Z, vmath.vector4(0, 0, 0, 0), COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
         end
     end
 
@@ -16087,7 +16092,7 @@ function update_selected_unit_ui(self)
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
         end
-        set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, 0.81, slot_color, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, HUMAN_UI_BASE_Z, slot_color, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
         if icon_anim then
             local icon_color = vmath.vector4(1, 1, 1, 1)
             if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
@@ -16104,9 +16109,9 @@ function update_selected_unit_ui(self)
                 icon_scale_x = (draw_w * 0.021) * draw_scale
                 icon_scale_y = (draw_h * 0.021) * draw_scale
             end
-            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, 0.815, icon_color, icon_scale_x, icon_scale_y)
+            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, HUMAN_UI_BACKPACK_ICON_Z, icon_color, icon_scale_x, icon_scale_y)
         else
-            set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, 0.815, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+            set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, HUMAN_UI_BACKPACK_ICON_Z, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
         end
     end
     if full_backpack_item_type and total_slots > 0 then
@@ -16142,7 +16147,7 @@ function update_selected_unit_ui(self)
             self.ui.backpack_item_icons[1],
             center_x,
             center_y,
-            0.815,
+            HUMAN_UI_BACKPACK_ICON_Z,
             vmath.vector4(1, 1, 1, packed_alpha),
             grid_w * packed_item_ui_scale_x,
             grid_h * packed_item_ui_scale_y
@@ -16160,7 +16165,7 @@ function update_selected_unit_ui(self)
         if self.drag_resource and self.drag_resource.active and self.drag_resource.drag_type == "equipped_buff" and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_name == slot_name then
             slot_tint = vmath.vector4(slot_tint.x, slot_tint.y, slot_tint.z, 0.35)
         end
-        set_ui_square_transform(self, self.ui.buff_slots[i], slot_x, slot_y, 0.813, slot_tint, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        set_ui_square_transform(self, self.ui.buff_slots[i], slot_x, slot_y, HUMAN_UI_BUFF_SLOT_Z, slot_tint, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
         local equipped_item = equipment[slot_name]
         local buff_def = equipped_item and BUFFS_BY_ITEM_TYPE[equipped_item] or nil
         if buff_def and buff_def.ui_anim then
@@ -16173,9 +16178,9 @@ function update_selected_unit_ui(self)
             local draw_w = math.max(1, tonumber(buff_def.ui_pixel_w or BUFF_SLOT_FRAME_SIZE) or BUFF_SLOT_FRAME_SIZE)
             local draw_h = math.max(1, tonumber(buff_def.ui_pixel_h or BUFF_SLOT_FRAME_SIZE) or BUFF_SLOT_FRAME_SIZE)
             local draw_scale = tonumber(buff_def.equipped_draw_scale or buff_def.backpack_draw_scale or 1.0) or 1.0
-            set_ui_square_transform(self, icon_go, slot_x, slot_y, 0.816, icon_color, (draw_w * 0.021) * draw_scale, (draw_h * 0.021) * draw_scale)
+            set_ui_square_transform(self, icon_go, slot_x, slot_y, HUMAN_UI_BUFF_ICON_Z, icon_color, (draw_w * 0.021) * draw_scale, (draw_h * 0.021) * draw_scale)
         else
-            set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, 0.816, vmath.vector4(0, 0, 0, 0), 1, 1)
+            set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, HUMAN_UI_BUFF_ICON_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
         end
     end
 
@@ -24636,6 +24641,28 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     end
 
     local clicked_alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
+    if (not clicked_alien) and clicked_cell_id == unit.cell_id and self.aliens then
+        -- Melee fallback: crowded same-cell clicks (e.g. barricade overlap) can miss strict alien click radius.
+        local fallback_alien = nil
+        local fallback_best_dist = math.huge
+        for _, alien in ipairs(self.aliens) do
+            if (not alien.is_dead) and alien.cell_id == clicked_cell_id then
+                if alien.go_id then
+                    local pos = go.get_position(alien.go_id)
+                    local dx = pos.x - world_x
+                    local dy = pos.y - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < fallback_best_dist then
+                        fallback_best_dist = dist
+                        fallback_alien = alien
+                    end
+                elseif not fallback_alien then
+                    fallback_alien = alien
+                end
+            end
+        end
+        clicked_alien = fallback_alien
+    end
     if not clicked_alien then
         return false
     end

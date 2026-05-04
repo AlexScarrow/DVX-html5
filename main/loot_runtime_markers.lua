@@ -11,7 +11,7 @@ function M.extend(runtime, ctx)
     local BARRICADE_HP_BAR_BG_SCALE_Y = 0.32
     local BARRICADE_HP_BAR_BG_FULL_W = BARRICADE_HP_BAR_ART_W * BARRICADE_HP_BAR_BG_SCALE_X
     local BARRICADE_HP_BAR_OFFSET_Y = -100
-    local BARRICADE_HP_BAR_Z = 0.81
+    local BARRICADE_HP_BAR_Z = 0.781
     local BARRICADE_HP_BAR_BG_ANIM = hash("healthBar_backdrop")
     local BARRICADE_HP_BAR_FILL_ANIM = hash("healthBar_fillAmount")
     -- Door HP bars sit closer to door art and thinner than barricade bars.

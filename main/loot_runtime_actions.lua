@@ -5822,9 +5822,7 @@ function M.extend(runtime, ctx)
                                         and slot.name ~= hash("blip_spawn")
                                         and slot.name ~= hash("blip")
                                     then
-                                        print("Clicked slot is occupied. Choose another slot for turret deploy.")
-                                        flash_invalid_drag_units(source_unit, nil)
-                                        slot = nil
+                                        slot = get_empty_object_slot(drop_cell)
                                     end
                                     if not slot then
                                         print("No valid clicked slot for turret deploy.")

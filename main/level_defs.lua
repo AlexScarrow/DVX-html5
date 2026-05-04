@@ -49,11 +49,11 @@ function M.create_level_library()
             starting_equipped_buffs = {}
         },
         medic = {
-            starting_backpack_items = {},
+            starting_backpack_items = { "meds"},
             starting_equipped_buffs = {}
         },
         gunner = {
-            starting_backpack_items = {},
+            starting_backpack_items = { "ammo"},
             starting_equipped_buffs = {}
         }
     }
@@ -86,11 +86,11 @@ function M.create_level_library()
             starting_equipped_buffs = {}
         },
         medic = {
-            starting_backpack_items = {},
+            starting_backpack_items = { "meds"},
             starting_equipped_buffs = {}
         },
         gunner = {
-            starting_backpack_items = {},
+            starting_backpack_items = { "ammo"},
             starting_equipped_buffs = {}
         }
     }
@@ -166,11 +166,11 @@ levels[3].unit_loadouts = {
         starting_equipped_buffs = {}
     },
     medic = {
-        starting_backpack_items = {},
+        starting_backpack_items = { "meds"},
         starting_equipped_buffs = {}
     },
     gunner = {
-        starting_backpack_items = {},
+        starting_backpack_items = { "ammo"},
         starting_equipped_buffs = {}
     }
 }
@@ -379,7 +379,7 @@ levels[3].unit_loadouts = {
         { x = 2, y = 8, tile = "coms" },
         { x = 5, y = 8, tile = "exterior2" },
         { x = 8, y = 8, tile = "rescue_entry" },
-        { x = 14, y = 8, tile = "exterior1" },
+        { x = 14, y = 7, tile = "exterior1" },
         { x = 11, y = 7, tile = "bunkroom" },
         { x = 2, y = 5, tile = "medbay" },
         { x = 5, y = 4, tile = "corridor1" },

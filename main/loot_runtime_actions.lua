@@ -5837,7 +5837,16 @@ function M.extend(runtime, ctx)
                                                 self.drag_resource = { active = false }
                                                 return true
                                             end
-                                            clear_packed_turret_from_backpack(source_unit)
+                                            if not remove_source_item() then
+                                                -- Fallback safety: remove one packed turret if drag slot changed mid-action.
+                                                for i, item in ipairs(source_unit.backpack_items or {}) do
+                                                    if item == TURRET_PACKED_ITEM then
+                                                        table.remove(source_unit.backpack_items, i)
+                                                        source_unit.backpack_used = #source_unit.backpack_items
+                                                        break
+                                                    end
+                                                end
+                                            end
                                             local replacing_spawn_marker = slot.name == hash("blip_spawn") or slot.name == hash("blip")
                                             if replacing_spawn_marker then
                                                 -- Preserve spawn capability even if its marker slot is reused.

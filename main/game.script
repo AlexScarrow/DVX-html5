@@ -1365,25 +1365,12 @@ local function get_step_move_cost(world_grid, from_cell_id, to_cell_id)
         return math.huge
     end
 
-    local has_obstacle = false
-    local scan = { to_cell.object1, to_cell.object2, to_cell.object3 }
-    for _, obj in ipairs(scan) do
-        if obj and obj.name == hash("obstacle") then
-            has_obstacle = true
-            break
-        end
-    end
-
     local step_cost = 0
-    -- Vertical transitions are always a flat ladder cost unless obstacle rule applies.
+    -- Vertical transitions are always a flat ladder cost.
     if from_cell.xCell == to_cell.xCell and from_cell.yCell ~= to_cell.yCell then
         step_cost = VERTICAL_MOVE_AP_COST
     else
         step_cost = 1
-    end
-    if has_obstacle then
-        -- Simplified rule: any obstacle in destination cell makes the step cost 2 AP.
-        step_cost = 2
     end
 
     return math.min(HUMAN_MAX_ACTION_POINTS, step_cost)

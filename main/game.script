@@ -26826,6 +26826,18 @@ function on_input(self, action_id, action)
                         dismiss_ranged_hit_preview(self)
                         return true
                     end
+                    if try_zoom_in_button(self, input_x, input_y) then
+                        dismiss_ranged_hit_preview(self)
+                        return true
+                    end
+                    if try_zoom_out_button(self, input_x, input_y) then
+                        dismiss_ranged_hit_preview(self)
+                        return true
+                    end
+                    if try_select_human_portrait(self, input_x, input_y) then
+                        dismiss_ranged_hit_preview(self)
+                        return true
+                    end
                     dismiss_ranged_hit_preview(self)
                     return true
                 end

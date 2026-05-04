@@ -519,6 +519,12 @@ function M.create(ctx)
                     human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current, melee_bonus
                 ))
                 if target_alien.hp_current <= 0 then
+                    if target_alien.go_id and ctx and ctx.spawn_impact_ring_at_world then
+                        local bpos = go.get_position(target_alien.go_id)
+                        if bpos then
+                            ctx.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
+                        end
+                    end
                     kill_alien(self, target_alien)
                     print(string.format("Alien #%d (BRUTE) is dead.", target_alien.id))
                 end

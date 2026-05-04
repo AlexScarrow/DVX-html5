@@ -1092,7 +1092,7 @@ ALIEN_REVEAL_WEIGHT_CANNON = tonumber(ALIEN_REVEAL_WEIGHTS.cannon_fodder or 10) 
 ALIEN_REVEAL_WEIGHT_SPEEDY = tonumber(ALIEN_REVEAL_WEIGHTS.speedy or 2) or 2
 ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
-SFX_TEST_FAVOR_SPEEDY_REVEAL = true
+SFX_TEST_FAVOR_SPEEDY_REVEAL = false
 TILE_OPACITY = 1
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
@@ -22238,6 +22238,11 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     end,
     play_civ_melee_hit_sfx = function(self_ref)
         play_civ_melee_hit_sfx(self_ref)
+    end,
+    spawn_impact_ring_at_world = function(self_ref, world_x, world_y, tint, duration_s)
+        if LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
+            LOOT_RUNTIME.spawn_impact_ring_at_world(self_ref, world_x, world_y, tint, duration_s)
+        end
     end,
     on_human_damaged = function(self_ref, unit, damage)
         trigger_human_portrait_hit_feedback(self_ref, unit, damage)

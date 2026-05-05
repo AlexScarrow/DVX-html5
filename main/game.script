@@ -190,8 +190,10 @@ HUMAN_PORTRAIT_START_X = SCREEN_WIDTH - 56
 HUMAN_PORTRAIT_START_Y = 386
 HUMAN_PORTRAIT_GAP_Y = 32
 HUMAN_PORTRAIT_Z = 0.846
-HUMAN_PORTRAIT_HIT_W = 90
-HUMAN_PORTRAIT_HIT_H = 90
+HUMAN_PORTRAIT_HIT_W = 68
+HUMAN_PORTRAIT_HIT_H = 60
+HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE = true
+HUMAN_PORTRAIT_HITBOX_DEBUG_Z = HUMAN_PORTRAIT_Z + 0.003
 HUMAN_PORTRAIT_HIT_FLASH_DURATION = 0.38
 HUMAN_PORTRAIT_HIT_RED_BLEND_MAX = 1.0
 HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX = 0.14
@@ -9879,7 +9881,8 @@ local function initialize_unit_ui(self)
         advisory_sprite = nil,
         ready_buttons = {},
         mp_debug_player_buttons = {},
-        human_portrait_icons = {}
+        human_portrait_icons = {},
+        human_portrait_hitbox_debug = {}
     }
 
     self.ui.panel_art = create_ui_panel_sprite(UI_PANEL_X, UI_PANEL_Y, 0.8, UI_PANEL_W, UI_PANEL_H)
@@ -9976,6 +9979,7 @@ local function initialize_unit_ui(self)
                 msg.post(msg.url(nil, self.ui.human_portrait_icons[i], "sprite"), "play_animation", { id = anim_id })
             end
         end
+        self.ui.human_portrait_hitbox_debug[i] = create_ui_square_alpha(0, 0, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, vmath.vector4(0, 0, 0, 0), HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
     end
     self.ui.launch_button = create_ui_square(0, 0, LAUNCH_BUTTON_Z, vmath.vector4(0.7, 0.2, 0.2, 0.95), LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
     self.ui.launch_button_art = create_ui_marker_sprite(hash("disabled_button"), LAUNCH_BUTTON_Z + 0.001)
@@ -10267,6 +10271,11 @@ local function set_ui_hidden(self)
     if self.ui.human_portrait_icons then
         for _, icon in ipairs(self.ui.human_portrait_icons) do
             set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+        end
+    end
+    if self.ui.human_portrait_hitbox_debug then
+        for _, hitbox in ipairs(self.ui.human_portrait_hitbox_debug) do
+            set_ui_square_transform(self, hitbox, -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
         end
     end
     set_ui_square_transform(self, self.ui.launch_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, LAUNCH_BUTTON_W, LAUNCH_BUTTON_H)
@@ -16348,8 +16357,27 @@ update_human_portrait_ui = function(self)
                 (HUMAN_PORTRAIT_DRAW_W * 0.021) * portrait_scale,
                 (HUMAN_PORTRAIT_DRAW_H * 0.021) * portrait_scale
             )
+            if self.ui.human_portrait_hitbox_debug then
+                local hx, hy = get_human_portrait_screen_pos(i)
+                local hitbox_tint = HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE
+                    and vmath.vector4(0.1, 1.0, 0.25, 0.32)
+                    or hidden
+                set_ui_square_transform(
+                    self,
+                    self.ui.human_portrait_hitbox_debug[i],
+                    hx,
+                    hy,
+                    HUMAN_PORTRAIT_HITBOX_DEBUG_Z,
+                    hitbox_tint,
+                    HUMAN_PORTRAIT_HIT_W,
+                    HUMAN_PORTRAIT_HIT_H
+                )
+            end
         else
             set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+            if self.ui.human_portrait_hitbox_debug then
+                set_ui_square_transform(self, self.ui.human_portrait_hitbox_debug[i], -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
+            end
         end
     end
 end
@@ -16417,65 +16445,76 @@ try_select_human_portrait = function(self, screen_x, screen_y)
         return false
     end
     local visible_ids = self.human_portrait_visible_unit_ids or get_visible_human_portrait_unit_ids(self)
+    local chosen_unit_id = nil
+    local best_dist_sq = math.huge
     for i, unit_id in ipairs(visible_ids) do
         local cx, cy = get_human_portrait_screen_pos(i)
         if is_point_in_screen_rect(screen_x, screen_y, cx, cy, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H) then
-            local unit = self.squad_units[unit_id]
-            if self.mp_state and self.mp_state.enabled and not multiplayer_can_control_unit(self, unit_id) then
-                return true
+            local dx = (screen_x or cx) - cx
+            local dy = (screen_y or cy) - cy
+            local dist_sq = (dx * dx) + (dy * dy)
+            if dist_sq < best_dist_sq then
+                best_dist_sq = dist_sq
+                chosen_unit_id = unit_id
             end
-            if unit and (unit.current_health or 0) > 0 then
-                local was_selected = self.controlled_unit_id == unit_id and unit.is_selected == true
-                if self.controlled_unit_id ~= unit_id then
-                    clear_locked_manual_target(self)
-                end
-                self.controlled_unit_id = unit_id
-                deselect_all_units(self)
-                unit.is_selected = true
-                self.ui_close_on_next_non_unit_click = false
-                self.awaiting_slot_shuffle_click = false
-                self.selected_start_cell = nil
-                close_comms_panel(self)
-                play_human_confirm_select_sfx(self, unit)
-                local unit_world_x = nil
-                local unit_world_y = nil
-                if unit.go_path then
-                    local pos = go.get_position(unit.go_path)
-                    unit_world_x = pos and pos.x or nil
-                    unit_world_y = pos and pos.y or nil
-                end
-                if (not unit_world_x or not unit_world_y) and unit.cell_id then
-                    local ucx, ucy = id_to_coords(unit.cell_id)
-                    if ucx and ucy then
-                        unit_world_x = ((ucx - 1) * CELL_WIDTH) + (CELL_WIDTH * 0.5)
-                        unit_world_y = ((ucy - 1) * CELL_HEIGHT) + (CELL_HEIGHT * 0.5)
-                    end
-                end
-                local unit_on_screen = false
-                if unit_world_x and unit_world_y and self.camera_pos and self.camera_zoom then
-                    local screen_unit_x = ((unit_world_x - self.camera_pos.x) * self.camera_zoom) + (SCREEN_WIDTH * 0.5)
-                    local screen_unit_y = ((unit_world_y - self.camera_pos.y) * self.camera_zoom) + (SCREEN_HEIGHT * 0.5)
-                    local margin = 48
-                    unit_on_screen = screen_unit_x >= margin
-                        and screen_unit_x <= (SCREEN_WIDTH - margin)
-                        and screen_unit_y >= margin
-                        and screen_unit_y <= (SCREEN_HEIGHT - margin)
-                end
-                if not unit_on_screen then
-                    center_camera_on_unit(self, unit)
-                end
-                if not was_selected then
-                    spawn_green_impact_ring_for_unit(self, unit, 0.6)
-                    unit.selection_green_flash_duration = HUMAN_SELECTION_GREEN_FLASH_DURATION
-                    unit.selection_green_flash_timer = HUMAN_SELECTION_GREEN_FLASH_DURATION
-                end
-                update_human_visual_state(self)
-                update_selected_unit_ui(self)
-            end
-            return true
         end
     end
-    return false
+    if not chosen_unit_id then
+        return false
+    end
+    local unit = self.squad_units[chosen_unit_id]
+    if self.mp_state and self.mp_state.enabled and not multiplayer_can_control_unit(self, chosen_unit_id) then
+        return true
+    end
+    if unit and (unit.current_health or 0) > 0 then
+        local was_selected = self.controlled_unit_id == chosen_unit_id and unit.is_selected == true
+        if self.controlled_unit_id ~= chosen_unit_id then
+            clear_locked_manual_target(self)
+        end
+        self.controlled_unit_id = chosen_unit_id
+        deselect_all_units(self)
+        unit.is_selected = true
+        self.ui_close_on_next_non_unit_click = false
+        self.awaiting_slot_shuffle_click = false
+        self.selected_start_cell = nil
+        close_comms_panel(self)
+        play_human_confirm_select_sfx(self, unit)
+        local unit_world_x = nil
+        local unit_world_y = nil
+        if unit.go_path then
+            local pos = go.get_position(unit.go_path)
+            unit_world_x = pos and pos.x or nil
+            unit_world_y = pos and pos.y or nil
+        end
+        if (not unit_world_x or not unit_world_y) and unit.cell_id then
+            local ucx, ucy = id_to_coords(unit.cell_id)
+            if ucx and ucy then
+                unit_world_x = ((ucx - 1) * CELL_WIDTH) + (CELL_WIDTH * 0.5)
+                unit_world_y = ((ucy - 1) * CELL_HEIGHT) + (CELL_HEIGHT * 0.5)
+            end
+        end
+        local unit_on_screen = false
+        if unit_world_x and unit_world_y and self.camera_pos and self.camera_zoom then
+            local screen_unit_x = ((unit_world_x - self.camera_pos.x) * self.camera_zoom) + (SCREEN_WIDTH * 0.5)
+            local screen_unit_y = ((unit_world_y - self.camera_pos.y) * self.camera_zoom) + (SCREEN_HEIGHT * 0.5)
+            local margin = 48
+            unit_on_screen = screen_unit_x >= margin
+                and screen_unit_x <= (SCREEN_WIDTH - margin)
+                and screen_unit_y >= margin
+                and screen_unit_y <= (SCREEN_HEIGHT - margin)
+        end
+        if not unit_on_screen then
+            center_camera_on_unit(self, unit)
+        end
+        if not was_selected then
+            spawn_green_impact_ring_for_unit(self, unit, 0.6)
+            unit.selection_green_flash_duration = HUMAN_SELECTION_GREEN_FLASH_DURATION
+            unit.selection_green_flash_timer = HUMAN_SELECTION_GREEN_FLASH_DURATION
+        end
+        update_human_visual_state(self)
+        update_selected_unit_ui(self)
+    end
+    return true
 end
 
 get_human_portrait_unit_id_at = function(self, screen_x, screen_y)
@@ -16483,13 +16522,21 @@ get_human_portrait_unit_id_at = function(self, screen_x, screen_y)
         return nil
     end
     local visible_ids = self.human_portrait_visible_unit_ids or get_visible_human_portrait_unit_ids(self)
+    local chosen_unit_id = nil
+    local best_dist_sq = math.huge
     for i, unit_id in ipairs(visible_ids) do
         local cx, cy = get_human_portrait_screen_pos(i)
         if is_point_in_screen_rect(screen_x, screen_y, cx, cy, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H) then
-            return unit_id
+            local dx = (screen_x or cx) - cx
+            local dy = (screen_y or cy) - cy
+            local dist_sq = (dx * dx) + (dy * dy)
+            if dist_sq < best_dist_sq then
+                best_dist_sq = dist_sq
+                chosen_unit_id = unit_id
+            end
         end
     end
-    return nil
+    return chosen_unit_id
 end
 
 function is_point_in_close_ui_button(screen_x, screen_y)
@@ -26767,6 +26814,12 @@ function on_input(self, action_id, action)
             self.zoom_input_armed = true
             self.touch_pan_blocked_by_ui = false
             if not inside_view then
+                return true
+            end
+            if try_select_human_portrait(self, input_x, input_y) then
+                dismiss_ranged_hit_preview(self)
+                self.is_panning = false
+                self.did_drag = true
                 return true
             end
             if get_selected_unit(self)

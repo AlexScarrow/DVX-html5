@@ -26972,6 +26972,11 @@ function on_input(self, action_id, action)
                 local world_x, world_y = screen_to_world(input_x, input_y, self.camera_pos, self.camera_zoom)
                 local clicked_cell_id = handle_cell_click(mapped_action, self.camera_pos, self.camera_zoom)
                 if clicked_cell_id then
+                    if get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y) then
+                        if handle_human_click_flow(self, clicked_cell_id, world_x, world_y) then
+                            return true
+                        end
+                    end
                     if LOOT_RUNTIME.handle_world_click_selected_unit(self, input_x, input_y, clicked_cell_id) then
                         return true
                     end

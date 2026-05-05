@@ -26904,6 +26904,42 @@ function on_input(self, action_id, action)
                 return true
             end
             if self.touch_pan_blocked_by_ui == true then
+                if try_close_selected_unit_ui(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    self.is_panning = false
+                    self.did_drag = false
+                    self.pan_velocity_x = 0
+                    self.pan_velocity_y = 0
+                    self.touch_pan_blocked_by_ui = false
+                    return true
+                end
+                if try_toggle_reactive_combat(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    self.is_panning = false
+                    self.did_drag = false
+                    self.pan_velocity_x = 0
+                    self.pan_velocity_y = 0
+                    self.touch_pan_blocked_by_ui = false
+                    return true
+                end
+                if try_toggle_comms_panel(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    self.is_panning = false
+                    self.did_drag = false
+                    self.pan_velocity_x = 0
+                    self.pan_velocity_y = 0
+                    self.touch_pan_blocked_by_ui = false
+                    return true
+                end
+                if try_activate_comms_slot(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    self.is_panning = false
+                    self.did_drag = false
+                    self.pan_velocity_x = 0
+                    self.pan_velocity_y = 0
+                    self.touch_pan_blocked_by_ui = false
+                    return true
+                end
                 dismiss_ranged_hit_preview(self)
                 self.is_panning = false
                 self.did_drag = false

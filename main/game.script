@@ -13831,69 +13831,102 @@ function enter_score_flow(self)
 end
 
 update_flow_title_space_grid_background = function(self, dt)
-    self.title_space_scroll_x = self.title_space_scroll_x or 0
-    self.title_space_scroll_y = self.title_space_scroll_y or 0
+    if self.ui then
+        if not self.ui.flow_title_space_tiles then
+            self.ui.flow_title_space_tiles = {
+                self.ui.flow_title_panel,
+                self.ui.flow_title_panel_2,
+                self.ui.flow_title_panel_3,
+                self.ui.flow_title_panel_4
+            }
+            for i = 5, 9 do
+                local panel = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
+                if panel then
+                    pcall(go.set, msg.url(nil, panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+                    pcall(go.set, msg.url(nil, panel, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                    table.insert(self.ui.flow_title_space_tiles, panel)
+                end
+            end
+        end
+    end
+    local gutter_x = 0
+    local gutter_y = 0
+    if is_expanded_hud_layout_active() then
+        local ok_size, win_w, win_h = pcall(window.get_size)
+        if ok_size and win_w and win_h and win_w > 0 and win_h > 0 then
+            local scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+            if scale and scale > 0 then
+                gutter_x = math.max(0, (win_w - (SCREEN_WIDTH * scale)) * 0.5 / scale)
+                gutter_y = math.max(0, (win_h - (SCREEN_HEIGHT * scale)) * 0.5 / scale)
+            end
+        end
+    end
+    local overfill_px = 160
+    local cover_w = SCREEN_WIDTH + (gutter_x * 2) + overfill_px
+    local cover_h = SCREEN_HEIGHT + (gutter_y * 2) + overfill_px
+    local space_scale = math.max(1, cover_w / TITLE_SPACE_TILE_W, cover_h / TITLE_SPACE_TILE_H)
+    local space_tile_w = TITLE_SPACE_TILE_W * space_scale
+    local space_tile_h = TITLE_SPACE_TILE_H * space_scale
+    local grid_scale_mult = math.max(1, space_scale)
+    local grid_tile_w = TITLE_GRID_TILE_W * grid_scale_mult
+    local grid_tile_h = TITLE_GRID_TILE_H * grid_scale_mult
+    local grid_draw_scale = TITLE_GRID_TILE_SCALE * grid_scale_mult
+
+    if self.title_space_scroll_x == nil then
+        self.title_space_scroll_x = -math.max(0, (gutter_x * 2.5) + (overfill_px * 2.0))
+    end
+    if self.title_space_scroll_y == nil then
+        self.title_space_scroll_y = math.max(0, (gutter_y * 2.5) + (overfill_px * 2.0))
+    end
     self.title_space_scroll_x = self.title_space_scroll_x - (TITLE_SPACE_SCROLL_SPEED_X * (dt or 0))
     self.title_space_scroll_y = self.title_space_scroll_y + (TITLE_SPACE_SCROLL_SPEED_Y * (dt or 0))
-    while self.title_space_scroll_x <= -TITLE_SPACE_TILE_W do
-        self.title_space_scroll_x = self.title_space_scroll_x + TITLE_SPACE_TILE_W
+    while self.title_space_scroll_x <= -space_tile_w do
+        self.title_space_scroll_x = self.title_space_scroll_x + space_tile_w
     end
-    while self.title_space_scroll_y >= TITLE_SPACE_TILE_H do
-        self.title_space_scroll_y = self.title_space_scroll_y - TITLE_SPACE_TILE_H
+    while self.title_space_scroll_y >= space_tile_h do
+        self.title_space_scroll_y = self.title_space_scroll_y - space_tile_h
     end
-    self.title_grid_scroll_x = self.title_grid_scroll_x or 0
-    self.title_grid_scroll_y = self.title_grid_scroll_y or 0
+    if self.title_grid_scroll_x == nil then
+        self.title_grid_scroll_x = -math.max(0, (gutter_x * 2.0) + (overfill_px * 1.4))
+    end
+    if self.title_grid_scroll_y == nil then
+        self.title_grid_scroll_y = math.max(0, (gutter_y * 2.0) + (overfill_px * 1.4))
+    end
     self.title_grid_scroll_x = self.title_grid_scroll_x + (TITLE_GRID_SCROLL_SPEED_X * (dt or 0))
     self.title_grid_scroll_y = self.title_grid_scroll_y - (TITLE_GRID_SCROLL_SPEED_Y * (dt or 0))
-    while self.title_grid_scroll_x >= TITLE_GRID_TILE_W do
-        self.title_grid_scroll_x = self.title_grid_scroll_x - TITLE_GRID_TILE_W
+    while self.title_grid_scroll_x >= grid_tile_w do
+        self.title_grid_scroll_x = self.title_grid_scroll_x - grid_tile_w
     end
-    while self.title_grid_scroll_y <= -TITLE_GRID_TILE_H do
-        self.title_grid_scroll_y = self.title_grid_scroll_y + TITLE_GRID_TILE_H
+    while self.title_grid_scroll_y <= -grid_tile_h do
+        self.title_grid_scroll_y = self.title_grid_scroll_y + grid_tile_h
     end
-    set_ui_square_transform(
-        self,
-        self.ui.flow_title_panel,
-        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
-        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
-        FLOW_UI_PANEL_Z + 0.001,
-        vmath.vector4(1, 1, 1, 1),
-        1,
-        1
-    )
-    set_ui_square_transform(
-        self,
-        self.ui.flow_title_panel_2,
-        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
-        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y,
-        FLOW_UI_PANEL_Z + 0.001,
-        vmath.vector4(1, 1, 1, 1),
-        1,
-        1
-    )
-    set_ui_square_transform(
-        self,
-        self.ui.flow_title_panel_3,
-        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x,
-        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
-        FLOW_UI_PANEL_Z + 0.001,
-        vmath.vector4(1, 1, 1, 1),
-        1,
-        1
-    )
-    set_ui_square_transform(
-        self,
-        self.ui.flow_title_panel_4,
-        (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x + TITLE_SPACE_TILE_W,
-        (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - TITLE_SPACE_TILE_H,
-        FLOW_UI_PANEL_Z + 0.001,
-        vmath.vector4(1, 1, 1, 1),
-        1,
-        1
-    )
+    local space_tiles = self.ui and self.ui.flow_title_space_tiles or nil
+    if space_tiles then
+        local base_space_x = (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x - space_tile_w
+        local base_space_y = (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - space_tile_h
+        local tile_i = 1
+        for row = 0, 2 do
+            for col = 0, 2 do
+                local tile = space_tiles[tile_i]
+                if tile then
+                    set_ui_square_transform(
+                        self,
+                        tile,
+                        base_space_x + (col * space_tile_w),
+                        base_space_y + (row * space_tile_h),
+                        FLOW_UI_PANEL_Z + 0.001,
+                        vmath.vector4(1, 1, 1, 1),
+                        space_scale,
+                        space_scale
+                    )
+                end
+                tile_i = tile_i + 1
+            end
+        end
+    end
     if self.ui.flow_title_grid_tiles then
-        local base_grid_x = (SCREEN_WIDTH * 0.5) - (((TITLE_GRID_TILE_COLS - 1) * TITLE_GRID_TILE_W) * 0.5) + self.title_grid_scroll_x
-        local base_grid_y = (SCREEN_HEIGHT * 0.5) - (((TITLE_GRID_TILE_ROWS - 1) * TITLE_GRID_TILE_H) * 0.5) + self.title_grid_scroll_y
+        local base_grid_x = (SCREEN_WIDTH * 0.5) - (((TITLE_GRID_TILE_COLS - 1) * grid_tile_w) * 0.5) + self.title_grid_scroll_x
+        local base_grid_y = (SCREEN_HEIGHT * 0.5) - (((TITLE_GRID_TILE_ROWS - 1) * grid_tile_h) * 0.5) + self.title_grid_scroll_y
         local grid_index = 1
         for row = 1, TITLE_GRID_TILE_ROWS do
             for col = 1, TITLE_GRID_TILE_COLS do
@@ -13902,12 +13935,12 @@ update_flow_title_space_grid_background = function(self, dt)
                     set_ui_square_transform(
                         self,
                         grid_tile,
-                        base_grid_x + ((col - 1) * TITLE_GRID_TILE_W),
-                        base_grid_y + ((row - 1) * TITLE_GRID_TILE_H),
+                        base_grid_x + ((col - 1) * grid_tile_w),
+                        base_grid_y + ((row - 1) * grid_tile_h),
                         TITLE_GRID_LAYER_Z,
                         vmath.vector4(1, 1, 1, 0.25),
-                        TITLE_GRID_TILE_SCALE,
-                        TITLE_GRID_TILE_SCALE
+                        grid_draw_scale,
+                        grid_draw_scale
                     )
                 end
                 grid_index = grid_index + 1
@@ -13931,6 +13964,11 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_3, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_4, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+        if self.ui.flow_title_space_tiles then
+            for _, panel in ipairs(self.ui.flow_title_space_tiles) do
+                set_ui_square_transform(self, panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
+            end
+        end
         if self.ui.flow_title_grid_tiles then
             for _, grid_tile in ipairs(self.ui.flow_title_grid_tiles) do
                 set_ui_square_transform(self, grid_tile, -9999, -9999, TITLE_GRID_LAYER_Z, hidden, 1, 1)

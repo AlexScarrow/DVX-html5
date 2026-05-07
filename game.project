@@ -15,6 +15,7 @@ use_accelerometer = 0
 width = 1280
 height = 720
 high_dpi = 0
+resizable = 1
 
 [render]
 clear_color_red = 0.0
@@ -56,4 +57,5 @@ transport_mode = websocket
 transport_ws_url = ws://90.192.116.103:8080/ws
 transport_room_id = dvx_local_room
 lock_fixed_window = 0
+start_maximized = 1
 

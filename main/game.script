@@ -265,6 +265,7 @@ MULTIPLAYER_TRANSPORT_MODE = tostring((sys.get_config and sys.get_config("dvx.tr
 MULTIPLAYER_TRANSPORT_WS_URL = tostring((sys.get_config and sys.get_config("dvx.transport_ws_url")) or "ws://127.0.0.1:8080/ws")
 MULTIPLAYER_TRANSPORT_ROOM_ID = tostring((sys.get_config and sys.get_config("dvx.transport_room_id")) or "dvx_local_room")
 WINDOW_LOCK_TO_DESIGN_SIZE = tostring((sys.get_config and sys.get_config("dvx.lock_fixed_window")) or "0") == "1"
+START_MAXIMIZED_ON_LAUNCH = tostring((sys.get_config and sys.get_config("dvx.start_maximized")) or "0") == "1"
 MULTIPLAYER_READY_BUTTON_W = 28
 MULTIPLAYER_READY_BUTTON_H = 28
 MULTIPLAYER_READY_BUTTON_GAP = 22
@@ -25998,6 +25999,18 @@ function init(self)
     msg.post(".", "acquire_input_focus")
     if (not IS_HTML5) and WINDOW_LOCK_TO_DESIGN_SIZE then
         enforce_fixed_window_size(self, 0, true)
+    elseif (not IS_HTML5) and START_MAXIMIZED_ON_LAUNCH and (not WINDOW_LOCK_TO_DESIGN_SIZE) then
+        timer.delay(0, false, function()
+            if window.set_resizable then
+                pcall(window.set_resizable, true)
+            end
+            -- Deterministic non-windowed startup for desktop distribution.
+            if window.set_fullscreen then
+                pcall(window.set_fullscreen, true)
+            elseif window.set_maximized then
+                pcall(window.set_maximized, true)
+            end
+        end)
     end
 
     -- Set camera view

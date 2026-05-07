@@ -204,6 +204,7 @@ NATIVE_INPUT_CALIBRATION_SCALE_X = 1.0
 NATIVE_INPUT_CALIBRATION_SCALE_Y = 1.0
 NATIVE_INPUT_CALIBRATION_OFFSET_X = 0
 NATIVE_INPUT_CALIBRATION_OFFSET_Y = 0
+NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE = 2.3
 NATIVE_INPUT_CALIBRATION_A = 1.402957
 NATIVE_INPUT_CALIBRATION_B = 0.012509
 NATIVE_INPUT_CALIBRATION_C = -260.542776
@@ -7815,7 +7816,15 @@ map_window_input_to_logical = function(x, y, screen_x, screen_y)
         if IS_HTML5 or NATIVE_INPUT_CALIBRATION_ENABLED ~= true then
             return logical_x, logical_y
         end
+        if not win_w or not win_h or win_w <= 0 or win_h <= 0 then
+            return logical_x, logical_y
+        end
         if win_w and win_h and (math.abs(win_w - SCREEN_WIDTH) <= 1 and math.abs(win_h - SCREEN_HEIGHT) <= 1) then
+            return logical_x, logical_y
+        end
+        local min_window_scale = tonumber(NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE or 2.3) or 2.3
+        local window_scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+        if window_scale < min_window_scale then
             return logical_x, logical_y
         end
         if tostring(NATIVE_INPUT_CALIBRATION_MODE or "") == "affine" then

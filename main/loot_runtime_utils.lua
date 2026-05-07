@@ -2,6 +2,8 @@ local M = {}
 
 function M.create(ctx)
     local runtime = {}
+    local ui_offset_x = 0
+    local ui_offset_y = 0
     local BUFFS_BY_ITEM_TYPE = {}
     do
         local buffs = (ctx and ctx.BUFFS) or {}
@@ -39,6 +41,11 @@ function M.create(ctx)
     end
     local function is_blip_spawn_name(name_hash)
         return name_hash == hash("blip_spawn") or name_hash == hash("blip")
+    end
+
+    runtime.set_ui_screen_offset = function(offset_x, offset_y)
+        ui_offset_x = tonumber(offset_x or 0) or 0
+        ui_offset_y = tonumber(offset_y or 0) or 0
     end
 
     runtime.get_backpack_item_color = function(item_type)
@@ -152,7 +159,7 @@ function M.create(ctx)
         local row = math.floor((slot_index - 1) / ctx.UI_BACKPACK_COLS)
         local slot_x = ctx.UI_BACKPACK_START_X + col * (ctx.UI_BACKPACK_SLOT_SIZE + ctx.UI_BACKPACK_SLOT_GAP)
         local slot_y = ctx.UI_BACKPACK_START_Y - row * (ctx.UI_BACKPACK_SLOT_SIZE + ctx.UI_BACKPACK_SLOT_GAP)
-        return slot_x, slot_y
+        return slot_x + ui_offset_x, slot_y + ui_offset_y
     end
 
     runtime.get_command_pip_screen_pos = function(pip_index)
@@ -160,39 +167,47 @@ function M.create(ctx)
         local row = math.floor((pip_index - 1) / ctx.COMMAND_UI.cols)
         local x = ctx.COMMAND_UI.start_x + col * (ctx.COMMAND_UI.pip_size + ctx.COMMAND_UI.pip_gap)
         local y = ctx.COMMAND_UI.start_y - row * (ctx.COMMAND_UI.pip_size + ctx.COMMAND_UI.pip_gap)
-        return x, y
+        return x + ui_offset_x, y + ui_offset_y
     end
 
     runtime.is_point_in_loot_button = function(screen_x, screen_y)
         local half = ctx.LOOT_UI.button_size * 0.5
-        return screen_x >= (ctx.LOOT_UI.button_x - half)
-            and screen_x <= (ctx.LOOT_UI.button_x + half)
-            and screen_y >= (ctx.LOOT_UI.button_y - half)
-            and screen_y <= (ctx.LOOT_UI.button_y + half)
+        local bx = ctx.LOOT_UI.button_x + ui_offset_x
+        local by = ctx.LOOT_UI.button_y + ui_offset_y
+        return screen_x >= (bx - half)
+            and screen_x <= (bx + half)
+            and screen_y >= (by - half)
+            and screen_y <= (by + half)
     end
 
     runtime.is_point_in_component_button = function(screen_x, screen_y)
         local half = ctx.COMPONENT_UI.button_size * 0.5
-        return screen_x >= (ctx.COMPONENT_UI.button_x - half)
-            and screen_x <= (ctx.COMPONENT_UI.button_x + half)
-            and screen_y >= (ctx.COMPONENT_UI.button_y - half)
-            and screen_y <= (ctx.COMPONENT_UI.button_y + half)
+        local bx = ctx.COMPONENT_UI.button_x + ui_offset_x
+        local by = ctx.COMPONENT_UI.button_y + ui_offset_y
+        return screen_x >= (bx - half)
+            and screen_x <= (bx + half)
+            and screen_y >= (by - half)
+            and screen_y <= (by + half)
     end
 
     runtime.is_point_in_fix_button = function(screen_x, screen_y)
         local half = ctx.COMPONENT_UI.fix_button_size * 0.5
-        return screen_x >= (ctx.COMPONENT_UI.fix_button_x - half)
-            and screen_x <= (ctx.COMPONENT_UI.fix_button_x + half)
-            and screen_y >= (ctx.COMPONENT_UI.fix_button_y - half)
-            and screen_y <= (ctx.COMPONENT_UI.fix_button_y + half)
+        local bx = ctx.COMPONENT_UI.fix_button_x + ui_offset_x
+        local by = ctx.COMPONENT_UI.fix_button_y + ui_offset_y
+        return screen_x >= (bx - half)
+            and screen_x <= (bx + half)
+            and screen_y >= (by - half)
+            and screen_y <= (by + half)
     end
 
     runtime.is_point_in_retrieve_button = function(screen_x, screen_y)
         local half = ctx.LOOT_UI.retrieve_button_size * 0.5
-        return screen_x >= (ctx.LOOT_UI.retrieve_button_x - half)
-            and screen_x <= (ctx.LOOT_UI.retrieve_button_x + half)
-            and screen_y >= (ctx.LOOT_UI.retrieve_button_y - half)
-            and screen_y <= (ctx.LOOT_UI.retrieve_button_y + half)
+        local bx = ctx.LOOT_UI.retrieve_button_x + ui_offset_x
+        local by = ctx.LOOT_UI.retrieve_button_y + ui_offset_y
+        return screen_x >= (bx - half)
+            and screen_x <= (bx + half)
+            and screen_y >= (by - half)
+            and screen_y <= (by + half)
     end
 
     runtime.cell_has_component_machine = function(cell)
@@ -461,8 +476,8 @@ function M.create(ctx)
         if not anchor then
             return nil, nil
         end
-        local panel_x = ctx.UI_PANEL_X or 0
-        local panel_y = ctx.UI_PANEL_Y or 0
+        local panel_x = (ctx.UI_PANEL_X or 0) + ui_offset_x
+        local panel_y = (ctx.UI_PANEL_Y or 0) + ui_offset_y
         local hotspot_x = panel_x + (ctx.BUFF_DROP_ZONE_OFFSET_X or 0)
         local hotspot_y = panel_y + (ctx.BUFF_DROP_ZONE_OFFSET_Y or 0)
         return hotspot_x + (anchor.x or 0), hotspot_y + (anchor.y or 0)
@@ -487,8 +502,8 @@ function M.create(ctx)
     end
 
     runtime.is_point_in_buff_drop_zone = function(screen_x, screen_y)
-        local panel_x = ctx.UI_PANEL_X or 0
-        local panel_y = ctx.UI_PANEL_Y or 0
+        local panel_x = (ctx.UI_PANEL_X or 0) + ui_offset_x
+        local panel_y = (ctx.UI_PANEL_Y or 0) + ui_offset_y
         local cx = panel_x + (ctx.BUFF_DROP_ZONE_OFFSET_X or 0)
         local cy = panel_y + (ctx.BUFF_DROP_ZONE_OFFSET_Y or 0)
         local half_w = (ctx.BUFF_DROP_ZONE_W or 114) * 0.5
@@ -530,17 +545,17 @@ function M.create(ctx)
     end
 
     runtime.get_bar_drop_target = function(screen_x, screen_y)
-        local min_y = ctx.UI_BAR_START_Y - ((ctx.UI_MAX_PIPS - 1) * (ctx.UI_BAR_PIP_SIZE + ctx.UI_BAR_PIP_GAP)) - ctx.LOOT_UI.bar_hit_padding
-        local max_y = ctx.UI_BAR_START_Y + ctx.LOOT_UI.bar_hit_padding
+        local min_y = (ctx.UI_BAR_START_Y + ui_offset_y) - ((ctx.UI_MAX_PIPS - 1) * (ctx.UI_BAR_PIP_SIZE + ctx.UI_BAR_PIP_GAP)) - ctx.LOOT_UI.bar_hit_padding
+        local max_y = (ctx.UI_BAR_START_Y + ui_offset_y) + ctx.LOOT_UI.bar_hit_padding
         if screen_y < min_y or screen_y > max_y then
             return nil
         end
 
         local half_w = (ctx.UI_BAR_PIP_SIZE * 0.5) + ctx.LOOT_UI.bar_hit_padding
-        if math.abs(screen_x - ctx.UI_BAR_AMMO_X) <= half_w then
+        if math.abs(screen_x - (ctx.UI_BAR_AMMO_X + ui_offset_x)) <= half_w then
             return "ammo"
         end
-        if math.abs(screen_x - ctx.UI_BAR_HP_X) <= half_w then
+        if math.abs(screen_x - (ctx.UI_BAR_HP_X + ui_offset_x)) <= half_w then
             return "meds"
         end
         return nil

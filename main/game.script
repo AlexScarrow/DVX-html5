@@ -903,8 +903,10 @@ MP_NET_STATUS_DOT_Y = SCREEN_HEIGHT - 18
 MP_NET_STATUS_DOT_W = 14
 MP_NET_STATUS_DOT_H = 14
 MP_NET_STATUS_DOT_Z = 0.846
-HUD_EXPANDED_TARGET_EDGE_MARGIN = 8
-HUD_EXPANDED_SAFE_EDGE_MARGIN = 8
+HUD_EXPANDED_TARGET_EDGE_MARGIN_X = -100
+HUD_EXPANDED_TARGET_EDGE_MARGIN_Y = -100
+HUD_EXPANDED_SAFE_EDGE_MARGIN = 0
+HUD_EXPANDED_BYPASS_CLAMP = true
 HUD_LAYOUT_BASE_UI_PANEL_X = UI_PANEL_X
 HUD_LAYOUT_BASE_UI_PANEL_Y = UI_PANEL_Y
 HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_X = HUMAN_PORTRAIT_START_X
@@ -938,32 +940,59 @@ is_expanded_hud_layout_active = function()
 end
 
 apply_runtime_hud_layout = function(self)
-    local function clamp_center(value, half_span)
+    local expanded = is_expanded_hud_layout_active()
+    local gutter_x = 0
+    local gutter_y = 0
+    local function clamp_center_x(value, half_span)
+        if expanded and HUD_EXPANDED_BYPASS_CLAMP == true then
+            return value
+        end
         local safe = tonumber(HUD_EXPANDED_SAFE_EDGE_MARGIN or 20) or 20
-        local min_c = safe + half_span
-        local max_c = SCREEN_WIDTH - safe - half_span
+        local min_c = (-gutter_x) + safe + half_span
+        local max_c = (SCREEN_WIDTH + gutter_x) - safe - half_span
         return math.max(min_c, math.min(max_c, value))
     end
-    local expanded = is_expanded_hud_layout_active()
+    local function clamp_center_y(value, half_span)
+        if expanded and HUD_EXPANDED_BYPASS_CLAMP == true then
+            return value
+        end
+        local safe = tonumber(HUD_EXPANDED_SAFE_EDGE_MARGIN or 20) or 20
+        local min_c = (-gutter_y) + safe + half_span
+        local max_c = (SCREEN_HEIGHT + gutter_y) - safe - half_span
+        return math.max(min_c, math.min(max_c, value))
+    end
     if expanded then
-        local edge_margin = tonumber(HUD_EXPANDED_TARGET_EDGE_MARGIN or 50) or 50
-        UI_PANEL_X = clamp_center(edge_margin + (UI_PANEL_W * 0.5), UI_PANEL_W * 0.5)
-        UI_PANEL_Y = HUD_LAYOUT_BASE_UI_PANEL_Y
-        HUMAN_PORTRAIT_START_X = clamp_center(SCREEN_WIDTH - edge_margin - (HUMAN_PORTRAIT_HIT_W * 0.5), HUMAN_PORTRAIT_HIT_W * 0.5)
+        local ok_size, win_w, win_h = pcall(window.get_size)
+        if ok_size and win_w and win_h and win_w > 0 and win_h > 0 then
+            local scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+            if scale and scale > 0 then
+                gutter_x = math.max(0, (win_w - (SCREEN_WIDTH * scale)) * 0.5 / scale)
+                gutter_y = math.max(0, (win_h - (SCREEN_HEIGHT * scale)) * 0.5 / scale)
+            end
+        end
+        local edge_margin_x = tonumber(HUD_EXPANDED_TARGET_EDGE_MARGIN_X or -100) or -100
+        local edge_margin_y = tonumber(HUD_EXPANDED_TARGET_EDGE_MARGIN_Y or -100) or -100
+        local left_edge_x = (-gutter_x) + edge_margin_x
+        local right_edge_x = (SCREEN_WIDTH + gutter_x) - edge_margin_x
+        local bottom_edge_y = (-gutter_y) + edge_margin_y
+        local top_edge_y = (SCREEN_HEIGHT + gutter_y) - edge_margin_y
+        UI_PANEL_X = clamp_center_x(left_edge_x + (UI_PANEL_W * 0.5), UI_PANEL_W * 0.5)
+        UI_PANEL_Y = clamp_center_y(HUD_LAYOUT_BASE_UI_PANEL_Y, UI_PANEL_H * 0.5)
+        HUMAN_PORTRAIT_START_X = clamp_center_x(right_edge_x - (HUMAN_PORTRAIT_HIT_W * 0.5), HUMAN_PORTRAIT_HIT_W * 0.5)
         HUMAN_PORTRAIT_START_Y = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_Y
-        NEW_TURN_BUTTON_X = clamp_center(edge_margin + (NEW_TURN_BUTTON_W * 0.5), NEW_TURN_BUTTON_W * 0.5)
-        NEW_TURN_BUTTON_Y = edge_margin + (NEW_TURN_BUTTON_H * 0.5)
-        LAUNCH_BUTTON_X = clamp_center(SCREEN_WIDTH - edge_margin - (LAUNCH_BUTTON_W * 0.5), LAUNCH_BUTTON_W * 0.5)
-        LAUNCH_BUTTON_Y = edge_margin + (LAUNCH_BUTTON_H * 0.5)
-        EXIT_BUTTON_X = clamp_center(edge_margin + (EXIT_BUTTON_W * 0.5), EXIT_BUTTON_W * 0.5)
-        EXIT_BUTTON_Y = SCREEN_HEIGHT - edge_margin - (EXIT_BUTTON_H * 0.5)
+        NEW_TURN_BUTTON_X = clamp_center_x(left_edge_x + (NEW_TURN_BUTTON_W * 0.5), NEW_TURN_BUTTON_W * 0.5)
+        NEW_TURN_BUTTON_Y = clamp_center_y(bottom_edge_y + (NEW_TURN_BUTTON_H * 0.5), NEW_TURN_BUTTON_H * 0.5)
+        LAUNCH_BUTTON_X = clamp_center_x(right_edge_x - (LAUNCH_BUTTON_W * 0.5), LAUNCH_BUTTON_W * 0.5)
+        LAUNCH_BUTTON_Y = clamp_center_y(bottom_edge_y + (LAUNCH_BUTTON_H * 0.5), LAUNCH_BUTTON_H * 0.5)
+        EXIT_BUTTON_X = clamp_center_x(left_edge_x + (EXIT_BUTTON_W * 0.5), EXIT_BUTTON_W * 0.5)
+        EXIT_BUTTON_Y = clamp_center_y(top_edge_y - (EXIT_BUTTON_H * 0.5), EXIT_BUTTON_H * 0.5)
         SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
-        SCORE_HUD_Y = SCREEN_HEIGHT - edge_margin - (SCORE_HUD_DIGIT_DRAW_H * 0.5)
-        MP_BUILD_HUD_Y = SCREEN_HEIGHT - edge_margin - (MP_BUILD_DIGIT_DRAW_H * 0.5)
-        MP_BUILD_HUD_RIGHT_X = SCREEN_WIDTH - edge_margin - (MP_BUILD_DIGIT_DRAW_W * 0.5)
-        ZOOM_IN_BUTTON_X = clamp_center(SCREEN_WIDTH - edge_margin - (ZOOM_IN_BUTTON_W * 0.5), ZOOM_IN_BUTTON_W * 0.5)
+        SCORE_HUD_Y = clamp_center_y(top_edge_y - (SCORE_HUD_DIGIT_DRAW_H * 0.5), SCORE_HUD_DIGIT_DRAW_H * 0.5)
+        MP_BUILD_HUD_Y = clamp_center_y(top_edge_y - (MP_BUILD_DIGIT_DRAW_H * 0.5), MP_BUILD_DIGIT_DRAW_H * 0.5)
+        MP_BUILD_HUD_RIGHT_X = clamp_center_x(right_edge_x - (MP_BUILD_DIGIT_DRAW_W * 0.5), MP_BUILD_DIGIT_DRAW_W * 0.5)
+        ZOOM_IN_BUTTON_X = clamp_center_x(right_edge_x - (ZOOM_IN_BUTTON_W * 0.5), ZOOM_IN_BUTTON_W * 0.5)
         ZOOM_IN_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_Y
-        ZOOM_OUT_BUTTON_X = clamp_center(SCREEN_WIDTH - edge_margin - (ZOOM_OUT_BUTTON_W * 0.5), ZOOM_OUT_BUTTON_W * 0.5)
+        ZOOM_OUT_BUTTON_X = clamp_center_x(right_edge_x - (ZOOM_OUT_BUTTON_W * 0.5), ZOOM_OUT_BUTTON_W * 0.5)
         ZOOM_OUT_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_Y
     else
         UI_PANEL_X = HUD_LAYOUT_BASE_UI_PANEL_X
@@ -999,11 +1028,21 @@ apply_runtime_hud_layout = function(self)
     AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
     MULTIPLAYER_READY_BUTTON_Y = NEW_TURN_BUTTON_Y
     ZOOM_SLIDER_TRACK_X = HUMAN_PORTRAIT_START_X
-    ZOOM_SLIDER_TRACK_TOP_Y = SCREEN_HEIGHT - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
+    if expanded then
+        ZOOM_SLIDER_TRACK_TOP_Y = (SCREEN_HEIGHT + gutter_y) - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
+    else
+        ZOOM_SLIDER_TRACK_TOP_Y = SCREEN_HEIGHT - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
+    end
     ZOOM_SLIDER_TRACK_BOTTOM_Y = ZOOM_SLIDER_TRACK_TOP_Y - ZOOM_SLIDER_TRACK_H
     ZOOM_SLIDER_TRACK_CENTER_Y = ZOOM_SLIDER_TRACK_TOP_Y - (ZOOM_SLIDER_TRACK_H * 0.5)
     PURGE_TIMER_HUD_CENTER_X = SCORE_HUD_CENTER_X
     PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 24
+    if LOOT_RUNTIME and LOOT_RUNTIME.set_ui_screen_offset then
+        LOOT_RUNTIME.set_ui_screen_offset(
+            (tonumber(UI_PANEL_X or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_X or UI_PANEL_X or 0) or 0),
+            (tonumber(UI_PANEL_Y or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_Y or UI_PANEL_Y or 0) or 0)
+        )
+    end
 end
 do
     local project_version_cfg = sys.get_config and sys.get_config("project.version") or nil
@@ -16292,6 +16331,8 @@ function update_selected_unit_ui(self)
         return
     end
 
+    local panel_dx = (tonumber(UI_PANEL_X or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_X or UI_PANEL_X or 0) or 0)
+    local panel_dy = (tonumber(UI_PANEL_Y or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_Y or UI_PANEL_Y or 0) or 0)
     local panel_shadow_alpha = get_ui_panel_shadow_alpha(self)
     set_ui_panel_transform(
         self,
@@ -16350,9 +16391,9 @@ function update_selected_unit_ui(self)
         local hp_color = hp_on and UI_COLOR_HP or vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0.2)
         local ammo_color = ammo_on and UI_COLOR_AMMO or vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, 0.2)
 
-        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X, pip_y, HUMAN_UI_BASE_Z, ap_color, UI_BAR_PIP_SIZE, pip_h)
-        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X, pip_y, HUMAN_UI_BASE_Z, hp_color, UI_BAR_PIP_SIZE, pip_h)
-        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X, pip_y, HUMAN_UI_BASE_Z, ammo_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, ap_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, hp_color, UI_BAR_PIP_SIZE, pip_h)
+        set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, ammo_color, UI_BAR_PIP_SIZE, pip_h)
     end
 
     local show_command = unit.class_id == UNIT_CLASS_SARGE

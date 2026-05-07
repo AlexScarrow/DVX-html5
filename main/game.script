@@ -903,6 +903,108 @@ MP_NET_STATUS_DOT_Y = SCREEN_HEIGHT - 18
 MP_NET_STATUS_DOT_W = 14
 MP_NET_STATUS_DOT_H = 14
 MP_NET_STATUS_DOT_Z = 0.846
+HUD_EXPANDED_TARGET_EDGE_MARGIN = 8
+HUD_EXPANDED_SAFE_EDGE_MARGIN = 8
+HUD_LAYOUT_BASE_UI_PANEL_X = UI_PANEL_X
+HUD_LAYOUT_BASE_UI_PANEL_Y = UI_PANEL_Y
+HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_X = HUMAN_PORTRAIT_START_X
+HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_Y = HUMAN_PORTRAIT_START_Y
+HUD_LAYOUT_BASE_NEW_TURN_BUTTON_X = NEW_TURN_BUTTON_X
+HUD_LAYOUT_BASE_NEW_TURN_BUTTON_Y = NEW_TURN_BUTTON_Y
+HUD_LAYOUT_BASE_LAUNCH_BUTTON_X = LAUNCH_BUTTON_X
+HUD_LAYOUT_BASE_LAUNCH_BUTTON_Y = LAUNCH_BUTTON_Y
+HUD_LAYOUT_BASE_EXIT_BUTTON_X = EXIT_BUTTON_X
+HUD_LAYOUT_BASE_EXIT_BUTTON_Y = EXIT_BUTTON_Y
+HUD_LAYOUT_BASE_SCORE_HUD_CENTER_X = SCORE_HUD_CENTER_X
+HUD_LAYOUT_BASE_SCORE_HUD_Y = SCORE_HUD_Y
+HUD_LAYOUT_BASE_MP_BUILD_HUD_RIGHT_X = MP_NET_STATUS_DOT_X - 14
+HUD_LAYOUT_BASE_MP_BUILD_HUD_Y = MP_NET_STATUS_DOT_Y
+HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_X = ZOOM_IN_BUTTON_X
+HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_Y = ZOOM_IN_BUTTON_Y
+HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_X = ZOOM_OUT_BUTTON_X
+HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_Y = ZOOM_OUT_BUTTON_Y
+
+is_expanded_hud_layout_active = function()
+    if IS_HTML5 then
+        return false
+    end
+    local ok_size, win_w, win_h = pcall(window.get_size)
+    if not ok_size or not win_w or not win_h or win_w <= 0 or win_h <= 0 then
+        return false
+    end
+    local window_scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+    local min_window_scale = tonumber(NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE or 2.3) or 2.3
+    return window_scale >= min_window_scale
+end
+
+apply_runtime_hud_layout = function(self)
+    local function clamp_center(value, half_span)
+        local safe = tonumber(HUD_EXPANDED_SAFE_EDGE_MARGIN or 20) or 20
+        local min_c = safe + half_span
+        local max_c = SCREEN_WIDTH - safe - half_span
+        return math.max(min_c, math.min(max_c, value))
+    end
+    local expanded = is_expanded_hud_layout_active()
+    if expanded then
+        local edge_margin = tonumber(HUD_EXPANDED_TARGET_EDGE_MARGIN or 50) or 50
+        UI_PANEL_X = clamp_center(edge_margin + (UI_PANEL_W * 0.5), UI_PANEL_W * 0.5)
+        UI_PANEL_Y = HUD_LAYOUT_BASE_UI_PANEL_Y
+        HUMAN_PORTRAIT_START_X = clamp_center(SCREEN_WIDTH - edge_margin - (HUMAN_PORTRAIT_HIT_W * 0.5), HUMAN_PORTRAIT_HIT_W * 0.5)
+        HUMAN_PORTRAIT_START_Y = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_Y
+        NEW_TURN_BUTTON_X = clamp_center(edge_margin + (NEW_TURN_BUTTON_W * 0.5), NEW_TURN_BUTTON_W * 0.5)
+        NEW_TURN_BUTTON_Y = edge_margin + (NEW_TURN_BUTTON_H * 0.5)
+        LAUNCH_BUTTON_X = clamp_center(SCREEN_WIDTH - edge_margin - (LAUNCH_BUTTON_W * 0.5), LAUNCH_BUTTON_W * 0.5)
+        LAUNCH_BUTTON_Y = edge_margin + (LAUNCH_BUTTON_H * 0.5)
+        EXIT_BUTTON_X = clamp_center(edge_margin + (EXIT_BUTTON_W * 0.5), EXIT_BUTTON_W * 0.5)
+        EXIT_BUTTON_Y = SCREEN_HEIGHT - edge_margin - (EXIT_BUTTON_H * 0.5)
+        SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
+        SCORE_HUD_Y = SCREEN_HEIGHT - edge_margin - (SCORE_HUD_DIGIT_DRAW_H * 0.5)
+        MP_BUILD_HUD_Y = SCREEN_HEIGHT - edge_margin - (MP_BUILD_DIGIT_DRAW_H * 0.5)
+        MP_BUILD_HUD_RIGHT_X = SCREEN_WIDTH - edge_margin - (MP_BUILD_DIGIT_DRAW_W * 0.5)
+        ZOOM_IN_BUTTON_X = clamp_center(SCREEN_WIDTH - edge_margin - (ZOOM_IN_BUTTON_W * 0.5), ZOOM_IN_BUTTON_W * 0.5)
+        ZOOM_IN_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_Y
+        ZOOM_OUT_BUTTON_X = clamp_center(SCREEN_WIDTH - edge_margin - (ZOOM_OUT_BUTTON_W * 0.5), ZOOM_OUT_BUTTON_W * 0.5)
+        ZOOM_OUT_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_Y
+    else
+        UI_PANEL_X = HUD_LAYOUT_BASE_UI_PANEL_X
+        UI_PANEL_Y = HUD_LAYOUT_BASE_UI_PANEL_Y
+        HUMAN_PORTRAIT_START_X = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_X
+        HUMAN_PORTRAIT_START_Y = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_Y
+        NEW_TURN_BUTTON_X = HUD_LAYOUT_BASE_NEW_TURN_BUTTON_X
+        NEW_TURN_BUTTON_Y = HUD_LAYOUT_BASE_NEW_TURN_BUTTON_Y
+        LAUNCH_BUTTON_X = HUD_LAYOUT_BASE_LAUNCH_BUTTON_X
+        LAUNCH_BUTTON_Y = HUD_LAYOUT_BASE_LAUNCH_BUTTON_Y
+        EXIT_BUTTON_X = HUD_LAYOUT_BASE_EXIT_BUTTON_X
+        EXIT_BUTTON_Y = HUD_LAYOUT_BASE_EXIT_BUTTON_Y
+        SCORE_HUD_CENTER_X = HUD_LAYOUT_BASE_SCORE_HUD_CENTER_X
+        SCORE_HUD_Y = HUD_LAYOUT_BASE_SCORE_HUD_Y
+        MP_BUILD_HUD_RIGHT_X = HUD_LAYOUT_BASE_MP_BUILD_HUD_RIGHT_X
+        MP_BUILD_HUD_Y = HUD_LAYOUT_BASE_MP_BUILD_HUD_Y
+        ZOOM_IN_BUTTON_X = HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_X
+        ZOOM_IN_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_Y
+        ZOOM_OUT_BUTTON_X = HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_X
+        ZOOM_OUT_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_Y
+    end
+    COMMS_PANEL_X = UI_PANEL_X + UI_PANEL_W
+    COMMS_PANEL_Y = UI_PANEL_Y
+    COMMS_TOGGLE_BTN_X = UI_PANEL_X + (UI_PANEL_W * 0.5) - 118
+    COMMS_TOGGLE_BTN_Y = UI_PANEL_Y - (UI_PANEL_H * 0.5) + 73
+    COMMS_SLOT_START_X = COMMS_PANEL_X - 46
+    COMMS_SLOT_START_Y = COMMS_PANEL_Y + 149
+    REALTIME_TOGGLE_BUTTON_X = LAUNCH_BUTTON_X
+    REALTIME_TOGGLE_BUTTON_Y = LAUNCH_BUTTON_Y + 72
+    OBJECTIVE_BUTTON_X = LAUNCH_BUTTON_X - (LAUNCH_BUTTON_W + 16)
+    OBJECTIVE_BUTTON_Y = LAUNCH_BUTTON_Y
+    AESTHETIC_BUTTON_X = NEW_TURN_BUTTON_X + NEW_TURN_BUTTON_W + 64
+    AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
+    MULTIPLAYER_READY_BUTTON_Y = NEW_TURN_BUTTON_Y
+    ZOOM_SLIDER_TRACK_X = HUMAN_PORTRAIT_START_X
+    ZOOM_SLIDER_TRACK_TOP_Y = SCREEN_HEIGHT - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
+    ZOOM_SLIDER_TRACK_BOTTOM_Y = ZOOM_SLIDER_TRACK_TOP_Y - ZOOM_SLIDER_TRACK_H
+    ZOOM_SLIDER_TRACK_CENTER_Y = ZOOM_SLIDER_TRACK_TOP_Y - (ZOOM_SLIDER_TRACK_H * 0.5)
+    PURGE_TIMER_HUD_CENTER_X = SCORE_HUD_CENTER_X
+    PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 24
+end
 do
     local project_version_cfg = sys.get_config and sys.get_config("project.version") or nil
     if project_version_cfg == nil or project_version_cfg == "" then
@@ -25788,6 +25890,7 @@ function init(self)
     self.zoom_slider_drag_active = false
     self.touch_pan_blocked_by_ui = false
     self.input_map_cursor_debug = nil
+    apply_runtime_hud_layout(self)
     self.camera_zoom = (self.camera_min_zoom + self.camera_max_zoom) * 0.5
     self.realtime_rules_enabled = REALTIME_MODE_CFG.enabled == true
     self.realtime_mp_enabled = REALTIME_MODE_CFG.multiplayer_enabled == true
@@ -26153,6 +26256,7 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    apply_runtime_hud_layout(self)
     if self.pending_level_load and self.pending_level_load.level_index then
         local remaining = tonumber(self.pending_level_load.frames_until_spawn or 0) or 0
         if remaining > 0 then
@@ -26957,6 +27061,7 @@ end
 -- =============================================================================
 
 function on_input(self, action_id, action)
+    apply_runtime_hud_layout(self)
     local alien_activity_blocked = self.alien_turn_active
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase

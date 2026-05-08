@@ -12966,6 +12966,7 @@ multiplayer_lobby_create_host_draft = function(self)
     lobby.offers_by_id[session_id] = session
     lobby.local_active_offer_id = session_id
     lobby.host_draft_session_id = session_id
+    lobby.pending_join_session_id = ""
     multiplayer_lobby_sync_sessions_from_offers(self)
     multiplayer_lobby_emit_offer_upsert(self, session)
     return true
@@ -12992,6 +12993,7 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
     end
     session.owner_player_id = tostring(session.owner_player_id or self.mp_state and self.mp_state.local_player_id or "p1")
     lobby.offers_by_id[tostring(session.id or "")] = session
+    lobby.pending_join_session_id = ""
     multiplayer_lobby_sync_sessions_from_offers(self)
     multiplayer_lobby_emit_offer_upsert(self, session)
     return multiplayer_lobby_enter_mp_setup_from_session(self, session)
@@ -20795,7 +20797,23 @@ multiplayer_transport_on_event = function(self, event)
         local target_player_id = event.payload and event.payload.target_player_id or nil
         local local_player_id = self.mp_state and self.mp_state.local_player_id or "p1"
         if target_player_id and target_player_id ~= local_player_id then
-            return
+            local target = tostring(target_player_id or "")
+            local host_id = tostring(self.mp_state and self.mp_state.host_player_id or "p1")
+            local pending_join = tostring(self.mp_lobby and self.mp_lobby.pending_join_session_id or "")
+            local accepted_session_id = tostring(event.payload and event.payload.session_id or "")
+            local valid_target = (target == "p1" or target == "p2" or target == "p3" or target == "p4")
+            if valid_target and target ~= host_id and pending_join ~= "" and accepted_session_id ~= "" and pending_join == accepted_session_id and local_player_id == host_id then
+                self.mp_state.local_player_id = target
+                self.mp_state.debug_active_player_id = target
+                if self.mp_transport and self.mp_transport.set_local_player_id then
+                    self.mp_transport.set_local_player_id(target)
+                end
+                local_player_id = target
+                print(string.format("MP NET | late_player_id_adopt | source=lobby_join_accepted assigned=%s", target))
+            end
+            if target_player_id ~= local_player_id then
+                return
+            end
         end
         multiplayer_lobby_ensure_runtime(self)
         local session_id = tostring(event.payload and event.payload.session_id or "")
@@ -21554,6 +21572,18 @@ multiplayer_transport_on_event = function(self, event)
         self.mp_state.event_seq = 0
         self.mp_state.pending_turn_state_snapshot_turn_id = 0
         self.mp_state.last_turn_state_snapshot_broadcast_turn_id = 0
+        local assigned_player_id = tostring(event.payload and event.payload.player_id or "")
+        if assigned_player_id == "p1" or assigned_player_id == "p2" or assigned_player_id == "p3" or assigned_player_id == "p4" then
+            local prev_local_player_id = tostring(self.mp_state.local_player_id or "p1")
+            if assigned_player_id ~= prev_local_player_id then
+                self.mp_state.local_player_id = assigned_player_id
+                self.mp_state.debug_active_player_id = assigned_player_id
+                if self.mp_transport and self.mp_transport.set_local_player_id then
+                    self.mp_transport.set_local_player_id(assigned_player_id)
+                end
+                print(string.format("MP NET | relay_player_id_assigned | previous=%s assigned=%s", prev_local_player_id, assigned_player_id))
+            end
+        end
         multiplayer_lobby_ensure_runtime(self)
         if self.mp_lobby then
             self.mp_lobby.offer_removed_at_ms_by_id = {}

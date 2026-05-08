@@ -338,6 +338,14 @@ function M.create(opts)
         state.on_event = nil
     end
 
+    function transport.set_local_player_id(player_id)
+        local next_id = tostring(player_id or "")
+        if next_id == "" then
+            return
+        end
+        state.ws_player_id = next_id
+    end
+
     function transport.update(dt)
         if state.mode ~= "websocket" then
             return

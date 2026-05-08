@@ -31,6 +31,21 @@ function getPlayerList(room) {
   return players;
 }
 
+function allocatePlayerId(room, requestedPlayerId) {
+  const used = new Set(getPlayerList(room));
+  const requested = String(requestedPlayerId || "");
+  if (requested && !used.has(requested)) {
+    return requested;
+  }
+  for (let i = 1; i <= MAX_PLAYERS_PER_ROOM; i += 1) {
+    const candidate = `p${i}`;
+    if (!used.has(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
 function removeClientFromRoom(ws) {
   const state = clientState.get(ws);
   if (!state || !state.roomId) {
@@ -83,8 +98,8 @@ wss.on("connection", (ws) => {
     if (msg.type === "join_room") {
       const payload = msg.payload || {};
       const roomId = String(payload.room_id || "");
-      const playerId = String(payload.player_id || "");
-      if (!roomId || !playerId) {
+      const requestedPlayerId = String(payload.player_id || "");
+      if (!roomId || !requestedPlayerId) {
         safeSend(ws, {
           version: 1,
           type: "error",
@@ -102,12 +117,21 @@ wss.on("connection", (ws) => {
         });
         return;
       }
+      const playerId = allocatePlayerId(room, requestedPlayerId);
+      if (!playerId) {
+        safeSend(ws, {
+          version: 1,
+          type: "error",
+          payload: { code: "room_full", message: "Room is full" }
+        });
+        return;
+      }
       room.clients.add(ws);
       clientState.set(ws, { roomId, playerId });
       safeSend(ws, {
         version: 1,
         type: "joined_room",
-        payload: { room_id: roomId, players: getPlayerList(room) }
+        payload: { room_id: roomId, players: getPlayerList(room), player_id: playerId }
       });
       for (const client of room.clients) {
         if (client === ws) continue;
@@ -141,10 +165,12 @@ wss.on("connection", (ws) => {
         return;
       }
       for (const client of room.clients) {
+        const commandPayload = Object.assign({}, msg.payload || {});
+        commandPayload.sender_player_id = state.playerId;
         safeSend(client, {
           version: 1,
           type: "command",
-          payload: msg.payload || {}
+          payload: commandPayload
         });
       }
       return;

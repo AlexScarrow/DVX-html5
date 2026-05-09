@@ -54,8 +54,8 @@ outro_preview_result = win
 env_name = LOCAL
 net_protocol_version = 1
 transport_mode = websocket
-transport_ws_url = ws://192.168.0.74:8080/ws
-transport_room_id = dvx_local_room_fix3
+transport_ws_url = ws://90.192.116.103:8080/ws
+transport_room_id = dvx_remote_friend_20260509
 lock_fixed_window = 0
 start_maximized = 1
 

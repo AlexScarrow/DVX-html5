@@ -17,22 +17,20 @@ function M.create_level_library()
 
     -- Example Level 1
     levels[1] = {
-       
-        { x = 8, y = 8, tile = "canteen" },
-        { x = 11, y = 11, tile = "factory" },
-        { x = 8, y = 11, tile = "workshop" },
         { x = 5, y = 11, tile = "coms" },
-        { x = 11, y = 8, tile = "medbay" },
+        { x = 8, y = 11, tile = "workshop" },
+        { x = 11, y = 11, tile = "factory" },
         { x = 2, y = 8, tile = "entry" },
         { x = 5, y = 8, tile = "armoury" },
-        { x = 5, y = 2, tile = "bunkroom" },
-        { x = 5, y = 5, tile = "jungle" },
+        { x = 8, y = 8, tile = "canteen" },
+        { x = 11, y = 8, tile = "medbay" },
         { x = 14, y = 8, tile = "exterior1" },
-        --{ x = 11, y = 11, tile = "lab" },
+        { x = 5, y = 5, tile = "jungle" },
+        { x = 8, y = 5, tile = "passage1" },
+        { x = 11, y = 5, tile = "corridor1" },
         { x = 14, y = 5, tile = "portal" },
-        --{ x = 14, y = 9, tile = "portal" },
-        { x = 11, y = 2, tile = "exit" },
-        { x = 10, y = 5, tile = "passage1" },
+        { x = 5, y = 2, tile = "bunkroom" },
+        { x = 9, y = 2, tile = "exit" },
     }
     levels[1].mission_type = "escape"
     levels[1].spawn_tile = "entry"
@@ -46,7 +44,9 @@ function M.create_level_library()
         },
         techie = {
             starting_backpack_items = { "power" },
-            starting_equipped_buffs = {}
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
         },
         medic = {
             starting_backpack_items = { "meds"},
@@ -248,7 +248,9 @@ levels[3].unit_loadouts = {
         },
         techie = {
             starting_backpack_items = { "power","wiring_straight","power" },
-            starting_equipped_buffs = {}
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
         },
         medic = {
             starting_backpack_items = {"power","meds","meds"},

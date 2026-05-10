@@ -812,6 +812,18 @@ images {
 images {
   image: "/assets/images/advisory_onlySargeAuthorized.png"
 }
+images {
+  image: "/assets/images/tile_cavern_off.png"
+}
+images {
+  image: "/assets/images/tile_cavern_on.png"
+}
+images {
+  image: "/assets/images/tile_showers_off.png"
+}
+images {
+  image: "/assets/images/tile_showers_on.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

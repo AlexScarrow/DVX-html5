@@ -17553,6 +17553,7 @@ multiplayer_apply_authoritative_unit_digest = function(self, unit_digest)
     if applied_any then
         update_human_visual_state(self)
         update_human_ap_debug_label(self)
+        update_selected_unit_ui(self)
         for unit_id, _ in pairs(moved_unit_ids) do
             local unit = self.squad_units and self.squad_units[unit_id] or nil
             if unit and unit.go_path then
@@ -21030,8 +21031,7 @@ multiplayer_transport_on_event = function(self, event)
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=resource_drag_applied")
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
-        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local should_apply_local = payload.host_applied ~= true
         local ok = true
         if should_apply_local then
             self.mp_state.applying_remote_event = true
@@ -21457,8 +21457,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
-        local should_apply_local = not (payload.host_applied == true and is_local_host)
+        local should_apply_local = payload.host_applied ~= true
         local applied_ok = true
         if should_apply_local then
             applied_ok = multiplayer_apply_retrieve_world_item_event(self, payload)

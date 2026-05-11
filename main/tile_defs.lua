@@ -1445,8 +1445,8 @@ library["lab"] = lab
     -- - Single isolated accessible cell: 4
     -- - Cell 4 remains enterable from left neighbor tile via edge rules.
     showers.cells[1].accessDown = false   -- blocks 2 <-> 3
-    showers.cells[2].accessDown = false
-    showers.cells[3].accessDown = false
+    showers.cells[2].accessDown = true
+    showers.cells[3].accessDown = true
     showers.cells[4].accessDown = false
     showers.cells[5].accessDown = true
     showers.cells[6].accessDown = true

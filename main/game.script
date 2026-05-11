@@ -4004,6 +4004,14 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
             to_x = to.x,
             to_y = to.y
         })
+    elseif self.mp_state and self.mp_state.enabled then
+        multiplayer_emit_combat_fx_event(self, {
+            fx_type = "human_projectile",
+            from_x = from.x,
+            from_y = from.y + 20,
+            to_x = to.x,
+            to_y = to.y
+        })
     end
 end
 
@@ -4446,6 +4454,14 @@ local function update_spitter_projectiles(self, dt)
                                 if bpos and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
                                     LOOT_RUNTIME.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
                                 end
+                                if bpos then
+                                    multiplayer_emit_combat_fx_event(self, {
+                                        fx_type = "brute_death_ring",
+                                        world_x = bpos.x,
+                                        world_y = bpos.y,
+                                        duration_s = 0.7
+                                    })
+                                end
                             end
                             print(string.format(
                                 "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
@@ -4705,6 +4721,14 @@ local function resolve_turret_pending_shot(self, shot_id)
                         local bpos = go.get_position(target_alien.go_id)
                         if bpos and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
                             LOOT_RUNTIME.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
+                        end
+                        if bpos then
+                            multiplayer_emit_combat_fx_event(self, {
+                                fx_type = "brute_death_ring",
+                                world_x = bpos.x,
+                                world_y = bpos.y,
+                                duration_s = 0.7
+                            })
                         end
                     end
                     target_alien.is_dead = true
@@ -22202,6 +22226,53 @@ multiplayer_apply_combat_fx_event = function(self, payload)
             return true
         end
         return false
+    elseif fx_type == "human_projectile" then
+        local from_x = tonumber(payload.from_x or 0)
+        local from_y = tonumber(payload.from_y or 0)
+        local to_x = tonumber(payload.to_x or 0)
+        local to_y = tonumber(payload.to_y or 0)
+        if not (from_x and from_y and to_x and to_y) then
+            return false
+        end
+        local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
+        if not projectile_id then
+            return false
+        end
+        go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
+        msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
+        go.set(msg.url(nil, projectile_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        local dir_x = to_x - from_x
+        local dir_y = to_y - from_y
+        if math.abs(dir_x) > 0.01 or math.abs(dir_y) > 0.01 then
+            go.set_rotation(vmath.quat_rotation_z(math.atan2(dir_y, dir_x) + math.pi), projectile_id)
+        end
+        self.spitter_projectiles = self.spitter_projectiles or {}
+        table.insert(self.spitter_projectiles, {
+            kind = "human_remote",
+            go_id = projectile_id,
+            from = vmath.vector3(from_x, from_y, 0.75),
+            to = vmath.vector3(to_x, to_y, 0.75),
+            t = 0,
+            speed = SPITTER_PROJECTILE_SPEED * 1.4
+        })
+        return true
+    elseif fx_type == "brute_death_ring" then
+        if not (LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world) then
+            return false
+        end
+        local world_x = tonumber(payload.world_x or 0)
+        local world_y = tonumber(payload.world_y or 0)
+        if not (world_x and world_y) then
+            return false
+        end
+        LOOT_RUNTIME.spawn_impact_ring_at_world(
+            self,
+            world_x,
+            world_y,
+            vmath.vector4(1.0, 0.55, 0.2, 1),
+            math.max(0.05, tonumber(payload.duration_s or 0.7) or 0.7)
+        )
+        return true
     end
     return false
 end

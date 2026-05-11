@@ -23287,6 +23287,19 @@ begin_settle_to_assigned_slot = function(self, unit)
     return true
 end
 
+get_alien_turn_overlay_scale_multiplier = function()
+    if not is_expanded_hud_layout_active() then
+        return 1
+    end
+    local ok_size, win_w, win_h = pcall(window.get_size)
+    if not ok_size or not win_w or not win_h then
+        return 1.5
+    end
+    local sx = (tonumber(win_w or SCREEN_WIDTH) or SCREEN_WIDTH) / SCREEN_WIDTH
+    local sy = (tonumber(win_h or SCREEN_HEIGHT) or SCREEN_HEIGHT) / SCREEN_HEIGHT
+    return math.max(1, math.min(2.2, math.max(sx, sy))) * 0.8
+end
+
 local function update_single_unit_movement(self, unit, dt)
     if not unit or not unit.is_moving or not unit.move_path then
         if unit then
@@ -25881,14 +25894,15 @@ end
             go.delete(self.alien_turn_overlay)
             self.alien_turn_overlay = nil
         end
+        local alien_overlay_scale_mul = get_alien_turn_overlay_scale_multiplier()
         self.alien_turn_overlay = factory.create(
             "/tile_factory#tile_factory",
             vmath.vector3(self.camera_pos.x, self.camera_pos.y, 0.701),
             nil,
             {},
             vmath.vector3(
-                4.2 / math.max(0.0001, (self.camera_zoom or 1)),
-                4 / math.max(0.0001, (self.camera_zoom or 1)),
+                (4.2 * alien_overlay_scale_mul) / math.max(0.0001, (self.camera_zoom or 1)),
+                (4 * alien_overlay_scale_mul) / math.max(0.0001, (self.camera_zoom or 1)),
                 1
             )
         )
@@ -27216,11 +27230,12 @@ function update(self, dt)
         go.set_scale(vmath.vector3(sx, sy, 1), self.sheen_overlay)
     end
     if self.alien_turn_overlay then
+        local alien_overlay_scale_mul = get_alien_turn_overlay_scale_multiplier()
         go.set_position(vmath.vector3(self.camera_pos.x, self.camera_pos.y, 0.701), self.alien_turn_overlay)
         go.set_scale(
             vmath.vector3(
-                4.2 / math.max(0.0001, (self.camera_zoom or 1)),
-                4 / math.max(0.0001, (self.camera_zoom or 1)),
+                (4.2 * alien_overlay_scale_mul) / math.max(0.0001, (self.camera_zoom or 1)),
+                (4 * alien_overlay_scale_mul) / math.max(0.0001, (self.camera_zoom or 1)),
                 1
             ),
             self.alien_turn_overlay

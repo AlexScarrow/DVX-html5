@@ -7274,6 +7274,8 @@ local function spawn_civilians_for_current_mission(self)
             and cell.tileID ~= hash("empty")
             and cell.tileID ~= hash("corridor1")
             and cell.tileID ~= hash("passage1")
+            and cell.tileID ~= hash("exterior1")
+            and cell.tileID ~= hash("exterior2")
             and is_cell_in_any_rescue_entry_tile(self, cell.idNumber) ~= true
             and is_cell_in_any_entry_tile(self, cell.idNumber) ~= true
         then
@@ -22989,23 +22991,26 @@ local function get_unit_world_pos_in_cell(self, unit, cell_id)
     return x, base_y
 end
 
-local function refresh_unit_positions_in_cell(self, cell_id)
+local function refresh_unit_positions_in_cell(self, cell_id, skip_moving_units)
     if not cell_id then
         return
     end
     local units_in_cell = get_units_on_cell(self, cell_id)
     sort_units_by_spawn_order(units_in_cell)
     for _, unit in ipairs(units_in_cell) do
-        if unit.go_path then
+        if unit.go_path and not (skip_moving_units and unit.is_moving == true) then
             local x, y = get_unit_world_pos_in_cell(self, unit, cell_id)
             go.set_position(vmath.vector3(x, y, 0.5), unit.go_path)
         end
     end
 end
 
-local function move_human_to_cell(self, unit, cell_id)
+local function move_human_to_cell(self, unit, cell_id, assign_slot)
     if not unit then
         return
+    end
+    if assign_slot == nil then
+        assign_slot = true
     end
 
     local old_cell_id = unit.cell_id
@@ -23016,14 +23021,18 @@ local function move_human_to_cell(self, unit, cell_id)
 
     unit.cell_id = cell_id
     self.world_grid[cell_id].isOccupied = unit.occupancy_hash
-    ensure_cell_slot_assignment(self, unit, cell_id)
-    if unit.forced_slot_index and self.cell_slot_assignments and self.cell_slot_assignments[cell_id] then
-        self.cell_slot_assignments[cell_id][unit.id] = unit.forced_slot_index
-        unit.forced_slot_index = nil
+    if assign_slot == true then
+        ensure_cell_slot_assignment(self, unit, cell_id)
+        if unit.forced_slot_index and self.cell_slot_assignments and self.cell_slot_assignments[cell_id] then
+            self.cell_slot_assignments[cell_id][unit.id] = unit.forced_slot_index
+            unit.forced_slot_index = nil
+        end
+    elseif self.cell_slot_assignments and self.cell_slot_assignments[cell_id] then
+        self.cell_slot_assignments[cell_id][unit.id] = nil
     end
 
-    refresh_unit_positions_in_cell(self, old_cell_id)
-    refresh_unit_positions_in_cell(self, cell_id)
+    refresh_unit_positions_in_cell(self, old_cell_id, true)
+    refresh_unit_positions_in_cell(self, cell_id, true)
 end
 
 function spawn_human_unit(self)
@@ -23258,6 +23267,26 @@ begin_human_path_move_for_unit = function(self, unit, path, destination_cell_id,
     self.controlled_unit_id = previous_controlled
 end
 
+begin_settle_to_assigned_slot = function(self, unit)
+    if not (self and unit and unit.go_path and unit.cell_id and self.world_grid and self.world_grid[unit.cell_id]) then
+        return false
+    end
+    ensure_cell_slot_assignment(self, unit, unit.cell_id)
+    local settle_x, settle_y = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
+    local pos = go.get_position(unit.go_path)
+    local dx = settle_x - pos.x
+    local dy = settle_y - pos.y
+    if (dx * dx + dy * dy) <= 0.25 then
+        return false
+    end
+    unit.micro_target_x = settle_x
+    unit.micro_target_y = settle_y
+    unit.micro_move_kind = "settle_end"
+    unit.shadow_motion_offset = nil
+    unit.counter_move_total_dist = nil
+    return true
+end
+
 local function update_single_unit_movement(self, unit, dt)
     if not unit or not unit.is_moving or not unit.move_path then
         if unit then
@@ -23389,77 +23418,25 @@ local function update_single_unit_movement(self, unit, dt)
     local is_vertical_step = (from_x == to_x) and (from_y ~= to_y)
     local move_profile = get_aesthetic_profile(self)
     local counter_move_enabled = move_profile and move_profile.counter_token_move_enabled == true
-    if (not counter_move_enabled) and is_vertical_step and unit.vertical_prep_done_for_index ~= unit.move_path_index then
-        if self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
-            local assignment = self.cell_slot_assignments[unit.cell_id]
-            local right_slot = 1
-            for i = 1, #CELL_SLOT_OFFSETS_X do
-                local slot_offset = CELL_SLOT_OFFSETS_X[i] or 0
-                local best_offset = CELL_SLOT_OFFSETS_X[right_slot] or 0
-                if slot_offset > best_offset then
-                    right_slot = i
-                end
-            end
-            assignment[unit.id] = right_slot
-        end
-        local prep_x, prep_y = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
-        unit.micro_target_x = prep_x
-        unit.micro_target_y = prep_y
-        unit.micro_move_kind = "prep_vertical"
-        unit.vertical_prep_done_for_index = unit.move_path_index
-        return
-    end
-
-    if unit.entry_slot_for_index ~= unit.move_path_index then
-        local selected_slot = math.random(1, #CELL_SLOT_OFFSETS_X)
-        local is_final_step = unit.move_path and (unit.move_path_index >= #unit.move_path)
-        local prefer_clicked_slot = is_final_step
-            and unit.desired_destination_slot_index
-            and (target_cell_id == unit.desired_destination_cell_id)
-        local allow_clicked_slot_for_entry = prefer_clicked_slot and (counter_move_enabled or (not is_vertical_step))
-        if is_vertical_step and (not counter_move_enabled) then
-            local right_slot = 1
-            for i = 1, #CELL_SLOT_OFFSETS_X do
-                local slot_offset = CELL_SLOT_OFFSETS_X[i] or 0
-                local best_offset = CELL_SLOT_OFFSETS_X[right_slot] or 0
-                if slot_offset > best_offset then
-                    right_slot = i
-                end
-            end
-            selected_slot = right_slot
-        end
-        if allow_clicked_slot_for_entry then
-            selected_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, unit.desired_destination_slot_index))
-        elseif self.cell_slot_assignments and self.cell_slot_assignments[target_cell_id] then
-            local assignment = self.cell_slot_assignments[target_cell_id]
-            local free_slots = {}
-            local used = {}
-            for unit_id, slot_index in pairs(assignment) do
-                if unit_id ~= unit.id then
-                    used[slot_index] = true
-                end
-            end
-            for i = 1, #CELL_SLOT_OFFSETS_X do
-                if not used[i] then
-                    table.insert(free_slots, i)
-                end
-            end
-            if #free_slots > 0 and (counter_move_enabled or (not is_vertical_step)) then
-                selected_slot = free_slots[math.random(1, #free_slots)]
-            end
-        end
-        unit.entry_slot_for_index = unit.move_path_index
-        unit.entry_slot_index = selected_slot
-    end
     local target_cell = self.world_grid[target_cell_id]
-    local target_x, target_y = get_human_world_pos_for_cell(target_cell)
-    target_x = target_x + ((CELL_SLOT_OFFSETS_X[unit.entry_slot_index] or 0) * HUMAN_STACK_SPACING_X)
-    target_x = clamp_world_x_to_cell(target_cell, target_x)
     local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, unit.cell_id, target_cell_id)
     if door_obj and door_closed then
         if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
             update_vertical_move_sfx_for_unit(self, unit, false)
             update_horizontal_move_sfx_for_actor(self, unit.id, false)
+            local settled = begin_settle_to_assigned_slot and begin_settle_to_assigned_slot(self, unit)
+            if settled then
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
+                unit.vertical_prep_done_for_index = nil
+                unit.entry_slot_for_index = nil
+                unit.entry_slot_index = nil
+                unit.last_completed_step_vertical = false
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+                set_unit_rotation_degrees(unit, 0)
+                update_human_ap_debug_label(self)
+                return
+            end
             unit.is_moving = false
             unit.move_path = nil
             unit.move_path_index = 0
@@ -23484,6 +23461,19 @@ local function update_single_unit_movement(self, unit, dt)
         if unit.current_ap < door_ap_cost then
             update_vertical_move_sfx_for_unit(self, unit, false)
             update_horizontal_move_sfx_for_actor(self, unit.id, false)
+            local settled = begin_settle_to_assigned_slot and begin_settle_to_assigned_slot(self, unit)
+            if settled then
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
+                unit.vertical_prep_done_for_index = nil
+                unit.entry_slot_for_index = nil
+                unit.entry_slot_index = nil
+                unit.last_completed_step_vertical = false
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+                set_unit_rotation_degrees(unit, 0)
+                update_human_ap_debug_label(self)
+                return
+            end
             unit.is_moving = false
             unit.move_path = nil
             unit.move_path_index = 0
@@ -23518,6 +23508,19 @@ local function update_single_unit_movement(self, unit, dt)
     if target_cost > unit.current_ap then
         update_vertical_move_sfx_for_unit(self, unit, false)
         update_horizontal_move_sfx_for_actor(self, unit.id, false)
+        local settled = begin_settle_to_assigned_slot and begin_settle_to_assigned_slot(self, unit)
+        if settled then
+            unit.desired_destination_cell_id = nil
+            unit.desired_destination_slot_index = nil
+            unit.vertical_prep_done_for_index = nil
+            unit.entry_slot_for_index = nil
+            unit.entry_slot_index = nil
+            unit.last_completed_step_vertical = false
+            set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+            set_unit_rotation_degrees(unit, 0)
+            update_human_ap_debug_label(self)
+            return
+        end
         unit.is_moving = false
         unit.move_path = nil
         unit.move_path_index = 0
@@ -23541,6 +23544,27 @@ local function update_single_unit_movement(self, unit, dt)
         update_human_ap_debug_label(self)
         return
     end
+    if is_vertical_step and (not counter_move_enabled) and unit.vertical_prep_done_for_index ~= unit.move_path_index then
+        local current_cell = self.world_grid and self.world_grid[unit.cell_id] or nil
+        if current_cell then
+            local prep_x, prep_y = get_human_world_pos_for_cell(current_cell)
+            local right_slot = #CELL_SLOT_OFFSETS_X
+            prep_x = prep_x + ((CELL_SLOT_OFFSETS_X[right_slot] or 0) * HUMAN_STACK_SPACING_X)
+            prep_x = clamp_world_x_to_cell(current_cell, prep_x)
+            unit.micro_target_x = prep_x
+            unit.micro_target_y = prep_y
+            unit.micro_move_kind = "prep_vertical"
+            unit.vertical_prep_done_for_index = unit.move_path_index
+            return
+        end
+    end
+
+    local target_x, target_y = get_human_world_pos_for_cell(target_cell)
+    if is_vertical_step and (not counter_move_enabled) then
+        local right_slot = #CELL_SLOT_OFFSETS_X
+        target_x = target_x + ((CELL_SLOT_OFFSETS_X[right_slot] or 0) * HUMAN_STACK_SPACING_X)
+    end
+    target_x = clamp_world_x_to_cell(target_cell, target_x)
 
     local current_pos = go.get_position(unit.go_path)
     local dx = target_x - current_pos.x
@@ -23596,9 +23620,17 @@ local function update_single_unit_movement(self, unit, dt)
         if tostring(self.locked_manual_target_unit_id or "") == tostring(unit.id or "") then
             clear_locked_manual_target(self)
         end
-        unit.forced_slot_index = unit.entry_slot_index
+        local is_final_step = unit.move_path and (unit.move_path_index >= #unit.move_path)
+        if is_final_step
+            and unit.desired_destination_slot_index
+            and (target_cell_id == unit.desired_destination_cell_id)
+        then
+            unit.forced_slot_index = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, unit.desired_destination_slot_index))
+        else
+            unit.forced_slot_index = nil
+        end
         local from_cell_id = unit.cell_id
-        move_human_to_cell(self, unit, target_cell_id)
+        move_human_to_cell(self, unit, target_cell_id, is_final_step)
         trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_id)
         trigger_unit_tile_bump_sfx(self, "human")
         local moved_cell = self.world_grid and self.world_grid[target_cell_id] or nil
@@ -23658,52 +23690,18 @@ local function update_single_unit_movement(self, unit, dt)
         unit.move_path_index = unit.move_path_index + 1
 
         if unit.move_path_index > #unit.move_path then
-            local final_desired_slot_index = unit.desired_destination_slot_index
             unit.desired_destination_cell_id = nil
             unit.desired_destination_slot_index = nil
-            if (not counter_move_enabled) and unit.last_completed_step_vertical and self.cell_slot_assignments and self.cell_slot_assignments[unit.cell_id] then
-                local assignment = self.cell_slot_assignments[unit.cell_id]
-                local current_slot = assignment[unit.id] or 1
-                local spare_slots = {}
-                local used = {}
-                for unit_id, slot_index in pairs(assignment) do
-                    if unit_id ~= unit.id then
-                        used[slot_index] = true
-                    end
-                end
-                for i = 1, #CELL_SLOT_OFFSETS_X do
-                    if i ~= current_slot and not used[i] then
-                        table.insert(spare_slots, i)
-                    end
-                end
-                local settle_slot = nil
-                if final_desired_slot_index then
-                    local desired_slot = math.max(1, math.min(#CELL_SLOT_OFFSETS_X, final_desired_slot_index))
-                    if desired_slot ~= current_slot then
-                        if not used[desired_slot] then
-                            settle_slot = desired_slot
-                        elseif #spare_slots > 0 then
-                            local desired_offset = CELL_SLOT_OFFSETS_X[desired_slot] or 0
-                            settle_slot = spare_slots[1]
-                            local best_dist = math.abs((CELL_SLOT_OFFSETS_X[settle_slot] or 0) - desired_offset)
-                            for _, free_slot in ipairs(spare_slots) do
-                                local dist = math.abs((CELL_SLOT_OFFSETS_X[free_slot] or 0) - desired_offset)
-                                if dist < best_dist then
-                                    best_dist = dist
-                                    settle_slot = free_slot
-                                end
-                            end
-                        end
-                    end
-                end
-                if settle_slot then
-                    assignment[unit.id] = settle_slot
-                    local settle_x, settle_y = get_unit_world_pos_in_cell(self, unit, unit.cell_id)
-                    unit.micro_target_x = settle_x
-                    unit.micro_target_y = settle_y
-                    unit.micro_move_kind = "settle_end"
-                    return
-                end
+            local settled = begin_settle_to_assigned_slot and begin_settle_to_assigned_slot(self, unit)
+            if settled then
+                unit.vertical_prep_done_for_index = nil
+                unit.entry_slot_for_index = nil
+                unit.entry_slot_index = nil
+                unit.last_completed_step_vertical = false
+                set_unit_scale(unit, HUMAN_VISUAL_SCALE, HUMAN_VISUAL_SCALE)
+                set_unit_rotation_degrees(unit, 0)
+                update_human_ap_debug_label(self)
+                return
             end
             update_vertical_move_sfx_for_unit(self, unit, false)
             update_horizontal_move_sfx_for_actor(self, unit.id, false)

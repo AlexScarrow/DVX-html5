@@ -1475,7 +1475,7 @@ library["lab"] = lab
         lootItems = { "ammo", "ammo", "meds", "material","meds", "wiring_straight", COMPONENT_UI.component_fuse }
     }
 
-    showers.cells[3].object1 = {
+    showers.cells[3].object2 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }

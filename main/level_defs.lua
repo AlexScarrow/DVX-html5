@@ -21,17 +21,18 @@ function M.create_level_library()
         { x = 8, y = 11, tile = "workshop" },
         { x = 11, y = 11, tile = "factory" },
         { x = 2, y = 8, tile = "entry" },
-        --{ x = 5, y = 8, tile = "armoury" },
-        { x = 5, y = 8, tile = "showers" },
+        { x = 5, y = 8, tile = "corridor1" },
         { x = 8, y = 8, tile = "canteen" },
         { x = 11, y = 8, tile = "medbay" },
         { x = 14, y = 8, tile = "exterior1" },
-        { x = 5, y = 5, tile = "jungle" },
-        { x = 8, y = 5, tile = "passage1" },
+        { x = 2, y = 5, tile = "corridor1" },
+        { x = 5, y = 5, tile = "bunkroom" },
+        { x = 8, y = 5, tile = "corridor1" },
         { x = 11, y = 5, tile = "corridor1" },
-        { x = 14, y = 5, tile = "portal" },
-        { x = 5, y = 2, tile = "bunkroom" },
-        { x = 9, y = 2, tile = "exit" },
+        { x = 14, y = 5, tile = "exit" },
+        { x = 5, y = 2, tile = "showers" },
+        { x = 8, y = 2, tile = "cavern" },
+        { x = 11, y = 2, tile = "portal" },
     }
     levels[1].mission_type = "escape"
     levels[1].spawn_tile = "entry"
@@ -44,17 +45,17 @@ function M.create_level_library()
             }
         },
         techie = {
-            starting_backpack_items = { "power" },
+            starting_backpack_items = { "power", "power" },
             starting_equipped_buffs = {
                 top = "buff_night_vision"
             }
         },
         medic = {
-            starting_backpack_items = { "meds"},
+            starting_backpack_items = { "meds", "meds"},
             starting_equipped_buffs = {}
         },
         gunner = {
-            starting_backpack_items = { "ammo"},
+            starting_backpack_items = { "ammo", "ammo"},
             starting_equipped_buffs = {}
         }
     }

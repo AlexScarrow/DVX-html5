@@ -38,6 +38,11 @@ local EXIT_Y = 604
 local EXIT_W = 124
 local EXIT_H = 62
 
+local DELETE_BTN_X = 64
+local DELETE_BTN_Y = 526
+local DELETE_BTN_W = 124
+local DELETE_BTN_H = 62
+
 local STATUS_X = 250
 local STATUS_Y = 36
 local STATUS_W = 420
@@ -76,7 +81,6 @@ local SHOW_EDITOR_GRID = false
 local TILE_CENTER_HIT_W = 42
 local TILE_CENTER_HIT_H = 28
 local PALETTE_VISIBLE_ROWS = 7
-local DELETE_BORDER_X = 48
 local EDITOR_BG_TINT = vmath.vector4(0.1, 0.1, 0.1, 1)
 local ALLOW_TILE_DUPLICATES = true
 local VALIDATION_BLOCK_SAVE = false
@@ -316,7 +320,11 @@ local function rebuild_preview_tile_visuals(self)
                 msg.post(msg.url(nil, id, "sprite"), "play_animation", { id = get_powered_anim_id(self, p.tile, tile_def) })
                 go.set_position(vmath.vector3(wx, wy, TILE_DRAW_Z), id)
                 go.set_scale(vmath.vector3(TILE_DRAW_SCALE, TILE_DRAW_SCALE, 1), id)
-                go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                if ed.selected_placement_index == i then
+                    go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(0.65, 1.0, 0.65, 1))
+                else
+                    go.set(msg.url(nil, id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                end
             end
         end
     end
@@ -614,6 +622,7 @@ local function load_level_into_editor(self, level_index)
     clear_invalid_tint(self)
     ed.selected_level_index = level_index
     ed.placements = clone_placements(level_def)
+    ed.selected_placement_index = nil
     rebuild_preview_tile_visuals(self)
 end
 
@@ -635,11 +644,13 @@ local function place_or_move_tile(self, center_x, center_y)
             y = center_y,
             tile = ed.drag.tile
         }
+        ed.selected_placement_index = #ed.placements
     elseif ed.drag.kind == "map" and ed.drag.origin_index then
         local idx = ed.drag.origin_index
         if ed.placements[idx] then
             ed.placements[idx].x = center_x
             ed.placements[idx].y = center_y
+            ed.selected_placement_index = idx
         end
     else
         return false
@@ -684,6 +695,7 @@ local function select_map_tile_for_drag(self, sx, sy)
     end
     if best_idx then
         local p = ed.placements[best_idx]
+        ed.selected_placement_index = best_idx
         ed.drag = {
             active = true,
             kind = "map",
@@ -787,6 +799,7 @@ local function hide_ui(self)
     self.set_ui_square_transform(self, ed.ui.save_button, -9999, -9999, BTN_Z, hidden, ACTION_W, ACTION_H)
     self.set_ui_square_transform(self, ed.ui.save_new_button, -9999, -9999, BTN_Z, hidden, ACTION_W, ACTION_H)
     self.set_ui_square_transform(self, ed.ui.back_button, -9999, -9999, BTN_Z, hidden, EXIT_W, EXIT_H)
+    self.set_ui_square_transform(self, ed.ui.delete_button, -9999, -9999, BTN_Z, hidden, DELETE_BTN_W, DELETE_BTN_H)
     self.set_ui_square_transform(self, ed.ui.status_strip, -9999, -9999, STATUS_Z, hidden, STATUS_W, STATUS_H)
     for _, group in ipairs(ed.level_button_digits or {}) do
         for _, id in ipairs(group) do
@@ -955,12 +968,16 @@ local function show_ui(self)
     self.set_ui_square_transform(self, ed.ui.save_new_button, SAVE_NEW_X, SAVE_Y, BTN_Z, vmath.vector4(0.95, 0.1, 0.1, 0.9), ACTION_W, ACTION_H)
     self.set_ui_square_transform(self, ed.ui.save_button, SAVE_EDIT_X, SAVE_Y, BTN_Z, vmath.vector4(0.65, 0.05, 0.05, 0.9), ACTION_W, ACTION_H)
     self.set_ui_square_transform(self, ed.ui.back_button, EXIT_X, EXIT_Y, BTN_Z, vmath.vector4(0.1, 0.85, 0.8, 0.9), EXIT_W, EXIT_H)
+    local has_selected = ed.selected_placement_index and ed.placements and ed.placements[ed.selected_placement_index]
+    local delete_tint = has_selected and vmath.vector4(0.88, 0.08, 0.08, 0.95) or vmath.vector4(0.35, 0.1, 0.1, 0.7)
+    self.set_ui_square_transform(self, ed.ui.delete_button, DELETE_BTN_X, DELETE_BTN_Y, BTN_Z, delete_tint, DELETE_BTN_W, DELETE_BTN_H)
     if ed.text then
         set_text_markers(self, ed.text.save_new_top, "save", SAVE_NEW_X, SAVE_Y + 11, 0.2, 1, 11)
         set_text_markers(self, ed.text.save_new_bottom, "new", SAVE_NEW_X, SAVE_Y - 11, 0.2, 1, 11)
         set_text_markers(self, ed.text.save_edit_top, "save", SAVE_EDIT_X, SAVE_Y + 11, 0.2, 1, 11)
         set_text_markers(self, ed.text.save_edit_bottom, "edit", SAVE_EDIT_X, SAVE_Y - 11, 0.2, 1, 11)
         set_text_markers(self, ed.text.exit_word, "exit", EXIT_X, EXIT_Y, 0.22, 1, 12)
+        set_text_markers(self, ed.text.delete_word, "delete", DELETE_BTN_X, DELETE_BTN_Y, 0.22, has_selected and 1 or 0.75, 12)
         for i, word in ipairs(MISSION_ORDER) do
             local text_word = word == "dna_sample" and "dna" or word
             set_text_markers(self, ed.text.tabs[i], text_word, get_tab_center_x(self.SCREEN_WIDTH, i), TAB_Y, 0.22, 1, 12)
@@ -1014,6 +1031,20 @@ local function hit_level_index(self, sx, sy)
     return nil
 end
 
+local function delete_selected_tile(self)
+    local ed = self.level_editor
+    local idx = tonumber(ed and ed.selected_placement_index or 0) or 0
+    if idx <= 0 or not ed.placements or not ed.placements[idx] then
+        return false
+    end
+    table.remove(ed.placements, idx)
+    ed.selected_placement_index = nil
+    clear_invalid_tint(self)
+    rebuild_preview_tile_visuals(self)
+    ed.status = "tile_deleted"
+    return true
+end
+
 local function refresh_palette_icons(self)
     local ed = self.level_editor
     for i, id in ipairs(ed.palette_icons) do
@@ -1035,6 +1066,7 @@ function M.enter(self)
     enforce_world_visibility(self, 0)
     self.level_editor.status = "ready"
     self.level_editor.drag = nil
+    self.level_editor.selected_placement_index = nil
     self.level_editor.palette_scroll_offset = 0
     clear_invalid_tint(self)
     refresh_current_mission_levels(self)
@@ -1062,6 +1094,7 @@ function M.exit(self)
         pcall(go.set, msg.url(nil, self.alien_turn_overlay, "sprite"), "blend_mode", (render and render.BLEND_ADD) or 1)
     end
     self.level_editor.drag = nil
+    self.level_editor.selected_placement_index = nil
     clear_invalid_tint(self)
     hide_ui(self)
 end
@@ -1108,6 +1141,10 @@ function M.handle_input(self, action, input_x, input_y, inside_view)
             M.exit(self)
             return true
         end
+        if math.abs(input_x - DELETE_BTN_X) <= (DELETE_BTN_W * 0.5) and math.abs(input_y - DELETE_BTN_Y) <= (DELETE_BTN_H * 0.5) then
+            delete_selected_tile(self)
+            return true
+        end
         local palette_idx = hit_palette_index(input_x, input_y, ed)
         if palette_idx and ed.palette_tiles[palette_idx] then
             return start_palette_drag(self, palette_idx)
@@ -1116,6 +1153,7 @@ function M.handle_input(self, action, input_x, input_y, inside_view)
             if select_map_tile_for_drag(self, input_x, input_y) then
                 return true
             end
+            ed.selected_placement_index = nil
             ed.pan_active = true
             ed.pan_start_input_x = input_x
             ed.pan_start_input_y = input_y
@@ -1128,10 +1166,10 @@ function M.handle_input(self, action, input_x, input_y, inside_view)
     if action.released then
         if ed.drag and ed.drag.active and input_x and input_y then
             local palette_idx = hit_palette_index(input_x, input_y, ed)
-            local delete_left_border = input_x <= DELETE_BORDER_X
-            if ed.drag.kind == "map" and (palette_idx or delete_left_border) then
+            if ed.drag.kind == "map" and palette_idx then
                 if ed.drag.origin_index and ed.placements[ed.drag.origin_index] then
                     table.remove(ed.placements, ed.drag.origin_index)
+                    ed.selected_placement_index = nil
                     clear_invalid_tint(self)
                     rebuild_preview_tile_visuals(self)
                 end
@@ -1244,6 +1282,7 @@ function M.init(self, deps)
         invalid_cells = {},
         invalid_markers = {},
         drag = nil,
+        selected_placement_index = nil,
         pan_active = false,
         pan_start_input_x = 0,
         pan_start_input_y = 0,
@@ -1260,6 +1299,7 @@ function M.init(self, deps)
             save_button = nil,
             save_new_button = nil,
             back_button = nil,
+            delete_button = nil,
             status_strip = nil
         },
         palette_icons = {},
@@ -1270,6 +1310,7 @@ function M.init(self, deps)
             save_edit_top = {},
             save_edit_bottom = {},
             exit_word = {},
+            delete_word = {},
             tabs = {}
         }
     }
@@ -1309,6 +1350,7 @@ function M.init(self, deps)
     self.level_editor.text.save_edit_top = create_text_markers(self, "save", BTN_Z + 0.003)
     self.level_editor.text.save_edit_bottom = create_text_markers(self, "edit", BTN_Z + 0.003)
     self.level_editor.text.exit_word = create_text_markers(self, "exit", BTN_Z + 0.003)
+    self.level_editor.text.delete_word = create_text_markers(self, "delete", BTN_Z + 0.003)
     for i, word in ipairs(MISSION_ORDER) do
         local text_word = word == "dna_sample" and "dna" or word
         self.level_editor.text.tabs[i] = create_text_markers(self, text_word, BTN_Z + 0.003)
@@ -1323,6 +1365,7 @@ function M.init(self, deps)
     ui.save_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), ACTION_W, ACTION_H)
     ui.save_new_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), ACTION_W, ACTION_H)
     ui.back_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), EXIT_W, EXIT_H)
+    ui.delete_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), DELETE_BTN_W, DELETE_BTN_H)
     ui.status_strip = self.create_ui_square(0, 0, STATUS_Z, vmath.vector4(0, 0, 0, 0), STATUS_W, STATUS_H)
 
     local names = {}

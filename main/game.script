@@ -190,6 +190,7 @@ HUMAN_PORTRAIT_START_X = SCREEN_WIDTH - 56
 HUMAN_PORTRAIT_START_Y = 386
 HUMAN_PORTRAIT_GAP_Y = 32
 HUMAN_PORTRAIT_Z = 0.846
+HUMAN_PORTRAIT_SELECTED_Z = HUMAN_PORTRAIT_Z + 0.001
 HUMAN_PORTRAIT_HIT_W = 68
 HUMAN_PORTRAIT_HIT_H = 60
 HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE = false
@@ -458,6 +459,8 @@ ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = "needs power on and fuse installed"
 ADVISORY_MSG_PROTOCOL_MISMATCH = "network version mismatch. update to same build."
 ADVISORY_MSG_NO_CLEAR_SHOT = "no clear shot"
 ADVISORY_MSG_ONLY_SARGE_FAB = "only sarge can use this!"
+ADVISORY_MSG_BACKPACK_FULL = "backpack full"
+ADVISORY_MSG_MOVE_UNIT_CLOSER = "move unit closer"
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -469,6 +472,8 @@ ADVISORY_ANIM_VENDING_NEEDS_POWER_FUSE = hash("advisory_needPowerAndFuse")
 ADVISORY_ANIM_PROTOCOL_MISMATCH = hash("advisory_networkVersionMismatchWarning")
 ADVISORY_ANIM_NO_CLEAR_SHOT = hash("advisory_noClearShot")
 ADVISORY_ANIM_ONLY_SARGE_FAB = hash("advisory_onlySargeAuthorized")
+ADVISORY_ANIM_BACKPACK_FULL = hash("advisory_backpackFull")
+ADVISORY_ANIM_MOVE_UNIT_CLOSER = hash("advisory_moveUnitCloser")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -9473,6 +9478,7 @@ local function ui_is_button_node(self, go_id)
         "ready_buttons",
         "mp_debug_player_buttons",
         "human_portrait_icons",
+        "human_portrait_selected_overlays",
         "flow_mp_mission_buttons",
         "flow_mp_count_buttons",
         "flow_mp_unit_buttons"
@@ -10145,6 +10151,7 @@ local function initialize_unit_ui(self)
         ready_buttons = {},
         mp_debug_player_buttons = {},
         human_portrait_icons = {},
+        human_portrait_selected_overlays = {},
         human_portrait_hitbox_debug = {},
         input_map_debug_digits = {}
     }
@@ -10248,6 +10255,10 @@ local function initialize_unit_ui(self)
             if anim_id then
                 msg.post(msg.url(nil, self.ui.human_portrait_icons[i], "sprite"), "play_animation", { id = anim_id })
             end
+        end
+        self.ui.human_portrait_selected_overlays[i] = create_ui_square_alpha(0, 0, HUMAN_PORTRAIT_SELECTED_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
+        if self.ui.human_portrait_selected_overlays[i] then
+            msg.post(msg.url(nil, self.ui.human_portrait_selected_overlays[i], "sprite"), "play_animation", { id = hash("selected_portrait") })
         end
         self.ui.human_portrait_hitbox_debug[i] = create_ui_square_alpha(0, 0, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, vmath.vector4(0, 0, 0, 0), HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
     end
@@ -10546,6 +10557,11 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
         end
     end
+    if self.ui.human_portrait_selected_overlays then
+        for _, overlay in ipairs(self.ui.human_portrait_selected_overlays) do
+            set_ui_square_transform(self, overlay, -9999, -9999, HUMAN_PORTRAIT_SELECTED_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+        end
+    end
     if self.ui.human_portrait_hitbox_debug then
         for _, hitbox in ipairs(self.ui.human_portrait_hitbox_debug) do
             set_ui_square_transform(self, hitbox, -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
@@ -10727,6 +10743,10 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_NO_CLEAR_SHOT
     elseif text == ADVISORY_MSG_ONLY_SARGE_FAB then
         anim_id = ADVISORY_ANIM_ONLY_SARGE_FAB
+    elseif text == ADVISORY_MSG_BACKPACK_FULL then
+        anim_id = ADVISORY_ANIM_BACKPACK_FULL
+    elseif text == ADVISORY_MSG_MOVE_UNIT_CLOSER then
+        anim_id = ADVISORY_ANIM_MOVE_UNIT_CLOSER
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -16763,6 +16783,19 @@ update_human_portrait_ui = function(self)
                 (HUMAN_PORTRAIT_DRAW_W * 0.021) * portrait_scale,
                 (HUMAN_PORTRAIT_DRAW_H * 0.021) * portrait_scale
             )
+            if self.ui.human_portrait_selected_overlays and self.ui.human_portrait_selected_overlays[i] then
+                local overlay_tint = selected and vmath.vector4(1, 1, 1, 1) or hidden
+                set_ui_square_transform(
+                    self,
+                    self.ui.human_portrait_selected_overlays[i],
+                    sx,
+                    sy,
+                    HUMAN_PORTRAIT_SELECTED_Z,
+                    overlay_tint,
+                    (HUMAN_PORTRAIT_DRAW_W * 0.021) * portrait_scale,
+                    (HUMAN_PORTRAIT_DRAW_H * 0.021) * portrait_scale
+                )
+            end
             if self.ui.human_portrait_hitbox_debug then
                 local hx, hy = get_human_portrait_screen_pos(i)
                 local hitbox_tint = HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE
@@ -16781,6 +16814,18 @@ update_human_portrait_ui = function(self)
             end
         else
             set_ui_square_transform(self, icon, -9999, -9999, HUMAN_PORTRAIT_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+            if self.ui.human_portrait_selected_overlays and self.ui.human_portrait_selected_overlays[i] then
+                set_ui_square_transform(
+                    self,
+                    self.ui.human_portrait_selected_overlays[i],
+                    -9999,
+                    -9999,
+                    HUMAN_PORTRAIT_SELECTED_Z,
+                    hidden,
+                    HUMAN_PORTRAIT_DRAW_W * 0.021,
+                    HUMAN_PORTRAIT_DRAW_H * 0.021
+                )
+            end
             if self.ui.human_portrait_hitbox_debug then
                 set_ui_square_transform(self, self.ui.human_portrait_hitbox_debug[i], -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
             end
@@ -22730,7 +22775,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     ADVISORY_MSG_FIX_WIRE_FIRST = ADVISORY_MSG_FIX_WIRE_FIRST,
     ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE = ADVISORY_MSG_VENDING_NEEDS_POWER_FUSE,
     ADVISORY_MSG_NO_AP = ADVISORY_MSG_NO_AP,
-    ADVISORY_MSG_ONLY_SARGE_FAB = ADVISORY_MSG_ONLY_SARGE_FAB
+    ADVISORY_MSG_ONLY_SARGE_FAB = ADVISORY_MSG_ONLY_SARGE_FAB,
+    ADVISORY_MSG_BACKPACK_FULL = ADVISORY_MSG_BACKPACK_FULL,
+    ADVISORY_MSG_MOVE_UNIT_CLOSER = ADVISORY_MSG_MOVE_UNIT_CLOSER
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,

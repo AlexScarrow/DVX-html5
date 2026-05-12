@@ -3015,6 +3015,7 @@ function M.extend(runtime, ctx)
         local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
         if manhattan ~= 0 then
             print("too far away")
+            emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
             flash_invalid_drag_units(source_unit, nil)
             return true, false, false
         end
@@ -5333,6 +5334,7 @@ function M.extend(runtime, ctx)
                     end
                 else
                     print("too far away")
+                    emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                     flash_invalid_drag_units(source_unit, target_unit)
                 end
             end
@@ -5566,11 +5568,13 @@ function M.extend(runtime, ctx)
                                 ))
                             else
                                 print(target_unit.display_name .. " backpack is full.")
+                                emit_advisory(self, ctx.ADVISORY_MSG_BACKPACK_FULL)
                                 flash_invalid_drag_units(source_unit, target_unit)
                             end
                         end
                     else
                         print("too far away")
+                        emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                         flash_invalid_drag_units(source_unit, target_unit)
                     end
                 else
@@ -5614,6 +5618,7 @@ function M.extend(runtime, ctx)
                                 local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
                                 if manhattan ~= 0 then
                                     print("too far away")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                                     flash_invalid_drag_units(source_unit, nil)
                                 elseif not instance or instance.functional ~= true then
                                     print("Workshop is offline or not yet repaired.")
@@ -5661,6 +5666,7 @@ function M.extend(runtime, ctx)
                                 local manhattan = math.abs(sx - tx) + math.abs(sy - ty)
                                 if manhattan ~= 0 then
                                     print("too far away")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                                     flash_invalid_drag_units(source_unit, nil)
                                 elseif drop_cell.isPowered ~= true then
                                     print("Vending machine is offline (tile has no power).")
@@ -5748,6 +5754,7 @@ function M.extend(runtime, ctx)
                             end
                         else
                             print("too far away")
+                            emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                             flash_invalid_drag_units(source_unit, nil)
                         end
                     end
@@ -5806,6 +5813,7 @@ function M.extend(runtime, ctx)
                             end
                         else
                             print("too far away")
+                            emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                             flash_invalid_drag_units(source_unit, nil)
                         end
                     end
@@ -5999,6 +6007,7 @@ function M.extend(runtime, ctx)
                                 end
                             else
                                 print("too far away")
+                                emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                                 flash_invalid_drag_units(source_unit, nil)
                             end
                         end
@@ -6056,6 +6065,7 @@ function M.extend(runtime, ctx)
                                     ))
                                 else
                                     print("too far away")
+                                    emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                                     flash_invalid_drag_units(source_unit, nil)
                                 end
                             end
@@ -6326,6 +6336,7 @@ function M.extend(runtime, ctx)
                                 end
                             else
                                 print("too far away")
+                                emit_advisory(self, ctx.ADVISORY_MSG_MOVE_UNIT_CLOSER)
                                 flash_invalid_drag_units(source_unit, nil)
                             end
                         end

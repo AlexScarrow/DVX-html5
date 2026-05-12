@@ -2400,6 +2400,7 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
     local ap_cost = get_ap_cost_value("door_toggle", 1)
     if unit.current_ap < ap_cost then
         print("Unable to toggle door: no AP")
+        show_advisory(self, ADVISORY_MSG_NO_AP)
         return true
     end
     if not is_door_functional_runtime(self.world_grid, owner_cell, door_obj) then
@@ -23505,6 +23506,7 @@ local function update_single_unit_movement(self, unit, dt)
             if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
                 LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "NOT_ENOUGH_AP")
             end
+            show_advisory(self, ADVISORY_MSG_NO_AP)
             print(unit.display_name .. " cannot pass: no AP to open door.")
             update_human_visual_state(self)
             update_human_ap_debug_label(self)
@@ -23552,6 +23554,7 @@ local function update_single_unit_movement(self, unit, dt)
         if LOOT_RUNTIME and LOOT_RUNTIME.emit_derple_feedback and unit.id then
             LOOT_RUNTIME.emit_derple_feedback(self, unit.id, "NOT_ENOUGH_AP")
         end
+        show_advisory(self, ADVISORY_MSG_NO_AP)
         print(unit.display_name .. " stopped before cell " .. target_cell_id .. " (cost " .. target_cost .. ", AP " .. unit.current_ap .. ")")
         update_human_visual_state(self)
         update_human_ap_debug_label(self)

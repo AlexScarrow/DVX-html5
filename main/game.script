@@ -195,6 +195,7 @@ HUMAN_PORTRAIT_HIT_W = 68
 HUMAN_PORTRAIT_HIT_H = 60
 HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE = false
 HUMAN_PORTRAIT_HITBOX_DEBUG_Z = HUMAN_PORTRAIT_Z + 0.003
+TILE_ALPHA_PARALLAX_MAX_OFFSET_PX = 40
 FLOW_BUTTON_HITBOX_DEBUG_VISIBLE = false
 INPUT_MAP_CURSOR_DEBUG_VISIBLE = false
 INPUT_MAP_CURSOR_DEBUG_Z = 1.49
@@ -25717,6 +25718,7 @@ end
         self.tile_light_is_lab = {}
         self.tile_light_is_jungle = {}
         self.tile_alpha_layers = {}
+        self.tile_alpha_generic_overlay = {}
         self.tile_room_shadows = {}
         self.exterior_detail_objects = {}
         self.entry_fire_fx_objects = {}
@@ -25929,15 +25931,17 @@ end
             -- Shared foreground alpha layer for depth, rendered above units/objects.
             local alpha_id = factory.create("/tile_factory#tile_factory", vmath.vector3(center_x, center_y, WORLD_FOREGROUND_ALPHA_Z), nil, {}, vmath.vector3(visual_scale, visual_scale, 1))
             if alpha_id then
+                local alpha_anim_id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode)
                 msg.post(
                     msg.url(nil, alpha_id, "sprite"),
                     "play_animation",
-                    { id = get_tile_alpha_overlay_anim_id(tile_def, self.aesthetic_mode) }
+                    { id = alpha_anim_id }
                 )
                 local always_visible = tile_def and tile_def.alphaOverlayAlwaysVisible == true
                 go.set(msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(1, 1, 1, always_visible and 1 or 0))
                 self.tile_alpha_layers[placement_index] = alpha_id
                 self.tile_alpha_power_state[placement_index] = always_visible and true or false
+                self.tile_alpha_generic_overlay[placement_index] = (alpha_anim_id == hash("tile_generic_alpha_layer"))
             end
         end
         if self.alien_turn_overlay then
@@ -26776,6 +26780,23 @@ function update(self, dt)
             local always_visible = false
             local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
             local placement = selected_level and selected_level[tile_instance_id] or nil
+            if placement and alpha_go then
+                local base_x, base_y = coords_to_world_pos(placement.x, placement.y)
+                local is_generic_overlay = self.tile_alpha_generic_overlay and self.tile_alpha_generic_overlay[tile_instance_id] == true
+                local parallax_x = 0
+                if is_generic_overlay then
+                    local zoom = tonumber(self.camera_zoom or 1) or 1
+                    if zoom <= 0 then
+                        zoom = 1
+                    end
+                    local camera_x = tonumber(self.camera_pos and self.camera_pos.x or 0) or 0
+                    local tile_dx_screen = (base_x - camera_x) * zoom
+                    local normalized_dx = clamp(tile_dx_screen / (SCREEN_WIDTH * 0.5), -1, 1)
+                    local max_shift_world = TILE_ALPHA_PARALLAX_MAX_OFFSET_PX / zoom
+                    parallax_x = normalized_dx * max_shift_world
+                end
+                go.set_position(vmath.vector3(base_x + parallax_x, base_y, WORLD_FOREGROUND_ALPHA_Z), alpha_go)
+            end
             local tile_def = placement and self.tile_library and self.tile_library[placement.tile] or nil
             if tile_def and tile_def.alphaOverlayAlwaysVisible == true then
                 always_visible = true

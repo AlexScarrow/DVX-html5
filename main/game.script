@@ -26113,7 +26113,7 @@ function init(self)
     -- Camera setup
     self.camera_pos = vmath.vector3(CELL_WIDTH * GRID_COLS / 2, CELL_HEIGHT * GRID_ROWS / 2, 1000)
     self.camera_zoom = 1.0
-    self.camera_min_zoom = 0.25--0.5
+    self.camera_min_zoom = 0.325--0.5
     self.camera_max_zoom = 1.7--1.0
     self.drag_threshold_px = 12
     self.is_panning = false

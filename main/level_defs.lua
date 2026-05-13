@@ -396,6 +396,28 @@ levels[3].unit_loadouts = {
     levels[11].spawn_cell = 2
     levels[11].unit_loadouts = levels[1].unit_loadouts
 
+    levels[12] = {
+        { x = 14, y = 11, tile = "coms" },
+        { x = 2, y = 9, tile = "lab" },
+        { x = 5, y = 8, tile = "exterior1" },
+        { x = 8, y = 8, tile = "exterior2" },
+        { x = 11, y = 8, tile = "rescue_entry" },
+        { x = 14, y = 8, tile = "armoury" },
+        { x = 2, y = 6, tile = "medbay" },
+        { x = 5, y = 5, tile = "corridor1" },
+        { x = 8, y = 5, tile = "jungle" },
+        { x = 11, y = 5, tile = "corridor1" },
+        { x = 14, y = 5, tile = "cavern" },
+        { x = 2, y = 3, tile = "portal" },
+        { x = 5, y = 2, tile = "portal" },
+        { x = 8, y = 2, tile = "portal" },
+        { x = 11, y = 2, tile = "portal" },
+    }
+    levels[12].mission_type = "dna_sample"
+    levels[12].spawn_tile = "rescue_entry"
+    levels[12].spawn_cell = 2
+    levels[12].unit_loadouts = levels[1].unit_loadouts
+
     return levels
 end
 

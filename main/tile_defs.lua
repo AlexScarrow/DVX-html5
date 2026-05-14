@@ -751,7 +751,7 @@ library["canteen"] = canteen
     medbay.powerLightOnAnim = "tile_medbay_on"
 
     medbay.alphaOverlayMode = "specified"
-    medbay.alphaOverlay = "tile_medbay_overlay"
+    --medbay.alphaOverlay = "tile_medbay_overlay"
     
      for i = 1, 9 do
          medbay.cells[i].lightValue = 1
@@ -768,7 +768,7 @@ library["canteen"] = canteen
     
      -- Example access pattern edits:
     medbay.cells[2].accessDown = false
-    medbay.cells[3].accessDown = false
+    medbay.cells[3].accessDown = true
     medbay.cells[3].accessRight = false
     medbay.cells[4].accessRight = false
     medbay.cells[5].accessDown = false
@@ -813,10 +813,14 @@ library["canteen"] = canteen
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = -110, offsetY = 15, hitW = 32, hitH = 32, requiredComponent = nil
     }
+    medbay.cells[8].object2 = {
+        name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+    }
 
     medbay.cells[9].object1 = {
         name = hash("med_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 503, isDependentOn = {}, objectId = 901,
-        offsetX = 10, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+        offsetX = -80, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
     }
     medbay.cells[9].object2 = {
         name = hash("medbay_reviver"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 902,

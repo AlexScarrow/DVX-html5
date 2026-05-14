@@ -130,7 +130,7 @@ local function create_text_markers(self, text, z)
     return markers
 end
 
-local function set_text_markers(self, markers, text, center_x, center_y, scale, alpha, spacing)
+local function set_text_markers(self, markers, text, center_x, center_y, scale, alpha, spacing, tint)
     local hidden = vmath.vector4(0, 0, 0, 0)
     if type(markers) ~= "table" then
         return
@@ -138,6 +138,7 @@ local function set_text_markers(self, markers, text, center_x, center_y, scale, 
     local s = scale or 0.22
     local a = alpha or 1
     local step = spacing or 12
+    local base_tint = tint or vmath.vector4(1, 1, 1, 1)
     for _, id in ipairs(markers) do
         self.set_ui_square_transform(self, id, -9999, -9999, BTN_Z + 0.003, hidden, s, s)
     end
@@ -147,7 +148,16 @@ local function set_text_markers(self, markers, text, center_x, center_y, scale, 
     for i = 1, math.min(#markers, #chars) do
         local ch = string.sub(chars, i, i)
         msg.post(msg.url(nil, markers[i], "sprite"), "play_animation", { id = hash("letter_" .. ch) })
-        self.set_ui_square_transform(self, markers[i], start_x + ((i - 1) * step), center_y, BTN_Z + 0.003, vmath.vector4(1, 1, 1, a), s, s)
+        self.set_ui_square_transform(
+            self,
+            markers[i],
+            start_x + ((i - 1) * step),
+            center_y,
+            BTN_Z + 0.003,
+            vmath.vector4(base_tint.x or 1, base_tint.y or 1, base_tint.z or 1, (base_tint.w or 1) * a),
+            s,
+            s
+        )
     end
 end
 
@@ -929,14 +939,14 @@ local function show_ui(self)
     local selected_idx = get_selected_mission_idx(ed.selected_mission_type)
     for i, mission in ipairs(MISSION_ORDER) do
         local active = (mission == ed.selected_mission_type)
-        local tint = active and vmath.vector4(0.2, 0.8, 0.35, 0.72) or vmath.vector4(0.2, 0.3, 0.5, 0.52)
+        local tint = active and vmath.vector4(0.2, 0.8, 0.35, 1) or vmath.vector4(0.2, 0.3, 0.5, 1)
         self.set_ui_square_transform(self, ed.ui.tab_buttons[i], get_tab_center_x(self.SCREEN_WIDTH, i), TAB_Y, TAB_Z, tint, TAB_W, TAB_H)
     end
     local level_x = get_tab_center_x(self.SCREEN_WIDTH, selected_idx)
     for i = 1, LEVEL_LIST_MAX do
         local level_idx = ed.filtered_level_indices[i]
         local active = (level_idx ~= nil and level_idx == ed.selected_level_index)
-        local tint = active and vmath.vector4(0.85, 0.9, 0.2, 0.72) or (level_idx and vmath.vector4(0.25, 0.4, 0.65, 0.62) or hidden)
+        local tint = active and vmath.vector4(0.85, 0.9, 0.2, 1) or (level_idx and vmath.vector4(0.25, 0.4, 0.65, 1) or hidden)
         local by = LEVEL_LIST_START_Y - ((i - 1) * (LEVEL_LIST_H + LEVEL_LIST_GAP))
         self.set_ui_square_transform(self, ed.ui.level_buttons[i], level_idx and level_x or -9999, level_idx and by or -9999, BTN_Z, tint, LEVEL_LIST_W, LEVEL_LIST_H)
         local digits = ed.level_button_digits and ed.level_button_digits[i] or nil
@@ -945,9 +955,9 @@ local function show_ui(self)
             msg.post(msg.url(nil, digits[1], "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, 1, 1)) })
             msg.post(msg.url(nil, digits[2], "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, 2, 2)) })
             msg.post(msg.url(nil, digits[3], "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, 3, 3)) })
-            self.set_ui_square_transform(self, digits[1], level_x - 16, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 0.95), 0.2, 0.2)
-            self.set_ui_square_transform(self, digits[2], level_x, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 0.95), 0.2, 0.2)
-            self.set_ui_square_transform(self, digits[3], level_x + 16, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 0.95), 0.2, 0.2)
+            self.set_ui_square_transform(self, digits[1], level_x - 16, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.2, 0.2)
+            self.set_ui_square_transform(self, digits[2], level_x, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.2, 0.2)
+            self.set_ui_square_transform(self, digits[3], level_x + 16, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.2, 0.2)
         elseif digits then
             self.set_ui_square_transform(self, digits[1], -9999, -9999, BTN_Z + 0.002, hidden, 0.2, 0.2)
             self.set_ui_square_transform(self, digits[2], -9999, -9999, BTN_Z + 0.002, hidden, 0.2, 0.2)
@@ -962,29 +972,29 @@ local function show_ui(self)
         local x = PALETTE_START_X + (col * (PALETTE_CELL_W + PALETTE_GAP_X))
         local y = PALETTE_START_Y - (row * (PALETTE_CELL_H + PALETTE_GAP_Y))
         local is_drag = (ed.drag and ed.drag.active and ed.drag.tile == tile_name and ed.drag.kind == "palette")
-        local tint = is_drag and vmath.vector4(0.98, 0.9, 0.3, 0.95) or vmath.vector4(0.2, 0.25, 0.35, 0.72)
+        local tint = is_drag and vmath.vector4(0.98, 0.9, 0.3, 1) or vmath.vector4(0.2, 0.25, 0.35, 1)
         local visible = slot >= 1 and slot <= PALETTE_VISIBLE_ROWS
         self.set_ui_square_transform(self, ed.ui.palette_buttons[i], visible and x or -9999, visible and y or -9999, BTN_Z, visible and tint or hidden, PALETTE_CELL_W, PALETTE_CELL_H)
         if ed.palette_icons and ed.palette_icons[i] then
             self.set_ui_square_transform(self, ed.palette_icons[i], visible and x or -9999, visible and y or -9999, BTN_Z + 0.001, visible and vmath.vector4(1, 1, 1, 1) or hidden, PALETTE_TILE_SCALE, PALETTE_TILE_SCALE)
         end
     end
-    self.set_ui_square_transform(self, ed.ui.save_new_button, SAVE_NEW_X, SAVE_Y, BTN_Z, vmath.vector4(0.95, 0.1, 0.1, 0.9), ACTION_W, ACTION_H)
-    self.set_ui_square_transform(self, ed.ui.save_button, SAVE_EDIT_X, SAVE_Y, BTN_Z, vmath.vector4(0.65, 0.05, 0.05, 0.9), ACTION_W, ACTION_H)
-    self.set_ui_square_transform(self, ed.ui.back_button, EXIT_X, EXIT_Y, BTN_Z, vmath.vector4(0.1, 0.85, 0.8, 0.9), EXIT_W, EXIT_H)
+    self.set_ui_square_transform(self, ed.ui.save_new_button, SAVE_NEW_X, SAVE_Y, BTN_Z, vmath.vector4(0.95, 0.1, 0.1, 1), ACTION_W, ACTION_H)
+    self.set_ui_square_transform(self, ed.ui.save_button, SAVE_EDIT_X, SAVE_Y, BTN_Z, vmath.vector4(0.65, 0.05, 0.05, 1), ACTION_W, ACTION_H)
+    self.set_ui_square_transform(self, ed.ui.back_button, EXIT_X, EXIT_Y, BTN_Z, vmath.vector4(0.1, 0.85, 0.8, 1), EXIT_W, EXIT_H)
     local has_selected = ed.selected_placement_index and ed.placements and ed.placements[ed.selected_placement_index]
-    local delete_tint = has_selected and vmath.vector4(0.88, 0.08, 0.08, 0.95) or vmath.vector4(0.35, 0.1, 0.1, 0.7)
+    local delete_tint = has_selected and vmath.vector4(0.88, 0.08, 0.08, 1) or vmath.vector4(0.35, 0.1, 0.1, 1)
     self.set_ui_square_transform(self, ed.ui.delete_button, DELETE_BTN_X, DELETE_BTN_Y, BTN_Z, delete_tint, DELETE_BTN_W, DELETE_BTN_H)
     if ed.text then
-        set_text_markers(self, ed.text.save_new_top, "save", SAVE_NEW_X, SAVE_Y + 11, 0.2, 1, 11)
-        set_text_markers(self, ed.text.save_new_bottom, "new", SAVE_NEW_X, SAVE_Y - 11, 0.2, 1, 11)
-        set_text_markers(self, ed.text.save_edit_top, "save", SAVE_EDIT_X, SAVE_Y + 11, 0.2, 1, 11)
-        set_text_markers(self, ed.text.save_edit_bottom, "edit", SAVE_EDIT_X, SAVE_Y - 11, 0.2, 1, 11)
-        set_text_markers(self, ed.text.exit_word, "exit", EXIT_X, EXIT_Y, 0.22, 1, 12)
-        set_text_markers(self, ed.text.delete_word, "delete", DELETE_BTN_X, DELETE_BTN_Y, 0.22, has_selected and 1 or 0.75, 12)
+        set_text_markers(self, ed.text.save_new_top, "save", SAVE_NEW_X, SAVE_Y + 11, 0.3, 1, 11, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.save_new_bottom, "new", SAVE_NEW_X, SAVE_Y - 11, 0.3, 1, 11, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.save_edit_top, "save", SAVE_EDIT_X, SAVE_Y + 11, 0.3, 1, 11, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.save_edit_bottom, "edit", SAVE_EDIT_X, SAVE_Y - 11, 0.3, 1, 11, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.exit_word, "exit", EXIT_X, EXIT_Y, 0.33, 1, 12, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.delete_word, "delete", DELETE_BTN_X, DELETE_BTN_Y, 0.33, has_selected and 1 or 0.75, 12, vmath.vector4(0, 0, 0, 1))
         for i, word in ipairs(MISSION_ORDER) do
             local text_word = word == "dna_sample" and "dna" or word
-            set_text_markers(self, ed.text.tabs[i], text_word, get_tab_center_x(self.SCREEN_WIDTH, i), TAB_Y, 0.22, 1, 12)
+            set_text_markers(self, ed.text.tabs[i], text_word, get_tab_center_x(self.SCREEN_WIDTH, i), TAB_Y, 0.33, 1, 12, vmath.vector4(0, 0, 0, 1))
         end
     end
     local status_tint = vmath.vector4(0.15, 0.2, 0.35, 0.65)
@@ -1360,6 +1370,7 @@ function M.init(self, deps)
     ui.panel = self.create_ui_square(0, 0, PANEL_Z, vmath.vector4(0, 0, 0, 0), 1160, 706)
     for i = 1, #MISSION_ORDER do
         ui.tab_buttons[i] = self.create_ui_square(0, 0, TAB_Z, vmath.vector4(0, 0, 0, 0), TAB_W, TAB_H)
+        pcall(go.set, msg.url(nil, ui.tab_buttons[i], "sprite"), "blend_mode", hash("alpha"))
     end
     self.level_editor.text.save_new_top = create_text_markers(self, "save", BTN_Z + 0.003)
     self.level_editor.text.save_new_bottom = create_text_markers(self, "new", BTN_Z + 0.003)
@@ -1373,6 +1384,7 @@ function M.init(self, deps)
     end
     for i = 1, LEVEL_LIST_MAX do
         ui.level_buttons[i] = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), LEVEL_LIST_W, LEVEL_LIST_H)
+        pcall(go.set, msg.url(nil, ui.level_buttons[i], "sprite"), "blend_mode", hash("alpha"))
         local d1 = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
         local d2 = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
         local d3 = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
@@ -1382,6 +1394,10 @@ function M.init(self, deps)
     ui.save_new_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), ACTION_W, ACTION_H)
     ui.back_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), EXIT_W, EXIT_H)
     ui.delete_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), DELETE_BTN_W, DELETE_BTN_H)
+    pcall(go.set, msg.url(nil, ui.save_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, ui.save_new_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, ui.back_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, ui.delete_button, "sprite"), "blend_mode", hash("alpha"))
     ui.status_strip = self.create_ui_square(0, 0, STATUS_Z, vmath.vector4(0, 0, 0, 0), STATUS_W, STATUS_H)
 
     local names = {}
@@ -1397,6 +1413,7 @@ function M.init(self, deps)
     self.level_editor.palette_tiles = names
     for i, _ in ipairs(names) do
         self.level_editor.ui.palette_buttons[i] = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), PALETTE_CELL_W, PALETTE_CELL_H)
+        pcall(go.set, msg.url(nil, self.level_editor.ui.palette_buttons[i], "sprite"), "blend_mode", hash("alpha"))
         local col = ((i - 1) % PALETTE_COLS)
         local row = math.floor((i - 1) / PALETTE_COLS)
         local x = PALETTE_START_X + (col * (PALETTE_CELL_W + PALETTE_GAP_X))

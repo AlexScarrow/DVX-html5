@@ -58,6 +58,10 @@ local PALETTE_GAP_X = 0
 
 local TILE_DRAW_SCALE = 1.0
 local PALETTE_TILE_SCALE = 0.25
+local EDITOR_BACKDROP_Z = 0.921
+local EDITOR_BACKDROP_ART_W = 752
+local EDITOR_BACKDROP_ART_H = 450
+local EDITOR_BACKDROP_OVERSCAN = 2.0
 local TILE_DRAW_Z = 0.922
 local TILE_DRAG_Z = 0.96
 local INVALID_TINT = vmath.vector4(1, 0.2, 0.2, 0.5)
@@ -1224,12 +1228,23 @@ function M.update(self, dt)
     local ed = self.level_editor
     local hidden = vmath.vector4(0, 0, 0, 0)
     if not ed or not ed.enabled then
+        if ed and ed.editor_backdrop then
+            go.set_position(OFFSCREEN, ed.editor_backdrop)
+        end
         hide_ui(self)
         return
     end
     enforce_world_visibility(self, 0)
     hide_gameplay_ui_for_editor(self)
     suppress_editor_visual_fx(self)
+    if ed.editor_backdrop then
+        local zoom = math.max(0.0001, tonumber(self.camera_zoom or 1) or 1)
+        local sx = ((self.SCREEN_WIDTH / zoom) / EDITOR_BACKDROP_ART_W) * EDITOR_BACKDROP_OVERSCAN
+        local sy = ((self.SCREEN_HEIGHT / zoom) / EDITOR_BACKDROP_ART_H) * EDITOR_BACKDROP_OVERSCAN
+        go.set_position(vmath.vector3(self.camera_pos.x, self.camera_pos.y, EDITOR_BACKDROP_Z), ed.editor_backdrop)
+        go.set_scale(vmath.vector3(sx, sy, 1), ed.editor_backdrop)
+        pcall(go.set, msg.url(nil, ed.editor_backdrop, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+    end
     show_ui(self)
     if ed.drag and ed.drag.active and self.level_editor.drag_visual then
         local vx = ed.last_input_x or 0
@@ -1312,7 +1327,8 @@ function M.init(self, deps)
             exit_word = {},
             delete_word = {},
             tabs = {}
-        }
+        },
+        editor_backdrop = nil
     }
 
     self.FLOW_STATE_LEVEL_EDITOR = deps.FLOW_STATE_LEVEL_EDITOR
@@ -1421,6 +1437,11 @@ function M.init(self, deps)
         self.level_editor.grid_lines_h[i] = self.create_ui_square(0, 0, GRID_Z, vmath.vector4(0, 0, 0, 0), GRID_VIEW_COLS * GRID_CELL_W, GRID_LINE_THICKNESS)
     end
     self.level_editor.drag_visual = factory.create("/tile_factory#tile_factory", OFFSCREEN)
+    self.level_editor.editor_backdrop = factory.create("/tile_factory#tile_factory", OFFSCREEN)
+    if self.level_editor.editor_backdrop then
+        msg.post(msg.url(nil, self.level_editor.editor_backdrop, "sprite"), "play_animation", { id = hash("editor_backdrop") })
+        pcall(go.set, msg.url(nil, self.level_editor.editor_backdrop, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+    end
     hide_ui(self)
     refresh_current_mission_levels(self)
 end
@@ -1435,6 +1456,9 @@ function M.final(self)
     delete_go_map(self.level_editor.ui)
     if self.level_editor.drag_visual then
         pcall(go.delete, self.level_editor.drag_visual)
+    end
+    if self.level_editor.editor_backdrop then
+        pcall(go.delete, self.level_editor.editor_backdrop)
     end
     if self.level_editor.x_axis_labels then
         for _, digits in ipairs(self.level_editor.x_axis_labels) do

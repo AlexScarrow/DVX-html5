@@ -195,6 +195,7 @@ HUMAN_PORTRAIT_HIT_W = 68
 HUMAN_PORTRAIT_HIT_H = 60
 HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE = false
 HUMAN_PORTRAIT_HITBOX_DEBUG_Z = HUMAN_PORTRAIT_Z + 0.003
+CAMERA_FOLLOW_SELECTED_WHILE_MOVING = true
 TILE_ALPHA_PARALLAX_MAX_OFFSET_PX = 40
 FLOW_BUTTON_HITBOX_DEBUG_VISIBLE = false
 INPUT_MAP_CURSOR_DEBUG_VISIBLE = false
@@ -14906,6 +14907,44 @@ local function get_selected_unit(self)
     return nil
 end
 
+update_camera_follow_selected_unit = function(self)
+    if not (CAMERA_FOLLOW_SELECTED_WHILE_MOVING and self and self.squad_units) then
+        return false
+    end
+    if self.camera_follow_disabled_by_pan == true then
+        return false
+    end
+    if self.is_panning then
+        return false
+    end
+    local unit = get_selected_unit(self)
+    if not (unit and unit.is_moving) then
+        return false
+    end
+    local ux, uy = nil, nil
+    if unit.go_path then
+        local pos = go.get_position(unit.go_path)
+        ux = pos and pos.x or nil
+        uy = pos and pos.y or nil
+    end
+    if (not ux or not uy) and unit.cell_id then
+        local cx, cy = id_to_coords(unit.cell_id)
+        if cx and cy then
+            ux = ((cx - 1) * CELL_WIDTH) + (CELL_WIDTH * 0.5)
+            uy = ((cy - 1) * CELL_HEIGHT) + (CELL_HEIGHT * 0.5)
+        end
+    end
+    if not (ux and uy) then
+        return false
+    end
+    self.camera_pos.x = ux
+    self.camera_pos.y = uy
+    self.pan_velocity_x = 0
+    self.pan_velocity_y = 0
+    apply_camera_transform(self)
+    return true
+end
+
 finish_level_load_after_clear = function(self, level_index)
     local loading_tutorial = (tostring(self.selected_mission_type or "") == MISSION_TYPE_TUTORIAL)
     self.tile_library = require("main.tile_defs").create_tile_library(COMPONENT_UI)
@@ -16926,6 +16965,7 @@ try_select_human_portrait = function(self, screen_x, screen_y)
         self.controlled_unit_id = chosen_unit_id
         deselect_all_units(self)
         unit.is_selected = true
+        self.camera_follow_disabled_by_pan = false
         self.ui_close_on_next_non_unit_click = false
         self.awaiting_slot_shuffle_click = false
         self.selected_start_cell = nil
@@ -25424,6 +25464,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.controlled_unit_id = clicked_unit.id
             deselect_all_units(self)
             clicked_unit.is_selected = true
+            self.camera_follow_disabled_by_pan = false
             play_human_confirm_select_sfx(self, clicked_unit)
             spawn_green_impact_ring_for_unit(self, clicked_unit, 0.6)
             clicked_unit.selection_green_flash_duration = HUMAN_SELECTION_GREEN_FLASH_DURATION
@@ -26135,6 +26176,7 @@ function init(self)
     self.zoom_smooth_speed = 12
     self.zoom_slider_drag_active = false
     self.touch_pan_blocked_by_ui = false
+    self.camera_follow_disabled_by_pan = false
     self.input_map_cursor_debug = nil
     apply_runtime_hud_layout(self)
     self.camera_zoom = (self.camera_min_zoom + self.camera_max_zoom) * 0.5
@@ -27313,7 +27355,10 @@ function update(self, dt)
         )
     end
 
-    if not self.is_panning then
+    if update_camera_follow_selected_unit(self) then
+        -- Re-apply unit UI layout against the post-follow camera to avoid one-frame pop.
+        update_selected_unit_ui(self)
+    elseif not self.is_panning then
         local speed = math.sqrt(self.pan_velocity_x * self.pan_velocity_x + self.pan_velocity_y * self.pan_velocity_y)
         if speed > self.pan_inertia_min_speed then
             self.camera_pos.x = self.camera_pos.x + self.pan_velocity_x * dt
@@ -27671,6 +27716,7 @@ function on_input(self, action_id, action)
 
             if drag_distance >= self.drag_threshold_px then
                 self.did_drag = true
+                self.camera_follow_disabled_by_pan = true
             end
 
             if self.did_drag then

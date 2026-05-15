@@ -17970,6 +17970,18 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
     if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_fix_markers then
         LOOT_RUNTIME.refresh_fix_markers(self)
     end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_machine_markers then
+        LOOT_RUNTIME.refresh_machine_markers(self)
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_power_node_markers then
+        LOOT_RUNTIME.refresh_power_node_markers(self)
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_wiregap_markers then
+        LOOT_RUNTIME.refresh_wiregap_markers(self)
+    end
+    if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_vent_markers then
+        LOOT_RUNTIME.refresh_vent_markers(self)
+    end
     if applied_any and LOOT_RUNTIME and LOOT_RUNTIME.refresh_world_item_visuals then
         LOOT_RUNTIME.refresh_world_item_visuals(self)
     end
@@ -18087,7 +18099,14 @@ multiplayer_apply_authoritative_actor_digest = function(self, actor_digest)
     end
     if applied_any then
         for _, alien in ipairs(self.aliens or {}) do
-            if alien and alien.go_id and not alien.is_moving then
+            if alien
+                and alien.go_id
+                and (
+                    alien.is_moving ~= true
+                    or alien.move_path == nil
+                    or alien.move_path[tonumber(alien.move_path_index or 0) or 0] == nil
+                )
+            then
                 local x, y = id_to_coords(alien.cell_id)
                 if x and y then
                     local wx, wy = coords_to_world_pos(x, y)
@@ -21127,7 +21146,7 @@ multiplayer_transport_on_event = function(self, event)
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=resource_drag_applied")
         local payload = event.payload or {}
-        local should_apply_local = payload.host_applied ~= true
+        local should_apply_local = (payload.host_applied ~= true) or (self.mp_state.local_player_id ~= self.mp_state.host_player_id)
         local ok = true
         if should_apply_local then
             self.mp_state.applying_remote_event = true
@@ -21527,7 +21546,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local should_apply_local = payload.host_applied ~= true
+        local should_apply_local = (payload.host_applied ~= true) or (self.mp_state.local_player_id ~= self.mp_state.host_player_id)
         local applied_ok = true
         if should_apply_local then
             applied_ok = multiplayer_apply_retrieve_power_event(self, payload)

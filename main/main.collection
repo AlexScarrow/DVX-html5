@@ -411,6 +411,54 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_music_bass"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/dvx_music_bass.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_music_drums"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/dvx_music_drums.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_music_pad"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/dvx_music_pad.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_music_melody"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/dvx_music_melody.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_music_sfx"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/dvx_music_sfx.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_music_victory"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/dvx_music_victory.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "human"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

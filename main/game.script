@@ -537,6 +537,37 @@ SFX_SARGE_ITEM_RECIEVE_URL = "main:/sfx_sarge_item_recieve#sound"
 SFX_TECHIE_ITEM_RECIEVE_URL = "main:/sfx_techie_item_recieve#sound"
 SFX_MEDIC_ITEM_RECIEVE_URL = "main:/sfx_medic_item_recieve#sound"
 SFX_GUNNER_ITEM_RECIEVE_URL = "main:/sfx_gunner_item_recieve#sound"
+SFX_MUSIC_BASS_URL = "main:/sfx_music_bass#sound"
+SFX_MUSIC_DRUMS_URL = "main:/sfx_music_drums#sound"
+SFX_MUSIC_PAD_URL = "main:/sfx_music_pad#sound"
+SFX_MUSIC_MELODY_URL = "main:/sfx_music_melody#sound"
+SFX_MUSIC_SFX_URL = "main:/sfx_music_sfx#sound"
+SFX_MUSIC_VICTORY_URL = "main:/sfx_music_victory#sound"
+ADAPTIVE_MUSIC_FOUNDATION_ENABLED = true
+ADAPTIVE_MUSIC_SOLO_FIREWALL = true
+ADAPTIVE_MUSIC_GAIN_ON = 0.5
+ADAPTIVE_MUSIC_GAIN_DRUMS_ON = 0.6
+ADAPTIVE_MUSIC_GAIN_ALIENS_ON = 0.6
+ADAPTIVE_MUSIC_GAIN_BUZZ_ON = 0.6
+ADAPTIVE_MUSIC_GAIN_OFF = 0.001
+ADAPTIVE_MUSIC_GAIN_FADE_IN_PER_SEC = 0.6
+ADAPTIVE_MUSIC_GAIN_FADE_OUT_PER_SEC = 0.4
+ADAPTIVE_MUSIC_DRUMS_FADE_OUT_S = 4.0
+ADAPTIVE_MUSIC_PAD_FADE_IN_S = 0.5
+ADAPTIVE_MUSIC_PAD_FADE_OUT_S = 4.0
+ADAPTIVE_MUSIC_CONTACT_SCAN_INTERVAL_S = 0.2
+ADAPTIVE_MUSIC_CONTACT_HOLD_S = 1.0
+ADAPTIVE_MUSIC_COMBAT_HOLD_S = 1.5
+ADAPTIVE_MUSIC_BASS_LOOP_DURATION_S = 16.0
+ADAPTIVE_MUSIC_PAD_EVERY_N_BASS_LOOPS = 4
+ADAPTIVE_MUSIC_STEM_KEYS = {
+    "music_bass",
+    "music_drums",
+    "music_pad",
+    "music_melody",
+    "music_sfx",
+    "music_victory"
+}
 SFX_SPEEDY_MOVE_URL_1 = "main:/sfx_speedy_move#sound"
 SFX_SPEEDY_MOVE_URL_2 = "main:/sfx_speedy_move_2#sound"
 SFX_SPEEDY_MOVE_URL_3 = "main:/sfx_speedy_move_3#sound"
@@ -11483,14 +11514,22 @@ set_sound_loop_state = function(self, key, should_play)
     if not entry or not entry.url then
         return
     end
+    local is_music_stem = tostring(key or ""):sub(1, 6) == "music_"
+    if (not should_play) and is_music_stem and self.sfx_state.music_allow_runtime_stop ~= true then
+        return
+    end
     if should_play and not entry.playing then
         entry.playing = true
-        print(string.format("SFX TRACE | play %s", tostring(key)))
         pcall(msg.post, entry.url, "play_sound")
+        if sound and sound.play then
+            pcall(sound.play, entry.url)
+        end
     elseif (not should_play) and entry.playing then
         entry.playing = false
-        print(string.format("SFX TRACE | stop %s", tostring(key)))
         pcall(msg.post, entry.url, "stop_sound")
+        if sound and sound.stop then
+            pcall(sound.stop, entry.url)
+        end
     end
 end
 
@@ -11508,11 +11547,16 @@ play_sfx_one_shot = function(self, key)
     if not entry or not entry.url then
         return
     end
-    print(string.format("SFX TRACE | oneshot %s", tostring(key)))
     pcall(msg.post, entry.url, "play_sound")
 end
 
 play_human_shoot_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     local roll = math.random(1, 2)
     if roll == 2 then
         play_sfx_one_shot(self, "human_shoot_2")
@@ -11522,6 +11566,12 @@ play_human_shoot_sfx = function(self)
 end
 
 play_turret_gun_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     play_sfx_one_shot(self, "turret_gun")
 end
 
@@ -11726,22 +11776,52 @@ play_alien_death_sfx = function(self, alien_type)
 end
 
 play_brute_damage_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     play_sfx_one_shot(self, "brute_damage")
 end
 
 play_melee_hit_alien_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     play_sfx_one_shot(self, "melee_hit_alien")
 end
 
 play_melee_hit_human_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     play_sfx_one_shot(self, "melee_hit_human")
 end
 
 play_spitter_fires_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     play_sfx_one_shot(self, "spitter_fires")
 end
 
 play_civ_melee_hit_sfx = function(self)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
     play_sfx_one_shot(self, "civ_melee_hit")
 end
 
@@ -11929,11 +12009,26 @@ refresh_ambient_sfx_state = function(self)
         return
     end
     local state = self.game_flow_state or FLOW_STATE_GAME
-    if self.sfx_state.last_flow_state == state then
+    local adaptive_music_allowed = ADAPTIVE_MUSIC_FOUNDATION_ENABLED == true
+    if adaptive_music_allowed and ADAPTIVE_MUSIC_SOLO_FIREWALL == true and self.multiplayer_mode_active == true then
+        adaptive_music_allowed = false
+    end
+    if self.sfx_state.last_flow_state == state
+        and self.sfx_state.last_adaptive_music_allowed == adaptive_music_allowed
+    then
         return
     end
     self.sfx_state.last_flow_state = state
+    self.sfx_state.last_adaptive_music_allowed = adaptive_music_allowed
     local in_gameplay = state == FLOW_STATE_GAME
+    if (not in_gameplay) and state == FLOW_STATE_SOLO_SETUP then
+        local has_live_world = type(self.world_grid) == "table" and #self.world_grid > 0
+        local has_live_squad = type(self.squad_units) == "table" and next(self.squad_units) ~= nil
+        local level_load_pending = self.pending_level_load and self.pending_level_load.level_index
+        if has_live_world and has_live_squad and (not level_load_pending) then
+            in_gameplay = true
+        end
+    end
     local directional_move_sfx_allowed = is_directional_move_sfx_allowed(self)
     local is_title_outro = (state == FLOW_STATE_OUTRO) and tostring(self.end_outro_sequence_id or "") == "title"
     local in_title_like = (state == FLOW_STATE_TITLE)
@@ -11944,7 +12039,7 @@ refresh_ambient_sfx_state = function(self)
         or (state == FLOW_STATE_SCORE_SOLO)
         or (state == FLOW_STATE_SCORE_MP)
         or is_title_outro
-    set_sound_loop_state(self, "planet", in_gameplay)
+    set_sound_loop_state(self, "planet", in_gameplay and (not adaptive_music_allowed))
     set_sound_loop_state(self, "title", in_title_like)
     if (not in_gameplay) or (not directional_move_sfx_allowed) then
         self.sfx_state.vertical_active_by_unit = {}
@@ -11955,6 +12050,216 @@ refresh_ambient_sfx_state = function(self)
         set_sound_loop_state(self, "human_horizontal", false)
         self.sfx_state.speedy_active_count = 0
         stop_speedy_move_sfx(self)
+    end
+end
+
+update_adaptive_music_trigger_state = function(self, dt)
+    if not self or not self.sfx_state then
+        return
+    end
+    local adaptive_music_allowed = ADAPTIVE_MUSIC_FOUNDATION_ENABLED == true
+    if adaptive_music_allowed and ADAPTIVE_MUSIC_SOLO_FIREWALL == true and self.multiplayer_mode_active == true then
+        adaptive_music_allowed = false
+    end
+    local state = self.game_flow_state or FLOW_STATE_GAME
+    local in_gameplay = state == FLOW_STATE_GAME
+    if (not in_gameplay) and state == FLOW_STATE_SOLO_SETUP then
+        local has_live_world = type(self.world_grid) == "table" and #self.world_grid > 0
+        local has_live_squad = type(self.squad_units) == "table" and next(self.squad_units) ~= nil
+        local level_load_pending = self.pending_level_load and self.pending_level_load.level_index
+        if has_live_world and has_live_squad and (not level_load_pending) then
+            in_gameplay = true
+        end
+    end
+    self.sfx_state.music_target_gain_by_key = self.sfx_state.music_target_gain_by_key or {}
+    if ADAPTIVE_MUSIC_FOUNDATION_ENABLED == true and self.sfx_state.music_transport_started == true then
+        local bass_loop_duration_s = math.max(0.25, tonumber(ADAPTIVE_MUSIC_BASS_LOOP_DURATION_S or 16.0) or 16.0)
+        local bass_loop_timer_s = (tonumber(self.sfx_state.music_bass_loop_timer_s or 0) or 0) + (dt or 0)
+        local bass_loop_count = tonumber(self.sfx_state.music_bass_loop_count or 0) or 0
+        while bass_loop_timer_s >= bass_loop_duration_s do
+            bass_loop_timer_s = bass_loop_timer_s - bass_loop_duration_s
+            bass_loop_count = bass_loop_count + 1
+        end
+        self.sfx_state.music_bass_loop_timer_s = bass_loop_timer_s
+        self.sfx_state.music_bass_loop_count = bass_loop_count
+    end
+    if not (adaptive_music_allowed and in_gameplay) then
+        self.sfx_state.music_contact_hold_s = 0
+        self.sfx_state.music_combat_hold_s = 0
+        self.sfx_state.music_contact_scan_timer_s = 0
+        for _, key in ipairs(ADAPTIVE_MUSIC_STEM_KEYS) do
+            self.sfx_state.music_target_gain_by_key[key] = ADAPTIVE_MUSIC_GAIN_OFF
+        end
+        return
+    end
+
+    self.sfx_state.music_contact_hold_s = math.max(0, (tonumber(self.sfx_state.music_contact_hold_s or 0) or 0) - (dt or 0))
+    self.sfx_state.music_combat_hold_s = math.max(0, (tonumber(self.sfx_state.music_combat_hold_s or 0) or 0) - (dt or 0))
+    self.sfx_state.music_contact_scan_timer_s = (tonumber(self.sfx_state.music_contact_scan_timer_s or 0) or 0) - (dt or 0)
+    local bass_loop_count = tonumber(self.sfx_state.music_bass_loop_count or 0) or 0
+    if self.sfx_state.music_contact_scan_timer_s <= 0 then
+        self.sfx_state.music_contact_scan_timer_s = tonumber(ADAPTIVE_MUSIC_CONTACT_SCAN_INTERVAL_S or 0.2) or 0.2
+        local has_visible_non_dead_alien = false
+        if self.squad_units and self.aliens and self.world_grid then
+            for _, unit in pairs(self.squad_units) do
+                if unit
+                    and (unit.current_health or 0) > 0
+                    and unit.cell_id
+                    and unit.in_shuttle ~= true
+                then
+                    for _, alien in ipairs(self.aliens) do
+                        if alien
+                            and alien.is_dead ~= true
+                            and alien.cell_id
+                            and has_unobstructed_los(self.world_grid, unit.cell_id, alien.cell_id)
+                        then
+                            has_visible_non_dead_alien = true
+                            break
+                        end
+                    end
+                end
+                if has_visible_non_dead_alien then
+                    break
+                end
+            end
+        end
+        if has_visible_non_dead_alien then
+            self.sfx_state.music_contact_hold_s = math.max(
+                tonumber(self.sfx_state.music_contact_hold_s or 0) or 0,
+                tonumber(ADAPTIVE_MUSIC_CONTACT_HOLD_S or 1.0) or 1.0
+            )
+        end
+    end
+
+    local combat_active = (tonumber(self.sfx_state.music_combat_hold_s or 0) or 0) > 0
+    local contact_active = (tonumber(self.sfx_state.music_contact_hold_s or 0) or 0) > 0
+    local alien_turn_active = self.alien_turn_active == true
+        or self.pending_spitter_attack_phase
+        or self.pending_melee_attack_phase
+        or any_alien_is_moving(self)
+    local bass_on = true
+    local drums_on = false
+    local pad_on = true
+    local melody_on = false
+    local sfx_on = false
+    local victory_on = false
+    if combat_active then
+        drums_on = true
+        melody_on = true
+        sfx_on = true
+    elseif alien_turn_active then
+        melody_on = true
+    elseif contact_active then
+        sfx_on = true
+    end
+    if pad_on then
+        local every_n = math.max(1, math.floor(tonumber(ADAPTIVE_MUSIC_PAD_EVERY_N_BASS_LOOPS or 4) or 4))
+        local current_loop_index = (bass_loop_count % every_n) + 1
+        pad_on = current_loop_index == every_n
+    end
+    self.sfx_state.music_target_gain_by_key.music_bass = bass_on and ADAPTIVE_MUSIC_GAIN_ON or ADAPTIVE_MUSIC_GAIN_OFF
+    self.sfx_state.music_target_gain_by_key.music_drums = drums_on and (tonumber(ADAPTIVE_MUSIC_GAIN_DRUMS_ON or ADAPTIVE_MUSIC_GAIN_ON) or ADAPTIVE_MUSIC_GAIN_ON) or ADAPTIVE_MUSIC_GAIN_OFF
+    self.sfx_state.music_target_gain_by_key.music_pad = pad_on and ADAPTIVE_MUSIC_GAIN_ON or ADAPTIVE_MUSIC_GAIN_OFF
+    self.sfx_state.music_target_gain_by_key.music_melody = melody_on and (tonumber(ADAPTIVE_MUSIC_GAIN_ALIENS_ON or ADAPTIVE_MUSIC_GAIN_ON) or ADAPTIVE_MUSIC_GAIN_ON) or ADAPTIVE_MUSIC_GAIN_OFF
+    self.sfx_state.music_target_gain_by_key.music_sfx = sfx_on and (tonumber(ADAPTIVE_MUSIC_GAIN_BUZZ_ON or ADAPTIVE_MUSIC_GAIN_ON) or ADAPTIVE_MUSIC_GAIN_ON) or ADAPTIVE_MUSIC_GAIN_OFF
+    self.sfx_state.music_target_gain_by_key.music_victory = victory_on and ADAPTIVE_MUSIC_GAIN_ON or ADAPTIVE_MUSIC_GAIN_OFF
+end
+
+adaptive_music_set_gain = function(self, key, gain_value)
+    if not self or not self.sfx_state then
+        return
+    end
+    local entry = self.sfx_state[key]
+    if not entry or not entry.url then
+        return
+    end
+    local gain = math.max(0, math.min(1, tonumber(gain_value or 0) or 0))
+    if sound and sound.set_gain then
+        pcall(sound.set_gain, entry.url, gain)
+    end
+    pcall(go.set, entry.url, "gain", gain)
+    pcall(msg.post, entry.url, "set_gain", { gain = gain })
+end
+
+update_adaptive_music_gain_mixer = function(self, dt)
+    if not self or not self.sfx_state then
+        return
+    end
+    local adaptive_music_allowed = ADAPTIVE_MUSIC_FOUNDATION_ENABLED == true
+    if adaptive_music_allowed and ADAPTIVE_MUSIC_SOLO_FIREWALL == true and self.multiplayer_mode_active == true then
+        adaptive_music_allowed = false
+    end
+    local state = self.game_flow_state or FLOW_STATE_GAME
+    local in_gameplay = state == FLOW_STATE_GAME
+    if (not in_gameplay) and state == FLOW_STATE_SOLO_SETUP then
+        local has_live_world = type(self.world_grid) == "table" and #self.world_grid > 0
+        local has_live_squad = type(self.squad_units) == "table" and next(self.squad_units) ~= nil
+        local level_load_pending = self.pending_level_load and self.pending_level_load.level_index
+        if has_live_world and has_live_squad and (not level_load_pending) then
+            in_gameplay = true
+        end
+    end
+    self.sfx_state.music_target_gain_by_key = self.sfx_state.music_target_gain_by_key or {}
+    self.sfx_state.music_current_gain_by_key = self.sfx_state.music_current_gain_by_key or {}
+    if ADAPTIVE_MUSIC_FOUNDATION_ENABLED == true and self.sfx_state.music_transport_started ~= true then
+        for _, key in ipairs(ADAPTIVE_MUSIC_STEM_KEYS) do
+            local entry = self.sfx_state[key]
+            if entry and entry.url then
+                set_sound_loop_state(self, key, true)
+                adaptive_music_set_gain(self, key, ADAPTIVE_MUSIC_GAIN_OFF)
+                self.sfx_state.music_current_gain_by_key[key] = ADAPTIVE_MUSIC_GAIN_OFF
+                self.sfx_state.music_target_gain_by_key[key] = self.sfx_state.music_target_gain_by_key[key] or ADAPTIVE_MUSIC_GAIN_OFF
+            end
+        end
+        self.sfx_state.music_transport_started = true
+    end
+    if not in_gameplay then
+        for _, key in ipairs(ADAPTIVE_MUSIC_STEM_KEYS) do
+            self.sfx_state.music_target_gain_by_key[key] = ADAPTIVE_MUSIC_GAIN_OFF
+        end
+    end
+    local fade_in_step = math.max(0.001, tonumber(ADAPTIVE_MUSIC_GAIN_FADE_IN_PER_SEC or 0.6) or 0.6) * (dt or 0)
+    local fade_out_step = math.max(0.001, tonumber(ADAPTIVE_MUSIC_GAIN_FADE_OUT_PER_SEC or 0.4) or 0.4) * (dt or 0)
+    for _, key in ipairs(ADAPTIVE_MUSIC_STEM_KEYS) do
+        local entry = self.sfx_state[key]
+        if entry and entry.url then
+            local target = tonumber(self.sfx_state.music_target_gain_by_key[key] or ADAPTIVE_MUSIC_GAIN_OFF) or ADAPTIVE_MUSIC_GAIN_OFF
+            target = math.max(0, math.min(1, target))
+            local current = tonumber(self.sfx_state.music_current_gain_by_key[key] or ADAPTIVE_MUSIC_GAIN_OFF) or ADAPTIVE_MUSIC_GAIN_OFF
+            local delta = target - current
+            if delta >= 0 and (key == "music_melody" or key == "music_drums") then
+                current = target
+            else
+                local step = fade_out_step
+                if delta >= 0 then
+                    step = fade_in_step
+                end
+                if key == "music_pad" then
+                    local full_span = math.max(0.001, (tonumber(ADAPTIVE_MUSIC_GAIN_ON or 0.5) or 0.5) - (tonumber(ADAPTIVE_MUSIC_GAIN_OFF or 0.001) or 0.001))
+                    if delta >= 0 then
+                        local pad_in_s = math.max(0.001, tonumber(ADAPTIVE_MUSIC_PAD_FADE_IN_S or 0.5) or 0.5)
+                        step = math.max(0.00001, (full_span / pad_in_s) * (dt or 0))
+                    else
+                        local pad_out_s = math.max(0.001, tonumber(ADAPTIVE_MUSIC_PAD_FADE_OUT_S or 4.0) or 4.0)
+                        step = math.max(0.00001, (full_span / pad_out_s) * (dt or 0))
+                    end
+                elseif delta < 0 and key == "music_drums" then
+                    local drums_out_s = math.max(0.001, tonumber(ADAPTIVE_MUSIC_DRUMS_FADE_OUT_S or 4.0) or 4.0)
+                    local full_span = math.max(0.001, (tonumber(ADAPTIVE_MUSIC_GAIN_ON or 0.5) or 0.5) - (tonumber(ADAPTIVE_MUSIC_GAIN_OFF or 0.001) or 0.001))
+                    step = math.max(0.00001, (full_span / drums_out_s) * (dt or 0))
+                end
+                if math.abs(delta) <= step then
+                    current = target
+                elseif delta > 0 then
+                    current = current + step
+                else
+                    current = current - step
+                end
+            end
+            current = math.max(0, math.min(1, current))
+            self.sfx_state.music_current_gain_by_key[key] = current
+            adaptive_music_set_gain(self, key, current)
+        end
     end
 end
 
@@ -12050,6 +12355,34 @@ update_horizontal_move_sfx_for_actor = function(self, actor_key, is_horizontal_n
         self.sfx_state.horizontal_active_count = math.max(0, (self.sfx_state.horizontal_active_count or 0) - 1)
     end
     set_sound_loop_state(self, "human_horizontal", (self.sfx_state.horizontal_active_count or 0) > 0)
+end
+
+reconcile_horizontal_move_sfx_state = function(self)
+    if not (self and self.sfx_state and self.sfx_state.horizontal_active_by_actor) then
+        return
+    end
+    local by_actor = self.sfx_state.horizontal_active_by_actor
+    local moving_lookup = {}
+    for _, unit in pairs(self.squad_units or {}) do
+        if unit and unit.id and unit.is_moving == true then
+            moving_lookup[tostring(unit.id)] = true
+        end
+    end
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true and civilian.is_moving == true then
+            moving_lookup["civ_" .. tostring(civilian.id or 0)] = true
+        end
+    end
+    local active_count = 0
+    for actor_key, is_active in pairs(by_actor) do
+        if is_active == true and moving_lookup[actor_key] == true then
+            active_count = active_count + 1
+        else
+            by_actor[actor_key] = nil
+        end
+    end
+    self.sfx_state.horizontal_active_count = active_count
+    set_sound_loop_state(self, "human_horizontal", active_count > 0)
 end
 
 stop_speedy_move_sfx = function(self)
@@ -13630,13 +13963,10 @@ local function start_outro_slideshow_runtime(self)
             pcall(go.set_position, vmath.vector3(wx, wy, z), handle)
         end,
         play_sfx = function(cue, state)
-            print(string.format("OUTRO SFX | cue=%s", tostring(cue and cue.cue or "")))
         end,
         start_music = function(soundtrack, state)
-            print(string.format("OUTRO MUSIC START | cue=%s", tostring(soundtrack and soundtrack.cue or "")))
         end,
         stop_music = function(soundtrack, state)
-            print(string.format("OUTRO MUSIC STOP | cue=%s", tostring(soundtrack and soundtrack.cue or "")))
         end
     }
     self.outro_slideshow_state = OUTRO_SLIDESHOW.start(sequence, hooks)
@@ -26339,6 +26669,12 @@ function init(self)
             techie_item_recieve = true,
             medic_item_recieve = true,
             gunner_item_recieve = true,
+            music_bass = true,
+            music_drums = true,
+            music_pad = true,
+            music_melody = true,
+            music_sfx = true,
+            music_victory = true,
             speedy_move = true
         },
         title = { url = msg.url(SFX_TITLE_URL), playing = false },
@@ -26385,6 +26721,18 @@ function init(self)
         techie_item_recieve = { url = msg.url(SFX_TECHIE_ITEM_RECIEVE_URL), playing = false },
         medic_item_recieve = { url = msg.url(SFX_MEDIC_ITEM_RECIEVE_URL), playing = false },
         gunner_item_recieve = { url = msg.url(SFX_GUNNER_ITEM_RECIEVE_URL), playing = false },
+        music_bass = { url = msg.url(SFX_MUSIC_BASS_URL), playing = false },
+        music_drums = { url = msg.url(SFX_MUSIC_DRUMS_URL), playing = false },
+        music_pad = { url = msg.url(SFX_MUSIC_PAD_URL), playing = false },
+        music_melody = { url = msg.url(SFX_MUSIC_MELODY_URL), playing = false },
+        music_sfx = { url = msg.url(SFX_MUSIC_SFX_URL), playing = false },
+        music_victory = { url = msg.url(SFX_MUSIC_VICTORY_URL), playing = false },
+        music_transport_started = false,
+        music_allow_runtime_stop = false,
+        music_target_gain_by_key = {},
+        music_current_gain_by_key = {},
+        music_bass_loop_timer_s = 0,
+        music_bass_loop_count = 0,
         speedy_voice_urls = {
             msg.url(SFX_SPEEDY_MOVE_URL_1),
             msg.url(SFX_SPEEDY_MOVE_URL_2),
@@ -26888,6 +27236,7 @@ function update(self, dt)
 
     update_human_movement(self, dt)
     update_civilian_movement(self, dt)
+    reconcile_horizontal_move_sfx_state(self)
     refresh_civilian_visuals(self)
     update_alien_movement(self, dt)
     local obstacle_shudder_active = false
@@ -27153,6 +27502,8 @@ function update(self, dt)
     update_flow_ui(self, dt)
     update_advisory_ui(self, dt)
     refresh_ambient_sfx_state(self)
+    update_adaptive_music_trigger_state(self, dt)
+    update_adaptive_music_gain_mixer(self, dt)
     update_outro_slideshow_runtime(self, dt)
     update_tutorial_overlay_ui(self)
     if LOOT_RUNTIME.update_workshop_transaction_panel_ui then
@@ -27945,6 +28296,7 @@ function final(self)
         LEVEL_EDITOR.final(self)
     end
     if self and self.sfx_state then
+        self.sfx_state.music_allow_runtime_stop = true
         self.sfx_state.vertical_active_by_unit = {}
         self.sfx_state.vertical_active_count = 0
         self.sfx_state.horizontal_active_by_actor = {}
@@ -27955,5 +28307,11 @@ function final(self)
         stop_speedy_move_sfx(self)
         set_sound_loop_state(self, "planet", false)
         set_sound_loop_state(self, "title", false)
+        set_sound_loop_state(self, "music_bass", false)
+        set_sound_loop_state(self, "music_drums", false)
+        set_sound_loop_state(self, "music_pad", false)
+        set_sound_loop_state(self, "music_melody", false)
+        set_sound_loop_state(self, "music_sfx", false)
+        set_sound_loop_state(self, "music_victory", false)
     end
 end

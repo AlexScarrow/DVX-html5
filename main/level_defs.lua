@@ -198,7 +198,7 @@ levels[3].unit_loadouts = {
     levels[4].spawn_cell = 2
     levels[4].unit_loadouts = {
         sarge = {
-            starting_backpack_items = {},
+            starting_backpack_items = { "bomb", "bomb" },
             starting_equipped_buffs = {
                 top = "buff_night_vision"
             }
@@ -324,13 +324,36 @@ levels[3].unit_loadouts = {
         { x = 11, y = 8, tile = "corridor1" },
         { x = 14, y = 8, tile = "exterior1" },
         { x = 2, y = 5, tile = "portal" },
+        { x = 5, y = 5, tile = "showers" },
+        { x = 8, y = 5, tile = "corridor1" },
         { x = 11, y = 5, tile = "bunkroom" },
         { x = 11, y = 2, tile = "medbay" },
+        { x = 14, y = 2, tile = "portal" },
     }
     levels[8].mission_type = "purge"
     levels[8].spawn_tile = "rescue_entry"
     levels[8].spawn_cell = 2
-    levels[8].unit_loadouts = levels[1].unit_loadouts
+    --levels[8].unit_loadouts = levels[1].unit_loadouts
+    levels[8].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = { "bomb", "bomb" },
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power" },
+            starting_equipped_buffs = {}
+        },
+        medic = {
+            starting_backpack_items = { "meds"},
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = { "ammo"},
+            starting_equipped_buffs = {}
+        }
+    }
 
     levels[9] = {
         { x = 2, y = 12, tile = "coms" },
@@ -394,7 +417,26 @@ levels[3].unit_loadouts = {
     levels[11].mission_type = "purge"
     levels[11].spawn_tile = "rescue_entry"
     levels[11].spawn_cell = 2
-    levels[11].unit_loadouts = levels[1].unit_loadouts
+    levels[11].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = { "bomb", "bomb" },
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power", "power" },
+            starting_equipped_buffs = {}
+        },
+        medic = {
+            starting_backpack_items = { "meds", "meds" },
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = { "ammo", "ammo" },
+            starting_equipped_buffs = {}
+        }
+    }
 
     levels[12] = {
         { x = 14, y = 11, tile = "coms" },

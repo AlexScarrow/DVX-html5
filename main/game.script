@@ -6584,8 +6584,7 @@ local function get_alive_human_count_on_lookup(self, lookup)
 end
 
 local function purge_has_bomb_on_portal_target(self)
-    local target_cells = get_world_cell_ids_for_tile_local_cells(self, PURGE_BOMB_TILE_NAME, { PURGE_BOMB_LOCAL_CELL })
-    local lookup = build_cell_lookup(target_cells)
+    local lookup = get_purge_bomb_target_lookup(self)
     if next(lookup) == nil then
         return false
     end
@@ -6598,6 +6597,31 @@ local function purge_has_bomb_on_portal_target(self)
         end
     end
     return false
+end
+
+get_purge_bomb_target_lookup = function(self)
+    local target_cells = get_world_cell_ids_for_tile_local_cells(self, PURGE_BOMB_TILE_NAME, { PURGE_BOMB_LOCAL_CELL })
+    return build_cell_lookup(target_cells)
+end
+
+count_purge_locked_portal_bombs = function(self)
+    local lookup = get_purge_bomb_target_lookup(self)
+    if next(lookup) == nil then
+        return 0
+    end
+    local count = 0
+    for _, item in ipairs(self.world_item_instances or {}) do
+        local meta = item and item.meta or nil
+        if item
+            and item.item_type == PURGE_BOMB_ITEM_TYPE
+            and lookup[tonumber(item.cell_id or 0) or 0] == true
+            and meta
+            and meta.purge_portal_locked == true
+        then
+            count = count + 1
+        end
+    end
+    return count
 end
 
 local function purge_is_extract_ready(self)
@@ -11439,6 +11463,16 @@ function score_record_civilian_escorted(self, civilian_id)
     local state = ensure_score_state(self)
     SCORE_RUNTIME.record_civilian_escorted(state, civilian_id)
     score_log_snapshot(self, "civilian_escorted")
+end
+
+function score_record_purge_portal_bonus_deployments(self, deployment_count)
+    local count = math.max(0, tonumber(deployment_count or 0) or 0)
+    if count <= 0 then
+        return
+    end
+    local state = ensure_score_state(self)
+    SCORE_RUNTIME.record_purge_portal_deployments(state, count)
+    score_log_snapshot(self, "purge_portal_bonus_deploy")
 end
 
 local function update_escape_pod_ready_sfx(self)
@@ -23074,9 +23108,12 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     record_tile_powered_first_time = score_record_tile_powered_first_time,
     record_civilian_escorted = score_record_civilian_escorted,
     record_launch_success = score_record_launch_success,
+    record_purge_portal_bonus_deployments = score_record_purge_portal_bonus_deployments,
     get_current_mission_type = get_current_mission_type,
     get_dna_mission_status = get_dna_mission_status,
     get_purge_mission_status = get_purge_mission_status,
+    get_purge_bomb_target_lookup = get_purge_bomb_target_lookup,
+    count_purge_locked_portal_bombs = count_purge_locked_portal_bombs,
     mark_purge_launch_pressed = mark_purge_launch_pressed,
     RESCUE_ENTRY_VICTORY_LOCAL_CELL = RESCUE_ENTRY_VICTORY_LOCAL_CELL,
     DNA_SAMPLE_RETURN_LOCAL_CELL = DNA_RESCUE_RETURN_LOCAL_CELL,
@@ -23580,19 +23617,6 @@ function spawn_human_unit(self)
                 else
                     unit.backpack_items = {}
                     unit.backpack_used = 0
-                end
-            end
-            if purge_is_active_mission(self) and unit.id == "sarge" then
-                local has_bomb = false
-                for _, item_type in ipairs(unit.backpack_items or {}) do
-                    if item_type == PURGE_BOMB_ITEM_TYPE then
-                        has_bomb = true
-                        break
-                    end
-                end
-                if not has_bomb then
-                    table.insert(unit.backpack_items, PURGE_BOMB_ITEM_TYPE)
-                    unit.backpack_used = #unit.backpack_items
                 end
             end
             unit.equipment = normalize_equipment(unit_loadout)

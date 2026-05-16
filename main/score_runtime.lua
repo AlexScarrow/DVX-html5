@@ -42,6 +42,7 @@ local function ensure_state(state)
     m.spawn_points_destroyed = tonumber(m.spawn_points_destroyed or 0) or 0
     m.civilian_escorted_count = tonumber(m.civilian_escorted_count or 0) or 0
     m.humans_escaped_on_launch = tonumber(m.humans_escaped_on_launch or 0) or 0
+    m.purge_portal_deployments = tonumber(m.purge_portal_deployments or 0) or 0
     m.holdout_turns_survived = tonumber(m.holdout_turns_survived or 0) or 0
     m.humans_alive_at_end = tonumber(m.humans_alive_at_end or 0) or 0
     m.mission_complete = m.mission_complete == true
@@ -169,6 +170,16 @@ function M.record_launch_success(state, escaped_humans_alive_count)
     return state
 end
 
+function M.record_purge_portal_deployments(state, count)
+    state = ensure_state(state)
+    local n = math.max(0, tonumber(count or 0) or 0)
+    if n > 0 then
+        state.metrics.purge_portal_deployments = (tonumber(state.metrics.purge_portal_deployments or 0) or 0) + n
+        log_event(state, "purge_portal_deployments", { count = n, total = state.metrics.purge_portal_deployments })
+    end
+    return state
+end
+
 function M.record_humans_alive_at_end(state, count)
     state = ensure_state(state)
     state.metrics.humans_alive_at_end = math.max(0, tonumber(count or 0) or 0)
@@ -237,6 +248,7 @@ function M.compute_score(state, mission_type_override)
     breakdown.spawn_points_points = (m.spawn_points_destroyed or 0) * (points.spawn_point_destroyed or 0)
     breakdown.civilian_escorted_points = (m.civilian_escorted_count or 0) * (points.civilian_escorted or 0)
     breakdown.humans_escaped_points = (m.humans_escaped_on_launch or 0) * (points.human_escaped_alive or 0)
+    breakdown.purge_portal_deploy_points = (m.purge_portal_deployments or 0) * (points.purge_portal_deployment or 0)
     breakdown.holdout_survival_points = (m.holdout_turns_survived or 0) * (holdout.points_per_turn_survived or 0)
 
     breakdown.efficiency_points = 0

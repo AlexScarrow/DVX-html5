@@ -3793,9 +3793,22 @@ function M.extend(runtime, ctx)
             self.game_won = true
             self.launch_fx_timer = 1.2
             local escaped = count_alive_humans_on_rescue_local_cell(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
+            local locked_bombs = 0
+            if ctx and ctx.count_purge_locked_portal_bombs then
+                locked_bombs = math.max(0, tonumber(ctx.count_purge_locked_portal_bombs(self) or 0) or 0)
+            end
+            local bonus_deployments = math.max(0, locked_bombs - 1)
+            if bonus_deployments > 0 and ctx and ctx.record_purge_portal_bonus_deployments then
+                ctx.record_purge_portal_bonus_deployments(self, bonus_deployments)
+            end
             record_launch_success(self, escaped)
             runtime.refresh_exit_objective_state(self)
-            print(string.format("PURGE | launch confirmed before timeout. escaped=%d", escaped))
+            print(string.format(
+                "PURGE | launch confirmed before timeout. escaped=%d locked_bombs=%d bonus_deployments=%d",
+                escaped,
+                locked_bombs,
+                bonus_deployments
+            ))
             return true
         end
         self.game_won = true
@@ -4397,6 +4410,15 @@ function M.extend(runtime, ctx)
         end
         if item.cell_id ~= unit.cell_id then
             return false
+        end
+        local item_meta = item.meta or nil
+        if item.item_type == PURGE_BOMB_ITEM_TYPE
+            and item_meta
+            and item_meta.purge_portal_locked == true
+        then
+            print("Bomb is locked on portal target and cannot be retrieved.")
+            flash_invalid_drag_units(unit, nil)
+            return true
         end
         unit.backpack_items = unit.backpack_items or {}
         local cap = unit.backpack_slots or (ctx.UI_BACKPACK_COLS * ctx.UI_BACKPACK_ROWS)
@@ -6324,15 +6346,35 @@ function M.extend(runtime, ctx)
                                     print(string.format("%s dropped a corpse from backpack. (AP -%d)", source_unit.display_name, get_drag_ap_cost()))
                                 else
                                     remove_source_item()
-                                    runtime.create_world_item_instance(self, source_item, drop_cell_id, source_unit.id, {})
+                                    local item_meta = {}
+                                    if source_item == PURGE_BOMB_ITEM_TYPE
+                                        and is_purge_mission(self)
+                                        and ctx
+                                        and ctx.get_purge_bomb_target_lookup
+                                    then
+                                        local lookup = ctx.get_purge_bomb_target_lookup(self) or {}
+                                        if lookup[tonumber(drop_cell_id or 0) or 0] == true then
+                                            item_meta.purge_portal_locked = true
+                                        end
+                                    end
+                                    runtime.create_world_item_instance(self, source_item, drop_cell_id, source_unit.id, item_meta)
                                     runtime.refresh_world_item_visuals(self)
                                     consumed = true
-                                    print(string.format(
-                                        "%s dropped 1 %s into world. (AP -%d)",
-                                        source_unit.display_name,
-                                        source_item,
-                                        get_drag_ap_cost()
-                                    ))
+                                    if source_item == PURGE_BOMB_ITEM_TYPE and item_meta.purge_portal_locked == true then
+                                        print(string.format(
+                                            "%s deployed 1 %s onto portal target (locked). (AP -%d)",
+                                            source_unit.display_name,
+                                            source_item,
+                                            get_drag_ap_cost()
+                                        ))
+                                    else
+                                        print(string.format(
+                                            "%s dropped 1 %s into world. (AP -%d)",
+                                            source_unit.display_name,
+                                            source_item,
+                                            get_drag_ap_cost()
+                                        ))
+                                    end
                                 end
                             else
                                 print("too far away")

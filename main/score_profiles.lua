@@ -116,6 +116,7 @@ M.PROFILES = {
             },
             tile_powered_first_time = 35,
             spawn_point_destroyed = 180,
+            purge_portal_deployment = 1000,
             civilian_escorted = 0,
             human_escaped_alive = 0,
             win_bonus = 550,

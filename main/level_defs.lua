@@ -198,7 +198,7 @@ levels[3].unit_loadouts = {
     levels[4].spawn_cell = 2
     levels[4].unit_loadouts = {
         sarge = {
-            starting_backpack_items = { "bomb", "bomb" },
+            starting_backpack_items = { "bomb" },
             starting_equipped_buffs = {
                 top = "buff_night_vision"
             }
@@ -406,11 +406,11 @@ levels[3].unit_loadouts = {
         { x = 2, y = 8, tile = "coms" },
         { x = 5, y = 8, tile = "exterior2" },
         { x = 8, y = 8, tile = "rescue_entry" },
-        { x = 14, y = 7, tile = "exterior1" },
         { x = 11, y = 7, tile = "bunkroom" },
+        { x = 14, y = 7, tile = "exterior1" },
         { x = 2, y = 5, tile = "medbay" },
-        { x = 5, y = 4, tile = "corridor1" },
-        { x = 8, y = 4, tile = "corridor1" },
+        { x = 5, y = 5, tile = "corridor1" },
+        { x = 8, y = 5, tile = "corridor1" },
         { x = 11, y = 4, tile = "armoury" },
         { x = 14, y = 4, tile = "portal" },
     }

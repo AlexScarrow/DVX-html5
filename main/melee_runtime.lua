@@ -238,7 +238,22 @@ function M.create(ctx)
             return false
         end
         local cell = self.world_grid[cell_id]
-        return cell and cell.has_barricade == true and (cell.barricade_hp or 0) > 0
+        if not cell then
+            return false
+        end
+        if cell.has_barricade == true and (cell.barricade_hp or 0) > 0 then
+            return true
+        end
+        local slots = { cell.object1, cell.object2, cell.object3 }
+        for _, slot in ipairs(slots) do
+            if slot and slot.name == hash("obstacle") then
+                local count = slot.stackCount or slot.obstacleCount or 1
+                if count >= 3 then
+                    return true
+                end
+            end
+        end
+        return false
     end
 
     local function record_alien_kill(self, alien)
@@ -491,11 +506,6 @@ function M.create(ctx)
         if target_alien.is_dead or target_alien.cell_id ~= human.cell_id then
             return
         end
-        if cell_has_active_barricade(self, human.cell_id) then
-            print(string.format("%s melee blocked by barricade on cell %d.", human.display_name, human.cell_id or -1))
-            return
-        end
-
         play_human_melee_lurch(human, target_alien)
         play_target_red_flash(self, target_alien)
         human.current_ap = human.current_ap - melee_ap_cost
@@ -536,6 +546,12 @@ function M.create(ctx)
                 kill_alien(self, target_alien)
             end
         else
+            if target_alien.go_id and ctx and ctx.spawn_impact_ring_at_world then
+                local mpos = go.get_position(target_alien.go_id)
+                if mpos then
+                    ctx.spawn_impact_ring_at_world(self, mpos.x, mpos.y, vmath.vector4(1.0, 0.9, 0.2, 0.9), 0.45)
+                end
+            end
             print(string.format(
                 "%s melee %s on alien #%d and MISSED [chance=%d%% roll=%d buff=%d]",
                 human.display_name, source_tag, target_alien.id, hit_chance, roll, melee_bonus

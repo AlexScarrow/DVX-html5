@@ -755,6 +755,15 @@ mp_alpha_label_from_network_id = function(network_id)
     return mp_lobby_sanitize_name(raw)
 end
 
+mp_normalize_network_player_id = function(raw_id)
+    local raw = string.lower(tostring(raw_id or ""))
+    if raw == "playerone" then return "p1" end
+    if raw == "playertwo" then return "p2" end
+    if raw == "playerthree" then return "p3" end
+    if raw == "playerfour" then return "p4" end
+    return raw ~= "" and raw or tostring(raw_id or "")
+end
+
 mp_network_id_for_slot = function(self, slot_player_id)
     local slot_id = tostring(slot_player_id or "")
     if slot_id == "" then
@@ -853,6 +862,7 @@ end
 MP_TELEMETRY_LOG_INTERVAL_S = 2.0
 MP_TELEMETRY_PING_INTERVAL_S = 1.0
 MP_TELEMETRY_DT_SPIKE_S = 0.05
+MP_CLIENT_LIVENESS_TIMEOUT_S = 3.5
 do
     local preview_cfg = sys.get_config and sys.get_config("debug.outro_preview") or nil
     DEBUG_OUTRO_PREVIEW_ENABLED = (preview_cfg == "1" or preview_cfg == "true" or preview_cfg == "on")
@@ -1952,7 +1962,9 @@ remove_one_obstacle_from_cell = function(world_grid, cell_id)
 end
 
 try_brute_break_adjacent_barricade = function(self, alien)
-    if not self or not alien or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.cell_id) then
+    local brute_like = alien
+        and (alien.type == ALIEN_TYPE_BRUTE or (alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE))
+    if not self or not brute_like or (not alien.cell_id) then
         return false
     end
     local target_cell_id = alien.cell_id
@@ -2266,7 +2278,8 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
         end
     end
     if is_cell_barricaded(world_grid, to_cell_id) then
-        return alien_type == ALIEN_TYPE_BRUTE or alien_type == ALIEN_TYPE_SPEEDY
+        return alien_type == ALIEN_TYPE_SPEEDY
+            or (alien_type == ALIEN_TYPE_BLIP and hidden_reveal_type == ALIEN_TYPE_BRUTE)
     end
     local _, door_obj, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
     if not door_obj or not door_closed then
@@ -3198,6 +3211,17 @@ end
 
 ALIEN_STACK_SLOT_LANE_X = { 20, -20, 40, -40, 60, -60 }
 
+alien_slot_name_from_lane_offset = function(lane_x)
+    local x = tonumber(lane_x or 0) or 0
+    if x <= -8 then
+        return "left"
+    end
+    if x >= 8 then
+        return "right"
+    end
+    return "center"
+end
+
 get_alien_effective_position_type = function(alien)
     if not alien then
         return nil
@@ -3229,6 +3253,38 @@ get_alien_stack_lane_offset_x = function(self, alien, cell_id, include_current_o
         end
     end
     return 0
+end
+
+ensure_alien_slot_name = function(self, alien, cell_id, include_current_on_target_cell)
+    if not alien then
+        return "center"
+    end
+    local lane_x = get_alien_stack_lane_offset_x(self, alien, cell_id or alien.cell_id, include_current_on_target_cell == true)
+    local slot_name = alien_slot_name_from_lane_offset(lane_x)
+    alien.slot_name = slot_name
+    return slot_name
+end
+
+get_alien_clockwise_fallback_cell = function(self, alien)
+    if not (self and self.world_grid and alien and alien.cell_id) then
+        return nil
+    end
+    local cfg = ALIEN_TYPE_CONFIG[alien.type]
+    local can_traverse_void = cfg and cfg.can_traverse_void == true
+    local ordered_dirs = { "up", "right", "down", "left" }
+    for _, dir in ipairs(ordered_dirs) do
+        local adj_id = get_adjacent_cell(alien.cell_id, dir)
+        if adj_id then
+            local adj_cell = self.world_grid[adj_id]
+            local is_void = adj_cell and adj_cell.tileID == hash("empty")
+            if adj_cell and ((not is_void) or can_traverse_void) then
+                if can_alien_cross_between_cells(self.world_grid, alien.cell_id, adj_id, alien.type, alien.hidden_reveal_type) then
+                    return adj_id
+                end
+            end
+        end
+    end
+    return nil
 end
 
 local function has_unobstructed_los(world_grid, from_id, to_id)
@@ -3529,7 +3585,9 @@ local function ensure_alien_visual(self, alien)
 
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     local position_type = get_alien_effective_position_type(alien)
-    x = x + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
+    local lane_offset_x = get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
+    x = x + (CELL_WIDTH * 0.25) + lane_offset_x
+    alien.slot_name = alien.slot_name or alien_slot_name_from_lane_offset(lane_offset_x)
     x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
     if position_type == ALIEN_TYPE_SPEEDY then
         y = y + 50
@@ -3623,6 +3681,7 @@ local function refresh_alien_visual(self, alien)
     if not alien.go_id then
         return
     end
+    ensure_alien_slot_name(self, alien, alien.cell_id, false)
     local alien_anim = get_alien_anim_for_aesthetic(self, alien.type)
     if alien_anim and alien.current_aesthetic_anim ~= alien_anim then
         msg.post(msg.url(nil, alien.go_id, "sprite"), "play_animation", { id = alien_anim })
@@ -3784,6 +3843,7 @@ local function spawn_alien(self, alien_type, cell_id)
         id = self.next_alien_id,
         type = alien_type,
         cell_id = cell_id,
+        slot_name = "center",
         ap_max = cfg.ap_per_turn,
         hp_max = cfg.hp,
         hp_current = cfg.hp,
@@ -3802,6 +3862,7 @@ local function spawn_alien(self, alien_type, cell_id)
     end
 
     table.insert(self.aliens, alien)
+    ensure_alien_slot_name(self, alien, cell_id, false)
     ensure_alien_visual(self, alien)
     refresh_alien_visual(self, alien)
     print(string.format("Alien spawned: #%d %s at cell %d", alien.id, alien.type, alien.cell_id))
@@ -3977,7 +4038,15 @@ local function any_alien_is_moving(self)
     end
     for _, alien in ipairs(self.aliens) do
         if alien.is_moving then
+            local path = alien.move_path
+            local idx = tonumber(alien.move_path_index or 0) or 0
+            if type(path) ~= "table" or #path < 2 or idx <= 0 or idx > #path then
+                alien.is_moving = false
+                alien.move_path = nil
+                alien.move_path_index = 0
+            else
             return true
+            end
         end
     end
     return false
@@ -5361,9 +5430,13 @@ local function update_alien_movement(self, dt)
                 local to_cell = self.world_grid[target_cell_id]
                 if to_cell
                     and is_cell_barricaded(self.world_grid, target_cell_id)
-                    and alien.type ~= ALIEN_TYPE_BRUTE
                     and alien.type ~= ALIEN_TYPE_SPEEDY
                 then
+                    if alien.type == ALIEN_TYPE_BRUTE
+                        or (alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE)
+                    then
+                        try_brute_break_adjacent_barricade(self, alien)
+                    end
                     alien.counter_shadow_offset = nil
                     alien.counter_move_total_dist = nil
                     alien.is_moving = false
@@ -5401,6 +5474,7 @@ local function update_alien_movement(self, dt)
                 local is_vent_jump = (alien.type ~= ALIEN_TYPE_BRUTE) and from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 local position_type = get_alien_effective_position_type(alien)
+                alien.slot_name = alien_slot_name_from_lane_offset(get_alien_stack_lane_offset_x(self, alien, target_cell_id, true))
                 tx = tx + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, target_cell_id, true)
                 tx = clamp_world_x_to_cell(target_cell, tx)
                 if position_type == ALIEN_TYPE_SPEEDY then
@@ -5776,7 +5850,9 @@ local function process_alien_turn(self)
                 --     ap_budget = 0
                 -- elseif try_brute_break_adjacent_barricade(self, alien) then
                 local brute_should_force_break = true
-                if alien.type == ALIEN_TYPE_BRUTE then
+                local brute_like = alien.type == ALIEN_TYPE_BRUTE
+                    or (alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE)
+                if brute_like then
                     local reachable_human_cell_id = select(1, get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id, alien.hidden_reveal_type))
                     brute_should_force_break = reachable_human_cell_id == nil
                 end
@@ -5820,13 +5896,43 @@ local function process_alien_turn(self)
             if not spitter_holding_for_shot then
                 local target_cell_id, path = get_nearest_reachable_human_cell_id(self, alien.type, alien.cell_id, alien.hidden_reveal_type)
                 local used_fallback_staging = false
-                if not target_cell_id and alien.type ~= ALIEN_TYPE_BRUTE then
-                    target_cell_id, path = get_blip_fallback_staging_target(self, alien.cell_id, alien.type, alien.hidden_reveal_type)
-                    used_fallback_staging = target_cell_id ~= nil
+                local brute_like = alien.type == ALIEN_TYPE_BRUTE
+                    or (alien.type == ALIEN_TYPE_BLIP and alien.hidden_reveal_type == ALIEN_TYPE_BRUTE)
+                if not target_cell_id and (not brute_like) then
+                    local clockwise_fallback = get_alien_clockwise_fallback_cell(self, alien)
+                    if clockwise_fallback and clockwise_fallback ~= alien.cell_id then
+                        target_cell_id = clockwise_fallback
+                        path = { alien.cell_id, clockwise_fallback }
+                        used_fallback_staging = true
+                    end
                 end
-                if not target_cell_id and alien.type == ALIEN_TYPE_BRUTE then
+                if not target_cell_id and brute_like then
                     target_cell_id, path = get_brute_barricade_staging_target(self, alien.cell_id)
                     used_fallback_staging = target_cell_id ~= nil
+                end
+                if target_cell_id and (not brute_like) and is_cell_barricaded(self.world_grid, target_cell_id) then
+                    local clockwise_fallback = get_alien_clockwise_fallback_cell(self, alien)
+                    if clockwise_fallback and clockwise_fallback ~= alien.cell_id and clockwise_fallback ~= target_cell_id then
+                        target_cell_id = clockwise_fallback
+                        path = { alien.cell_id, clockwise_fallback }
+                        used_fallback_staging = true
+                    end
+                end
+                if target_cell_id and (not brute_like) and target_cell_id ~= alien.cell_id then
+                    local target_occupancy = 0
+                    for _, scan in ipairs(self.aliens or {}) do
+                        if scan and (not scan.is_dead) and scan.id ~= alien.id and scan.cell_id == target_cell_id then
+                            target_occupancy = target_occupancy + 1
+                        end
+                    end
+                    if target_occupancy >= 1 then
+                        local clockwise_fallback = get_alien_clockwise_fallback_cell(self, alien)
+                        if clockwise_fallback and clockwise_fallback ~= alien.cell_id and clockwise_fallback ~= target_cell_id then
+                            target_cell_id = clockwise_fallback
+                            path = { alien.cell_id, clockwise_fallback }
+                            used_fallback_staging = true
+                        end
+                    end
                 end
                 if target_cell_id then
                     local step_budget = ap_budget
@@ -5835,6 +5941,22 @@ local function process_alien_turn(self)
                     end
                     local segment_path, spent = get_alien_turn_movement_segment(self, alien, path, step_budget)
                     spent = spent or 0
+                    if spent <= 0 then
+                        if (not brute_like) then
+                            local clockwise_fallback = get_alien_clockwise_fallback_cell(self, alien)
+                            if clockwise_fallback and clockwise_fallback ~= alien.cell_id then
+                                local fallback_path = { alien.cell_id, clockwise_fallback }
+                                local fallback_segment, fallback_spent = get_alien_turn_movement_segment(self, alien, fallback_path, step_budget)
+                                fallback_spent = fallback_spent or 0
+                                if fallback_spent > 0 then
+                                    segment_path = fallback_segment
+                                    spent = fallback_spent
+                                    target_cell_id = clockwise_fallback
+                                    used_fallback_staging = true
+                                end
+                            end
+                        end
+                    end
                     if spent <= 0 then
                         -- If already engaged in melee range, preserve AP for melee phase.
                         if shares_cell_with_living_human then
@@ -12834,6 +12956,11 @@ multiplayer_lobby_is_host = function(self)
     if not (self and self.mp_state and self.mp_state.enabled) then
         return true
     end
+    local local_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+    local active_session_id = tostring(self.mp_state.session_id or "")
+    if local_offer_id ~= "" and active_session_id ~= "" and local_offer_id == active_session_id then
+        return true
+    end
     return self.mp_state.local_player_id == self.mp_state.host_player_id
 end
 
@@ -12841,20 +12968,37 @@ multiplayer_apply_in_match_player_departure = function(self, departed_network_pl
     if not (self and self.mp_state and self.mp_state.enabled) then
         return false
     end
-    local departed_network_id = tostring(departed_network_player_id or "")
+    local departed_network_id = mp_normalize_network_player_id(departed_network_player_id)
     if departed_network_id == "" then
         return false
     end
-    local host_network_id = tostring(self.mp_state.host_player_id or "p1")
-    if departed_network_id == host_network_id then
+    local host_network_id = tostring(self.mp_state.host_player_id or self.mp_state.local_player_id or "p1")
+    local local_network_id = tostring(self.mp_state.local_player_id or "")
+    local local_is_host = multiplayer_lobby_is_host(self)
+    if host_network_id == "" then
+        host_network_id = local_network_id ~= "" and local_network_id or "p1"
+    end
+    if departed_network_id == host_network_id and local_network_id ~= "" and local_network_id ~= departed_network_id then
+        host_network_id = local_network_id
+    elseif departed_network_id == host_network_id then
         return false
     end
     local departed_slot_id = multiplayer_get_slot_player_id_for_network(self, departed_network_id)
     local host_slot_id = multiplayer_get_slot_player_id_for_network(self, host_network_id)
+    if local_is_host and local_network_id ~= "" then
+        host_network_id = local_network_id
+        host_slot_id = multiplayer_get_slot_player_id_for_network(self, local_network_id)
+        self.mp_state.host_player_id = local_network_id
+    end
     local changed = false
     self.mp_state.connected_players = self.mp_state.connected_players or {}
+    local departed_network_slot_id = multiplayer_get_slot_player_id_for_network(self, departed_network_id)
     if self.mp_state.connected_players[departed_network_id] ~= nil then
         self.mp_state.connected_players[departed_network_id] = nil
+        changed = true
+    end
+    if departed_network_slot_id ~= "" and self.mp_state.connected_players[departed_network_slot_id] ~= nil then
+        self.mp_state.connected_players[departed_network_slot_id] = nil
         changed = true
     end
     self.mp_state.ready_by_player_id = self.mp_state.ready_by_player_id or {}
@@ -12898,9 +13042,215 @@ multiplayer_apply_in_match_player_departure = function(self, departed_network_pl
         self.mp_state.seat_assignments[departed_slot_id] = {}
         changed = true
     end
-    if tostring(self.mp_state.debug_active_player_id or "") == departed_network_id then
+    -- Also reclaim any seat whose mapped network player is no longer connected.
+    self.mp_state.connected_players[host_network_id] = true
+    local connected_count = 0
+    for _, is_connected in pairs(self.mp_state.connected_players or {}) do
+        if is_connected == true then
+            connected_count = connected_count + 1
+        end
+    end
+    local occupied_non_host_slots = 0
+    local max_non_host_units_in_single_slot = 0
+    for i = 1, 4 do
+        local slot_id = "p" .. tostring(i)
+        if slot_id ~= host_slot_id then
+            local slot_units = self.mp_state.seat_assignments[slot_id] or {}
+            if #slot_units > 0 then
+                occupied_non_host_slots = occupied_non_host_slots + 1
+                if #slot_units > max_non_host_units_in_single_slot then
+                    max_non_host_units_in_single_slot = #slot_units
+                end
+            end
+        end
+    end
+    local force_reclaim_all_non_host = connected_count <= 1
+        or (tonumber(self.mp_state.player_count or 2) or 2) <= 2
+        or (occupied_non_host_slots <= 1 and max_non_host_units_in_single_slot >= 2)
+    if force_reclaim_all_non_host then
+        for i = 1, 4 do
+            local slot_id = "p" .. tostring(i)
+            if slot_id ~= host_slot_id then
+                local slot_units = self.mp_state.seat_assignments[slot_id] or {}
+                local moved_any = false
+                for _, unit_id in ipairs(slot_units) do
+                    local exists = false
+                    for _, host_unit_id in ipairs(host_units) do
+                        if host_unit_id == unit_id then
+                            exists = true
+                            break
+                        end
+                    end
+                    if not exists then
+                        host_units[#host_units + 1] = unit_id
+                    end
+                    moved_any = true
+                end
+                if moved_any then
+                    self.mp_state.seat_assignments[slot_id] = {}
+                    changed = true
+                end
+                if self.mp_state.ready_by_player_id[slot_id] ~= nil then
+                    self.mp_state.ready_by_player_id[slot_id] = nil
+                    changed = true
+                end
+            end
+        end
+    end
+    if local_is_host and force_reclaim_all_non_host then
+        local all_units = {}
+        local unit_order = get_spawn_order_unit_id_list()
+        for _, unit_id in ipairs(unit_order or {}) do
+            if self.squad_units and self.squad_units[unit_id] then
+                all_units[#all_units + 1] = unit_id
+            end
+        end
+        self.mp_state.seat_assignments[host_slot_id] = all_units
+        for i = 1, 4 do
+            local slot_id = "p" .. tostring(i)
+            if slot_id ~= host_slot_id and self.mp_state.seat_assignments[slot_id] and #self.mp_state.seat_assignments[slot_id] > 0 then
+                self.mp_state.seat_assignments[slot_id] = {}
+                changed = true
+            end
+        end
+        changed = true
+    end
+    for i = 1, 4 do
+        local slot_id = "p" .. tostring(i)
+        if slot_id ~= host_slot_id then
+            local mapped_network_id = tostring(mp_network_id_for_slot(self, slot_id) or "")
+            local slot_connected = mapped_network_id ~= ""
+                and self.mp_state.connected_players
+                and self.mp_state.connected_players[mapped_network_id] == true
+            if (not force_reclaim_all_non_host) and (not slot_connected) then
+                local slot_units = self.mp_state.seat_assignments[slot_id] or {}
+                local moved_any = false
+                for _, unit_id in ipairs(slot_units) do
+                    local exists = false
+                    for _, host_unit_id in ipairs(host_units) do
+                        if host_unit_id == unit_id then
+                            exists = true
+                            break
+                        end
+                    end
+                    if not exists then
+                        host_units[#host_units + 1] = unit_id
+                    end
+                    moved_any = true
+                end
+                if moved_any then
+                    self.mp_state.seat_assignments[slot_id] = {}
+                    changed = true
+                end
+                if self.mp_state.ready_by_player_id[slot_id] ~= nil then
+                    self.mp_state.ready_by_player_id[slot_id] = nil
+                    changed = true
+                end
+                if mapped_network_id ~= "" and self.mp_state.ready_by_player_id[mapped_network_id] ~= nil then
+                    self.mp_state.ready_by_player_id[mapped_network_id] = nil
+                    changed = true
+                end
+            end
+        end
+    end
+    local active_debug_id = tostring(self.mp_state.debug_active_player_id or "")
+    if active_debug_id == departed_network_id or active_debug_id == departed_slot_id then
         self.mp_state.debug_active_player_id = host_network_id
         changed = true
+    end
+    if changed then
+        multiplayer_enforce_controlled_unit(self, true)
+        update_human_visual_state(self)
+        update_selected_unit_ui(self)
+    end
+    return changed
+end
+
+multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return false
+    end
+    if not multiplayer_lobby_is_host(self) then
+        return false
+    end
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return false
+    end
+    local host_network_id = mp_normalize_network_player_id(self.mp_state.local_player_id or self.mp_state.host_player_id or "p1")
+    self.mp_state.host_player_id = host_network_id
+    local host_slot_id = multiplayer_get_slot_player_id_for_network(self, host_network_id)
+    self.mp_state.seat_assignments = self.mp_state.seat_assignments or multiplayer_get_default_seat_assignments(self.mp_state.player_count or 4)
+    self.mp_state.seat_assignments[host_slot_id] = self.mp_state.seat_assignments[host_slot_id] or {}
+    local host_units = self.mp_state.seat_assignments[host_slot_id]
+    local connected_lookup = self.mp_state.connected_players or {}
+    local now_s = tonumber(socket and socket.gettime and socket.gettime() or os.clock()) or 0
+    local last_seen_lookup = self.mp_state.last_seen_by_network_id or {}
+    local occupied_non_host_slots = 0
+    local max_non_host_units_in_slot = 0
+    local connected_non_host_count = 0
+    for i = 1, 4 do
+        local slot_id = "p" .. tostring(i)
+        if slot_id ~= host_slot_id then
+            local slot_units = self.mp_state.seat_assignments[slot_id] or {}
+            if #slot_units > 0 then
+                occupied_non_host_slots = occupied_non_host_slots + 1
+                if #slot_units > max_non_host_units_in_slot then
+                    max_non_host_units_in_slot = #slot_units
+                end
+            end
+            local mapped_network_id = mp_normalize_network_player_id(mp_network_id_for_slot(self, slot_id) or "")
+            local slot_connected = connected_lookup[slot_id] == true
+            if (not slot_connected) and mapped_network_id ~= "" then
+                slot_connected = connected_lookup[mapped_network_id] == true
+            end
+            if slot_connected and mapped_network_id ~= "" then
+                local last_seen_s = tonumber(last_seen_lookup[mapped_network_id] or 0) or 0
+                if last_seen_s > 0 and (now_s - last_seen_s) > MP_CLIENT_LIVENESS_TIMEOUT_S then
+                    slot_connected = false
+                end
+            end
+            if slot_connected then
+                connected_non_host_count = connected_non_host_count + 1
+            end
+        end
+    end
+    local force_two_player_pattern_reclaim = (connected_non_host_count == 0)
+        and (occupied_non_host_slots == 1 and max_non_host_units_in_slot >= 2)
+    local changed = false
+    for i = 1, 4 do
+        local slot_id = "p" .. tostring(i)
+        if slot_id ~= host_slot_id then
+            local slot_units = self.mp_state.seat_assignments[slot_id] or {}
+            if #slot_units > 0 then
+                local mapped_network_id = mp_normalize_network_player_id(mp_network_id_for_slot(self, slot_id) or "")
+                local slot_connected = connected_lookup[slot_id] == true
+                if (not slot_connected) and mapped_network_id ~= "" then
+                    slot_connected = connected_lookup[mapped_network_id] == true
+                end
+                if slot_connected and mapped_network_id ~= "" then
+                    local last_seen_s = tonumber(last_seen_lookup[mapped_network_id] or 0) or 0
+                    if last_seen_s > 0 and (now_s - last_seen_s) > MP_CLIENT_LIVENESS_TIMEOUT_S then
+                        slot_connected = false
+                    end
+                end
+                if (not slot_connected) or force_two_player_pattern_reclaim then
+                    for _, unit_id in ipairs(slot_units) do
+                        local exists = false
+                        for _, host_unit_id in ipairs(host_units) do
+                            if host_unit_id == unit_id then
+                                exists = true
+                                break
+                            end
+                        end
+                        if not exists then
+                            host_units[#host_units + 1] = unit_id
+                        end
+                    end
+                    self.mp_state.seat_assignments[slot_id] = {}
+                    changed = true
+                end
+            end
+        end
     end
     if changed then
         multiplayer_enforce_controlled_unit(self, true)
@@ -12944,7 +13294,14 @@ multiplayer_lobby_ensure_runtime = function(self)
     lobby.offers_bootstrap_done = lobby.offers_bootstrap_done == true
     lobby.session_counter = tonumber(lobby.session_counter or 6) or 6
     lobby.host_draft_session_id = tostring(lobby.host_draft_session_id or "")
-    lobby.local_username = tostring(lobby.local_username or ((self.mp_state and self.mp_state.local_player_id) or "Player"))
+    if tostring(lobby.local_username or "") == "" then
+        local local_network_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+        local local_slot_id = local_network_id
+        if multiplayer_get_slot_player_id_for_network then
+            local_slot_id = tostring(multiplayer_get_slot_player_id_for_network(self, local_network_id) or local_network_id)
+        end
+        lobby.local_username = mp_alpha_label_from_network_id(local_slot_id)
+    end
     lobby.pending_cancel_confirm = lobby.pending_cancel_confirm == true
     lobby.protocol_mismatch_hint_active = lobby.protocol_mismatch_hint_active == true
     if type(lobby.sessions) ~= "table" then
@@ -18162,6 +18519,7 @@ multiplayer_build_actor_state_digest = function(self)
             digest.aliens[key] = {
                 id = tonumber(alien.id or 0) or 0,
                 cell = tonumber(alien.cell_id or 0) or 0,
+                slot = tostring(alien.slot_name or ensure_alien_slot_name(self, alien, alien.cell_id, false) or "center"),
                 hp = tonumber(alien.hp_current or 0) or 0,
                 dead = alien.is_dead == true and 1 or 0,
                 moving = alien.is_moving == true and 1 or 0,
@@ -18522,6 +18880,15 @@ multiplayer_apply_authoritative_actor_digest = function(self, actor_digest)
                     alien.cell_id = cell
                     applied_any = true
                 end
+                local host_slot_name = tostring(row.slot or "")
+                if host_slot_name == "left" or host_slot_name == "center" or host_slot_name == "right" then
+                    if tostring(alien.slot_name or "") ~= host_slot_name then
+                        alien.slot_name = host_slot_name
+                        applied_any = true
+                    end
+                elseif alien.slot_name == nil then
+                    alien.slot_name = ensure_alien_slot_name(self, alien, alien.cell_id, false)
+                end
                 if hp then
                     alien.hp_current = hp
                     applied_any = true
@@ -18586,11 +18953,7 @@ multiplayer_apply_authoritative_actor_digest = function(self, actor_digest)
                     or alien.move_path[tonumber(alien.move_path_index or 0) or 0] == nil
                 )
             then
-                local x, y = id_to_coords(alien.cell_id)
-                if x and y then
-                    local wx, wy = coords_to_world_pos(x, y)
-                    go.set_position(vmath.vector3(wx, wy, 0.6), alien.go_id)
-                end
+                refresh_alien_visual(self, alien)
             end
         end
         refresh_civilian_visuals(self)
@@ -18651,10 +19014,11 @@ multiplayer_compute_turn_checksum_buckets = function(self)
     local alien_rows = {}
     for _, alien in ipairs(self.aliens or {}) do
         alien_rows[#alien_rows + 1] = string.format(
-            "%d|%s|%d|%d|%d|%d",
+            "%d|%s|%d|%s|%d|%d|%d",
             tonumber(alien and alien.id or 0) or 0,
             tostring(alien and alien.type or "blip"),
             tonumber(alien and alien.cell_id or 0) or 0,
+            tostring(alien and alien.slot_name or "_"),
             tonumber(alien and alien.hp_current or 0) or 0,
             (alien and alien.is_dead == true) and 1 or 0,
             (alien and alien.is_moving == true) and 1 or 0
@@ -18818,10 +19182,11 @@ multiplayer_compute_turn_checksum = function(self)
     local alien_rows = {}
     for _, alien in ipairs(self.aliens or {}) do
         alien_rows[#alien_rows + 1] = string.format(
-            "%d|%s|%d|%d|%d|%d",
+            "%d|%s|%d|%s|%d|%d|%d",
             tonumber(alien and alien.id or 0) or 0,
             tostring(alien and alien.type or "blip"),
             tonumber(alien and alien.cell_id or 0) or 0,
+            tostring(alien and alien.slot_name or "_"),
             tonumber(alien and alien.hp_current or 0) or 0,
             (alien and alien.is_dead == true) and 1 or 0,
             (alien and alien.is_moving == true) and 1 or 0
@@ -19019,6 +19384,15 @@ multiplayer_transport_handle_command = function(self, command)
                 reason = "not_host"
             }))
             return events
+        end
+        if multiplayer_reconcile_departed_ownership_on_turn_boundary(self) then
+            table.insert(events, multiplayer_transport_emit_event(self, "player_departed_in_match", {
+                session_id = tostring(self.mp_state and self.mp_state.session_id or ""),
+                departed_player_id = "turn_boundary_reclaim",
+                seat_assignments = multiplayer_clone_seat_assignments(self.mp_state.seat_assignments, self.mp_state.player_count or 4),
+                required_ready_player_ids = multiplayer_clone_simple_table(self.mp_state.required_ready_player_ids or {}),
+                ready_by_player_id = multiplayer_clone_simple_table(self.mp_state.ready_by_player_id or {})
+            }))
         end
         if not can_advance_next_turn(self, true) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
@@ -20724,6 +21098,33 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "pong_echo" then
+        local target_player_id = event.payload and event.payload.target_player_id or nil
+        local local_player_id = self.mp_state and self.mp_state.local_player_id or nil
+        if target_player_id and local_player_id and target_player_id ~= local_player_id then
+            return
+        end
+        local sender_player_id = mp_normalize_network_player_id(event.sender_player_id or "")
+        if sender_player_id ~= "" then
+            self.mp_state.last_seen_by_network_id = self.mp_state.last_seen_by_network_id or {}
+            self.mp_state.last_seen_by_network_id[sender_player_id] = tonumber(socket and socket.gettime and socket.gettime() or os.clock()) or 0
+        end
+        if self.mp_telemetry and self.mp_telemetry.enabled then
+            local sent_ms = tonumber(event.payload and event.payload.sent_ms or 0) or 0
+            if sent_ms > 0 then
+                local now_ms = (socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)
+                local rtt = math.max(0, now_ms - sent_ms)
+                self.mp_telemetry.rtt_last_ms = rtt
+                local samples = self.mp_telemetry.rtt_samples_ms or {}
+                samples[#samples + 1] = rtt
+                if #samples > 32 then
+                    table.remove(samples, 1)
+                end
+                self.mp_telemetry.rtt_samples_ms = samples
+            end
+        end
+        return
+    end
     if event.type == "turn_advanced" then
         print(string.format("MP TURN | request_accepted | next_turn_id=%d", (event.payload and event.payload.turn_id) or 0))
         if self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
@@ -21404,13 +21805,16 @@ multiplayer_transport_on_event = function(self, event)
             local accepted_session_id = tostring(event.payload and event.payload.session_id or "")
             local valid_target = (target == "p1" or target == "p2" or target == "p3" or target == "p4")
             if valid_target and target ~= host_id and pending_join ~= "" and accepted_session_id ~= "" and pending_join == accepted_session_id and local_player_id == host_id then
-                self.mp_state.local_player_id = target
-                self.mp_state.debug_active_player_id = target
-                if self.mp_transport and self.mp_transport.set_local_player_id then
-                    self.mp_transport.set_local_player_id(target)
+                local local_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+                if local_offer_id ~= accepted_session_id then
+                    self.mp_state.local_player_id = target
+                    self.mp_state.debug_active_player_id = target
+                    if self.mp_transport and self.mp_transport.set_local_player_id then
+                        self.mp_transport.set_local_player_id(target)
+                    end
+                    local_player_id = target
+                    print(string.format("MP NET | late_player_id_adopt | source=lobby_join_accepted assigned=%s", target))
                 end
-                local_player_id = target
-                print(string.format("MP NET | late_player_id_adopt | source=lobby_join_accepted assigned=%s", target))
             end
             if target_player_id ~= local_player_id then
                 return
@@ -22187,6 +22591,29 @@ multiplayer_transport_on_event = function(self, event)
                 if self.mp_transport and self.mp_transport.set_local_player_id then
                     self.mp_transport.set_local_player_id(assigned_player_id)
                 end
+                if tostring(self.mp_state.host_player_id or "") == prev_local_player_id then
+                    self.mp_state.host_player_id = assigned_player_id
+                end
+                if self.mp_lobby then
+                    local local_offer_id = tostring(self.mp_lobby.local_active_offer_id or "")
+                    if local_offer_id ~= "" then
+                        local local_offer = multiplayer_lobby_get_session_by_id(self, local_offer_id)
+                        if local_offer and tostring(local_offer.owner_player_id or "") == prev_local_player_id then
+                            local_offer.owner_player_id = assigned_player_id
+                            if self.mp_lobby.offers_by_id then
+                                self.mp_lobby.offers_by_id[local_offer_id] = local_offer
+                            end
+                            if self.mp_lobby.sessions then
+                                for _, session in ipairs(self.mp_lobby.sessions) do
+                                    if session and tostring(session.id or "") == local_offer_id then
+                                        session.owner_player_id = assigned_player_id
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
                 print(string.format("MP NET | relay_player_id_assigned | previous=%s assigned=%s", prev_local_player_id, assigned_player_id))
             end
         end
@@ -22199,15 +22626,25 @@ multiplayer_transport_on_event = function(self, event)
         self.mp_state.connected_players = {}
         local players = event.payload and event.payload.players or {}
         for _, player_id in ipairs(players) do
-            self.mp_state.connected_players[player_id] = true
+            local normalized_player_id = mp_normalize_network_player_id(player_id)
+            self.mp_state.connected_players[normalized_player_id] = true
+            local slot_player_id = multiplayer_get_slot_player_id_for_network(self, normalized_player_id)
+            if slot_player_id and slot_player_id ~= "" then
+                self.mp_state.connected_players[slot_player_id] = true
+            end
         end
-        self.mp_state.connected_players[self.mp_state.local_player_id or "p1"] = true
+        local local_network_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "p1")
+        self.mp_state.connected_players[local_network_id] = true
+        local local_slot_id = multiplayer_get_slot_player_id_for_network(self, local_network_id)
+        if local_slot_id and local_slot_id ~= "" then
+            self.mp_state.connected_players[local_slot_id] = true
+        end
         local count = 0
         for _, _ in pairs(self.mp_state.connected_players) do
             count = count + 1
         end
         print(string.format("MP NET | joined_room | room_id=%s connected_players=%d", tostring(event.payload and event.payload.room_id or "unknown"), count))
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_lobby_is_host(self)
         if is_local_host then
             multiplayer_setup_push_state(self)
             if self.game_flow_state == FLOW_STATE_MP_LOBBY then
@@ -22232,9 +22669,16 @@ multiplayer_transport_on_event = function(self, event)
     if event.type == "player_joined" then
         local player_id = event.payload and event.payload.player_id or nil
         if player_id then
+            local normalized_player_id = mp_normalize_network_player_id(player_id)
             self.mp_state.connected_players = self.mp_state.connected_players or {}
-            self.mp_state.connected_players[player_id] = true
-            print(string.format("MP NET | player_joined | player_id=%s", tostring(player_id)))
+            self.mp_state.last_seen_by_network_id = self.mp_state.last_seen_by_network_id or {}
+            self.mp_state.connected_players[normalized_player_id] = true
+            self.mp_state.last_seen_by_network_id[normalized_player_id] = tonumber(socket and socket.gettime and socket.gettime() or os.clock()) or 0
+            local slot_player_id = multiplayer_get_slot_player_id_for_network(self, normalized_player_id)
+            if slot_player_id and slot_player_id ~= "" then
+                self.mp_state.connected_players[slot_player_id] = true
+            end
+            print(string.format("MP NET | player_joined | player_id=%s", tostring(normalized_player_id)))
             if self.mp_state.local_player_id == self.mp_state.host_player_id then
                 multiplayer_setup_push_state(self)
             end
@@ -22245,25 +22689,32 @@ multiplayer_transport_on_event = function(self, event)
     if event.type == "player_left" then
         local player_id = event.payload and event.payload.player_id or nil
         if player_id then
+            local normalized_player_id = mp_normalize_network_player_id(player_id)
             local in_match = (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME
-            local is_local_host = self.mp_state and self.mp_state.local_player_id == self.mp_state.host_player_id
+            local is_local_host = multiplayer_lobby_is_host(self)
             local host_player_id = tostring(self.mp_state and self.mp_state.host_player_id or "")
-            if in_match and is_local_host and tostring(player_id or "") ~= host_player_id then
-                if multiplayer_apply_in_match_player_departure(self, player_id) then
-                    multiplayer_transport_broadcast_event(self, "player_departed_in_match", {
-                        session_id = tostring(self.mp_state and self.mp_state.session_id or ""),
-                        departed_player_id = tostring(player_id or ""),
-                        seat_assignments = multiplayer_clone_seat_assignments(self.mp_state.seat_assignments, self.mp_state.player_count or 4),
-                        required_ready_player_ids = multiplayer_clone_simple_table(self.mp_state.required_ready_player_ids or {}),
-                        ready_by_player_id = multiplayer_clone_simple_table(self.mp_state.ready_by_player_id or {})
-                    })
+            if in_match and tostring(normalized_player_id or "") ~= host_player_id then
+                if multiplayer_apply_in_match_player_departure(self, normalized_player_id) then
+                    if is_local_host then
+                        multiplayer_transport_broadcast_event(self, "player_departed_in_match", {
+                            session_id = tostring(self.mp_state and self.mp_state.session_id or ""),
+                            departed_player_id = tostring(normalized_player_id or ""),
+                            seat_assignments = multiplayer_clone_seat_assignments(self.mp_state.seat_assignments, self.mp_state.player_count or 4),
+                            required_ready_player_ids = multiplayer_clone_simple_table(self.mp_state.required_ready_player_ids or {}),
+                            ready_by_player_id = multiplayer_clone_simple_table(self.mp_state.ready_by_player_id or {})
+                        })
+                    end
                 end
             elseif self.mp_state and self.mp_state.connected_players then
-                self.mp_state.connected_players[player_id] = nil
+                self.mp_state.connected_players[normalized_player_id] = nil
+                local slot_player_id = multiplayer_get_slot_player_id_for_network(self, normalized_player_id)
+                if slot_player_id and slot_player_id ~= "" then
+                    self.mp_state.connected_players[slot_player_id] = nil
+                end
             end
-            print(string.format("MP NET | player_left | player_id=%s", tostring(player_id)))
+            print(string.format("MP NET | player_left | player_id=%s", tostring(normalized_player_id)))
             if self.game_flow_state == FLOW_STATE_MP_LOBBY then
-                multiplayer_lobby_remove_offers_by_owner(self, player_id)
+                multiplayer_lobby_remove_offers_by_owner(self, normalized_player_id)
             end
         end
         return
@@ -22274,28 +22725,6 @@ multiplayer_transport_on_event = function(self, event)
     end
     if event.type == "pong" then
         print("MP NET | relay_pong.")
-        return
-    end
-    if event.type == "pong_echo" then
-        local target_player_id = event.payload and event.payload.target_player_id or nil
-        local local_player_id = self.mp_state and self.mp_state.local_player_id or nil
-        if target_player_id and local_player_id and target_player_id ~= local_player_id then
-            return
-        end
-        if self.mp_telemetry and self.mp_telemetry.enabled then
-            local sent_ms = tonumber(event.payload and event.payload.sent_ms or 0) or 0
-            if sent_ms > 0 then
-                local now_ms = (socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)
-                local rtt = math.max(0, now_ms - sent_ms)
-                self.mp_telemetry.rtt_last_ms = rtt
-                local samples = self.mp_telemetry.rtt_samples_ms or {}
-                samples[#samples + 1] = rtt
-                if #samples > 32 then
-                    table.remove(samples, 1)
-                end
-                self.mp_telemetry.rtt_samples_ms = samples
-            end
-        end
         return
     end
     if event.type == "error" then
@@ -22906,13 +23335,17 @@ can_advance_next_turn = function(self, emit_log)
         end
         return false
     end
+    local missing_ready = {}
     for _, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
         if self.mp_state.ready_by_player_id[player_id] ~= true then
-            if emit_log then
-                print(string.format("MP TURN | turn_advance_blocked | reason=ready_gate_not_satisfied | missing_player=%s", tostring(player_id)))
-            end
-            return false
+            missing_ready[#missing_ready + 1] = tostring(player_id)
         end
+    end
+    if emit_log and #missing_ready > 0 then
+        print(string.format(
+            "MP TURN | ready_gate_advisory_only | missing=%s",
+            table.concat(missing_ready, ",")
+        ))
     end
     return true
 end
@@ -24824,6 +25257,7 @@ multiplayer_build_snapshot_state = function(self)
                 id = alien.id,
                 type = alien.type,
                 cell_id = alien.cell_id,
+                slot_name = tostring(alien.slot_name or ensure_alien_slot_name(self, alien, alien.cell_id, false) or "center"),
                 ap_max = alien.ap_max,
                 turn_ap_remaining = alien.turn_ap_remaining,
                 hp_max = alien.hp_max,
@@ -24912,10 +25346,11 @@ multiplayer_compute_realtime_snapshot_signature = function(snapshot)
     local alien_rows = {}
     for _, alien in ipairs(snapshot.aliens or {}) do
         alien_rows[#alien_rows + 1] = string.format(
-            "%d|%s|%d|%d|%d|%d",
+            "%d|%s|%d|%s|%d|%d|%d",
             tonumber(alien.id or 0) or 0,
             tostring(alien.type or "_"),
             tonumber(alien.cell_id or 0) or 0,
+            tostring(alien.slot_name or "_"),
             tonumber(alien.hp_current or 0) or 0,
             round_px(alien.world_x),
             round_px(alien.world_y)
@@ -25094,6 +25529,7 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
                     id = alien_id,
                     type = alien_type,
                     cell_id = tonumber(alien_snapshot.cell_id),
+                    slot_name = tostring(alien_snapshot.slot_name or "center"),
                     ap_max = ap_max,
                     turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or ap_max) or ap_max,
                     hp_max = hp_max,
@@ -25113,6 +25549,12 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
             else
                 alien.type = alien_snapshot.type or alien.type
                 alien.cell_id = tonumber(alien_snapshot.cell_id) or alien.cell_id
+                local snapshot_slot_name = tostring(alien_snapshot.slot_name or "")
+                if snapshot_slot_name == "left" or snapshot_slot_name == "center" or snapshot_slot_name == "right" then
+                    alien.slot_name = snapshot_slot_name
+                elseif alien.slot_name == nil then
+                    alien.slot_name = ensure_alien_slot_name(self, alien, alien.cell_id, false)
+                end
                 alien.ap_max = tonumber(alien_snapshot.ap_max or alien.ap_max or 1) or 1
                 alien.turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or alien.turn_ap_remaining or alien.ap_max) or alien.ap_max
                 alien.hp_max = tonumber(alien_snapshot.hp_max or alien.hp_max or 1) or 1
@@ -25376,6 +25818,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
             id = tonumber(alien_snapshot.id or 0) or 0,
             type = alien_type,
             cell_id = tonumber(alien_snapshot.cell_id),
+            slot_name = tostring(alien_snapshot.slot_name or "center"),
             ap_max = ap_max,
             turn_ap_remaining = tonumber(alien_snapshot.turn_ap_remaining or ap_max) or ap_max,
             hp_max = hp_max,
@@ -28219,6 +28662,13 @@ function on_input(self, action_id, action)
                 local world_x, world_y = screen_to_world(input_x, input_y, self.camera_pos, self.camera_zoom)
                 local clicked_cell_id = handle_cell_click(mapped_action, self.camera_pos, self.camera_zoom)
                 if clicked_cell_id then
+                    local selected_unit = get_selected_unit(self)
+                    if selected_unit and selected_unit.cell_id == clicked_cell_id then
+                        local clicked_alien_same_cell = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
+                        if clicked_alien_same_cell and handle_human_click_flow(self, clicked_cell_id, world_x, world_y) then
+                            return true
+                        end
+                    end
                     if get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y) then
                         if handle_human_click_flow(self, clicked_cell_id, world_x, world_y) then
                             return true

@@ -4342,6 +4342,55 @@ function M.extend(runtime, ctx)
         self.drag_resource.screen_y = screen_y
     end
 
+    runtime.resolve_resource_drag_ui_action = function(self, screen_x, screen_y)
+        local drag = self and self.drag_resource or nil
+        if not (drag and drag.active) then
+            return nil
+        end
+        if drag.drag_type == "command" then
+            return nil
+        end
+        local source_unit = self.squad_units and self.squad_units[drag.source_unit_id]
+        if not source_unit then
+            return nil
+        end
+        source_unit.backpack_items = source_unit.backpack_items or {}
+        source_unit.equipment = source_unit.equipment or {}
+        local source_item = nil
+        if drag.drag_type == "equipped_buff" then
+            source_item = source_unit.equipment[drag.source_slot_name]
+        else
+            source_item = source_unit.backpack_items[drag.source_slot_index]
+            if (not source_item) and drag.item_type then
+                drag.source_slot_index = get_backpack_item_slot(source_unit, drag.item_type)
+                if drag.source_slot_index then
+                    source_item = source_unit.backpack_items[drag.source_slot_index]
+                end
+            end
+        end
+        if not source_item then
+            return nil
+        end
+        local bar_target = runtime.get_bar_drop_target and runtime.get_bar_drop_target(screen_x, screen_y) or nil
+        if bar_target and source_item == bar_target then
+            return {
+                action_type = "use_on_own_bar",
+                bar_target = bar_target
+            }
+        end
+        local in_buff_drop_zone = runtime.is_point_in_buff_drop_zone and runtime.is_point_in_buff_drop_zone(screen_x, screen_y) or false
+        if in_buff_drop_zone and runtime.is_buff_item and runtime.is_buff_item(source_item) then
+            local buff_slot_target = runtime.get_buff_slot_for_item and runtime.get_buff_slot_for_item(source_item) or nil
+            if buff_slot_target then
+                return {
+                    action_type = "equip_self_buff",
+                    buff_slot = buff_slot_target
+                }
+            end
+        end
+        return nil
+    end
+
     runtime.try_apply_to_own_bar = function(unit, item_type, bar_target)
         if not unit or not bar_target then
             return false

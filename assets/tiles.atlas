@@ -819,6 +819,9 @@ images {
   image: "/assets/images/advisory_moveUnitCloser.png"
 }
 images {
+  image: "/assets/images/advisory_tryAgain.png"
+}
+images {
   image: "/assets/images/tile_cavern_off.png"
 }
 images {

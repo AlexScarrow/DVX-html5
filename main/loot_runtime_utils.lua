@@ -561,6 +561,35 @@ function M.create(ctx)
         return nil
     end
 
+    runtime.get_bar_drop_screen_point = function(bar_target)
+        local x = nil
+        if bar_target == "ammo" then
+            x = (ctx.UI_BAR_AMMO_X or 0) + ui_offset_x
+        elseif bar_target == "meds" then
+            x = (ctx.UI_BAR_HP_X or 0) + ui_offset_x
+        end
+        if not x then
+            return nil, nil
+        end
+        local y = (ctx.UI_BAR_START_Y or 0) + ui_offset_y
+        return x, y
+    end
+
+    runtime.get_buff_slot_drop_screen_point = function(slot_name)
+        if not slot_name then
+            return nil, nil
+        end
+        local sx, sy = runtime.get_buff_slot_screen_pos(slot_name)
+        if sx and sy then
+            return sx, sy
+        end
+        local panel_x = (ctx.UI_PANEL_X or 0) + ui_offset_x
+        local panel_y = (ctx.UI_PANEL_Y or 0) + ui_offset_y
+        local cx = panel_x + (ctx.BUFF_DROP_ZONE_OFFSET_X or 0)
+        local cy = panel_y + (ctx.BUFF_DROP_ZONE_OFFSET_Y or 0)
+        return cx, cy
+    end
+
     runtime.can_transfer_between_units = function(self, source_unit, target_unit)
         if not source_unit or not target_unit or not source_unit.cell_id or not target_unit.cell_id then
             return false

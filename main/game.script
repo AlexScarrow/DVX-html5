@@ -450,6 +450,8 @@ ADVISORY_TEXT_Z = 0.86
 ADVISORY_TEXT_SCALE = 1.5
 ADVISORY_TEXT_Y = 36
 ADVISORY_DEFAULT_DURATION = 1.8
+UI_ACTION_FEEDBACK_FADE_IN_S = 0.25
+UI_ACTION_FEEDBACK_MIN_ALPHA = 0.35
 ADVISORY_MSG_NO_AMMO = "no ammo loaded. add ammo clip."
 ADVISORY_MSG_TECHIE_ONLY = "only techie can do this job"
 ADVISORY_MSG_NO_AP = "no action points left"
@@ -463,6 +465,7 @@ ADVISORY_MSG_NO_CLEAR_SHOT = "no clear shot"
 ADVISORY_MSG_ONLY_SARGE_FAB = "only sarge can use this!"
 ADVISORY_MSG_BACKPACK_FULL = "backpack full"
 ADVISORY_MSG_MOVE_UNIT_CLOSER = "move unit closer"
+ADVISORY_MSG_TRY_AGAIN = "action not confirmed. try again."
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -476,6 +479,7 @@ ADVISORY_ANIM_NO_CLEAR_SHOT = hash("advisory_noClearShot")
 ADVISORY_ANIM_ONLY_SARGE_FAB = hash("advisory_onlySargeAuthorized")
 ADVISORY_ANIM_BACKPACK_FULL = hash("advisory_backpackFull")
 ADVISORY_ANIM_MOVE_UNIT_CLOSER = hash("advisory_moveUnitCloser")
+ADVISORY_ANIM_TRY_AGAIN = hash("advisory_tryAgain")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -10804,6 +10808,8 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_BACKPACK_FULL
     elseif text == ADVISORY_MSG_MOVE_UNIT_CLOSER then
         anim_id = ADVISORY_ANIM_MOVE_UNIT_CLOSER
+    elseif text == ADVISORY_MSG_TRY_AGAIN then
+        anim_id = ADVISORY_ANIM_TRY_AGAIN
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -16739,6 +16745,104 @@ LOOT_RUNTIME = require("main.loot_runtime_utils").create({
     can_human_cross_between_cells = can_human_cross_between_cells
 })
 
+ui_feedback_state_ensure = function(self)
+    if not self then
+        return nil
+    end
+    self.ui_action_feedback = self.ui_action_feedback or {
+        selected_unit_id = nil,
+        last_ammo = 0,
+        last_hp = 0,
+        ammo_gain_timer_s = 0,
+        hp_gain_timer_s = 0,
+        buff_item_by_slot = {},
+        buff_gain_timer_by_slot = {}
+    }
+    return self.ui_action_feedback
+end
+
+ui_feedback_alpha_from_timer = function(timer_s)
+    local max_t = tonumber(UI_ACTION_FEEDBACK_FADE_IN_S or 0.16) or 0.16
+    if max_t <= 0 then
+        return 1
+    end
+    local t = tonumber(timer_s or 0) or 0
+    if t <= 0 then
+        return 1
+    end
+    local min_a = tonumber(UI_ACTION_FEEDBACK_MIN_ALPHA or 0.35) or 0.35
+    local progress = 1 - math.max(0, math.min(1, t / max_t))
+    return min_a + ((1 - min_a) * progress)
+end
+
+update_ui_action_feedback = function(self, dt)
+    local state = ui_feedback_state_ensure(self)
+    if not state then
+        return
+    end
+    local step = tonumber(dt or 0) or 0
+    state.ammo_gain_timer_s = math.max(0, (tonumber(state.ammo_gain_timer_s or 0) or 0) - step)
+    state.hp_gain_timer_s = math.max(0, (tonumber(state.hp_gain_timer_s or 0) or 0) - step)
+    for slot_name, timer_s in pairs(state.buff_gain_timer_by_slot or {}) do
+        state.buff_gain_timer_by_slot[slot_name] = math.max(0, (tonumber(timer_s or 0) or 0) - step)
+    end
+end
+
+record_ui_action_feedback_snapshot = function(self, unit)
+    local state = ui_feedback_state_ensure(self)
+    if not state then
+        return nil
+    end
+    if not unit then
+        state.selected_unit_id = nil
+        state.last_ammo = 0
+        state.last_hp = 0
+        state.ammo_gain_timer_s = 0
+        state.hp_gain_timer_s = 0
+        state.buff_item_by_slot = {}
+        state.buff_gain_timer_by_slot = {}
+        return state
+    end
+    local unit_id = tostring(unit.id or "")
+    if state.selected_unit_id ~= unit_id then
+        state.selected_unit_id = unit_id
+        state.last_ammo = tonumber(unit.current_ammo or 0) or 0
+        state.last_hp = tonumber(unit.current_health or 0) or 0
+        state.ammo_gain_timer_s = 0
+        state.hp_gain_timer_s = 0
+        state.buff_item_by_slot = {}
+        state.buff_gain_timer_by_slot = {}
+        for _, slot_name in ipairs(BUFF_SLOT_ORDER or {}) do
+            state.buff_item_by_slot[slot_name] = tostring((unit.equipment and unit.equipment[slot_name]) or "")
+            state.buff_gain_timer_by_slot[slot_name] = 0
+        end
+        return state
+    end
+    local ammo_now = tonumber(unit.current_ammo or 0) or 0
+    if ammo_now > (tonumber(state.last_ammo or 0) or 0) then
+        state.ammo_gain_timer_s = UI_ACTION_FEEDBACK_FADE_IN_S
+    end
+    state.last_ammo = ammo_now
+    local hp_now = tonumber(unit.current_health or 0) or 0
+    if hp_now > (tonumber(state.last_hp or 0) or 0) then
+        state.hp_gain_timer_s = UI_ACTION_FEEDBACK_FADE_IN_S
+    end
+    state.last_hp = hp_now
+    for _, slot_name in ipairs(BUFF_SLOT_ORDER or {}) do
+        local prev_item = tostring((state.buff_item_by_slot and state.buff_item_by_slot[slot_name]) or "")
+        local now_item = tostring((unit.equipment and unit.equipment[slot_name]) or "")
+        if now_item ~= prev_item then
+            state.buff_item_by_slot[slot_name] = now_item
+            if now_item ~= "" and now_item ~= "_" then
+                state.buff_gain_timer_by_slot[slot_name] = UI_ACTION_FEEDBACK_FADE_IN_S
+            else
+                state.buff_gain_timer_by_slot[slot_name] = 0
+            end
+        end
+    end
+    return state
+end
+
 function update_selected_unit_ui(self)
     if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
         set_ui_hidden(self)
@@ -16764,6 +16868,7 @@ function update_selected_unit_ui(self)
         end
     end
     if not unit then
+        record_ui_action_feedback_snapshot(self, nil)
         set_ui_hidden(self)
         update_human_portrait_ui(self)
         update_global_ui_buttons(self)
@@ -16805,6 +16910,9 @@ function update_selected_unit_ui(self)
         close_comms_panel(self)
         return
     end
+    local ui_feedback = record_ui_action_feedback_snapshot(self, unit)
+    local hp_fill_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.hp_gain_timer_s or 0)
+    local ammo_fill_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.ammo_gain_timer_s or 0)
 
     local panel_dx = (tonumber(UI_PANEL_X or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_X or UI_PANEL_X or 0) or 0)
     local panel_dy = (tonumber(UI_PANEL_Y or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_Y or UI_PANEL_Y or 0) or 0)
@@ -16863,8 +16971,12 @@ function update_selected_unit_ui(self)
         local hp_on = i > (UI_MAX_PIPS - hp_count)
         local ammo_on = i > (UI_MAX_PIPS - ammo_count)
         local ap_color = ap_on and UI_COLOR_AP or vmath.vector4(UI_COLOR_AP.x, UI_COLOR_AP.y, UI_COLOR_AP.z, 0.2)
-        local hp_color = hp_on and UI_COLOR_HP or vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0.2)
-        local ammo_color = ammo_on and UI_COLOR_AMMO or vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, 0.2)
+        local hp_color = hp_on
+            and vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, hp_fill_alpha)
+            or vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0.2)
+        local ammo_color = ammo_on
+            and vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, ammo_fill_alpha)
+            or vmath.vector4(UI_COLOR_AMMO.x, UI_COLOR_AMMO.y, UI_COLOR_AMMO.z, 0.2)
 
         set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, ap_color, UI_BAR_PIP_SIZE, pip_h)
         set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, hp_color, UI_BAR_PIP_SIZE, pip_h)
@@ -16994,6 +17106,9 @@ function update_selected_unit_ui(self)
             local icon_color = vmath.vector4(1, 1, 1, 1)
             if self.drag_resource and self.drag_resource.active and self.drag_resource.drag_type == "equipped_buff" and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_name == slot_name then
                 icon_color = vmath.vector4(1, 1, 1, 0.35)
+            else
+                local buff_fade_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.buff_gain_timer_by_slot and ui_feedback.buff_gain_timer_by_slot[slot_name] or 0)
+                icon_color = vmath.vector4(1, 1, 1, buff_fade_alpha)
             end
             msg.post(msg.url(nil, icon_go, "sprite"), "play_animation", { id = hash(buff_def.ui_anim) })
             local draw_w = math.max(1, tonumber(buff_def.ui_pixel_w or BUFF_SLOT_FRAME_SIZE) or BUFF_SLOT_FRAME_SIZE)
@@ -19767,6 +19882,10 @@ multiplayer_transport_handle_command = function(self, command)
             return events
         end
         local drag = payload.drag or {}
+        local ui_action = nil
+        if type(payload.ui_action) == "table" then
+            ui_action = multiplayer_clone_flat_table(payload.ui_action)
+        end
         local source_unit_id = drag.source_unit_id
         if not multiplayer_player_owns_unit(self, sender, source_unit_id) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
@@ -19780,7 +19899,8 @@ multiplayer_transport_handle_command = function(self, command)
             screen_y = tonumber(payload.screen_y),
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y),
-            drag = multiplayer_clone_flat_table(drag)
+            drag = multiplayer_clone_flat_table(drag),
+            ui_action = ui_action
         }) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "resource_drag_end",
@@ -19794,6 +19914,7 @@ multiplayer_transport_handle_command = function(self, command)
             world_x = tonumber(payload.world_x),
             world_y = tonumber(payload.world_y),
             drag = multiplayer_clone_flat_table(drag),
+            ui_action = ui_action,
             host_applied = true,
             unit_digest = multiplayer_build_unit_state_digest(self),
             world_digest = multiplayer_build_world_state_digest(self),
@@ -22007,6 +22128,13 @@ multiplayer_transport_on_event = function(self, event)
             end
         end
         print(string.format("MP COMMAND | rejected | type=%s reason=%s", tostring(cmd), tostring(reason)))
+        if cmd == "resource_drag_end"
+            and self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        then
+            show_advisory(self, ADVISORY_MSG_TRY_AGAIN, 1.2)
+        end
         if cmd == "manual_shot"
             and reason == "invalid_target"
             and self.mp_state
@@ -25392,12 +25520,29 @@ multiplayer_apply_resource_drag_event = function(self, payload)
         return false
     end
     local drag = multiplayer_clone_flat_table(payload.drag)
+    local ui_action = payload.ui_action
     drag.world_x = tonumber(payload.world_x)
     drag.world_y = tonumber(payload.world_y)
     drag.active = true
     self.drag_resource = drag
     local screen_x = tonumber(payload.screen_x)
     local screen_y = tonumber(payload.screen_y)
+    if ui_action and type(ui_action) == "table" and LOOT_RUNTIME then
+        local action_type = tostring(ui_action.action_type or "")
+        if action_type == "use_on_own_bar" and LOOT_RUNTIME.get_bar_drop_screen_point then
+            local resolved_x, resolved_y = LOOT_RUNTIME.get_bar_drop_screen_point(tostring(ui_action.bar_target or ""))
+            if resolved_x and resolved_y then
+                screen_x = resolved_x
+                screen_y = resolved_y
+            end
+        elseif action_type == "equip_self_buff" and LOOT_RUNTIME.get_buff_slot_drop_screen_point then
+            local resolved_x, resolved_y = LOOT_RUNTIME.get_buff_slot_drop_screen_point(tostring(ui_action.buff_slot or ""))
+            if resolved_x and resolved_y then
+                screen_x = resolved_x
+                screen_y = resolved_y
+            end
+        end
+    end
     if not (screen_x and screen_y) then
         self.drag_resource = { active = false }
         return false
@@ -27522,6 +27667,7 @@ function update(self, dt)
     end
     update_ladder_tints(self)
     update_selected_unit_pulse(self, dt)
+    update_ui_action_feedback(self, dt)
     update_selected_unit_ui(self)
     update_flow_ui(self, dt)
     update_advisory_ui(self, dt)
@@ -27801,13 +27947,18 @@ function on_input(self, action_id, action)
             if action.released then
                 if self.mp_state and self.mp_state.enabled then
                     local world_x, world_y = screen_to_world(input_x, input_y, self.camera_pos, self.camera_zoom)
+                    local ui_action = nil
+                    if LOOT_RUNTIME and LOOT_RUNTIME.resolve_resource_drag_ui_action then
+                        ui_action = LOOT_RUNTIME.resolve_resource_drag_ui_action(self, input_x, input_y)
+                    end
                     multiplayer_transport_send_command(self, "resource_drag_end", {
                         turn_id = self.mp_state.turn_id or 1,
                         screen_x = input_x,
                         screen_y = input_y,
                         world_x = world_x,
                         world_y = world_y,
-                        drag = multiplayer_clone_flat_table(self.drag_resource)
+                        drag = multiplayer_clone_flat_table(self.drag_resource),
+                        ui_action = ui_action
                     }, multiplayer_get_active_player_id_for_commands(self))
                     self.drag_resource = { active = false }
                 else

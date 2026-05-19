@@ -3739,7 +3739,8 @@ local function refresh_alien_visual(self, alien)
     end
     local x, y = coords_to_world_pos(self.world_grid[alien.cell_id].xCell, self.world_grid[alien.cell_id].yCell)
     local position_type = get_alien_effective_position_type(alien)
-    x = x + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
+    local lane_offset_x = get_alien_stack_lane_offset_x(self, alien, alien.cell_id, false)
+    x = x + (CELL_WIDTH * 0.25) + lane_offset_x
     x = clamp_world_x_to_cell(self.world_grid[alien.cell_id], x)
     if position_type == ALIEN_TYPE_SPEEDY then
         y = y + 50
@@ -4077,7 +4078,7 @@ local function remove_dead_aliens(self)
     end
 end
 
-local function spawn_human_reaction_projectile(self, shooter_unit, target_alien, impact_hit, impact_light, impact_chance, impact_roll)
+local function spawn_human_reaction_projectile(self, shooter_unit, target_alien, impact_hit, impact_light, impact_chance, impact_roll, source_kind)
     if not shooter_unit or not shooter_unit.go_path or not target_alien or not target_alien.go_id then
         return
     end
@@ -4113,12 +4114,15 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
         impact_chance = impact_chance or 0,
         impact_roll = impact_roll or 0
     })
+    local projectile_source_kind = tostring(source_kind or "manual")
     if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
         multiplayer_transport_broadcast_event(self, "realtime_human_projectile", {
             from_x = from.x,
             from_y = from.y + 20,
             to_x = to.x,
-            to_y = to.y
+            to_y = to.y,
+            shooter_unit_id = shooter_unit.id,
+            source_kind = projectile_source_kind
         })
     elseif self.mp_state and self.mp_state.enabled then
         multiplayer_emit_combat_fx_event(self, {
@@ -4126,7 +4130,9 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
             from_x = from.x,
             from_y = from.y + 20,
             to_x = to.x,
-            to_y = to.y
+            to_y = to.y,
+            shooter_unit_id = shooter_unit.id,
+            source_kind = projectile_source_kind
         })
     end
 end
@@ -4235,7 +4241,7 @@ local function resolve_human_reaction_fire(self, alien)
                             hit_chance or 0
                         ))
                         local roll = math.random(1, 100)
-                        spawn_human_reaction_projectile(self, unit, chosen_target, roll <= hit_chance, active_light, hit_chance, roll)
+                        spawn_human_reaction_projectile(self, unit, chosen_target, roll <= hit_chance, active_light, hit_chance, roll, "reactive")
                         self.human_reactive_fire_cooldown_by_unit_id[unit_id] = HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS
                     end
                 end
@@ -5478,8 +5484,9 @@ local function update_alien_movement(self, dt)
                 local is_vent_jump = (alien.type ~= ALIEN_TYPE_BRUTE) and from_vent and to_vent and from_cell_before_step ~= target_cell_id
                 local tx, ty = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
                 local position_type = get_alien_effective_position_type(alien)
-                alien.slot_name = alien_slot_name_from_lane_offset(get_alien_stack_lane_offset_x(self, alien, target_cell_id, true))
-                tx = tx + (CELL_WIDTH * 0.25) + get_alien_stack_lane_offset_x(self, alien, target_cell_id, true)
+                local lane_offset_x = get_alien_stack_lane_offset_x(self, alien, target_cell_id, true)
+                alien.slot_name = alien_slot_name_from_lane_offset(lane_offset_x)
+                tx = tx + (CELL_WIDTH * 0.25) + lane_offset_x
                 tx = clamp_world_x_to_cell(target_cell, tx)
                 if position_type == ALIEN_TYPE_SPEEDY then
                     ty = ty + 50
@@ -19901,10 +19908,31 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        if not destination_cell_id or unit.cell_id == destination_cell_id or not is_walkable_cell(self.world_grid, destination_cell_id) then
+        local is_same_cell_reposition = destination_cell_id and (unit.cell_id == destination_cell_id)
+        if not destination_cell_id or (not is_same_cell_reposition and not is_walkable_cell(self.world_grid, destination_cell_id)) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "move_unit",
                 reason = "invalid_destination"
+            }))
+            return events
+        end
+        if is_same_cell_reposition then
+            if requested_slot == nil then
+                table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                    command_type = "move_unit",
+                    reason = "invalid_destination"
+                }))
+                return events
+            end
+            local ap_now = tonumber(unit.current_ap or 0) or 0
+            table.insert(events, multiplayer_transport_emit_event(self, "move_unit_applied", {
+                unit_id = unit_id,
+                destination_cell_id = destination_cell_id,
+                destination_slot_index = multiplayer_resolve_destination_slot(self, unit, destination_cell_id, requested_slot),
+                path = { unit.cell_id },
+                ap_cost = 0,
+                ap_before = ap_now,
+                ap_after = ap_now
             }))
             return events
         end
@@ -21502,6 +21530,11 @@ multiplayer_transport_on_event = function(self, event)
         local from_y = tonumber(event.payload and event.payload.from_y or nil)
         local to_x = tonumber(event.payload and event.payload.to_x or nil)
         local to_y = tonumber(event.payload and event.payload.to_y or nil)
+        local shooter_unit_id = event.payload and event.payload.shooter_unit_id or nil
+        if shooter_unit_id and multiplayer_can_control_unit(self, shooter_unit_id) then
+            -- Shooter client already spawned this projectile from manual_shot_applied.
+            return
+        end
         if not (from_x and from_y and to_x and to_y) then
             return
         end
@@ -23243,6 +23276,10 @@ multiplayer_apply_combat_fx_event = function(self, payload)
         local from_y = tonumber(payload.from_y or 0)
         local to_x = tonumber(payload.to_x or 0)
         local to_y = tonumber(payload.to_y or 0)
+        local shooter_unit_id = payload.shooter_unit_id
+        if shooter_unit_id and multiplayer_can_control_unit(self, shooter_unit_id) then
+            return true
+        end
         if not (from_x and from_y and to_x and to_y) then
             return false
         end
@@ -24948,7 +24985,7 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_out
     if shot_outcome and shot_outcome.impact_hit ~= nil then
         impact_hit = (shot_outcome.impact_hit == true)
     end
-    spawn_human_reaction_projectile(self, unit, alien, impact_hit, active_light, hit_chance, roll)
+    spawn_human_reaction_projectile(self, unit, alien, impact_hit, active_light, hit_chance, roll, "manual")
     clear_ranged_hit_preview(self)
 
     update_human_visual_state(self)
@@ -25035,6 +25072,32 @@ multiplayer_apply_move_unit_event = function(self, payload)
     end
     local resolved_slot = multiplayer_resolve_destination_slot(self, unit, destination_cell_id, payload.destination_slot_index)
     if unit.cell_id == destination_cell_id then
+        if resolved_slot then
+            self.cell_slot_assignments = self.cell_slot_assignments or {}
+            self.cell_slot_assignments[destination_cell_id] = self.cell_slot_assignments[destination_cell_id] or {}
+            self.cell_slot_assignments[destination_cell_id][unit.id] = resolved_slot
+            if unit.go_path then
+                local target_x, target_y = get_unit_world_pos_in_cell(self, unit, destination_cell_id)
+                local current_pos = go.get_position(unit.go_path)
+                local dx = target_x - current_pos.x
+                local dy = target_y - current_pos.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                if distance > 0.5 then
+                    local move_duration = math.max(0.06, distance / HUMAN_MOVE_SPEED)
+                    go.cancel_animations(unit.go_path, "position")
+                    go.animate(
+                        unit.go_path,
+                        "position",
+                        go.PLAYBACK_ONCE_FORWARD,
+                        vmath.vector3(target_x, target_y, 0.5),
+                        go.EASING_INOUTSINE,
+                        move_duration
+                    )
+                else
+                    go.set_position(vmath.vector3(target_x, target_y, 0.5), unit.go_path)
+                end
+            end
+        end
         local ap_after = tonumber(payload.ap_after)
         if ap_after then
             unit.current_ap = math.max(0, math.floor(ap_after + 0.5))
@@ -26400,6 +26463,13 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         if self.controlled_unit_id == clicked_unit.id and clicked_unit.is_selected then
             clear_locked_manual_target(self)
             if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
+                local is_non_host_client_shuffle = self.mp_state
+                    and self.mp_state.enabled
+                    and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+                if is_non_host_client_shuffle and clicked_unit.mp_move_command_pending == true then
+                    print(clicked_unit.display_name .. " reposition is awaiting host confirmation.")
+                    return true
+                end
                 local assignment = self.cell_slot_assignments[clicked_cell_id]
                 local current_slot = assignment[clicked_unit.id] or 1
                 local used = {}
@@ -26433,6 +26503,18 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     move_duration
                 )
                 print(clicked_unit.display_name .. " shifted position within cell.")
+                if self.mp_state and self.mp_state.enabled then
+                    local active_player_id = multiplayer_get_active_player_id_for_commands(self)
+                    multiplayer_transport_send_command(self, "move_unit", {
+                        turn_id = self.mp_state.turn_id or 1,
+                        unit_id = clicked_unit.id,
+                        destination_cell_id = clicked_cell_id,
+                        destination_slot_index = next_slot
+                    }, active_player_id)
+                    if is_non_host_client_shuffle then
+                        clicked_unit.mp_move_command_pending = true
+                    end
+                end
             end
         else
             clear_locked_manual_target(self)
@@ -26498,6 +26580,13 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
 
         if clicked_cell_id == unit.cell_id then
             if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
+                local is_non_host_client_shuffle = self.mp_state
+                    and self.mp_state.enabled
+                    and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+                if is_non_host_client_shuffle and unit.mp_move_command_pending == true then
+                    print(unit.display_name .. " reposition is awaiting host confirmation.")
+                    return true
+                end
                 local assignment = self.cell_slot_assignments[clicked_cell_id]
                 local current_slot = assignment[unit.id] or 1
                 local used = {}
@@ -26536,6 +26625,18 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     move_duration
                 )
                 print(unit.display_name .. " repositioned within cell (0 AP).")
+                if self.mp_state and self.mp_state.enabled then
+                    local active_player_id = multiplayer_get_active_player_id_for_commands(self)
+                    multiplayer_transport_send_command(self, "move_unit", {
+                        turn_id = self.mp_state.turn_id or 1,
+                        unit_id = unit.id,
+                        destination_cell_id = clicked_cell_id,
+                        destination_slot_index = best_slot
+                    }, active_player_id)
+                    if is_non_host_client_shuffle then
+                        unit.mp_move_command_pending = true
+                    end
+                end
             end
             self.ui_close_on_next_non_unit_click = false
             update_human_visual_state(self)

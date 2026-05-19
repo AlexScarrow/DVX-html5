@@ -20028,29 +20028,6 @@ multiplayer_transport_handle_command = function(self, command)
                 }))
                 return events
             end
-            local shooter_cell = self.world_grid and self.world_grid[unit.cell_id] or nil
-            local target_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
-            if shooter_cell and target_cell then
-                local is_vertical_lane = (shooter_cell.xCell == target_cell.xCell) and (shooter_cell.yCell ~= target_cell.yCell)
-                if is_vertical_lane then
-                    local shooter_center_x = coords_to_world_pos(shooter_cell.xCell, shooter_cell.yCell)
-                    local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-                    local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
-                    local target_pos = alien.go_id and go.get_position(alien.go_id) or nil
-                    local shooter_x = shooter_pos and shooter_pos.x or shooter_center_x
-                    local target_x = target_pos and target_pos.x or target_center_x
-                    local right_threshold = CELL_WIDTH * 0.15
-                    local shooter_in_right_lane = shooter_x >= (shooter_center_x + right_threshold)
-                    local target_in_right_lane = target_x >= (target_center_x + right_threshold)
-                    if (not shooter_in_right_lane) or (not target_in_right_lane) then
-                        table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
-                            command_type = "manual_shot",
-                            reason = "invalid_target"
-                        }))
-                        return events
-                    end
-                end
-            end
             if (tonumber(unit.current_ammo or 0) or 0) <= 0 then
                 table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                     command_type = "manual_shot",
@@ -24925,27 +24902,6 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_out
         return false
     end
 
-    local shooter_cell = self.world_grid[unit.cell_id]
-    local target_cell = self.world_grid[alien.cell_id]
-    if shooter_cell and target_cell then
-        local is_vertical_lane = (shooter_cell.xCell == target_cell.xCell) and (shooter_cell.yCell ~= target_cell.yCell)
-        if is_vertical_lane then
-            local shooter_center_x = coords_to_world_pos(shooter_cell.xCell, shooter_cell.yCell)
-            local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-            local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
-            local target_pos = alien.go_id and go.get_position(alien.go_id) or nil
-            local shooter_x = shooter_pos and shooter_pos.x or shooter_center_x
-            local target_x = target_pos and target_pos.x or target_center_x
-            local right_threshold = CELL_WIDTH * 0.15
-            local shooter_in_right_lane = shooter_x >= (shooter_center_x + right_threshold)
-            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
-            if (not shooter_in_right_lane) or (not target_in_right_lane) then
-                print("Unable to fire: vertical shot requires both shooter and target in right lane.")
-                return false
-            end
-        end
-    end
-
     local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
     try_realtime_auto_load_ammo_from_backpack(self, unit)
     if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then
@@ -26395,28 +26351,6 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
         show_advisory(self, ADVISORY_MSG_NO_CLEAR_SHOT)
         dismiss_ranged_hit_preview(self)
         return true
-    end
-    local shooter_cell = self.world_grid and self.world_grid[unit.cell_id] or nil
-    local target_cell = self.world_grid and self.world_grid[alien.cell_id] or nil
-    if shooter_cell and target_cell then
-        local is_vertical_lane = (shooter_cell.xCell == target_cell.xCell) and (shooter_cell.yCell ~= target_cell.yCell)
-        if is_vertical_lane then
-            local shooter_center_x = coords_to_world_pos(shooter_cell.xCell, shooter_cell.yCell)
-            local target_center_x = coords_to_world_pos(target_cell.xCell, target_cell.yCell)
-            local shooter_pos = unit.go_path and go.get_position(unit.go_path) or nil
-            local target_pos = alien.go_id and go.get_position(alien.go_id) or nil
-            local shooter_x = shooter_pos and shooter_pos.x or shooter_center_x
-            local target_x = target_pos and target_pos.x or target_center_x
-            local right_threshold = CELL_WIDTH * 0.15
-            local shooter_in_right_lane = shooter_x >= (shooter_center_x + right_threshold)
-            local target_in_right_lane = target_x >= (target_center_x + right_threshold)
-            if (not shooter_in_right_lane) or (not target_in_right_lane) then
-                print("Unable to fire: vertical shot requires both shooter and target in right lane.")
-                show_advisory(self, ADVISORY_MSG_NO_CLEAR_SHOT)
-                dismiss_ranged_hit_preview(self)
-                return true
-            end
-        end
     end
     local shot_ap_cost = get_ap_cost_value("manual_ranged_shot", 1)
     if unit.current_ap < shot_ap_cost or unit.current_ammo <= 0 then

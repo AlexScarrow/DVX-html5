@@ -4657,8 +4657,18 @@ function M.extend(runtime, ctx)
                 end
                 ctx.mp_send_command(self, "pickup_turret", payload, sender_player_id)
             end
-            -- In multiplayer, turret pickup must always flow through host command handling.
-            -- Do not fallback to local mutation here; that creates ghost turrets on peers.
+            local is_confirmed_client = false
+            if self and self.mp_state then
+                local local_player_id = self.mp_state.local_player_id
+                local host_player_id = self.mp_state.host_player_id
+                if local_player_id and host_player_id and local_player_id ~= host_player_id then
+                    is_confirmed_client = true
+                end
+            end
+            if is_confirmed_client then
+                -- Client-side immediate feedback while host authorization is in-flight.
+                runtime.try_pickup_world_turret_by_ids(self, unit.id, cell.idNumber, world_x, world_y)
+            end
             return true
         end
         return runtime.try_pickup_world_turret_by_ids(self, unit.id, cell.idNumber, world_x, world_y)
@@ -4800,6 +4810,26 @@ function M.extend(runtime, ctx)
             obstacle_object_id = tonumber(obstacle_slot.objectId or 0) or 0,
             obstacle_slot_idx = tonumber(get_cell_object_slot_index(cell, obstacle_slot) or 0) or 0
         }) then
+            local is_confirmed_client = false
+            if self and self.mp_state then
+                local local_player_id = self.mp_state.local_player_id
+                local host_player_id = self.mp_state.host_player_id
+                if local_player_id and host_player_id and local_player_id ~= host_player_id then
+                    is_confirmed_client = true
+                end
+            end
+            if is_confirmed_client then
+                -- Client-side immediate feedback while host authorization is in-flight.
+                runtime.try_pickup_obstacle_by_ids(
+                    self,
+                    unit.id,
+                    clicked_cell_id,
+                    world_x,
+                    world_y,
+                    tonumber(obstacle_slot.objectId or 0) or 0,
+                    tonumber(get_cell_object_slot_index(cell, obstacle_slot) or 0) or 0
+                )
+            end
             return true
         end
         return runtime.try_pickup_obstacle_by_ids(

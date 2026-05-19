@@ -909,11 +909,18 @@ function M.extend(runtime, ctx)
     runtime.refresh_vent_markers = function(self)
         self.vent_objects = self.vent_objects or {}
         self.vent_shadow_objects = self.vent_shadow_objects or {}
+        self.vent_weld_overlay_objects = self.vent_weld_overlay_objects or {}
         for cell_id, marker in pairs(self.vent_shadow_objects) do
             if marker then
                 go.delete(marker)
             end
             self.vent_shadow_objects[cell_id] = nil
+        end
+        for cell_id, marker in pairs(self.vent_weld_overlay_objects) do
+            if marker then
+                go.delete(marker)
+            end
+            self.vent_weld_overlay_objects[cell_id] = nil
         end
         for cell_id, marker in pairs(self.vent_objects) do
             if marker then
@@ -933,29 +940,46 @@ function M.extend(runtime, ctx)
                 local vent_x = x + (vent.offsetX or 0)
                 local vent_y = y + (vent.offsetY or 0)
                 local fx_active = self.vent_weld_fx_cells and self.vent_weld_fx_cells[cell_id]
-                local marker_x = fx_active and (x + WELD_OVERLAY_OFFSET_X) or vent_x
-                local marker_y = fx_active and (y + WELD_OVERLAY_OFFSET_Y) or vent_y
+                local marker_x = vent_x
+                local marker_y = vent_y
                 if boardgame_shadows_enabled(self) then
                     self.vent_shadow_objects[cell_id] = spawn_world_shadow(vent_x + 4, vent_y - 6, 0.5, 0.45, 0.18, 0.32)
                 end
-                local marker_z = fx_active and WELD_OVERLAY_Z or 0.48
-                local marker_factory = fx_active and "/weld_overlay_factory#weld_overlay_factory" or "/alien_blip_factory#alien_blip_factory"
+                local marker_z = 0.48
+                local marker_factory = "/alien_blip_factory#alien_blip_factory"
                 local marker_id = factory.create(marker_factory, vmath.vector3(marker_x, marker_y, marker_z))
                 if marker_id then
-                    local anim = fx_active and hash("weld_overlay") or (vent.isWelded == true and hash("vent_welded") or hash("vent_unwelded"))
+                    local anim = (vent.isWelded == true and hash("vent_welded") or hash("vent_unwelded"))
                     msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = anim })
                     if fx_active then
                         local sprite_url = msg.url(nil, marker_id, "sprite")
-                        local dim_tint = vmath.vector4(0, 0, 0, 1)
-                        local bright_tint = vmath.vector4(0, 1, 1, 1)
+                        local dim_tint = vmath.vector4(0.55, 0.95, 0.95, 1)
+                        local bright_tint = vmath.vector4(1, 1, 1, 1)
                         local pulse_speed = 0.03 + (math.random() * 0.11)
                         go.set(sprite_url, "tint", dim_tint)
                         go.animate(sprite_url, "tint", go.PLAYBACK_LOOP_PINGPONG, bright_tint, go.EASING_INOUTSINE, pulse_speed)
-                        go.set_scale(vmath.vector3(1, 1, 1), marker_id)
+                        go.set_scale(vmath.vector3(0.62, 0.62, 1), marker_id)
                     else
                         go.set_scale(vmath.vector3(0.6, 0.6, 1), marker_id)
                     end
                     self.vent_objects[cell_id] = marker_id
+                end
+                if fx_active then
+                    local overlay_id = factory.create(
+                        "/weld_overlay_factory#weld_overlay_factory",
+                        vmath.vector3(x + WELD_OVERLAY_OFFSET_X, y + WELD_OVERLAY_OFFSET_Y, WELD_OVERLAY_Z)
+                    )
+                    if overlay_id then
+                        local overlay_sprite_url = msg.url(nil, overlay_id, "sprite")
+                        msg.post(overlay_sprite_url, "play_animation", { id = hash("weld_overlay") })
+                        pcall(go.set, overlay_sprite_url, "blend_mode", hash("add"))
+                        local low_cyan = vmath.vector4(0.0, 0.75, 0.9, 0.25)
+                        local high_cyan = vmath.vector4(0.45, 1.0, 1.0, 0.95)
+                        local pulse_speed = 0.05 + (math.random() * 0.12)
+                        go.set(overlay_sprite_url, "tint", low_cyan)
+                        go.animate(overlay_sprite_url, "tint", go.PLAYBACK_LOOP_PINGPONG, high_cyan, go.EASING_INOUTSINE, pulse_speed)
+                        self.vent_weld_overlay_objects[cell_id] = overlay_id
+                    end
                 end
             end
         end

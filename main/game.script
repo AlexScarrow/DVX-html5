@@ -22537,6 +22537,23 @@ multiplayer_transport_on_event = function(self, event)
         then
             show_advisory(self, ADVISORY_MSG_TRY_AGAIN, 1.2)
         end
+        if (cmd == "pickup_turret" or cmd == "pickup_obstacle")
+            and self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        then
+            show_advisory(self, ADVISORY_MSG_TRY_AGAIN, 1.2)
+            local current_turn_id = tonumber(self.mp_state.turn_id or 1) or 1
+            if self.mp_state.last_pickup_reject_snapshot_turn_id ~= current_turn_id then
+                self.mp_state.last_pickup_reject_snapshot_turn_id = current_turn_id
+                multiplayer_transport_send_command(self, "request_snapshot", {
+                    turn_id = current_turn_id,
+                    reason = tostring(cmd) .. "_rejected",
+                    expected_turn_id = current_turn_id
+                }, self.mp_state.local_player_id)
+                print(string.format("MP SNAPSHOT | requested_%s_rejected | turn_id=%d", tostring(cmd), current_turn_id))
+            end
+        end
         if cmd == "manual_shot"
             and reason == "invalid_target"
             and self.mp_state

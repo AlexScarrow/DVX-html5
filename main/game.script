@@ -5824,6 +5824,10 @@ local function process_alien_turn(self)
         return
     end
     self.aliens = self.aliens or {}
+    local movement_only_phase = self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        and self.mp_state.client_alien_movement_only_phase == true
 
     if any_alien_is_moving(self) or self.pending_spitter_attack_phase or self.pending_melee_attack_phase or any_civilian_is_moving(self) then
         return
@@ -6005,6 +6009,23 @@ local function process_alien_turn(self)
     end
 
     if any_step or any_melee_ready_without_move or any_spitter_ready_to_fire then
+        if movement_only_phase then
+            self.pending_melee_attack_phase = false
+            self.pending_spitter_attack_phase = false
+            self.alien_turn_waiting_for_advance = false
+            if any_step then
+                self.alien_turn_active = true
+            else
+                self.alien_turn_active = false
+            end
+            return
+        end
+        if self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id == self.mp_state.host_player_id
+        then
+            self.mp_state.pre_attack_sync_pending = true
+        end
         MELEE_RUNTIME.begin_phase(self)
         begin_spitter_attack_phase(self)
         if step_mode and self.alien_turn_manual_pause then
@@ -6023,6 +6044,7 @@ local function process_alien_turn(self)
         multiplayer_transport_broadcast_event(self, "alien_activity_state", {
             active = false
         })
+        self.mp_state.pre_attack_sync_pending = false
     end
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         self.mp_state.client_alien_activity_visible = false
@@ -18952,6 +18974,38 @@ multiplayer_apply_authoritative_actor_digest = function(self, actor_digest)
     return applied_any
 end
 
+multiplayer_apply_actor_cell_reconcile = function(self, actor_digest)
+    if not self or type(actor_digest) ~= "table" then
+        return false
+    end
+    local changed = false
+    local aliens_digest = type(actor_digest.aliens) == "table" and actor_digest.aliens or {}
+    for key, row in pairs(aliens_digest) do
+        if type(row) == "table" then
+            local alien = find_alien_by_id(self, tonumber(row.id) or tonumber(key))
+            if alien then
+                local cell = tonumber(row.cell)
+                if cell and cell > 0 and alien.cell_id ~= cell then
+                    alien.cell_id = cell
+                    alien.is_moving = false
+                    alien.move_path = nil
+                    alien.move_path_index = nil
+                    alien.move_target_cell_id = nil
+                    changed = true
+                end
+            end
+        end
+    end
+    if changed then
+        for _, alien in ipairs(self.aliens or {}) do
+            if alien and alien.go_id then
+                refresh_alien_visual(self, alien)
+            end
+        end
+    end
+    return changed
+end
+
 multiplayer_compute_turn_checksum_buckets = function(self)
     local buckets = {
         units = "0",
@@ -21962,6 +22016,22 @@ multiplayer_transport_on_event = function(self, event)
         local sender_player_id = event.sender_player_id or nil
         if self.mp_state and self.mp_state.enabled and sender_player_id == self.mp_state.host_player_id then
             self.mp_state.client_alien_activity_visible = event.payload and event.payload.active == true
+            if self.mp_state.client_alien_activity_visible ~= true then
+                self.mp_state.client_alien_movement_only_phase = false
+            end
+        end
+        return
+    end
+    if event.type == "alien_pre_attack_sync" then
+        local sender_player_id = event.sender_player_id or nil
+        if self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+            and sender_player_id == self.mp_state.host_player_id
+        then
+            local payload = event.payload or {}
+            multiplayer_apply_actor_cell_reconcile(self, payload.actor_digest)
+            self.mp_state.client_alien_movement_only_phase = false
         end
         return
     end
@@ -23851,6 +23921,9 @@ end
 
 local function next_turn_reset_human_ap(self)
     score_record_turn_started(self)
+    if self.mp_state then
+        self.mp_state.pre_attack_sync_pending = false
+    end
     if not self.squad_units then
         return
     end
@@ -28174,6 +28247,19 @@ function update(self, dt)
             end
         end
     end
+    if self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id == self.mp_state.host_player_id
+        and self.mp_state.pre_attack_sync_pending == true
+        and (self.pending_melee_attack_phase or self.pending_spitter_attack_phase)
+        and (not any_alien_is_moving(self))
+        and (not any_civilian_is_moving(self))
+    then
+        self.mp_state.pre_attack_sync_pending = false
+        multiplayer_transport_broadcast_event(self, "alien_pre_attack_sync", {
+            actor_digest = multiplayer_build_actor_state_digest(self)
+        })
+    end
     MELEE_RUNTIME.update_human_hit_flash(self, dt)
     MELEE_RUNTIME.update_swipe_fx(self, dt)
     MELEE_RUNTIME.update_phase(self, dt)
@@ -29048,10 +29134,10 @@ function on_message(self, message_id, message, sender)
         local skip_authoritative_sim = message and message.skip_authoritative_sim == true
         if skip_authoritative_sim then
             if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
-                self.mp_state.client_alien_activity_visible = false
+                self.mp_state.client_alien_activity_visible = true
+                self.mp_state.client_alien_movement_only_phase = true
             end
-            print("MP TURN | non_host_skip_local_alien_factory_sim")
-            return
+            print("MP TURN | non_host_movement_only_alien_sim")
         end
         if LOOT_RUNTIME.process_factory_turn then
             LOOT_RUNTIME.process_factory_turn(self)

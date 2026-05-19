@@ -777,6 +777,10 @@ mp_network_id_for_slot = function(self, slot_player_id)
         return slot_id
     end
     local host_id = tostring(self.mp_state.host_player_id or "p1")
+    if multiplayer_lobby_is_host and multiplayer_lobby_is_host(self) then
+        host_id = tostring(self.mp_state.local_player_id or host_id)
+        self.mp_state.host_player_id = host_id
+    end
     local ordered = {}
     ordered[1] = host_id
     for i = 1, 4 do
@@ -862,7 +866,7 @@ end
 MP_TELEMETRY_LOG_INTERVAL_S = 2.0
 MP_TELEMETRY_PING_INTERVAL_S = 1.0
 MP_TELEMETRY_DT_SPIKE_S = 0.05
-MP_CLIENT_LIVENESS_TIMEOUT_S = 3.5
+MP_CLIENT_LIVENESS_TIMEOUT_S = 2.5
 do
     local preview_cfg = sys.get_config and sys.get_config("debug.outro_preview") or nil
     DEBUG_OUTRO_PREVIEW_ENABLED = (preview_cfg == "1" or preview_cfg == "true" or preview_cfg == "on")
@@ -13183,39 +13187,8 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
     self.mp_state.seat_assignments[host_slot_id] = self.mp_state.seat_assignments[host_slot_id] or {}
     local host_units = self.mp_state.seat_assignments[host_slot_id]
     local connected_lookup = self.mp_state.connected_players or {}
-    local now_s = tonumber(socket and socket.gettime and socket.gettime() or os.clock()) or 0
+    local now_s = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
     local last_seen_lookup = self.mp_state.last_seen_by_network_id or {}
-    local occupied_non_host_slots = 0
-    local max_non_host_units_in_slot = 0
-    local connected_non_host_count = 0
-    for i = 1, 4 do
-        local slot_id = "p" .. tostring(i)
-        if slot_id ~= host_slot_id then
-            local slot_units = self.mp_state.seat_assignments[slot_id] or {}
-            if #slot_units > 0 then
-                occupied_non_host_slots = occupied_non_host_slots + 1
-                if #slot_units > max_non_host_units_in_slot then
-                    max_non_host_units_in_slot = #slot_units
-                end
-            end
-            local mapped_network_id = mp_normalize_network_player_id(mp_network_id_for_slot(self, slot_id) or "")
-            local slot_connected = connected_lookup[slot_id] == true
-            if (not slot_connected) and mapped_network_id ~= "" then
-                slot_connected = connected_lookup[mapped_network_id] == true
-            end
-            if slot_connected and mapped_network_id ~= "" then
-                local last_seen_s = tonumber(last_seen_lookup[mapped_network_id] or 0) or 0
-                if last_seen_s > 0 and (now_s - last_seen_s) > MP_CLIENT_LIVENESS_TIMEOUT_S then
-                    slot_connected = false
-                end
-            end
-            if slot_connected then
-                connected_non_host_count = connected_non_host_count + 1
-            end
-        end
-    end
-    local force_two_player_pattern_reclaim = (connected_non_host_count == 0)
-        and (occupied_non_host_slots == 1 and max_non_host_units_in_slot >= 2)
     local changed = false
     for i = 1, 4 do
         local slot_id = "p" .. tostring(i)
@@ -13227,13 +13200,22 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
                 if (not slot_connected) and mapped_network_id ~= "" then
                     slot_connected = connected_lookup[mapped_network_id] == true
                 end
+                local last_seen_s = tonumber(last_seen_lookup[mapped_network_id] or 0) or 0
+                local age_s = (last_seen_s > 0) and (now_s - last_seen_s) or -1
                 if slot_connected and mapped_network_id ~= "" then
-                    local last_seen_s = tonumber(last_seen_lookup[mapped_network_id] or 0) or 0
-                    if last_seen_s > 0 and (now_s - last_seen_s) > MP_CLIENT_LIVENESS_TIMEOUT_S then
+                    if last_seen_s <= 0 or (now_s - last_seen_s) > MP_CLIENT_LIVENESS_TIMEOUT_S then
                         slot_connected = false
                     end
                 end
-                if (not slot_connected) or force_two_player_pattern_reclaim then
+                print(string.format(
+                    "MP RECLAIM | slot=%s mapped=%s units=%d connected=%s age=%.2f",
+                    tostring(slot_id),
+                    tostring(mapped_network_id),
+                    #slot_units,
+                    tostring(slot_connected),
+                    age_s
+                ))
+                if not slot_connected then
                     for _, unit_id in ipairs(slot_units) do
                         local exists = false
                         for _, host_unit_id in ipairs(host_units) do
@@ -13248,6 +13230,7 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
                     end
                     self.mp_state.seat_assignments[slot_id] = {}
                     changed = true
+                    print(string.format("MP RECLAIM | moved_slot=%s -> host=%s", tostring(slot_id), tostring(host_slot_id)))
                 end
             end
         end
@@ -13256,6 +13239,7 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
         multiplayer_enforce_controlled_unit(self, true)
         update_human_visual_state(self)
         update_selected_unit_ui(self)
+        print("MP RECLAIM | applied")
     end
     return changed
 end
@@ -19337,7 +19321,6 @@ multiplayer_transport_handle_command = function(self, command)
         end
         self.mp_state.seen_command_ids[dedupe_key] = true
     end
-
     if cmd_type == "set_ready" then
         local target_player_id = tostring(payload.player_id or sender or "")
         local ready_on = payload.ready == true
@@ -19431,6 +19414,20 @@ multiplayer_transport_handle_command = function(self, command)
                 reason = "host_does_not_ping_itself"
             }))
             return events
+        end
+        if is_local_host then
+            local sender_network_id = mp_normalize_network_player_id(sender or "")
+            local host_network_id = mp_normalize_network_player_id(self.mp_state.host_player_id or "")
+            if sender_network_id ~= "" and sender_network_id ~= host_network_id then
+                self.mp_state.connected_players = self.mp_state.connected_players or {}
+                self.mp_state.last_seen_by_network_id = self.mp_state.last_seen_by_network_id or {}
+                self.mp_state.connected_players[sender_network_id] = true
+                local sender_slot_id = multiplayer_get_slot_player_id_for_network(self, sender_network_id)
+                if sender_slot_id and sender_slot_id ~= "" then
+                    self.mp_state.connected_players[sender_slot_id] = true
+                end
+                self.mp_state.last_seen_by_network_id[sender_network_id] = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
+            end
         end
         table.insert(events, multiplayer_transport_emit_event(self, "pong_echo", {
             target_player_id = sender,
@@ -19853,11 +19850,12 @@ multiplayer_transport_handle_command = function(self, command)
         local requested_session_id = tostring(payload.session_id or "")
         local active_session_id = tostring(self.mp_state.session_id or "")
         if requested_session_id ~= "" and active_session_id ~= "" and requested_session_id ~= active_session_id then
-            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
-                command_type = "leave_match_request",
-                reason = "session_mismatch"
-            }))
-            return events
+            print(string.format(
+                "MP MATCH | leave_request_session_mismatch_ignored | sender=%s requested=%s active=%s",
+                tostring(sender or ""),
+                requested_session_id,
+                active_session_id
+            ))
         end
         if not multiplayer_apply_in_match_player_departure(self, sender) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
@@ -21107,7 +21105,7 @@ multiplayer_transport_on_event = function(self, event)
         local sender_player_id = mp_normalize_network_player_id(event.sender_player_id or "")
         if sender_player_id ~= "" then
             self.mp_state.last_seen_by_network_id = self.mp_state.last_seen_by_network_id or {}
-            self.mp_state.last_seen_by_network_id[sender_player_id] = tonumber(socket and socket.gettime and socket.gettime() or os.clock()) or 0
+            self.mp_state.last_seen_by_network_id[sender_player_id] = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
         end
         if self.mp_telemetry and self.mp_telemetry.enabled then
             local sent_ms = tonumber(event.payload and event.payload.sent_ms or 0) or 0
@@ -22624,10 +22622,13 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_lobby.sessions = {}
         end
         self.mp_state.connected_players = {}
+        self.mp_state.last_seen_by_network_id = {}
+        local joined_now_s = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
         local players = event.payload and event.payload.players or {}
         for _, player_id in ipairs(players) do
             local normalized_player_id = mp_normalize_network_player_id(player_id)
             self.mp_state.connected_players[normalized_player_id] = true
+            self.mp_state.last_seen_by_network_id[normalized_player_id] = joined_now_s
             local slot_player_id = multiplayer_get_slot_player_id_for_network(self, normalized_player_id)
             if slot_player_id and slot_player_id ~= "" then
                 self.mp_state.connected_players[slot_player_id] = true
@@ -22635,6 +22636,7 @@ multiplayer_transport_on_event = function(self, event)
         end
         local local_network_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "p1")
         self.mp_state.connected_players[local_network_id] = true
+        self.mp_state.last_seen_by_network_id[local_network_id] = joined_now_s
         local local_slot_id = multiplayer_get_slot_player_id_for_network(self, local_network_id)
         if local_slot_id and local_slot_id ~= "" then
             self.mp_state.connected_players[local_slot_id] = true
@@ -22645,6 +22647,10 @@ multiplayer_transport_on_event = function(self, event)
         end
         print(string.format("MP NET | joined_room | room_id=%s connected_players=%d", tostring(event.payload and event.payload.room_id or "unknown"), count))
         local is_local_host = multiplayer_lobby_is_host(self)
+        if is_local_host then
+            local local_network_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "p1")
+            self.mp_state.host_player_id = local_network_id
+        end
         if is_local_host then
             multiplayer_setup_push_state(self)
             if self.game_flow_state == FLOW_STATE_MP_LOBBY then
@@ -22673,7 +22679,7 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_state.connected_players = self.mp_state.connected_players or {}
             self.mp_state.last_seen_by_network_id = self.mp_state.last_seen_by_network_id or {}
             self.mp_state.connected_players[normalized_player_id] = true
-            self.mp_state.last_seen_by_network_id[normalized_player_id] = tonumber(socket and socket.gettime and socket.gettime() or os.clock()) or 0
+            self.mp_state.last_seen_by_network_id[normalized_player_id] = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
             local slot_player_id = multiplayer_get_slot_player_id_for_network(self, normalized_player_id)
             if slot_player_id and slot_player_id ~= "" then
                 self.mp_state.connected_players[slot_player_id] = true
@@ -23470,10 +23476,11 @@ function try_exit_game_button(self, screen_x, screen_y)
                 multiplayer_lobby_cancel_session(self, session_id)
                 multiplayer_leave_in_progress_match_to_lobby(self, "host_exit_button")
             else
+                local command_sender = multiplayer_get_active_player_id_for_commands(self)
                 multiplayer_transport_send_command(self, "leave_match_request", {
                     session_id = session_id,
                     reason = "client_exit_button"
-                }, local_player_id)
+                }, command_sender)
                 multiplayer_leave_in_progress_match_to_lobby(self, "client_exit_button")
             end
             return true
@@ -27556,6 +27563,23 @@ function update(self, dt)
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
     end
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id == self.mp_state.host_player_id then
+        if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME then
+            self.mp_state.reclaim_scan_accum_s = (tonumber(self.mp_state.reclaim_scan_accum_s or 0) or 0) + dt
+            if self.mp_state.reclaim_scan_accum_s >= 0.5 then
+                self.mp_state.reclaim_scan_accum_s = 0
+                if multiplayer_reconcile_departed_ownership_on_turn_boundary(self) then
+                    multiplayer_transport_broadcast_event(self, "player_departed_in_match", {
+                        session_id = tostring(self.mp_state and self.mp_state.session_id or ""),
+                        departed_player_id = "turn_boundary_reclaim",
+                        seat_assignments = multiplayer_clone_seat_assignments(self.mp_state.seat_assignments, self.mp_state.player_count or 4),
+                        required_ready_player_ids = multiplayer_clone_simple_table(self.mp_state.required_ready_player_ids or {}),
+                        ready_by_player_id = multiplayer_clone_simple_table(self.mp_state.ready_by_player_id or {})
+                    })
+                end
+            end
+        else
+            self.mp_state.reclaim_scan_accum_s = 0
+        end
         if realtime_mp_host_can_simulate(self) then
             local snapshot_interval_s = math.max(0.05, tonumber(REALTIME_MP_SNAPSHOT_INTERVAL_S or 0.2) or 0.2)
             self.mp_state.realtime_snapshot_accum_s = (tonumber(self.mp_state.realtime_snapshot_accum_s or 0) or 0) + dt

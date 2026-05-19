@@ -24793,16 +24793,67 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
     end
 
     local best_alien = nil
-    local best_dist = math.huge
+    local best_score = math.huge
     for _, alien in ipairs(self.aliens) do
         if (not alien.is_dead) and alien.cell_id == cell_id then
+            local ax = nil
+            local ay = nil
             if alien.go_id then
                 local pos = go.get_position(alien.go_id)
-                local dx = pos.x - world_x
-                local dy = pos.y - world_y
-                local dist = math.sqrt(dx * dx + dy * dy)
-                if dist < best_dist then
-                    best_dist = dist
+                if pos then
+                    ax = pos.x
+                    ay = pos.y
+                end
+            end
+            if (not ax) or (not ay) then
+                local cell = self.world_grid and self.world_grid[cell_id] or nil
+                if cell then
+                    local lane_bias_x = 0
+                    local slot_name = tostring(alien.slot_name or "")
+                    if slot_name == "left" then
+                        lane_bias_x = -20
+                    elseif slot_name == "right" then
+                        lane_bias_x = 20
+                    end
+                    ax, ay = coords_to_world_pos(cell.xCell, cell.yCell)
+                    ax = clamp_world_x_to_cell(cell, ax + (CELL_WIDTH * 0.25) + lane_bias_x)
+                    local position_type = get_alien_effective_position_type(alien)
+                    if position_type == ALIEN_TYPE_SPEEDY then
+                        ay = ay + 50
+                    elseif position_type == ALIEN_TYPE_SPITTER then
+                        ay = ay - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+                    elseif position_type == ALIEN_TYPE_CANNON then
+                        ay = ay - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+                    elseif position_type == ALIEN_TYPE_BRUTE then
+                        ay = ay - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 35
+                    end
+                end
+            end
+            if ax and ay then
+                local dx = ax - world_x
+                local dy = ay - world_y
+                local position_type = get_alien_effective_position_type(alien)
+                local click_radius = UNIT_CLICK_SELECT_RADIUS
+                if position_type == ALIEN_TYPE_SPEEDY then
+                    click_radius = math.max(click_radius, 64)
+                elseif position_type == ALIEN_TYPE_SPITTER then
+                    click_radius = math.max(click_radius, 60)
+                elseif position_type == ALIEN_TYPE_CANNON then
+                    click_radius = math.max(click_radius, 50)
+                elseif position_type == ALIEN_TYPE_BRUTE then
+                    click_radius = math.max(click_radius, 58)
+                end
+                local score_dy = dy
+                if (position_type == ALIEN_TYPE_CANNON or position_type == ALIEN_TYPE_SPITTER or position_type == ALIEN_TYPE_BRUTE)
+                    and world_y > ay
+                then
+                    -- Grounded aliens sit low in the cell; reduce accidental "air-click" selects above them.
+                    score_dy = score_dy * 1.45
+                end
+                local dist = math.sqrt(dx * dx + score_dy * score_dy)
+                local score = dist / math.max(1, click_radius)
+                if score <= 1 and score < best_score then
+                    best_score = score
                     best_alien = alien
                 end
             elseif not best_alien then
@@ -24811,10 +24862,7 @@ local function get_clicked_alien_in_cell(self, cell_id, world_x, world_y)
         end
     end
 
-    if best_dist <= UNIT_CLICK_SELECT_RADIUS then
-        return best_alien
-    end
-    return nil
+    return best_alien
 end
 
 multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_outcome)
@@ -24843,6 +24891,10 @@ multiplayer_attempt_manual_shot_on_target = function(self, unit, alien, shot_out
         update_human_visual_state(self)
         update_human_ap_debug_label(self)
         return true
+    end
+    if (tonumber(unit.cell_id or 0) or 0) == (tonumber(alien.cell_id or 0) or 0) then
+        -- Same-cell attacks must resolve as melee only; never fall through into ranged AP/ammo spend.
+        return false
     end
 
     local alien_cell = self.world_grid[alien.cell_id]
@@ -26222,8 +26274,12 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     end
 
     local clicked_alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
-    if (not clicked_alien) and clicked_cell_id == unit.cell_id and self.aliens then
-        -- Melee fallback: crowded same-cell clicks (e.g. barricade overlap) can miss strict alien click radius.
+    if (not clicked_alien)
+        and clicked_cell_id == unit.cell_id
+        and self.aliens
+        and is_cell_barricaded(self.world_grid, clicked_cell_id)
+    then
+        -- Melee fallback only for barricade-overlap clicks to avoid hijacking normal same-cell slot moves.
         local fallback_alien = nil
         local fallback_best_dist = math.huge
         for _, alien in ipairs(self.aliens) do
@@ -26232,13 +26288,29 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
                     local pos = go.get_position(alien.go_id)
                     local dx = pos.x - world_x
                     local dy = pos.y - world_y
-                    local dist = math.sqrt(dx * dx + dy * dy)
-                    if dist < fallback_best_dist then
+                    local position_type = get_alien_effective_position_type(alien)
+                    local click_radius = UNIT_CLICK_SELECT_RADIUS
+                    if position_type == ALIEN_TYPE_SPEEDY then
+                        click_radius = math.max(click_radius, 64)
+                    elseif position_type == ALIEN_TYPE_SPITTER then
+                        click_radius = math.max(click_radius, 60)
+                    elseif position_type == ALIEN_TYPE_CANNON then
+                        click_radius = math.max(click_radius, 50)
+                    elseif position_type == ALIEN_TYPE_BRUTE then
+                        click_radius = math.max(click_radius, 58)
+                    end
+                    local score_dy = dy
+                    if (position_type == ALIEN_TYPE_CANNON or position_type == ALIEN_TYPE_SPITTER or position_type == ALIEN_TYPE_BRUTE)
+                        and world_y > pos.y
+                    then
+                        score_dy = score_dy * 1.45
+                    end
+                    local dist = math.sqrt(dx * dx + score_dy * score_dy)
+                    local fallback_radius = click_radius * 1.45
+                    if dist <= fallback_radius and dist < fallback_best_dist then
                         fallback_best_dist = dist
                         fallback_alien = alien
                     end
-                elseif not fallback_alien then
-                    fallback_alien = alien
                 end
             end
         end
@@ -26247,7 +26319,6 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     if not clicked_alien then
         return false
     end
-    local alien = clicked_alien
     local locked_alien_id = tonumber(self.locked_manual_target_alien_id or 0) or 0
     local locked_unit_id = tostring(self.locked_manual_target_unit_id or "")
     if locked_unit_id ~= "" and tostring(unit.id or "") ~= locked_unit_id then
@@ -26256,13 +26327,15 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     end
     if locked_alien_id > 0 then
         local locked_alien = find_alien_by_id(self, locked_alien_id)
-        if locked_alien and (not locked_alien.is_dead) then
-            alien = locked_alien
-        else
+        if not locked_alien or locked_alien.is_dead then
             clear_locked_manual_target(self)
+        elseif clicked_alien and clicked_alien.id ~= locked_alien_id then
+            clear_locked_manual_target(self)
+            dismiss_ranged_hit_preview(self)
         end
     end
-    if not self.locked_manual_target_alien_id and alien and (not alien.is_dead) then
+    local alien = clicked_alien
+    if alien and (not alien.is_dead) then
         self.locked_manual_target_alien_id = alien.id
         self.locked_manual_target_unit_id = unit.id
     end

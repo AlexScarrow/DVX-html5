@@ -305,6 +305,15 @@ REALTIME_TOGGLE_BUTTON_H = 54
 REALTIME_TOGGLE_BUTTON_DRAW_W = 44.25
 REALTIME_TOGGLE_BUTTON_DRAW_H = 30.5
 REALTIME_TOGGLE_BUTTON_DISABLED = true
+MP_LAG_SIM_MODE_OFF = "off"
+MP_LAG_SIM_MODE_LOW = "low"
+MP_LAG_SIM_MODE_HIGH = "high"
+MP_LAG_SIM_BUTTON_W = 120
+MP_LAG_SIM_BUTTON_H = 52
+MP_LAG_SIM_BUTTON_DRAW_W = 44.25
+MP_LAG_SIM_BUTTON_DRAW_H = 30.5
+MP_LAG_SIM_BUTTON_X = EXIT_BUTTON_X + 150
+MP_LAG_SIM_BUTTON_Y = EXIT_BUTTON_Y
 LAUNCH_BUTTON_Z = 0.845
 EXIT_BUTTON_Z = LAUNCH_BUTTON_Z
 SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
@@ -976,6 +985,8 @@ HUD_LAYOUT_BASE_EXIT_BUTTON_X = EXIT_BUTTON_X
 HUD_LAYOUT_BASE_EXIT_BUTTON_Y = EXIT_BUTTON_Y
 HUD_LAYOUT_BASE_SCORE_HUD_CENTER_X = SCORE_HUD_CENTER_X
 HUD_LAYOUT_BASE_SCORE_HUD_Y = SCORE_HUD_Y
+HUD_LAYOUT_BASE_MP_LAG_SIM_BUTTON_X = MP_LAG_SIM_BUTTON_X
+HUD_LAYOUT_BASE_MP_LAG_SIM_BUTTON_Y = MP_LAG_SIM_BUTTON_Y
 HUD_LAYOUT_BASE_MP_BUILD_HUD_RIGHT_X = MP_NET_STATUS_DOT_X - 14
 HUD_LAYOUT_BASE_MP_BUILD_HUD_Y = MP_NET_STATUS_DOT_Y
 HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_X = ZOOM_IN_BUTTON_X
@@ -1045,6 +1056,8 @@ apply_runtime_hud_layout = function(self)
         EXIT_BUTTON_Y = clamp_center_y(top_edge_y - (EXIT_BUTTON_H * 0.5), EXIT_BUTTON_H * 0.5)
         SCORE_HUD_CENTER_X = SCREEN_WIDTH * 0.5
         SCORE_HUD_Y = clamp_center_y(top_edge_y - (SCORE_HUD_DIGIT_DRAW_H * 0.5), SCORE_HUD_DIGIT_DRAW_H * 0.5)
+        MP_LAG_SIM_BUTTON_X = clamp_center_x((EXIT_BUTTON_X + SCORE_HUD_CENTER_X) * 0.5, MP_LAG_SIM_BUTTON_W * 0.5)
+        MP_LAG_SIM_BUTTON_Y = EXIT_BUTTON_Y
         MP_BUILD_HUD_Y = clamp_center_y(top_edge_y - (MP_BUILD_DIGIT_DRAW_H * 0.5), MP_BUILD_DIGIT_DRAW_H * 0.5)
         MP_BUILD_HUD_RIGHT_X = clamp_center_x(right_edge_x - (MP_BUILD_DIGIT_DRAW_W * 0.5), MP_BUILD_DIGIT_DRAW_W * 0.5)
         ZOOM_IN_BUTTON_X = clamp_center_x(right_edge_x - (ZOOM_IN_BUTTON_W * 0.5), ZOOM_IN_BUTTON_W * 0.5)
@@ -1064,6 +1077,8 @@ apply_runtime_hud_layout = function(self)
         EXIT_BUTTON_Y = HUD_LAYOUT_BASE_EXIT_BUTTON_Y
         SCORE_HUD_CENTER_X = HUD_LAYOUT_BASE_SCORE_HUD_CENTER_X
         SCORE_HUD_Y = HUD_LAYOUT_BASE_SCORE_HUD_Y
+        MP_LAG_SIM_BUTTON_X = HUD_LAYOUT_BASE_MP_LAG_SIM_BUTTON_X
+        MP_LAG_SIM_BUTTON_Y = HUD_LAYOUT_BASE_MP_LAG_SIM_BUTTON_Y
         MP_BUILD_HUD_RIGHT_X = HUD_LAYOUT_BASE_MP_BUILD_HUD_RIGHT_X
         MP_BUILD_HUD_Y = HUD_LAYOUT_BASE_MP_BUILD_HUD_Y
         ZOOM_IN_BUTTON_X = HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_X
@@ -1094,6 +1109,8 @@ apply_runtime_hud_layout = function(self)
     ZOOM_SLIDER_TRACK_CENTER_Y = ZOOM_SLIDER_TRACK_TOP_Y - (ZOOM_SLIDER_TRACK_H * 0.5)
     PURGE_TIMER_HUD_CENTER_X = SCORE_HUD_CENTER_X
     PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 24
+    MP_LAG_SIM_BUTTON_X = (EXIT_BUTTON_X + SCORE_HUD_CENTER_X) * 0.5
+    MP_LAG_SIM_BUTTON_Y = EXIT_BUTTON_Y
     if LOOT_RUNTIME and LOOT_RUNTIME.set_ui_screen_offset then
         LOOT_RUNTIME.set_ui_screen_offset(
             (tonumber(UI_PANEL_X or 0) or 0) - (tonumber(HUD_LAYOUT_BASE_UI_PANEL_X or UI_PANEL_X or 0) or 0),
@@ -9494,6 +9511,23 @@ update_realtime_toggle_button_visual = function(self)
     pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
 end
 
+update_mp_lag_sim_button_visual = function(self)
+    if not (self and self.ui and self.ui.lag_sim_button) then
+        return
+    end
+    local mode = MP_LAG_SIM_MODE_OFF
+    if self.mp_lag_sim and self.mp_lag_sim.mode then
+        mode = tostring(self.mp_lag_sim.mode)
+    end
+    local tint = vmath.vector4(0.2, 0.8, 0.2, 0.78)
+    if mode == MP_LAG_SIM_MODE_LOW then
+        tint = vmath.vector4(1.0, 0.7, 0.2, 0.82)
+    elseif mode == MP_LAG_SIM_MODE_HIGH then
+        tint = vmath.vector4(0.95, 0.2, 0.2, 0.86)
+    end
+    pcall(go.set, msg.url(nil, self.ui.lag_sim_button, "sprite"), "tint", tint)
+end
+
 update_multiplayer_new_turn_button_visual = function(self)
     if not (self and self.ui and self.ui.new_turn_button) then
         return
@@ -10298,6 +10332,7 @@ local function initialize_unit_ui(self)
         launch_button_art = nil,
         exit_button = nil,
         exit_button_debug_hitbox = nil,
+        lag_sim_button = nil,
         aesthetic_toggle_button = nil,
         zoom_slider_track = nil,
         zoom_slider_knob = nil,
@@ -10488,6 +10523,7 @@ local function initialize_unit_ui(self)
     if self.ui.exit_button then
         pcall(go.set, msg.url(nil, self.ui.exit_button, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
     end
+    self.ui.lag_sim_button = create_ui_square_alpha(0, 0, EXIT_BUTTON_Z + 0.001, vmath.vector4(0.2, 0.8, 0.2, 0.78), MP_LAG_SIM_BUTTON_W, MP_LAG_SIM_BUTTON_H)
     self.ui.realtime_toggle_button = create_ui_marker_sprite(hash("realtime_button_off"), LAUNCH_BUTTON_Z)
     update_realtime_toggle_button_visual(self)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
@@ -16032,6 +16068,7 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.launch_button_art, -9999, -9999, LAUNCH_BUTTON_Z + 0.001, hidden, 1, (LAUNCH_BUTTON_H * 0.021) * 0.75)
         set_ui_square_transform(self, self.ui.exit_button, -9999, -9999, EXIT_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.exit_button_debug_hitbox, -9999, -9999, EXIT_BUTTON_Z + 0.03, hidden, EXIT_BUTTON_W, EXIT_BUTTON_H)
+        set_ui_square_transform(self, self.ui.lag_sim_button, -9999, -9999, EXIT_BUTTON_Z + 0.001, hidden, MP_LAG_SIM_BUTTON_W, MP_LAG_SIM_BUTTON_H)
         set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
@@ -16198,6 +16235,21 @@ function update_global_ui_buttons(self)
         1,
         1
     )
+    local lag_sim_btn_visible = (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME
+    local lag_btn_tint = lag_sim_btn_visible and vmath.vector4(1, 1, 1, 0.001) or vmath.vector4(1, 1, 1, 0)
+    set_ui_square_transform(
+        self,
+        self.ui.lag_sim_button,
+        lag_sim_btn_visible and MP_LAG_SIM_BUTTON_X or -9999,
+        lag_sim_btn_visible and MP_LAG_SIM_BUTTON_Y or -9999,
+        EXIT_BUTTON_Z + 0.001,
+        lag_btn_tint,
+        MP_LAG_SIM_BUTTON_W,
+        MP_LAG_SIM_BUTTON_H
+    )
+    if lag_sim_btn_visible then
+        update_mp_lag_sim_button_visual(self)
+    end
     if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE then
         set_ui_square_transform(self, self.ui.exit_button_debug_hitbox, EXIT_BUTTON_X, EXIT_BUTTON_Y, EXIT_BUTTON_Z + 0.03, vmath.vector4(0.1, 1.0, 0.2, 0.72), EXIT_BUTTON_W, EXIT_BUTTON_H)
     else
@@ -22838,6 +22890,120 @@ multiplayer_transport_on_event = function(self, event)
     end
 end
 
+multiplayer_lag_sim_now_ms = function()
+    local now = tonumber(get_wall_clock_ms and get_wall_clock_ms() or 0) or 0
+    if now <= 0 then
+        now = math.floor(((socket and socket.gettime and (socket.gettime() * 1000)) or (os.clock() * 1000)) + 0.5)
+    end
+    return now
+end
+
+multiplayer_lag_sim_get_profile = function(mode)
+    local m = tostring(mode or MP_LAG_SIM_MODE_OFF)
+    if m == MP_LAG_SIM_MODE_LOW then
+        return {
+            enabled = true,
+            delay_ms = 80,
+            jitter_ms = 15,
+            drop_pct = 0.2
+        }
+    end
+    if m == MP_LAG_SIM_MODE_HIGH then
+        return {
+            enabled = true,
+            delay_ms = 180,
+            jitter_ms = 40,
+            drop_pct = 0.8
+        }
+    end
+    return {
+        enabled = false,
+        delay_ms = 0,
+        jitter_ms = 0,
+        drop_pct = 0
+    }
+end
+
+multiplayer_lag_sim_ensure_state = function(self)
+    self.mp_lag_sim = self.mp_lag_sim or {}
+    self.mp_lag_sim.mode = self.mp_lag_sim.mode or MP_LAG_SIM_MODE_OFF
+    self.mp_lag_sim.outbound_queue = self.mp_lag_sim.outbound_queue or {}
+    self.mp_lag_sim.seq = tonumber(self.mp_lag_sim.seq or 0) or 0
+    self.mp_lag_sim.last_release_ms = tonumber(self.mp_lag_sim.last_release_ms or 0) or 0
+    return self.mp_lag_sim
+end
+
+multiplayer_lag_sim_set_mode = function(self, mode)
+    local state = multiplayer_lag_sim_ensure_state(self)
+    local next_mode = tostring(mode or MP_LAG_SIM_MODE_OFF)
+    if next_mode ~= MP_LAG_SIM_MODE_LOW and next_mode ~= MP_LAG_SIM_MODE_HIGH then
+        next_mode = MP_LAG_SIM_MODE_OFF
+    end
+    state.mode = next_mode
+    state.outbound_queue = {}
+    state.last_release_ms = 0
+    update_mp_lag_sim_button_visual(self)
+end
+
+multiplayer_lag_sim_queue_outbound = function(self, packet_kind, packet_payload)
+    if not (self and packet_kind and packet_payload) then
+        return false
+    end
+    local state = multiplayer_lag_sim_ensure_state(self)
+    local profile = multiplayer_lag_sim_get_profile(state.mode)
+    if profile.enabled ~= true then
+        return false
+    end
+    local drop_roll = math.random() * 100
+    if drop_roll < (tonumber(profile.drop_pct or 0) or 0) then
+        return true
+    end
+    local now_ms = multiplayer_lag_sim_now_ms()
+    local jitter = tonumber(profile.jitter_ms or 0) or 0
+    local jitter_delta = 0
+    if jitter > 0 then
+        jitter_delta = math.random(-jitter, jitter)
+    end
+    local release_ms = now_ms + (tonumber(profile.delay_ms or 0) or 0) + jitter_delta
+    if release_ms <= state.last_release_ms then
+        release_ms = state.last_release_ms + 1
+    end
+    state.last_release_ms = release_ms
+    state.seq = (tonumber(state.seq or 0) or 0) + 1
+    state.outbound_queue[#state.outbound_queue + 1] = {
+        kind = packet_kind,
+        payload = packet_payload,
+        release_ms = release_ms,
+        seq = state.seq
+    }
+    return true
+end
+
+multiplayer_lag_sim_flush_outbound = function(self)
+    if not (self and self.mp_transport and self.mp_lag_sim and self.mp_lag_sim.outbound_queue) then
+        return
+    end
+    local queue = self.mp_lag_sim.outbound_queue
+    if #queue <= 0 then
+        return
+    end
+    local now_ms = multiplayer_lag_sim_now_ms()
+    local kept = {}
+    for i = 1, #queue do
+        local item = queue[i]
+        if item and (tonumber(item.release_ms or 0) or 0) <= now_ms then
+            if item.kind == "command" and self.mp_transport.send_command then
+                self.mp_transport.send_command(item.payload)
+            elseif item.kind == "events" and self.mp_transport.send_events then
+                self.mp_transport.send_events(item.payload)
+            end
+        else
+            kept[#kept + 1] = item
+        end
+    end
+    self.mp_lag_sim.outbound_queue = kept
+end
+
 multiplayer_transport_send_command = function(self, cmd_type, payload, sender_player_id)
     if not (self.mp_state and self.mp_state.enabled and self.mp_transport) then
         return
@@ -22857,13 +23023,16 @@ multiplayer_transport_send_command = function(self, cmd_type, payload, sender_pl
         )
     )
     multiplayer_telemetry_on_send_command(self, cmd_type)
-    self.mp_transport.send_command({
+    local command_packet = {
         version = 1,
         session_id = self.mp_state.session_id or "local_session",
         sender_player_id = sender,
         type = cmd_type,
         payload = payload or {}
-    })
+    }
+    if multiplayer_lag_sim_queue_outbound(self, "command", command_packet) ~= true then
+        self.mp_transport.send_command(command_packet)
+    end
 end
 
 multiplayer_transport_broadcast_events = function(self, events)
@@ -22873,10 +23042,12 @@ multiplayer_transport_broadcast_events = function(self, events)
     if self.mp_telemetry and self.mp_telemetry.enabled then
         self.mp_telemetry.tx_event_count = (tonumber(self.mp_telemetry.tx_event_count or 0) or 0) + #events
     end
-    if self.mp_transport.send_events then
-        self.mp_transport.send_events(events)
-    else
+    if not self.mp_transport.send_events then
         print("MP NET | transport_missing_send_events | events_dropped")
+        return
+    end
+    if multiplayer_lag_sim_queue_outbound(self, "events", events) ~= true then
+        self.mp_transport.send_events(events)
     end
 end
 
@@ -22889,6 +23060,7 @@ multiplayer_transport_broadcast_event = function(self, event_type, payload)
 end
 
 multiplayer_transport_init = function(self)
+    multiplayer_lag_sim_ensure_state(self)
     self.mp_transport = MP_TRANSPORT.create({
         mode = MULTIPLAYER_TRANSPORT_MODE,
         ws_url = MULTIPLAYER_TRANSPORT_WS_URL,
@@ -23602,6 +23774,36 @@ function try_exit_game_button(self, screen_x, screen_y)
         return true
     end
     return false
+end
+
+try_toggle_mp_lag_sim_button = function(self, screen_x, screen_y)
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+        return false
+    end
+    local half_w = MP_LAG_SIM_BUTTON_W * 0.5
+    local half_h = MP_LAG_SIM_BUTTON_H * 0.5
+    if screen_x < (MP_LAG_SIM_BUTTON_X - half_w)
+        or screen_x > (MP_LAG_SIM_BUTTON_X + half_w)
+        or screen_y < (MP_LAG_SIM_BUTTON_Y - half_h)
+        or screen_y > (MP_LAG_SIM_BUTTON_Y + half_h)
+    then
+        return false
+    end
+    local state = multiplayer_lag_sim_ensure_state(self)
+    local current = tostring(state.mode or MP_LAG_SIM_MODE_OFF)
+    local next_mode = MP_LAG_SIM_MODE_OFF
+    if current == MP_LAG_SIM_MODE_OFF then
+        next_mode = MP_LAG_SIM_MODE_LOW
+    elseif current == MP_LAG_SIM_MODE_LOW then
+        next_mode = MP_LAG_SIM_MODE_HIGH
+    end
+    multiplayer_lag_sim_set_mode(self, next_mode)
+    show_advisory(self, string.format("MP LAG SIM: %s", string.upper(next_mode)), 1.0)
+    if not (self.mp_state and self.mp_state.enabled) then
+        show_advisory(self, "lag sim will apply in multiplayer", 1.0)
+    end
+    print(string.format("MP LAG SIM | mode=%s", tostring(next_mode)))
+    return true
 end
 
 local function try_toggle_realtime_button(self, screen_x, screen_y)
@@ -27737,6 +27939,7 @@ function update(self, dt)
         end
     end
 
+    multiplayer_lag_sim_flush_outbound(self)
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
     end
@@ -28826,6 +29029,10 @@ function on_input(self, action_id, action)
                     return true
                 end
                 if try_exit_game_button(self, input_x, input_y) then
+                    dismiss_ranged_hit_preview(self)
+                    return true
+                end
+                if try_toggle_mp_lag_sim_button(self, input_x, input_y) then
                     dismiss_ranged_hit_preview(self)
                     return true
                 end

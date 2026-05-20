@@ -15308,6 +15308,7 @@ function update_flow_ui(self, dt)
     end
     update_score_flow_digits(self, false)
     update_score_flow_team_names(self, false)
+    update_flow_title_space_grid_background(self, dt)
     leaderboard_render_rows(self)
     local panel_tint = LEADERBOARD_DEBUG_LAYOUT_ENABLED and vmath.vector4(0.15, 0.08, 0.24, 0) or vmath.vector4(0.07, 0.13, 0.09, 1)
     set_ui_square_transform(self, self.ui.flow_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z, panel_tint, LEADERBOARD_DEBUG_PANEL_W, LEADERBOARD_DEBUG_PANEL_H)

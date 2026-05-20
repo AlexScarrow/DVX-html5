@@ -4450,6 +4450,34 @@ function M.extend(runtime, ctx)
         return best
     end
 
+    runtime.find_civilian_drop_target = function(self, world_x, world_y)
+        if not (self and self.civilians) then
+            return nil
+        end
+        local best = nil
+        local best_dist = math.huge
+        for _, civilian in ipairs(self.civilians) do
+            if civilian and civilian.cell_id and (civilian.current_health or 0) > 0 then
+                local go_id = civilian.go_path or (self.civilian_visuals and civilian.id and self.civilian_visuals[civilian.id]) or nil
+                if go_id then
+                    local pos = go.get_position(go_id)
+                    local dx = pos.x - world_x
+                    local dy = pos.y - world_y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < best_dist and dist <= ctx.LOOT_UI.human_drop_radius then
+                        best = civilian
+                        best_dist = dist
+                    end
+                end
+            end
+        end
+        if best then
+            best.target_kind = "civilian"
+            best.display_name = best.display_name or string.format("Civilian #%d", tonumber(best.id or 0) or 0)
+        end
+        return best
+    end
+
     runtime.try_pickup_world_item_by_id_for_unit = function(self, unit_id, world_item_id)
         runtime.ensure_item_runtime_state(self)
         local unit = self.squad_units and self.squad_units[unit_id] or nil
@@ -5613,10 +5641,20 @@ function M.extend(runtime, ctx)
                             target_unit = source_unit
                         end
                     end
+                    if not target_unit and runtime.find_civilian_drop_target then
+                        target_unit = runtime.find_civilian_drop_target(self, world_x, world_y)
+                    end
                 end
                 if target_unit then
                     if runtime.can_transfer_between_units(self, source_unit, target_unit) then
                         if source_unit.class_id == ctx.UNIT_CLASS_MEDIC and source_item == "meds" then
+                            if target_unit.target_kind == "civilian" then
+                                target_unit.max_health = tonumber(ctx.CIVILIAN_MAX_HEALTH or 10) or 10
+                                target_unit.current_health = math.min(
+                                    target_unit.max_health,
+                                    tonumber(target_unit.current_health or target_unit.max_health) or target_unit.max_health
+                                )
+                            end
                             if (target_unit.current_health or 0) <= 0 then
                                 print(target_unit.display_name .. " is dead and cannot be healed with meds.")
                                 flash_invalid_drag_units(source_unit, target_unit)
@@ -5631,7 +5669,9 @@ function M.extend(runtime, ctx)
                                 end
                                 remove_source_item()
                                 target_unit.current_health = target_unit.max_health
-                                emit_receive_item_feedback(self, target_unit)
+                                if target_unit.target_kind ~= "civilian" then
+                                    emit_receive_item_feedback(self, target_unit)
+                                end
                                 trigger_receive_pulse(target_unit)
                                 local pos = target_unit.go_path and go.get_position(target_unit.go_path) or nil
                                 if pos then

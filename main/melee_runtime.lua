@@ -173,6 +173,8 @@ function M.create(ctx)
                 and civilian.cell_id == cell_id
                 and (civilian.current_health or 0) > 0
                 and civilian.is_dead ~= true
+                and civilian.is_awake == true
+                and civilian.is_rescued ~= true
             then
                 civilian.target_kind = "civilian"
                 civilian.display_name = civilian.display_name or string.format("Civilian #%d", tonumber(civilian.id or 0) or 0)

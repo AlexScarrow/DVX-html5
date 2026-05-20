@@ -4846,6 +4846,9 @@ local function resolve_turret_pending_shot(self, shot_id)
             end
             if target_alien and (not target_alien.is_dead) then
                 target_alien.hp_current = math.max(0, (target_alien.hp_current or 1) - 1)
+                if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
+                    MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target_alien)
+                end
                 if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
                     play_brute_damage_sfx(self)
                     target_alien.brute_damage_flash_timer = 0.24
@@ -4876,9 +4879,6 @@ local function resolve_turret_pending_shot(self, shot_id)
                     target_alien.move_path_index = 0
                     play_alien_death_sfx(self, target_alien.type)
                     score_record_alien_kill(self, target_alien.type)
-                    if MELEE_RUNTIME and MELEE_RUNTIME.spawn_alien_blood_splatter_fx then
-                        MELEE_RUNTIME.spawn_alien_blood_splatter_fx(self, target_alien)
-                    end
                     remove_dead_aliens(self)
                 end
                 print(string.format(
@@ -5026,6 +5026,39 @@ function process_turret_reactive_fire(self, dt)
                         local turret_pos = vmath.vector3(tx + (turret_obj.offsetX or 0), ty + (turret_obj.offsetY or 0), 0.76)
                         local target = choose_turret_target(self, turret_cell_id, turret_targets, turret_pos.x, tx)
                         if target then
+                            local is_authoritative_turret_sim = (not (self.mp_state and self.mp_state.enabled))
+                                or (self.mp_state.local_player_id == self.mp_state.host_player_id)
+                            if is_authoritative_turret_sim and target.kind == "alien" then
+                                local target_alien = nil
+                                for _, scan_alien in ipairs(self.aliens or {}) do
+                                    if scan_alien and tonumber(scan_alien.id or 0) == tonumber(target.id or 0) then
+                                        target_alien = scan_alien
+                                        break
+                                    end
+                                end
+                                if target_alien
+                                    and target_alien.type == ALIEN_TYPE_BLIP
+                                    and target_alien.hidden_reveal_type == ALIEN_TYPE_BRUTE
+                                then
+                                    local cfg = ALIEN_TYPE_CONFIG[ALIEN_TYPE_BRUTE]
+                                    local preserved_pos = nil
+                                    if target_alien.go_id then
+                                        preserved_pos = go.get_position(target_alien.go_id)
+                                    end
+                                    target_alien.type = ALIEN_TYPE_BRUTE
+                                    target_alien.ap_max = cfg.ap_per_turn
+                                    target_alien.hp_max = cfg.hp
+                                    target_alien.hp_current = cfg.hp
+                                    target_alien.can_traverse_void = cfg.can_traverse_void == true
+                                    target_alien.has_ranged = cfg.has_ranged == true
+                                    target_alien.ranged_cells = cfg.ranged_cells or 0
+                                    refresh_alien_visual(self, target_alien)
+                                    if preserved_pos and target_alien.go_id then
+                                        go.set_position(preserved_pos, target_alien.go_id)
+                                    end
+                                    target.hp = target_alien.hp_current
+                                end
+                            end
                             local target_pos = get_target_world_pos_for_turret(self, target)
                             if target_pos then
                                 self.turret_pending_shots = self.turret_pending_shots or {}

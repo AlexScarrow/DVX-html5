@@ -774,17 +774,17 @@ escape_win = {
                 --fx_cues = {},
                 sfx_cues = {}
             },
-            -- {
-            --     id = "lose_02",
-            --     start_at = 2,
-            --     anim = "sweep_shadow",
-            --     duration = 2,
-            --     ease = "linear",
-            --     from = { x = -1000, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
-            --     to = { x = 700, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
-            --     --fx_cues = {},
-            --     sfx_cues = {}
-            -- },
+            {
+                id = "lose_02",
+                start_at = 2,
+                anim = "sweep_shadow",
+                duration = 2,
+                ease = "linear",
+                from = { x = -1000, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
+                to = { x = 700, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
             {
                 id = "lose_03",
                 start_at = 0,

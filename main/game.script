@@ -54,6 +54,7 @@ window = rawget(_G, "window") or {}
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
 IS_HTML5 = (html5 ~= nil)
+INPUT_CALIBRATION_PROFILES_DB = require("main.input_calibration_profiles")
 
 
 -- Visual rendering
@@ -209,12 +210,14 @@ NATIVE_INPUT_CALIBRATION_SCALE_Y = 1.0
 NATIVE_INPUT_CALIBRATION_OFFSET_X = 0
 NATIVE_INPUT_CALIBRATION_OFFSET_Y = 0
 NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE = 2.3
+HUD_EXPANDED_LAYOUT_MIN_WINDOW_SCALE = 2.3
 NATIVE_INPUT_CALIBRATION_A = 1.402957
 NATIVE_INPUT_CALIBRATION_B = 0.012509
 NATIVE_INPUT_CALIBRATION_C = -260.542776
 NATIVE_INPUT_CALIBRATION_D = -0.003697
 NATIVE_INPUT_CALIBRATION_E = 1.554141
 NATIVE_INPUT_CALIBRATION_F = -200.530050
+INPUT_CALIBRATION_ACTIVE_PROFILE_ID = ""
 HUMAN_PORTRAIT_HIT_FLASH_DURATION = 0.38
 HUMAN_PORTRAIT_HIT_RED_BLEND_MAX = 1.0
 HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX = 0.14
@@ -1004,7 +1007,7 @@ is_expanded_hud_layout_active = function()
         return false
     end
     local window_scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
-    local min_window_scale = tonumber(NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE or 2.3) or 2.3
+    local min_window_scale = tonumber(HUD_EXPANDED_LAYOUT_MIN_WINDOW_SCALE or 2.3) or 2.3
     return window_scale >= min_window_scale
 end
 
@@ -8259,18 +8262,40 @@ map_window_input_to_logical = function(x, y, screen_x, screen_y)
         if win_w and win_h and (math.abs(win_w - SCREEN_WIDTH) <= 1 and math.abs(win_h - SCREEN_HEIGHT) <= 1) then
             return logical_x, logical_y
         end
-        local min_window_scale = tonumber(NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE or 2.3) or 2.3
         local window_scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+        local min_window_scale = tonumber(NATIVE_INPUT_CALIBRATION_MIN_WINDOW_SCALE or 2.3) or 2.3
+        local mode = tostring(NATIVE_INPUT_CALIBRATION_MODE or "")
+        local a = tonumber(NATIVE_INPUT_CALIBRATION_A or 1.0) or 1.0
+        local b = tonumber(NATIVE_INPUT_CALIBRATION_B or 0.0) or 0.0
+        local c = tonumber(NATIVE_INPUT_CALIBRATION_C or 0.0) or 0.0
+        local d = tonumber(NATIVE_INPUT_CALIBRATION_D or 0.0) or 0.0
+        local e = tonumber(NATIVE_INPUT_CALIBRATION_E or 1.0) or 1.0
+        local f = tonumber(NATIVE_INPUT_CALIBRATION_F or 0.0) or 0.0
+        local profile_id = nil
+        if INPUT_CALIBRATION_PROFILES_DB and INPUT_CALIBRATION_PROFILES_DB.resolve then
+            local info = sys.get_sys_info and sys.get_sys_info() or nil
+            local system_name = tostring(info and info.system_name or "")
+            local profile = INPUT_CALIBRATION_PROFILES_DB.resolve(system_name, win_w, win_h, window_scale)
+            if profile then
+                profile_id = tostring(profile.id or "")
+                min_window_scale = tonumber(profile.min_window_scale or min_window_scale) or min_window_scale
+                mode = tostring(profile.mode or mode)
+                a = tonumber(profile.a or a) or a
+                b = tonumber(profile.b or b) or b
+                c = tonumber(profile.c or c) or c
+                d = tonumber(profile.d or d) or d
+                e = tonumber(profile.e or e) or e
+                f = tonumber(profile.f or f) or f
+            end
+        end
+        if profile_id and profile_id ~= INPUT_CALIBRATION_ACTIVE_PROFILE_ID then
+            INPUT_CALIBRATION_ACTIVE_PROFILE_ID = profile_id
+            print(string.format("INPUT CAL | profile=%s win=%dx%d scale=%.3f", profile_id, win_w, win_h, window_scale))
+        end
         if window_scale < min_window_scale then
             return logical_x, logical_y
         end
-        if tostring(NATIVE_INPUT_CALIBRATION_MODE or "") == "affine" then
-            local a = tonumber(NATIVE_INPUT_CALIBRATION_A or 1.0) or 1.0
-            local b = tonumber(NATIVE_INPUT_CALIBRATION_B or 0.0) or 0.0
-            local c = tonumber(NATIVE_INPUT_CALIBRATION_C or 0.0) or 0.0
-            local d = tonumber(NATIVE_INPUT_CALIBRATION_D or 0.0) or 0.0
-            local e = tonumber(NATIVE_INPUT_CALIBRATION_E or 1.0) or 1.0
-            local f = tonumber(NATIVE_INPUT_CALIBRATION_F or 0.0) or 0.0
+        if mode == "affine" then
             return (a * logical_x) + (b * logical_y) + c, (d * logical_x) + (e * logical_y) + f
         end
         local cx = SCREEN_WIDTH * 0.5

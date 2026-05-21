@@ -30,6 +30,16 @@ local WINDOWS_1080_CANDIDATE = {
     f = -160.424040
 }
 
+local WINDOWS_1440_CANDIDATE = {
+    mode = "affine",
+    a = 1.463401,
+    b = 0.014385,
+    c = -299.624192,
+    d = -0.003032,
+    e = 1.454396,
+    f = -164.434641
+}
+
 local PROFILES = {
     {
         id = "mac_windowed_identity",
@@ -62,7 +72,7 @@ local PROFILES = {
         min_height = 1320,
         max_height = 1520,
         min_window_scale = 1.0,
-        preset = WINDOWS_1080_CANDIDATE
+        preset = WINDOWS_1440_CANDIDATE
     },
     {
         id = "windows_3840x2160_candidate_v1",

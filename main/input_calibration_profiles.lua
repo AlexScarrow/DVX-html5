@@ -46,13 +46,45 @@ local PROFILES = {
         platform = "Darwin",
         min_window_scale = 0.0,
         max_window_scale = 2.299,
-        preset = IDENTITY
+        preset = IDENTITY,
+        hud = {
+            expanded_min_window_scale = 2.3,
+            portrait_dx = 0,
+            left_cluster_dx = 0,
+            left_cluster_dy = 0,
+            right_cluster_dx = 0,
+            right_cluster_dy = 0,
+            human_ui_dx = 0,
+            human_ui_dy = 0,
+            exit_dx = 0,
+            exit_dy = 0,
+            score_dx = 0,
+            score_dy = 0,
+            build_version_dx = 0,
+            build_version_dy = 0
+        }
     },
     {
         id = "mac_maximized_affine",
         platform = "Darwin",
         min_window_scale = 2.3,
-        preset = MAC_AFFINE
+        preset = MAC_AFFINE,
+        hud = {
+            expanded_min_window_scale = 2.3,
+            portrait_dx = 0,
+            left_cluster_dx = 0,
+            left_cluster_dy = 0,
+            right_cluster_dx = 0,
+            right_cluster_dy = 0,
+            human_ui_dx = 0,
+            human_ui_dy = 0,
+            exit_dx = 0,
+            exit_dy = 0,
+            score_dx = 0,
+            score_dy = 0,
+            build_version_dx = 0,
+            build_version_dy = 0
+        }
     },
     {
         id = "windows_1920x1080_candidate_v1",
@@ -62,7 +94,23 @@ local PROFILES = {
         min_height = 1000,
         max_height = 1200,
         min_window_scale = 1.0,
-        preset = WINDOWS_1080_CANDIDATE
+        preset = WINDOWS_1080_CANDIDATE,
+        hud = {
+            expanded_min_window_scale = 1.0,
+            portrait_dx = 0,
+            left_cluster_dx = 0,
+            left_cluster_dy = 0,
+            right_cluster_dx = 0,
+            right_cluster_dy = 0,
+            human_ui_dx = 0,
+            human_ui_dy = 0,
+            exit_dx = 0,
+            exit_dy = 0,
+            score_dx = 0,
+            score_dy = 0,
+            build_version_dx = 0,
+            build_version_dy = 0
+        }
     },
     {
         id = "windows_2560x1440_candidate_v1",
@@ -72,7 +120,11 @@ local PROFILES = {
         min_height = 1320,
         max_height = 1520,
         min_window_scale = 1.0,
-        preset = WINDOWS_1440_CANDIDATE
+        preset = WINDOWS_1440_CANDIDATE,
+        hud = {
+            expanded_min_window_scale = 1.0,
+            portrait_dx = 0
+        }
     },
     {
         id = "windows_3840x2160_candidate_v1",
@@ -82,7 +134,11 @@ local PROFILES = {
         min_height = 2000,
         max_height = 2300,
         min_window_scale = 1.0,
-        preset = WINDOWS_1080_CANDIDATE
+        preset = WINDOWS_1080_CANDIDATE,
+        hud = {
+            expanded_min_window_scale = 1.0,
+            portrait_dx = 0
+        }
     },
     {
         id = "windows_fallback_identity",
@@ -140,7 +196,8 @@ function M.resolve(platform, win_w, win_h, window_scale)
                 c = preset.c,
                 d = preset.d,
                 e = preset.e,
-                f = preset.f
+                f = preset.f,
+                hud = profile.hud
             }
         end
     end

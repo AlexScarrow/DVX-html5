@@ -1008,6 +1008,14 @@ is_expanded_hud_layout_active = function()
     end
     local window_scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
     local min_window_scale = tonumber(HUD_EXPANDED_LAYOUT_MIN_WINDOW_SCALE or 2.3) or 2.3
+    if INPUT_CALIBRATION_PROFILES_DB and INPUT_CALIBRATION_PROFILES_DB.resolve then
+        local info = sys.get_sys_info and sys.get_sys_info() or nil
+        local system_name = tostring(info and info.system_name or "")
+        local profile = INPUT_CALIBRATION_PROFILES_DB.resolve(system_name, win_w, win_h, window_scale)
+        if profile and profile.hud and profile.hud.expanded_min_window_scale ~= nil then
+            min_window_scale = tonumber(profile.hud.expanded_min_window_scale) or min_window_scale
+        end
+    end
     return window_scale >= min_window_scale
 end
 
@@ -1015,6 +1023,19 @@ apply_runtime_hud_layout = function(self)
     local expanded = is_expanded_hud_layout_active()
     local gutter_x = 0
     local gutter_y = 0
+    local profile_hud = nil
+    local ok_size_for_profile, win_w_for_profile, win_h_for_profile = pcall(window.get_size)
+    if ok_size_for_profile and win_w_for_profile and win_h_for_profile and win_w_for_profile > 0 and win_h_for_profile > 0 then
+        local scale_for_profile = math.min(win_w_for_profile / SCREEN_WIDTH, win_h_for_profile / SCREEN_HEIGHT)
+        if INPUT_CALIBRATION_PROFILES_DB and INPUT_CALIBRATION_PROFILES_DB.resolve then
+            local info = sys.get_sys_info and sys.get_sys_info() or nil
+            local system_name = tostring(info and info.system_name or "")
+            local profile_for_hud = INPUT_CALIBRATION_PROFILES_DB.resolve(system_name, win_w_for_profile, win_h_for_profile, scale_for_profile)
+            if profile_for_hud and profile_for_hud.hud then
+                profile_hud = profile_for_hud.hud
+            end
+        end
+    end
     local function clamp_center_x(value, half_span)
         if expanded and HUD_EXPANDED_BYPASS_CLAMP == true then
             return value
@@ -1089,6 +1110,59 @@ apply_runtime_hud_layout = function(self)
         ZOOM_IN_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_IN_BUTTON_Y
         ZOOM_OUT_BUTTON_X = HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_X
         ZOOM_OUT_BUTTON_Y = HUD_LAYOUT_BASE_ZOOM_OUT_BUTTON_Y
+    end
+    local apply_profile_hud_offsets = (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME
+    if apply_profile_hud_offsets and profile_hud then
+        if profile_hud.portrait_dx then
+            HUMAN_PORTRAIT_START_X = HUMAN_PORTRAIT_START_X + (tonumber(profile_hud.portrait_dx) or 0)
+        end
+        if profile_hud.portrait_dy then
+            HUMAN_PORTRAIT_START_Y = HUMAN_PORTRAIT_START_Y + (tonumber(profile_hud.portrait_dy) or 0)
+        end
+        if profile_hud.human_ui_dx then
+            UI_PANEL_X = UI_PANEL_X + (tonumber(profile_hud.human_ui_dx) or 0)
+        end
+        if profile_hud.human_ui_dy then
+            UI_PANEL_Y = UI_PANEL_Y + (tonumber(profile_hud.human_ui_dy) or 0)
+        end
+        if profile_hud.left_cluster_dx then
+            local dx = tonumber(profile_hud.left_cluster_dx) or 0
+            NEW_TURN_BUTTON_X = NEW_TURN_BUTTON_X + dx
+            AESTHETIC_BUTTON_X = AESTHETIC_BUTTON_X + dx
+        end
+        if profile_hud.left_cluster_dy then
+            local dy = tonumber(profile_hud.left_cluster_dy) or 0
+            NEW_TURN_BUTTON_Y = NEW_TURN_BUTTON_Y + dy
+            AESTHETIC_BUTTON_Y = AESTHETIC_BUTTON_Y + dy
+        end
+        if profile_hud.right_cluster_dx then
+            local dx = tonumber(profile_hud.right_cluster_dx) or 0
+            LAUNCH_BUTTON_X = LAUNCH_BUTTON_X + dx
+            OBJECTIVE_BUTTON_X = OBJECTIVE_BUTTON_X + dx
+        end
+        if profile_hud.right_cluster_dy then
+            local dy = tonumber(profile_hud.right_cluster_dy) or 0
+            LAUNCH_BUTTON_Y = LAUNCH_BUTTON_Y + dy
+            OBJECTIVE_BUTTON_Y = OBJECTIVE_BUTTON_Y + dy
+        end
+        if profile_hud.exit_dx then
+            EXIT_BUTTON_X = EXIT_BUTTON_X + (tonumber(profile_hud.exit_dx) or 0)
+        end
+        if profile_hud.exit_dy then
+            EXIT_BUTTON_Y = EXIT_BUTTON_Y + (tonumber(profile_hud.exit_dy) or 0)
+        end
+        if profile_hud.score_dx then
+            SCORE_HUD_CENTER_X = SCORE_HUD_CENTER_X + (tonumber(profile_hud.score_dx) or 0)
+        end
+        if profile_hud.score_dy then
+            SCORE_HUD_Y = SCORE_HUD_Y + (tonumber(profile_hud.score_dy) or 0)
+        end
+        if profile_hud.build_version_dx then
+            MP_BUILD_HUD_RIGHT_X = MP_BUILD_HUD_RIGHT_X + (tonumber(profile_hud.build_version_dx) or 0)
+        end
+        if profile_hud.build_version_dy then
+            MP_BUILD_HUD_Y = MP_BUILD_HUD_Y + (tonumber(profile_hud.build_version_dy) or 0)
+        end
     end
     COMMS_PANEL_X = UI_PANEL_X + UI_PANEL_W
     COMMS_PANEL_Y = UI_PANEL_Y

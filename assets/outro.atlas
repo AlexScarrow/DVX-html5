@@ -118,6 +118,12 @@ images {
 images {
   image: "/assets/images/tutorial12.png"
 }
+images {
+  image: "/assets/images/advisory_backpackFull.png"
+}
+images {
+  image: "/assets/images/letterbox.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

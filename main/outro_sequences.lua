@@ -221,7 +221,21 @@ M.SEQUENCES = {
                     to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
                     --fx_cues = {},
                     sfx_cues = {}
-            },
+                },
+                {
+                    id = "lose_07",
+                    start_at = 0,
+                    anim = "letterbox",
+                    duration = 15,
+                    ease = "linear",--"in_out_sine",
+                    -- draw_w = 1280,
+                    -- draw_h = 720,
+                    from = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                    to = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+                
         } --END OF SHOTS       
     }, --END OF OUTRO (purge_win)
 
@@ -376,6 +390,19 @@ M.SEQUENCES = {
                     ease = "linear",--"in_out_sine",
                     from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
                     to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+                {
+                    id = "lose_07",
+                    start_at = 0,
+                    anim = "letterbox",
+                    duration = 15,
+                    ease = "linear",--"in_out_sine",
+                    -- draw_w = 1280,
+                    -- draw_h = 720,
+                    from = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                    to = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
                     --fx_cues = {},
                     sfx_cues = {}
                 },
@@ -535,6 +562,19 @@ M.SEQUENCES = {
                     ease = "linear",--"in_out_sine",
                     from = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 0.0 },
                     to = { x = 0, y = 0, z=2.1, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                    --fx_cues = {},
+                    sfx_cues = {}
+                },
+                {
+                    id = "lose_07",
+                    start_at = 0,
+                    anim = "letterbox",
+                    duration = 15,
+                    ease = "linear",--"in_out_sine",
+                    -- draw_w = 1280,
+                    -- draw_h = 720,
+                    from = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                    to = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
                     --fx_cues = {},
                     sfx_cues = {}
                 },
@@ -699,6 +739,19 @@ escape_win = {
                 --fx_cues = {},
                 sfx_cues = {}
             },
+            {
+                id = "lose_07",
+                start_at = 0,
+                anim = "letterbox",
+                duration = 25,
+                ease = "linear",--"in_out_sine",
+                -- draw_w = 1280,
+                -- draw_h = 720,
+                from = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                to = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
         },
     },
 
@@ -721,17 +774,17 @@ escape_win = {
                 --fx_cues = {},
                 sfx_cues = {}
             },
-            {
-                id = "lose_02",
-                start_at = 2,
-                anim = "sweep_shadow",
-                duration = 2,
-                ease = "linear",
-                from = { x = -1000, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
-                to = { x = 700, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
-                --fx_cues = {},
-                sfx_cues = {}
-            },
+            -- {
+            --     id = "lose_02",
+            --     start_at = 2,
+            --     anim = "sweep_shadow",
+            --     duration = 2,
+            --     ease = "linear",
+            --     from = { x = -1000, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
+            --     to = { x = 700, y = 0, z = 4, scale_x = 0.8, scale_y = 1, alpha = 0.75 },
+            --     --fx_cues = {},
+            --     sfx_cues = {}
+            -- },
             {
                 id = "lose_03",
                 start_at = 0,
@@ -784,6 +837,19 @@ escape_win = {
                 ease = "linear",--"in_out_sine",
                 from = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 0.0 },
                 to = { x = 0, y = 0, z=3, scale_x = 10, scale_y = 10, alpha = 1.0 },
+                --fx_cues = {},
+                sfx_cues = {}
+            },
+            {
+                id = "lose_07",
+                start_at = 0,
+                anim = "letterbox",
+                duration = 6,
+                ease = "linear",--"in_out_sine",
+                -- draw_w = 1280,
+                -- draw_h = 720,
+                from = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+                to = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
                 --fx_cues = {},
                 sfx_cues = {}
             },
@@ -927,6 +993,19 @@ title = {
             --fx_cues = {},
             sfx_cues = {}
         },
+        -- {
+        --     id = "lose_07",
+        --     start_at = 0,
+        --     anim = "letterbox",
+        --     duration = 24,
+        --     ease = "linear",--"in_out_sine",
+        --     -- draw_w = 1280,
+        --     -- draw_h = 720,
+        --     from = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+        --     to = { x = 0, y = -40, z=4, scale_x = 0.15, scale_y = 0.25, alpha = 1.0 },
+        --     --fx_cues = {},
+        --     sfx_cues = {}
+        -- },
         
     } --END OF SHOTS
 }, -- END OF OUTRO (lose)

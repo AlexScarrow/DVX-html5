@@ -523,6 +523,7 @@ SFX_SPEEDY_DIES_URL = "main:/sfx_speedy_dies#sound"
 SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
 SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
 SFX_SPITTER_FIRES_URL = "main:/sfx_spitter_fires#sound"
+SFX_FURNACE_FIRE_URL = "main:/sfx_furnace_fire#sound"
 SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
 SFX_MELEE_HIT_HUMAN_URL = "main:/sfx_melee_hit_human#sound"
@@ -577,6 +578,9 @@ ADAPTIVE_MUSIC_CONTACT_HOLD_S = 1.0
 ADAPTIVE_MUSIC_COMBAT_HOLD_S = 1.5
 ADAPTIVE_MUSIC_BASS_LOOP_DURATION_S = 16.0
 ADAPTIVE_MUSIC_PAD_EVERY_N_BASS_LOOPS = 4
+FURNACE_FIRE_LOOP_GAIN = 0.6
+FURNACE_FIRE_FADE_IN_S = 0.2
+FURNACE_FIRE_FADE_OUT_S = 0.25
 ADAPTIVE_MUSIC_STEM_KEYS = {
     "music_bass",
     "music_drums",
@@ -12410,6 +12414,61 @@ set_sound_loop_state = function(self, key, should_play)
     end
 end
 
+update_furnace_fire_loop_sfx = function(self, dt)
+    if not (self and self.sfx_state and self.sfx_state.loops == true) then
+        return
+    end
+    local entry = self.sfx_state.furnace_fire
+    if not (entry and entry.url) then
+        return
+    end
+    local enabled = (self.sfx_state.enabled_by_key and self.sfx_state.enabled_by_key.furnace_fire == true)
+    local active = false
+    if enabled and (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME then
+        local cells = self.furnace_active_cells or nil
+        if cells then
+            active = next(cells) ~= nil
+        end
+    end
+    local state = self.sfx_state.furnace_fire_state or {
+        gain = 0,
+        target = 0
+    }
+    local target = active and (tonumber(FURNACE_FIRE_LOOP_GAIN or 0.6) or 0.6) or 0
+    state.target = target
+    if target > 0 and entry.playing ~= true then
+        entry.playing = true
+        pcall(msg.post, entry.url, "play_sound")
+        if sound and sound.play then
+            pcall(sound.play, entry.url)
+        end
+        state.gain = 0
+        if sound and sound.set_gain then
+            pcall(sound.set_gain, entry.url, 0)
+        end
+    end
+    local now_gain = tonumber(state.gain or 0) or 0
+    if target > now_gain then
+        local fade_in_s = math.max(0.01, tonumber(FURNACE_FIRE_FADE_IN_S or 0.2) or 0.2)
+        now_gain = math.min(target, now_gain + ((tonumber(dt or 0) or 0) * (target / fade_in_s)))
+    elseif target < now_gain then
+        local fade_out_s = math.max(0.01, tonumber(FURNACE_FIRE_FADE_OUT_S or 0.25) or 0.25)
+        now_gain = math.max(target, now_gain - ((tonumber(dt or 0) or 0) * ((tonumber(FURNACE_FIRE_LOOP_GAIN or 0.6) or 0.6) / fade_out_s)))
+    end
+    state.gain = now_gain
+    if entry.playing == true and sound and sound.set_gain then
+        pcall(sound.set_gain, entry.url, now_gain)
+    end
+    if target <= 0 and entry.playing == true and now_gain <= 0.001 then
+        entry.playing = false
+        pcall(msg.post, entry.url, "stop_sound")
+        if sound and sound.stop then
+            pcall(sound.stop, entry.url)
+        end
+    end
+    self.sfx_state.furnace_fire_state = state
+end
+
 play_sfx_one_shot = function(self, key)
     if not self or not self.sfx_state then
         return
@@ -15072,6 +15131,7 @@ local function stop_level_fx_before_outro(self)
         return
     end
     furnace_clear_fire_fx(self)
+    set_sound_loop_state(self, "furnace_fire", false)
     furnace_clear_flail_corpses(self)
     local function stop_and_delete_fx(go_id)
         if not go_id then
@@ -16532,6 +16592,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
         self.sfx_state.speedy_active_count = 0
         set_sound_loop_state(self, "human_vertical", false)
         set_sound_loop_state(self, "human_horizontal", false)
+        set_sound_loop_state(self, "furnace_fire", false)
         stop_speedy_move_sfx(self)
     end
     if self.mp_state and self.mp_state.enabled then
@@ -28319,6 +28380,7 @@ function init(self)
             brute_dies = true,
             spitter_dies = true,
             spitter_fires = true,
+            furnace_fire = true,
             brute_damage = true,
             melee_hit_alien = true,
             melee_hit_human = true,
@@ -28371,6 +28433,7 @@ function init(self)
         brute_dies = { url = msg.url(SFX_BRUTE_DIES_URL), playing = false },
         spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
         spitter_fires = { url = msg.url(SFX_SPITTER_FIRES_URL), playing = false },
+        furnace_fire = { url = msg.url(SFX_FURNACE_FIRE_URL), playing = false },
         brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },
         melee_hit_human = { url = msg.url(SFX_MELEE_HIT_HUMAN_URL), playing = false },
@@ -28621,6 +28684,7 @@ function update(self, dt)
     end
     update_escape_pod_ready_sfx(self)
     update_sparking_wire_ambient_sfx(self, dt)
+    update_furnace_fire_loop_sfx(self, dt)
     tick_human_portrait_hit_feedback(self, dt)
     furnace_update_debug_markers(self, dt)
     furnace_update_flail_corpses(self, dt)
@@ -30035,6 +30099,7 @@ function final(self)
         self.sfx_state.speedy_active_count = 0
         set_sound_loop_state(self, "human_vertical", false)
         set_sound_loop_state(self, "human_horizontal", false)
+        set_sound_loop_state(self, "furnace_fire", false)
         stop_speedy_move_sfx(self)
         set_sound_loop_state(self, "planet", false)
         set_sound_loop_state(self, "title", false)

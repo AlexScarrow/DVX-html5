@@ -163,6 +163,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_furnace_fire"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/furnace_fire.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_brute_damage"
   data: "components {\n"
   "  id: \"sound\"\n"

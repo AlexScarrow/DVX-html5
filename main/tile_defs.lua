@@ -1685,6 +1685,28 @@ library["cavern"] = cavern
             offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
         }
 
+        furnace.cells[3].object2 = {
+            name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+            offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+            lootItems = {
+                "power",
+                --"wiring_straight",
+                --"plate",
+                --"ammo",
+                --"meds",
+                --"material"
+                "buff_hazmat",
+                "buff_hazmat",
+                -- "buff_oxygen_mask",
+                -- "buff_speed_stims",
+                --"buff_night_vision",
+                -- "buff_melee_left",
+                -- "buff_melee_right"
+            }
+        }
+
+        
+
         library["furnace"] = furnace
     
     return library

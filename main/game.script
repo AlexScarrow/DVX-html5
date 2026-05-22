@@ -9041,6 +9041,191 @@ furnace_clear_fire_fx = function(self)
     self.furnace_fire_fx_by_cell = {}
 end
 
+FURNACE_DEATH_FLAIL_DURATION_S = 2.0
+FURNACE_DEATH_FLAIL_SLOT_SPEED = 4.0
+FURNACE_DEATH_FLAIL_ROTATION_DEG = 9.0
+FURNACE_DEATH_FLAIL_SLOT_LANES_X = { -50, -25, 25, 50 }
+
+furnace_clear_flail_corpses = function(self)
+    if not self then
+        return
+    end
+    if self.furnace_flail_corpses then
+        for _, entry in ipairs(self.furnace_flail_corpses) do
+            if entry and entry.bottom_go_id then
+                pcall(go.delete, entry.bottom_go_id)
+            end
+            if entry and entry.go_id then
+                pcall(go.delete, entry.go_id)
+            end
+        end
+    end
+    self.furnace_flail_corpses = {}
+end
+
+furnace_spawn_alien_flail_corpse = function(self, alien)
+    if not (self and alien and alien.go_id and alien.cell_id and self.world_grid and self.world_grid[alien.cell_id]) then
+        return
+    end
+    self.furnace_flail_corpses = self.furnace_flail_corpses or {}
+    local effect_type = get_alien_effective_position_type(alien) or alien.type
+    local factory_path = "/alien_blip_factory#alien_blip_factory"
+    if effect_type == ALIEN_TYPE_CANNON or effect_type == ALIEN_TYPE_BRUTE then
+        factory_path = "/alien_cannon_fodder_factory#alien_cannon_fodder_factory"
+    elseif effect_type == ALIEN_TYPE_SPITTER then
+        factory_path = "/alien_spitter_factory#alien_spitter_factory"
+    elseif effect_type == ALIEN_TYPE_SPEEDY then
+        factory_path = "/alien_speedy_factory#alien_speedy_factory"
+    end
+    local cell = self.world_grid[alien.cell_id]
+    local base_x, base_y = coords_to_world_pos(cell.xCell, cell.yCell)
+    local lane_base = 0
+    local slot_name = tostring(alien.slot_name or "")
+    if slot_name == "left" then
+        lane_base = -20
+    elseif slot_name == "right" then
+        lane_base = 20
+    end
+    local anchor_x = clamp_world_x_to_cell(cell, base_x + (CELL_WIDTH * 0.25))
+    base_x = clamp_world_x_to_cell(cell, anchor_x + lane_base)
+    if effect_type == ALIEN_TYPE_SPEEDY then
+        base_y = base_y + 50
+    elseif effect_type == ALIEN_TYPE_SPITTER then
+        base_y = base_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM
+    elseif effect_type == ALIEN_TYPE_CANNON then
+        base_y = base_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM - 25
+    elseif effect_type == ALIEN_TYPE_BRUTE then
+        base_y = base_y - (CELL_HEIGHT * 0.5) + HUMAN_FLOOR_OFFSET_FROM_CELL_BOTTOM + 35
+    end
+    local corpse_id = factory.create(factory_path, vmath.vector3(base_x, base_y, 0.605))
+    if not corpse_id then
+        return
+    end
+    local scale = 1.0
+    if effect_type == ALIEN_TYPE_CANNON then
+        scale = 0.22 * CANNON_FODDER_SCALE_MULTIPLIER
+    elseif effect_type == ALIEN_TYPE_SPITTER then
+        scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
+    elseif effect_type == ALIEN_TYPE_SPEEDY then
+        scale = 0.33333334 * 0.75
+    elseif effect_type == ALIEN_TYPE_BRUTE then
+        scale = (0.22 * 1.5 * 1.25 * 1.2 * 1.1) * ((self.aesthetic_mode == AESTHETIC_MODE_COMPUTER) and 1.2 or 1.0)
+    elseif effect_type == ALIEN_TYPE_BLIP then
+        scale = 1.0
+    end
+    go.set_scale(vmath.vector3(scale, scale, 1), corpse_id)
+    local corpse_anim = get_alien_anim_for_aesthetic(self, effect_type)
+    if corpse_anim then
+        pcall(msg.post, msg.url(nil, corpse_id, "sprite"), "play_animation", { id = corpse_anim })
+    end
+    local sprite_url = msg.url(nil, corpse_id, "sprite")
+    local shadow_url = msg.url(nil, corpse_id, "shadow")
+    pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.55, 0.2, 0.95))
+    pcall(go.set, shadow_url, "tint", vmath.vector4(1, 1, 1, get_world_shadow_alpha(self)))
+    local facing_flip = false
+    local ok_flip, val_flip = pcall(sprite.get_hflip, msg.url(nil, alien.go_id, "sprite"))
+    if ok_flip and val_flip ~= nil then
+        facing_flip = val_flip == true
+    end
+    pcall(sprite.set_hflip, sprite_url, facing_flip)
+    pcall(sprite.set_hflip, shadow_url, facing_flip)
+    local bottom_go_id = nil
+    if effect_type == ALIEN_TYPE_SPITTER and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
+        bottom_go_id = factory.create("/alien_spitter_bottom_factory#alien_spitter_bottom_factory", vmath.vector3(base_x, base_y, 0.605))
+        if bottom_go_id then
+            pcall(go.set_parent, bottom_go_id, corpse_id, false)
+            pcall(go.set_position, vmath.vector3(0, SPITTER_BOTTOM_OFFSET_Y, SPITTER_BOTTOM_OFFSET_Z), bottom_go_id)
+            pcall(sprite.set_hflip, msg.url(nil, bottom_go_id, "sprite"), facing_flip)
+            pcall(go.set, msg.url(nil, bottom_go_id, "sprite"), "tint", vmath.vector4(1.0, 0.55, 0.2, 0.95))
+        end
+    end
+    self.furnace_flail_spawn_seq = (tonumber(self.furnace_flail_spawn_seq or 0) or 0) + 1
+    local lane_index = 1
+    local lane_dist = math.huge
+    for i, lane_x in ipairs(FURNACE_DEATH_FLAIL_SLOT_LANES_X) do
+        local d = math.abs((tonumber(lane_x or 0) or 0) - lane_base)
+        if d < lane_dist then
+            lane_dist = d
+            lane_index = i
+        end
+    end
+    table.insert(self.furnace_flail_corpses, {
+        go_id = corpse_id,
+        bottom_go_id = bottom_go_id,
+        cell_id = alien.cell_id,
+        type = effect_type,
+        base_x = base_x,
+        anchor_x = anchor_x,
+        base_y = base_y,
+        t = 0,
+        phase = (self.furnace_flail_spawn_seq * 0.97) + (math.random() * 0.4),
+        speed = FURNACE_DEATH_FLAIL_SLOT_SPEED,
+        lane_index = lane_index,
+        lane_dir = (lane_index >= #FURNACE_DEATH_FLAIL_SLOT_LANES_X) and -1 or 1,
+        lane_step_timer = 0,
+        current_x = base_x,
+        facing_flip = facing_flip
+    })
+end
+
+furnace_update_flail_corpses = function(self, dt)
+    if not (self and self.furnace_flail_corpses) then
+        return
+    end
+    for i = #self.furnace_flail_corpses, 1, -1 do
+        local entry = self.furnace_flail_corpses[i]
+        local alive = entry and entry.go_id
+        if not alive then
+            table.remove(self.furnace_flail_corpses, i)
+        else
+            entry.t = (tonumber(entry.t or 0) or 0) + (tonumber(dt or 0) or 0)
+            if entry.t >= FURNACE_DEATH_FLAIL_DURATION_S then
+                if entry.bottom_go_id then
+                    pcall(go.delete, entry.bottom_go_id)
+                end
+                pcall(go.delete, entry.go_id)
+                table.remove(self.furnace_flail_corpses, i)
+            else
+                local cell = entry.cell_id and self.world_grid and self.world_grid[entry.cell_id] or nil
+                if not cell then
+                    if entry.bottom_go_id then
+                        pcall(go.delete, entry.bottom_go_id)
+                    end
+                    pcall(go.delete, entry.go_id)
+                    table.remove(self.furnace_flail_corpses, i)
+                else
+                    entry.phase = (tonumber(entry.phase or 0) or 0) + ((tonumber(dt or 0) or 0) * (entry.speed or FURNACE_DEATH_FLAIL_SLOT_SPEED) * math.pi * 2)
+                    local interval_s = 1.0 / math.max(0.25, tonumber(entry.speed or FURNACE_DEATH_FLAIL_SLOT_SPEED) or FURNACE_DEATH_FLAIL_SLOT_SPEED)
+                    entry.lane_step_timer = (tonumber(entry.lane_step_timer or 0) or 0) + (tonumber(dt or 0) or 0)
+                    while entry.lane_step_timer >= interval_s do
+                        entry.lane_step_timer = entry.lane_step_timer - interval_s
+                        local lane_count = #FURNACE_DEATH_FLAIL_SLOT_LANES_X
+                        local lane_index = tonumber(entry.lane_index or 1) or 1
+                        local lane_dir = tonumber(entry.lane_dir or 1) or 1
+                        lane_index = lane_index + lane_dir
+                        if lane_index >= lane_count then
+                            lane_index = lane_count
+                            lane_dir = -1
+                        elseif lane_index <= 1 then
+                            lane_index = 1
+                            lane_dir = 1
+                        end
+                        entry.lane_index = lane_index
+                        entry.lane_dir = lane_dir
+                    end
+                    local lane_x = FURNACE_DEATH_FLAIL_SLOT_LANES_X[tonumber(entry.lane_index or 1) or 1] or 0
+                    local target_x = clamp_world_x_to_cell(cell, (entry.anchor_x or entry.base_x or 0) + lane_x)
+                    local smooth = math.min(1, (tonumber(dt or 0) or 0) * 14)
+                    entry.current_x = (tonumber(entry.current_x or target_x) or target_x) + ((target_x - (tonumber(entry.current_x or target_x) or target_x)) * smooth)
+                    pcall(go.set_position, vmath.vector3(entry.current_x, entry.base_y or 0, 0.605), entry.go_id)
+                    local rot = math.rad(math.sin(entry.phase * 2.2) * FURNACE_DEATH_FLAIL_ROTATION_DEG)
+                    pcall(go.set_rotation, vmath.quat_rotation_z(rot), entry.go_id)
+                end
+            end
+        end
+    end
+end
+
 furnace_sync_fire_fx = function(self)
     if not self then
         return
@@ -9172,6 +9357,7 @@ furnace_kill_units_on_cell = function(self, active_cell_id)
     end
     for _, alien in ipairs(self.aliens or {}) do
         if alien and alien.is_dead ~= true and alien.cell_id == active_cell_id then
+            furnace_spawn_alien_flail_corpse(self, alien)
             alien.hp_current = 0
             alien.is_dead = true
             alien.turn_ap_remaining = 0
@@ -14873,6 +15059,7 @@ local function stop_level_fx_before_outro(self)
         return
     end
     furnace_clear_fire_fx(self)
+    furnace_clear_flail_corpses(self)
     local function stop_and_delete_fx(go_id)
         if not go_id then
             return
@@ -16347,6 +16534,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
     self.furnace_active_cells = {}
     furnace_clear_debug_markers(self)
     furnace_clear_fire_fx(self)
+    furnace_clear_flail_corpses(self)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
@@ -28422,6 +28610,7 @@ function update(self, dt)
     update_sparking_wire_ambient_sfx(self, dt)
     tick_human_portrait_hit_feedback(self, dt)
     furnace_update_debug_markers(self, dt)
+    furnace_update_flail_corpses(self, dt)
     if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
     end

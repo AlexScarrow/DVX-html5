@@ -9026,6 +9026,51 @@ furnace_clear_debug_markers = function(self)
     self.furnace_debug_markers = {}
 end
 
+furnace_clear_fire_fx = function(self)
+    if not self then
+        return
+    end
+    if self.furnace_fire_fx_by_cell then
+        for cell_key, fx_id in pairs(self.furnace_fire_fx_by_cell) do
+            if fx_id then
+                pcall(go.delete, fx_id)
+            end
+            self.furnace_fire_fx_by_cell[cell_key] = nil
+        end
+    end
+    self.furnace_fire_fx_by_cell = {}
+end
+
+furnace_sync_fire_fx = function(self)
+    if not self then
+        return
+    end
+    self.furnace_fire_fx_by_cell = self.furnace_fire_fx_by_cell or {}
+    local active = self.furnace_active_cells or {}
+    for cell_key, fx_id in pairs(self.furnace_fire_fx_by_cell) do
+        if active[cell_key] ~= true then
+            if fx_id then
+                pcall(go.delete, fx_id)
+            end
+            self.furnace_fire_fx_by_cell[cell_key] = nil
+        end
+    end
+    for cell_key, _ in pairs(active) do
+        if self.furnace_fire_fx_by_cell[cell_key] == nil then
+            local cell_id = tonumber(cell_key)
+            local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+            if cell then
+                local wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+                local fx_id = factory.create("/fire_fx_factory#fire_fx_factory", vmath.vector3(wx, wy - 35, 0.69))
+                if fx_id then
+                    pcall(particlefx.play, msg.url(nil, fx_id, "particlefx"))
+                    self.furnace_fire_fx_by_cell[cell_key] = fx_id
+                end
+            end
+        end
+    end
+end
+
 furnace_sync_debug_markers = function(self)
     if not self then
         return
@@ -9160,6 +9205,7 @@ furnace_process_start_of_turn = function(self)
     if not furnace_instances or #furnace_instances == 0 then
         self.furnace_active_cells = {}
         furnace_clear_debug_markers(self)
+        furnace_clear_fire_fx(self)
         return
     end
     self.furnace_runtime = self.furnace_runtime or {}
@@ -9171,13 +9217,15 @@ furnace_process_start_of_turn = function(self)
             state.cycle_step = 0
         end
         if powered then
-            local step = ((tonumber(state.cycle_step or 0) or 0) % 4) + 1
+            local step = ((tonumber(state.cycle_step or 0) or 0) % 8) + 1
             local local_cell_index = 1
-            if step == 2 then
+            if step <= 2 then
+                local_cell_index = 1
+            elseif step <= 4 then
                 local_cell_index = 8
-            elseif step == 3 then
+            elseif step <= 6 then
                 local_cell_index = 4
-            elseif step == 4 then
+            else
                 local_cell_index = 5
             end
             state.cycle_step = step
@@ -9198,6 +9246,7 @@ furnace_process_start_of_turn = function(self)
     end
     self.furnace_active_cells = active_cells
     furnace_sync_debug_markers(self)
+    furnace_sync_fire_fx(self)
     for cell_key, _ in pairs(active_cells) do
         furnace_kill_units_on_cell(self, tonumber(cell_key))
     end
@@ -14823,6 +14872,7 @@ local function stop_level_fx_before_outro(self)
     if not self then
         return
     end
+    furnace_clear_fire_fx(self)
     local function stop_and_delete_fx(go_id)
         if not go_id then
             return
@@ -16296,6 +16346,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
     self.furnace_runtime = {}
     self.furnace_active_cells = {}
     furnace_clear_debug_markers(self)
+    furnace_clear_fire_fx(self)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false

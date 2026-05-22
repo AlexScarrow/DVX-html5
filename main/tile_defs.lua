@@ -1547,15 +1547,7 @@ library["lab"] = lab
     cavern.cells[7].lightValue = 2
     cavern.cells[8].lightValue = 2
     cavern.cells[9].lightValue = 0
-    -- showers.cells[4].moveValue = 1
-    -- showers.cells[3].moveValue = 3
-    -- showers.cells[6].moveValue = 3
-    -- showers.cells[9].moveValue = 3
 
-    -- Internal connectivity:
-    -- - Vertical shaft only on right column: 3 <-> 6 <-> 9
-    -- - Single isolated accessible cell: 4
-    -- - Cell 4 remains enterable from left neighbor tile via edge rules.
     cavern.cells[1].accessDown = false   -- blocks 2 <-> 3
     cavern.cells[2].accessDown = false
     cavern.cells[3].accessDown = false
@@ -1580,12 +1572,6 @@ library["lab"] = lab
     cavern.cells[2].hazard_type = "gas"
     cavern.cells[3].hazard_type = "gas"
    
-
---     showers.cells[1].object1 = {
---         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
---         offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
---     }
--- 
 cavern.cells[1].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
     offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
@@ -1603,51 +1589,103 @@ cavern.cells[3].object1 = {
     offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
     lootItems = { "material", "material", "material", "material","material", "material" }
 }
--- 
---     showers.cells[3].object1 = {
---         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
---         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
---     }
--- 
--- 
---     showers.cells[4].object1 = {
---         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
---         offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
---     }
--- 
--- 
--- 
---     showers.cells[6].object1 = {
---         name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 602, isDependentOn = {}, objectId = 601,
---         offsetX = -90, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
---     }
--- 
---     showers.cells[6].object2 = {
---         name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
---         offsetX = 10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
---     }
--- 
---     showers.cells[6].object3 = {
---         name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 603,
---         offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
---     }
--- 
+
         cavern.cells[1].object2 = {
         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 801,
         offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
         }
--- 
---     showers.cells[8].object2 = {
---         name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 802,
---         offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
---     }
--- 
---     showers.cells[9].object1 = {
---         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
---         offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
---     }
+
 
 library["cavern"] = cavern
+
+        -- =====================================================================
+        -- FURNACE (vertical only in middle)
+        -- =====================================================================
+        local furnace = create_tile_prototype("furnace")
+        furnace.visualTile = "furnace_off"
+        furnace.powerLightOffAnim = "tile_furnace_off"
+        furnace.powerLightOnAnim = "tile_furnace_on"
+
+        for i = 1, 9 do
+            furnace.cells[i].lightValue = 0
+            furnace.cells[i].moveValue = 1
+            furnace.cells[i].coverValue = 0
+        end
+
+        furnace.cells[1].lightValue = 0
+        furnace.cells[2].lightValue = 0
+        furnace.cells[3].lightValue = 0
+        furnace.cells[4].lightValue = 2
+        furnace.cells[5].lightValue = 2
+        furnace.cells[6].lightValue = 0
+        furnace.cells[7].lightValue = 2
+        furnace.cells[8].lightValue = 2
+        furnace.cells[9].lightValue = 0
+
+        furnace.cells[1].accessDown = false   -- blocks 2 <-> 3
+        furnace.cells[2].accessDown = true
+        furnace.cells[3].accessDown = false
+        furnace.cells[4].accessDown = true
+        furnace.cells[5].accessDown = false
+        furnace.cells[6].accessDown = true
+        furnace.cells[7].accessDown = false
+        furnace.cells[8].accessDown = true
+        furnace.cells[9].accessDown = true
+
+        furnace.cells[1].accessRight = true
+        furnace.cells[2].accessRight = true
+        furnace.cells[3].accessRight = false
+        furnace.cells[4].accessRight = true
+        furnace.cells[5].accessRight = false
+        furnace.cells[6].accessRight = true
+        furnace.cells[7].accessRight = true
+        furnace.cells[8].accessRight = false
+        furnace.cells[9].accessRight = false
+
+        -- furnace.cells[1].hazard_type = "gas"
+        -- furnace.cells[2].hazard_type = "gas"
+        -- furnace.cells[3].hazard_type = "gas"
+
+--         furnace.cells[1].object1 = {
+--             name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+--             offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+--             lootItems = { "material", "material", "material", "material","material", "material" }
+--         }
+-- 
+--         furnace.cells[2].object1 = {
+--             name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+--             offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+--             lootItems = { "material", "material", "material", "material","material", "material" }
+--         }
+-- 
+--         furnace.cells[3].object1 = {
+--             name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+--             offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+--             lootItems = { "material", "material", "material", "material","material", "material" }
+--         }
+
+        furnace.cells[1].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 101,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+        furnace.cells[6].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+        furnace.cells[7].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 701,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+        furnace.cells[3].object1 = {
+            name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+            offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+        }
+        furnace.cells[6].object2 = {
+            name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 602,
+            offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+        }
+
+        library["furnace"] = furnace
     
     return library
 end

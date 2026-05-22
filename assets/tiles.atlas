@@ -836,6 +836,12 @@ images {
 images {
   image: "/assets/images/editor_backdrop.png"
 }
+images {
+  image: "/assets/images/tile_furnace_off.png"
+}
+images {
+  image: "/assets/images/tile_furnace_on.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

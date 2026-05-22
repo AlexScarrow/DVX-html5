@@ -9432,6 +9432,7 @@ furnace_process_start_of_turn = function(self)
                 local_cell_index = 5
             end
             state.cycle_step = step
+            state.active_local_cell_index = local_cell_index
             local active_cell_id = furnace_local_cell_to_world_cell_id(self, tile_instance_id, local_cell_index)
             if active_cell_id and self.world_grid[active_cell_id] then
                 active_cells[tostring(active_cell_id)] = true
@@ -9443,6 +9444,8 @@ furnace_process_start_of_turn = function(self)
                     active_cell_id
                 ))
             end
+        else
+            state.active_local_cell_index = nil
         end
         state.last_powered = powered
         self.furnace_runtime[tile_instance_id] = state
@@ -9452,6 +9455,61 @@ furnace_process_start_of_turn = function(self)
     furnace_sync_fire_fx(self)
     for cell_key, _ in pairs(active_cells) do
         furnace_kill_units_on_cell(self, tonumber(cell_key))
+    end
+end
+
+furnace_refresh_active_cells_for_power_state = function(self)
+    if not (self and self.world_grid) then
+        return
+    end
+    local furnace_instances = furnace_get_tile_instance_ids(self)
+    if not furnace_instances or #furnace_instances == 0 then
+        if self.furnace_active_cells and next(self.furnace_active_cells) ~= nil then
+            self.furnace_active_cells = {}
+            furnace_sync_debug_markers(self)
+            furnace_sync_fire_fx(self)
+        end
+        return
+    end
+    self.furnace_runtime = self.furnace_runtime or {}
+    local active_cells = {}
+    for _, tile_instance_id in ipairs(furnace_instances) do
+        local state = self.furnace_runtime[tile_instance_id] or { cycle_step = 0, last_powered = false, active_local_cell_index = nil }
+        local powered = furnace_is_tile_powered(self, tile_instance_id) == true
+        if not powered then
+            state.last_powered = false
+            state.active_local_cell_index = nil
+        else
+            local local_cell_index = tonumber(state.active_local_cell_index or 0) or 0
+            if local_cell_index > 0 then
+                local active_cell_id = furnace_local_cell_to_world_cell_id(self, tile_instance_id, local_cell_index)
+                if active_cell_id and self.world_grid[active_cell_id] then
+                    active_cells[tostring(active_cell_id)] = true
+                end
+            end
+        end
+        self.furnace_runtime[tile_instance_id] = state
+    end
+    local previous_active = self.furnace_active_cells or {}
+    local changed = false
+    for cell_key, _ in pairs(previous_active) do
+        if active_cells[cell_key] ~= true then
+            changed = true
+            break
+        end
+    end
+    if not changed then
+        for cell_key, _ in pairs(active_cells) do
+            if previous_active[cell_key] ~= true then
+                changed = true
+                break
+            end
+        end
+    end
+    if changed then
+        self.furnace_active_cells = active_cells
+        furnace_sync_debug_markers(self)
+        furnace_sync_fire_fx(self)
     end
 end
 
@@ -12369,8 +12427,17 @@ function compute_placeholder_score_breakdown(self)
     }
 end
 
+local stop_level_fx_before_outro
+
 function enter_flow_state(self, next_state)
-    self.game_flow_state = next_state or FLOW_STATE_GAME
+    local previous_state = self.game_flow_state or FLOW_STATE_GAME
+    local target_state = next_state or FLOW_STATE_GAME
+    if previous_state == FLOW_STATE_GAME and target_state ~= FLOW_STATE_GAME then
+        if stop_level_fx_before_outro then
+            stop_level_fx_before_outro(self)
+        end
+    end
+    self.game_flow_state = target_state
     self.flow_overlay_phase = 0
     self.flow_submit_done = false
     if self.game_flow_state == FLOW_STATE_TITLE then
@@ -15126,7 +15193,7 @@ local function start_outro_slideshow_runtime(self)
     end
 end
 
-local function stop_level_fx_before_outro(self)
+stop_level_fx_before_outro = function(self)
     if not self then
         return
     end
@@ -28682,6 +28749,7 @@ function update(self, dt)
         self.sfx_state.boot_deferred = true
         refresh_ambient_sfx_state(self)
     end
+    furnace_refresh_active_cells_for_power_state(self)
     update_escape_pod_ready_sfx(self)
     update_sparking_wire_ambient_sfx(self, dt)
     update_furnace_fire_loop_sfx(self, dt)

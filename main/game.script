@@ -5775,6 +5775,10 @@ local function update_alien_movement(self, dt)
                         trigger_unit_tile_bump_sfx(self, "alien")
                     end
                     local continue_after_step = true
+                    furnace_resolve_cell_entry(self, target_cell_id, "alien_move_step")
+                    if alien.is_dead == true then
+                        continue_after_step = false
+                    end
                     local step_has_fire = get_cell_hazard_flags(to_cell)
                     if step_has_fire then
                         local fire_step_damage = math.max(0, tonumber(HAZARD_DAMAGE.fire_per_turn or 1) or 1)
@@ -8035,7 +8039,13 @@ local function update_civilian_movement(self, dt)
                             civilian.cell_id = target_cell_id or civilian.cell_id
                             ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
                             trigger_unit_tile_bump_sfx(self, "civ")
-                            civilian.move_path_index = (civilian.move_path_index or 0) + 1
+                            furnace_resolve_cell_entry(self, civilian.cell_id, "civilian_move_step")
+                            if civilian.is_dead == true then
+                                stop_civilian_motion()
+                                refresh_civilian_visuals(self)
+                            else
+                                civilian.move_path_index = (civilian.move_path_index or 0) + 1
+                            end
                         end
                     else
                         local owner_cell, door_obj, door_closed = get_edge_door_context(self.world_grid, civilian.cell_id, target_cell_id)
@@ -8129,16 +8139,22 @@ local function update_civilian_movement(self, dt)
                                     civilian.cell_id = target_cell_id
                                     ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
                                     trigger_unit_tile_bump_sfx(self, "civ")
-                                    if (not counter_move_enabled) and is_vertical_step then
-                                        local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
-                                        if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
-                                            civilian.micro_target_x = settle_x
-                                            civilian.micro_target_y = settle_y
-                                            civilian.micro_move_kind = "settle_after_vertical"
+                                    furnace_resolve_cell_entry(self, target_cell_id, "civilian_move_step")
+                                    if civilian.is_dead == true then
+                                        stop_civilian_motion()
+                                        refresh_civilian_visuals(self)
+                                    else
+                                        if (not counter_move_enabled) and is_vertical_step then
+                                            local settle_x, settle_y = get_civilian_world_pos_in_cell(self, civilian, target_cell_id, civilian.entry_slot_index)
+                                            if settle_x and settle_y and (math.abs(settle_x - target_x) > 0.5 or math.abs(settle_y - target_y) > 0.5) then
+                                                civilian.micro_target_x = settle_x
+                                                civilian.micro_target_y = settle_y
+                                                civilian.micro_move_kind = "settle_after_vertical"
+                                            end
                                         end
+                                        civilian.move_path_index = (civilian.move_path_index or 0) + 1
+                                        civilian.counter_move_total_dist = nil
                                     end
-                                    civilian.move_path_index = (civilian.move_path_index or 0) + 1
-                                    civilian.counter_move_total_dist = nil
                                 end
                             else
                                 local nx = pos.x + ((dx / dist) * step)
@@ -8995,31 +9011,69 @@ furnace_is_tile_powered = function(self, tile_instance_id)
     return center_cell and center_cell.tileID == hash("furnace") and center_cell.isPowered == true
 end
 
-furnace_show_debug_pulse = function(self, cell_id)
-    local cell = self and self.world_grid and cell_id and self.world_grid[cell_id] or nil
-    if not cell then
+furnace_clear_debug_markers = function(self)
+    if not self then
         return
     end
-    local wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
-    if self.furnace_debug_pulse_go then
-        pcall(go.delete, self.furnace_debug_pulse_go)
-        self.furnace_debug_pulse_go = nil
-    end
-    local marker_id = factory.create("/ui_alpha_factory#ui_alpha_factory", vmath.vector3(wx, wy, 0.74))
-    if not marker_id then
-        return
-    end
-    go.set_scale(vmath.vector3(CELL_WIDTH * 0.88, CELL_HEIGHT * 0.88, 1), marker_id)
-    go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1.0, 0.12, 0.12, 0.65))
-    self.furnace_debug_pulse_go = marker_id
-    self.furnace_debug_pulse_token = (tonumber(self.furnace_debug_pulse_token or 0) or 0) + 1
-    local close_token = self.furnace_debug_pulse_token
-    timer.delay(0.52, false, function()
-        if self and self.furnace_debug_pulse_go and self.furnace_debug_pulse_token == close_token then
-            pcall(go.delete, self.furnace_debug_pulse_go)
-            self.furnace_debug_pulse_go = nil
+    if self.furnace_debug_markers then
+        for cell_key, marker_id in pairs(self.furnace_debug_markers) do
+            if marker_id then
+                pcall(go.delete, marker_id)
+            end
+            self.furnace_debug_markers[cell_key] = nil
         end
-    end)
+    end
+    self.furnace_debug_markers = {}
+end
+
+furnace_sync_debug_markers = function(self)
+    if not self then
+        return
+    end
+    self.furnace_debug_markers = self.furnace_debug_markers or {}
+    local active = self.furnace_active_cells or {}
+    for cell_key, marker_id in pairs(self.furnace_debug_markers) do
+        if active[cell_key] ~= true then
+            if marker_id then
+                pcall(go.delete, marker_id)
+            end
+            self.furnace_debug_markers[cell_key] = nil
+        end
+    end
+    for cell_key, _ in pairs(active) do
+        if self.furnace_debug_markers[cell_key] == nil then
+            local cell_id = tonumber(cell_key)
+            local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+            if cell then
+                local wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+                local marker_id = factory.create("/ui_alpha_factory#ui_alpha_factory", vmath.vector3(wx, wy, 0.74))
+                if marker_id then
+                    go.set_scale(vmath.vector3(CELL_WIDTH * 0.88, CELL_HEIGHT * 0.88, 1), marker_id)
+                    go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1.0, 0.12, 0.12, 0.65))
+                    self.furnace_debug_markers[cell_key] = marker_id
+                end
+            end
+        end
+    end
+end
+
+furnace_update_debug_markers = function(self, dt)
+    if not (self and self.furnace_debug_markers) then
+        return
+    end
+    self.furnace_debug_marker_phase = (tonumber(self.furnace_debug_marker_phase or 0) or 0) + ((tonumber(dt or 0) or 0) * 9.0)
+    local pulse = 0.5 + (0.5 * math.sin(self.furnace_debug_marker_phase))
+    local alpha = 0.35 + (0.4 * pulse)
+    for _, marker_id in pairs(self.furnace_debug_markers) do
+        if marker_id then
+            go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1.0, 0.12, 0.12, alpha))
+        end
+    end
+end
+
+furnace_is_cell_active = function(self, cell_id)
+    local key = tostring(tonumber(cell_id or 0) or 0)
+    return self and self.furnace_active_cells and self.furnace_active_cells[key] == true
 end
 
 furnace_kill_units_on_cell = function(self, active_cell_id)
@@ -9032,6 +9086,20 @@ furnace_kill_units_on_cell = function(self, active_cell_id)
                 print(string.format("FURNACE PULSE | human=%s survived (hazmat)", tostring(unit.id or "?")))
             else
                 unit.current_health = 0
+                unit.is_moving = false
+                unit.move_path = nil
+                unit.move_path_index = 0
+                unit.desired_destination_cell_id = nil
+                unit.desired_destination_slot_index = nil
+                unit.micro_target_x = nil
+                unit.micro_target_y = nil
+                unit.micro_move_kind = nil
+                unit.vertical_prep_done_for_index = nil
+                unit.entry_slot_for_index = nil
+                unit.entry_slot_index = nil
+                unit.last_completed_step_vertical = false
+                unit.shadow_motion_offset = nil
+                unit.counter_move_total_dist = nil
                 trigger_human_portrait_hit_feedback(self, unit, 1)
                 handle_human_death_loot_drop(self, unit, "furnace_pulse")
                 print(string.format("FURNACE PULSE | human=%s killed on cell=%d", tostring(unit.id or "?"), active_cell_id))
@@ -9043,6 +9111,17 @@ furnace_kill_units_on_cell = function(self, active_cell_id)
             civilian.current_health = 0
             civilian.is_dead = true
             civilian.is_awake = false
+            civilian.is_moving = false
+            civilian.move_path = nil
+            civilian.move_path_index = 0
+            civilian.vertical_prep_done_for_index = nil
+            civilian.entry_slot_for_index = nil
+            civilian.entry_slot_index = nil
+            civilian.micro_target_x = nil
+            civilian.micro_target_y = nil
+            civilian.micro_move_kind = nil
+            civilian.shadow_motion_offset = nil
+            civilian.counter_move_total_dist = nil
             print(string.format("FURNACE PULSE | civilian=%s killed on cell=%d", tostring(civilian.id or "?"), active_cell_id))
         end
     end
@@ -9064,15 +9143,27 @@ furnace_kill_units_on_cell = function(self, active_cell_id)
     end
 end
 
+furnace_resolve_cell_entry = function(self, cell_id, reason_tag)
+    if not furnace_is_cell_active(self, cell_id) then
+        return false
+    end
+    furnace_kill_units_on_cell(self, cell_id)
+    print(string.format("FURNACE ACTIVE | entry_kill_zone | cell=%d source=%s", tonumber(cell_id or 0) or 0, tostring(reason_tag or "unknown")))
+    return true
+end
+
 furnace_process_start_of_turn = function(self)
     if not (self and self.world_grid) then
         return
     end
     local furnace_instances = furnace_get_tile_instance_ids(self)
     if not furnace_instances or #furnace_instances == 0 then
+        self.furnace_active_cells = {}
+        furnace_clear_debug_markers(self)
         return
     end
     self.furnace_runtime = self.furnace_runtime or {}
+    local active_cells = {}
     for _, tile_instance_id in ipairs(furnace_instances) do
         local state = self.furnace_runtime[tile_instance_id] or { cycle_step = 0, last_powered = false }
         local powered = furnace_is_tile_powered(self, tile_instance_id) == true
@@ -9092,8 +9183,7 @@ furnace_process_start_of_turn = function(self)
             state.cycle_step = step
             local active_cell_id = furnace_local_cell_to_world_cell_id(self, tile_instance_id, local_cell_index)
             if active_cell_id and self.world_grid[active_cell_id] then
-                furnace_show_debug_pulse(self, active_cell_id)
-                furnace_kill_units_on_cell(self, active_cell_id)
+                active_cells[tostring(active_cell_id)] = true
                 print(string.format(
                     "FURNACE PULSE | tile_instance=%d step=%d cell_local=%d world_cell=%d",
                     tile_instance_id,
@@ -9105,6 +9195,11 @@ furnace_process_start_of_turn = function(self)
         end
         state.last_powered = powered
         self.furnace_runtime[tile_instance_id] = state
+    end
+    self.furnace_active_cells = active_cells
+    furnace_sync_debug_markers(self)
+    for cell_key, _ in pairs(active_cells) do
+        furnace_kill_units_on_cell(self, tonumber(cell_key))
     end
 end
 
@@ -16199,10 +16294,8 @@ function reset_and_load_level(self, level_index, defer_spawn)
     self.selected_start_cell = nil
     self.furnace_tile_instances = nil
     self.furnace_runtime = {}
-    if self.furnace_debug_pulse_go then
-        pcall(go.delete, self.furnace_debug_pulse_go)
-        self.furnace_debug_pulse_go = nil
-    end
+    self.furnace_active_cells = {}
+    furnace_clear_debug_markers(self)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
@@ -25279,6 +25372,12 @@ local function update_single_unit_movement(self, unit, dt)
         trigger_obstacle_pass_nudge(self, target_cell_id, from_cell_id)
         trigger_unit_tile_bump_sfx(self, "human")
         local moved_cell = self.world_grid and self.world_grid[target_cell_id] or nil
+        furnace_resolve_cell_entry(self, target_cell_id, "human_move_step")
+        if unit.current_health <= 0 then
+            update_human_visual_state(self)
+            update_human_ap_debug_label(self)
+            return
+        end
         local has_fire, has_gas = get_cell_hazard_flags(moved_cell)
         local has_hazmat = unit_has_equipped_buff_kind(unit, "hazmat_suit")
         local step_hazard_damage = ((has_fire or has_gas) and not has_hazmat) and 1 or 0
@@ -28271,6 +28370,7 @@ function update(self, dt)
     update_escape_pod_ready_sfx(self)
     update_sparking_wire_ambient_sfx(self, dt)
     tick_human_portrait_hit_feedback(self, dt)
+    furnace_update_debug_markers(self, dt)
     if self.realtime_client_settle_timer and self.realtime_client_settle_timer > 0 then
         self.realtime_client_settle_timer = math.max(0, self.realtime_client_settle_timer - dt)
     end

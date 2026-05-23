@@ -1005,6 +1005,17 @@ SOLO_SETUP_LAUNCH_HIT_Y = MP_SETUP_START_BTN_Y
 SOLO_SETUP_ACTION_HIT_W = MP_SETUP_ACTION_BTN_W
 SOLO_SETUP_ACTION_HIT_H = MP_SETUP_ACTION_BTN_H
 SOLO_SETUP_HITBOX_DEBUG_VISIBLE = false
+SOLO_SETUP_TEXT_Z = SOLO_SETUP_UI_Z + 0.006
+SOLO_SETUP_MISSION_TYPE_MAX_CHARS = 8
+SOLO_SETUP_MISSION_META_MAX_CHARS = 14
+SOLO_SETUP_MISSION_TYPE_SCALE = 0.2875
+SOLO_SETUP_MISSION_TYPE_SPACING = 10
+SOLO_SETUP_MISSION_TYPE_OFFSET_X = 10
+SOLO_SETUP_MISSION_TYPE_OFFSET_Y = 14
+SOLO_SETUP_MISSION_META_SCALE = 0.59125
+SOLO_SETUP_MISSION_META_SPACING = 8
+SOLO_SETUP_MISSION_META_OFFSET_Y = -32
+SOLO_SETUP_MISSION_META_VALUE_MAX_DIGITS = 6
 AESTHETIC_BUTTON_X = NEW_TURN_BUTTON_X + NEW_TURN_BUTTON_W + 64
 AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
 AESTHETIC_BUTTON_W = 120
@@ -11184,6 +11195,8 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_pin_display = nil,
         flow_mp_lobby_pin_enter = nil,
         solo_progress_mission_hitboxes = {},
+        solo_progress_mission_type_letters = {},
+        solo_progress_mission_meta_digits = {},
         advisory_sprite = nil,
         ready_buttons = {},
         mp_debug_player_buttons = {},
@@ -11678,10 +11691,36 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_mp_back_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
     set_ui_square_transform(self, self.ui.flow_debug_solo_back_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H)
     set_ui_square_transform(self, self.ui.flow_debug_solo_launch_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H)
-    set_ui_square_transform(self, self.ui.flow_debug_solo_launch_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H)
     if self.ui.solo_progress_mission_hitboxes then
         for _, hitbox_id in ipairs(self.ui.solo_progress_mission_hitboxes) do
             set_ui_square_transform(self, hitbox_id, -9999, -9999, SOLO_SETUP_UI_Z + 0.03, hidden, SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
+        end
+    end
+    if self.ui.solo_progress_mission_type_letters then
+        for _, slot_letters in ipairs(self.ui.solo_progress_mission_type_letters) do
+            if slot_letters then
+                for _, letter_id in ipairs(slot_letters) do
+                    set_ui_square_transform(self, letter_id, -9999, -9999, SOLO_SETUP_TEXT_Z, hidden, SOLO_SETUP_MISSION_TYPE_SCALE, SOLO_SETUP_MISSION_TYPE_SCALE)
+                end
+            end
+        end
+    end
+    if self.ui.solo_progress_mission_meta_digits then
+        for _, slot_digits in ipairs(self.ui.solo_progress_mission_meta_digits) do
+            if slot_digits then
+                for _, digit_id in ipairs(slot_digits) do
+                    set_ui_square_transform(
+                        self,
+                        digit_id,
+                        -9999,
+                        -9999,
+                        SOLO_SETUP_TEXT_Z,
+                        hidden,
+                        SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_MISSION_META_SCALE,
+                        SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_MISSION_META_SCALE
+                    )
+                end
+            end
         end
     end
     set_ui_square_transform(self, self.ui.flow_mp_start_button, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
@@ -14270,6 +14309,132 @@ solo_setup_set_selected_slot = function(self, slot)
     self.solo_setup.mission_type = multiplayer_normalize_mission_type(get_level_mission_type(level_def))
 end
 
+solo_progress_get_mission_type_label = function(self, mission_slot)
+    local level_index = solo_progress_map_mission_to_level_index(self, mission_slot)
+    local level_def = self.level_library and self.level_library[level_index] or nil
+    local mission_type = multiplayer_normalize_mission_type(get_level_mission_type(level_def))
+    local label = "escape"
+    if mission_type == MISSION_TYPE_RESCUE then
+        label = "rescue"
+    elseif mission_type == MISSION_TYPE_PURGE then
+        label = "purge"
+    elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
+        label = "dna"
+    end
+    label = string.lower(tostring(label or "escape"))
+    label = string.gsub(label, "[^a-z]", "")
+    if label == "" then
+        label = "escape"
+    end
+    if #label > SOLO_SETUP_MISSION_TYPE_MAX_CHARS then
+        label = string.sub(label, 1, SOLO_SETUP_MISSION_TYPE_MAX_CHARS)
+    end
+    return label
+end
+
+solo_progress_get_row_required_score = function(row_index)
+    local row = math.max(1, math.min(SOLO_SETUP_MISSION_ROWS, tonumber(row_index or 1) or 1))
+    if row <= #SOLO_SETUP_TIER_THRESHOLDS then
+        return math.max(0, tonumber(SOLO_SETUP_TIER_THRESHOLDS[row] or 0) or 0)
+    end
+    return math.max(0, tonumber(SOLO_SETUP_TIER_THRESHOLDS[#SOLO_SETUP_TIER_THRESHOLDS] or 0) or 0)
+end
+
+solo_progress_format_meta_value = function(value)
+    local numeric = math.max(0, math.floor(tonumber(value or 0) or 0))
+    local text = tostring(numeric)
+    if #text > SOLO_SETUP_MISSION_META_VALUE_MAX_DIGITS then
+        text = string.sub(text, #text - SOLO_SETUP_MISSION_META_VALUE_MAX_DIGITS + 1)
+    end
+    return text
+end
+
+solo_progress_draw_letter_nodes = function(self, nodes, text, center_x, center_y, spacing, scale, tint)
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if not nodes then
+        return
+    end
+    for i = 1, #nodes do
+        set_ui_square_transform(self, nodes[i], -9999, -9999, SOLO_SETUP_TEXT_Z, hidden, scale, scale)
+    end
+    local normalized = string.lower(tostring(text or ""))
+    normalized = string.gsub(normalized, "[^a-z]", "")
+    if normalized == "" then
+        return
+    end
+    local count = math.min(#normalized, #nodes)
+    local start_x = (tonumber(center_x or 0) or 0) - (((count - 1) * spacing) * 0.5)
+    for i = 1, count do
+        local glyph_id = nodes[i]
+        local ch = string.sub(normalized, i, i)
+        msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+        set_ui_square_transform(self, glyph_id, start_x + ((i - 1) * spacing), center_y, SOLO_SETUP_TEXT_Z, tint, scale, scale)
+    end
+end
+
+solo_progress_draw_meta_nodes = function(self, nodes, text, center_x, center_y, spacing, scale, tint)
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if not nodes then
+        return
+    end
+    for i = 1, #nodes do
+        set_ui_square_transform(self, nodes[i], -9999, -9999, SOLO_SETUP_TEXT_Z, hidden, scale, scale)
+    end
+    local normalized = tostring(text or "")
+    normalized = string.gsub(normalized, "[^%d%.]", "")
+    if normalized == "" then
+        return
+    end
+    if #normalized > #nodes then
+        normalized = string.sub(normalized, #normalized - #nodes + 1)
+    end
+    local count = #normalized
+    local start_x = (tonumber(center_x or 0) or 0) - (((count - 1) * spacing) * 0.5)
+    for i = 1, count do
+        local glyph_id = nodes[i]
+        local ch = string.sub(normalized, i, i)
+        local anim_id = (ch == ".") and hash("score_period") or hash("score_" .. ch)
+        msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = anim_id })
+        set_ui_square_transform(self, glyph_id, start_x + ((i - 1) * spacing), center_y, SOLO_SETUP_TEXT_Z, tint, SCORE_HUD_DIGIT_DRAW_W * 0.021 * scale, SCORE_HUD_DIGIT_DRAW_H * 0.021 * scale)
+    end
+end
+
+solo_progress_render_mission_text = function(self, mission_slot, center_x, center_y)
+    if not (self and self.ui and self.ui.solo_progress_mission_type_letters and self.ui.solo_progress_mission_meta_digits) then
+        return
+    end
+    local slot = math.max(1, math.min(SOLO_SETUP_MISSION_COUNT, tonumber(mission_slot or 1) or 1))
+    local row = math.floor((slot - 1) / SOLO_SETUP_MISSION_COLS) + 1
+    local row_summary = solo_progress_get_row_summary(self, row)
+    local row_goal = solo_progress_get_row_required_score(row)
+    local type_label = solo_progress_get_mission_type_label(self, slot)
+    local meta_text = solo_progress_format_meta_value(row_summary.total) .. "." .. solo_progress_format_meta_value(row_goal)
+    local unlocked = solo_progress_is_mission_unlocked(self, slot)
+    local text_tint = unlocked and vmath.vector4(1, 1, 1, 0.95) or vmath.vector4(0, 0, 0, 0.95)
+    local letters = self.ui.solo_progress_mission_type_letters[slot]
+    local digits = self.ui.solo_progress_mission_meta_digits[slot]
+    solo_progress_draw_letter_nodes(
+        self,
+        letters,
+        type_label,
+        center_x + SOLO_SETUP_MISSION_TYPE_OFFSET_X,
+        center_y + SOLO_SETUP_MISSION_TYPE_OFFSET_Y,
+        SOLO_SETUP_MISSION_TYPE_SPACING,
+        SOLO_SETUP_MISSION_TYPE_SCALE,
+        text_tint
+    )
+    solo_progress_draw_meta_nodes(
+        self,
+        digits,
+        meta_text,
+        center_x,
+        center_y + SOLO_SETUP_MISSION_META_OFFSET_Y,
+        SOLO_SETUP_MISSION_META_SPACING,
+        SOLO_SETUP_MISSION_META_SCALE,
+        text_tint
+    )
+end
+
 solo_progress_ui_ensure_nodes = function(self)
     if not (self and self.ui) then
         return
@@ -14278,6 +14443,8 @@ solo_progress_ui_ensure_nodes = function(self)
     self.ui.solo_progress_row_lock = self.ui.solo_progress_row_lock or {}
     self.ui.solo_progress_locked_masks = self.ui.solo_progress_locked_masks or {}
     self.ui.solo_progress_mission_hitboxes = self.ui.solo_progress_mission_hitboxes or {}
+    self.ui.solo_progress_mission_type_letters = self.ui.solo_progress_mission_type_letters or {}
+    self.ui.solo_progress_mission_meta_digits = self.ui.solo_progress_mission_meta_digits or {}
     if not self.ui.solo_progress_selected_box then
         self.ui.solo_progress_selected_box = create_ui_square(0, 0, SOLO_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
     end
@@ -14295,6 +14462,18 @@ solo_progress_ui_ensure_nodes = function(self)
         end
         if not self.ui.solo_progress_mission_hitboxes[i] then
             self.ui.solo_progress_mission_hitboxes[i] = create_ui_square_alpha(0, 0, SOLO_SETUP_UI_Z + 0.03, vmath.vector4(0, 0, 0, 0), SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
+        end
+        self.ui.solo_progress_mission_type_letters[i] = self.ui.solo_progress_mission_type_letters[i] or {}
+        self.ui.solo_progress_mission_meta_digits[i] = self.ui.solo_progress_mission_meta_digits[i] or {}
+        for ci = 1, SOLO_SETUP_MISSION_TYPE_MAX_CHARS do
+            if not self.ui.solo_progress_mission_type_letters[i][ci] then
+                self.ui.solo_progress_mission_type_letters[i][ci] = create_ui_marker_sprite(hash("letter_a"), SOLO_SETUP_TEXT_Z)
+            end
+        end
+        for ci = 1, SOLO_SETUP_MISSION_META_MAX_CHARS do
+            if not self.ui.solo_progress_mission_meta_digits[i][ci] then
+                self.ui.solo_progress_mission_meta_digits[i][ci] = create_ui_marker_sprite(hash("score_0"), SOLO_SETUP_TEXT_Z)
+            end
         end
     end
 end
@@ -14324,6 +14503,35 @@ solo_progress_ui_hide_nodes = function(self, hidden_tint)
     if self.ui.solo_progress_mission_hitboxes then
         for i = 1, #self.ui.solo_progress_mission_hitboxes do
             set_ui_square_transform(self, self.ui.solo_progress_mission_hitboxes[i], -9999, -9999, SOLO_SETUP_UI_Z + 0.03, hidden_tint, SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
+        end
+    end
+    if self.ui.solo_progress_mission_type_letters then
+        for i = 1, #self.ui.solo_progress_mission_type_letters do
+            local slot_letters = self.ui.solo_progress_mission_type_letters[i]
+            if slot_letters then
+                for ci = 1, #slot_letters do
+                    set_ui_square_transform(self, slot_letters[ci], -9999, -9999, SOLO_SETUP_TEXT_Z, hidden_tint, SOLO_SETUP_MISSION_TYPE_SCALE, SOLO_SETUP_MISSION_TYPE_SCALE)
+                end
+            end
+        end
+    end
+    if self.ui.solo_progress_mission_meta_digits then
+        for i = 1, #self.ui.solo_progress_mission_meta_digits do
+            local slot_digits = self.ui.solo_progress_mission_meta_digits[i]
+            if slot_digits then
+                for ci = 1, #slot_digits do
+                    set_ui_square_transform(
+                        self,
+                        slot_digits[ci],
+                        -9999,
+                        -9999,
+                        SOLO_SETUP_TEXT_Z,
+                        hidden_tint,
+                        SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_MISSION_META_SCALE,
+                        SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_MISSION_META_SCALE
+                    )
+                end
+            end
         end
     end
 end
@@ -16697,6 +16905,7 @@ function update_flow_ui(self, dt)
             else
                 set_ui_square_transform(self, self.ui.solo_progress_mission_hitboxes[slot], -9999, -9999, SOLO_SETUP_UI_Z + 0.03, hidden, SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
             end
+            solo_progress_render_mission_text(self, slot, mx, my)
         end
         for row = 1, 3 do
             local summary = solo_progress_get_row_summary(self, row)

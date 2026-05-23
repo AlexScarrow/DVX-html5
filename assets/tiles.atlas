@@ -606,6 +606,9 @@ images {
   image: "/assets/images/score_period.png"
 }
 images {
+  image: "/assets/images/score_slash.png"
+}
+images {
   image: "/assets/images/realtime_button_on.png"
 }
 images {

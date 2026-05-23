@@ -1010,12 +1010,18 @@ SOLO_SETUP_MISSION_TYPE_MAX_CHARS = 8
 SOLO_SETUP_MISSION_META_MAX_CHARS = 14
 SOLO_SETUP_MISSION_TYPE_SCALE = 0.2875
 SOLO_SETUP_MISSION_TYPE_SPACING = 10
-SOLO_SETUP_MISSION_TYPE_OFFSET_X = 10
+SOLO_SETUP_MISSION_TYPE_OFFSET_X = 15
 SOLO_SETUP_MISSION_TYPE_OFFSET_Y = 14
 SOLO_SETUP_MISSION_META_SCALE = 0.59125
 SOLO_SETUP_MISSION_META_SPACING = 8
 SOLO_SETUP_MISSION_META_OFFSET_Y = -32
 SOLO_SETUP_MISSION_META_VALUE_MAX_DIGITS = 6
+SOLO_SETUP_ROW_TOTAL_MAX_CHARS = 14
+SOLO_SETUP_ROW_TOTAL_SCALE = 0.5
+SOLO_SETUP_ROW_TOTAL_SPACING = 8
+SOLO_SETUP_ROW_TOTAL_OFFSET_Y = 0
+SOLO_SETUP_TEXT_TINT_UNLOCKED = vmath.vector4(0.22, 0.96, 0.3, 0.98)
+SOLO_SETUP_TEXT_TINT_LOCKED = vmath.vector4(1, 1, 1, 0.98)
 AESTHETIC_BUTTON_X = NEW_TURN_BUTTON_X + NEW_TURN_BUTTON_W + 64
 AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
 AESTHETIC_BUTTON_W = 120
@@ -11197,6 +11203,7 @@ local function initialize_unit_ui(self)
         solo_progress_mission_hitboxes = {},
         solo_progress_mission_type_letters = {},
         solo_progress_mission_meta_digits = {},
+        solo_progress_row_total_digits = {},
         advisory_sprite = nil,
         ready_buttons = {},
         mp_debug_player_buttons = {},
@@ -11718,6 +11725,24 @@ local function set_ui_hidden(self)
                         hidden,
                         SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_MISSION_META_SCALE,
                         SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_MISSION_META_SCALE
+                    )
+                end
+            end
+        end
+    end
+    if self.ui.solo_progress_row_total_digits then
+        for _, row_digits in ipairs(self.ui.solo_progress_row_total_digits) do
+            if row_digits then
+                for _, digit_id in ipairs(row_digits) do
+                    set_ui_square_transform(
+                        self,
+                        digit_id,
+                        -9999,
+                        -9999,
+                        SOLO_SETUP_TEXT_Z,
+                        hidden,
+                        SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_ROW_TOTAL_SCALE,
+                        SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_ROW_TOTAL_SCALE
                     )
                 end
             end
@@ -14372,7 +14397,7 @@ solo_progress_draw_letter_nodes = function(self, nodes, text, center_x, center_y
     end
 end
 
-solo_progress_draw_meta_nodes = function(self, nodes, text, center_x, center_y, spacing, scale, tint)
+solo_progress_draw_meta_nodes = function(self, nodes, text, center_x, center_y, spacing, scale, tint, highlight_leading_zero_red)
     local hidden = vmath.vector4(0, 0, 0, 0)
     if not nodes then
         return
@@ -14381,7 +14406,7 @@ solo_progress_draw_meta_nodes = function(self, nodes, text, center_x, center_y, 
         set_ui_square_transform(self, nodes[i], -9999, -9999, SOLO_SETUP_TEXT_Z, hidden, scale, scale)
     end
     local normalized = tostring(text or "")
-    normalized = string.gsub(normalized, "[^%d%.]", "")
+    normalized = string.gsub(normalized, "[^%d/]", "")
     if normalized == "" then
         return
     end
@@ -14393,9 +14418,13 @@ solo_progress_draw_meta_nodes = function(self, nodes, text, center_x, center_y, 
     for i = 1, count do
         local glyph_id = nodes[i]
         local ch = string.sub(normalized, i, i)
-        local anim_id = (ch == ".") and hash("score_period") or hash("score_" .. ch)
+        local anim_id = (ch == "/") and hash("score_slash") or hash("score_" .. ch)
+        local glyph_tint = tint
+        if highlight_leading_zero_red == true and i == 1 and ch == "0" then
+            glyph_tint = vmath.vector4(0.96, 0.2, 0.2, 1.0)
+        end
         msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = anim_id })
-        set_ui_square_transform(self, glyph_id, start_x + ((i - 1) * spacing), center_y, SOLO_SETUP_TEXT_Z, tint, SCORE_HUD_DIGIT_DRAW_W * 0.021 * scale, SCORE_HUD_DIGIT_DRAW_H * 0.021 * scale)
+        set_ui_square_transform(self, glyph_id, start_x + ((i - 1) * spacing), center_y, SOLO_SETUP_TEXT_Z, glyph_tint, SCORE_HUD_DIGIT_DRAW_W * 0.021 * scale, SCORE_HUD_DIGIT_DRAW_H * 0.021 * scale)
     end
 end
 
@@ -14405,12 +14434,15 @@ solo_progress_render_mission_text = function(self, mission_slot, center_x, cente
     end
     local slot = math.max(1, math.min(SOLO_SETUP_MISSION_COUNT, tonumber(mission_slot or 1) or 1))
     local row = math.floor((slot - 1) / SOLO_SETUP_MISSION_COLS) + 1
-    local row_summary = solo_progress_get_row_summary(self, row)
+    local mission_entry = solo_progress_get_mission_entry(self, slot)
     local row_goal = solo_progress_get_row_required_score(row)
     local type_label = solo_progress_get_mission_type_label(self, slot)
-    local meta_text = solo_progress_format_meta_value(row_summary.total) .. "." .. solo_progress_format_meta_value(row_goal)
+    local meta_text = ""
+    if tostring(mission_entry.result or "unplayed") ~= "unplayed" then
+        meta_text = solo_progress_format_meta_value(mission_entry.score) .. "/" .. solo_progress_format_meta_value(row_goal)
+    end
     local unlocked = solo_progress_is_mission_unlocked(self, slot)
-    local text_tint = unlocked and vmath.vector4(1, 1, 1, 0.95) or vmath.vector4(0, 0, 0, 0.95)
+    local text_tint = unlocked and SOLO_SETUP_TEXT_TINT_UNLOCKED or SOLO_SETUP_TEXT_TINT_LOCKED
     local letters = self.ui.solo_progress_mission_type_letters[slot]
     local digits = self.ui.solo_progress_mission_meta_digits[slot]
     solo_progress_draw_letter_nodes(
@@ -14431,7 +14463,8 @@ solo_progress_render_mission_text = function(self, mission_slot, center_x, cente
         center_y + SOLO_SETUP_MISSION_META_OFFSET_Y,
         SOLO_SETUP_MISSION_META_SPACING,
         SOLO_SETUP_MISSION_META_SCALE,
-        text_tint
+        text_tint,
+        (tonumber(mission_entry.score or 0) or 0) <= 0
     )
 end
 
@@ -14445,6 +14478,7 @@ solo_progress_ui_ensure_nodes = function(self)
     self.ui.solo_progress_mission_hitboxes = self.ui.solo_progress_mission_hitboxes or {}
     self.ui.solo_progress_mission_type_letters = self.ui.solo_progress_mission_type_letters or {}
     self.ui.solo_progress_mission_meta_digits = self.ui.solo_progress_mission_meta_digits or {}
+    self.ui.solo_progress_row_total_digits = self.ui.solo_progress_row_total_digits or {}
     if not self.ui.solo_progress_selected_box then
         self.ui.solo_progress_selected_box = create_ui_square(0, 0, SOLO_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
     end
@@ -14454,6 +14488,12 @@ solo_progress_ui_ensure_nodes = function(self)
         end
         if not self.ui.solo_progress_row_lock[i] then
             self.ui.solo_progress_row_lock[i] = create_ui_square(0, 0, SOLO_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), SOLO_SETUP_LOCK_ICON_W, SOLO_SETUP_LOCK_ICON_H)
+        end
+        self.ui.solo_progress_row_total_digits[i] = self.ui.solo_progress_row_total_digits[i] or {}
+        for ci = 1, SOLO_SETUP_ROW_TOTAL_MAX_CHARS do
+            if not self.ui.solo_progress_row_total_digits[i][ci] then
+                self.ui.solo_progress_row_total_digits[i][ci] = create_ui_marker_sprite(hash("score_0"), SOLO_SETUP_TEXT_Z)
+            end
         end
     end
     for i = 1, SOLO_SETUP_MISSION_COUNT do
@@ -14529,6 +14569,25 @@ solo_progress_ui_hide_nodes = function(self, hidden_tint)
                         hidden_tint,
                         SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_MISSION_META_SCALE,
                         SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_MISSION_META_SCALE
+                    )
+                end
+            end
+        end
+    end
+    if self.ui.solo_progress_row_total_digits then
+        for i = 1, #self.ui.solo_progress_row_total_digits do
+            local row_digits = self.ui.solo_progress_row_total_digits[i]
+            if row_digits then
+                for ci = 1, #row_digits do
+                    set_ui_square_transform(
+                        self,
+                        row_digits[ci],
+                        -9999,
+                        -9999,
+                        SOLO_SETUP_TEXT_Z,
+                        hidden_tint,
+                        SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_ROW_TOTAL_SCALE,
+                        SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_ROW_TOTAL_SCALE
                     )
                 end
             end
@@ -16915,6 +16974,7 @@ function update_flow_ui(self, dt)
             local bar_left = SOLO_SETUP_FILL_BAR_X
             local bar_top = SOLO_SETUP_FILL_BAR_Y[row] or SOLO_SETUP_FILL_BAR_Y[1]
             local bar_center_y = SCREEN_HEIGHT - (bar_top + (SOLO_SETUP_FILL_BAR_H * 0.5))
+            local row_meta_text = solo_progress_format_meta_value(summary.total) .. "/" .. solo_progress_format_meta_value(threshold)
             if fill_w > 0.5 then
                 set_ui_square_transform(
                     self,
@@ -16926,8 +16986,30 @@ function update_flow_ui(self, dt)
                     fill_w,
                     SOLO_SETUP_FILL_BAR_H
                 )
+                solo_progress_draw_meta_nodes(
+                    self,
+                    self.ui.solo_progress_row_total_digits and self.ui.solo_progress_row_total_digits[row] or nil,
+                    row_meta_text,
+                    bar_left + (fill_w * 0.5),
+                    bar_center_y + SOLO_SETUP_ROW_TOTAL_OFFSET_Y,
+                    SOLO_SETUP_ROW_TOTAL_SPACING,
+                    SOLO_SETUP_ROW_TOTAL_SCALE,
+                    vmath.vector4(1, 1, 1, 1.0),
+                    (tonumber(summary.total or 0) or 0) <= 0
+                )
             else
                 set_ui_square_transform(self, self.ui.solo_progress_row_fill[row], -9999, -9999, SOLO_SETUP_UI_Z + 0.002, hidden, SOLO_SETUP_FILL_BAR_W, SOLO_SETUP_FILL_BAR_H)
+                solo_progress_draw_meta_nodes(
+                    self,
+                    self.ui.solo_progress_row_total_digits and self.ui.solo_progress_row_total_digits[row] or nil,
+                    "",
+                    -9999,
+                    -9999,
+                    SOLO_SETUP_ROW_TOTAL_SPACING,
+                    SOLO_SETUP_ROW_TOTAL_SCALE,
+                    hidden,
+                    false
+                )
             end
             set_ui_square_transform(self, self.ui.solo_progress_row_lock[row], -9999, -9999, SOLO_SETUP_UI_Z + 0.003, hidden, SOLO_SETUP_LOCK_ICON_W, SOLO_SETUP_LOCK_ICON_H)
         end

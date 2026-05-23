@@ -273,7 +273,8 @@ function M.create(ctx)
         alien.move_path = nil
         alien.move_path_index = 0
         if ctx and ctx.play_alien_death_sfx then
-            ctx.play_alien_death_sfx(self, alien.type)
+            local death_pos = alien.go_id and go.get_position(alien.go_id) or nil
+            ctx.play_alien_death_sfx(self, alien.type, death_pos and death_pos.x or nil, death_pos and death_pos.y or nil)
         end
         record_alien_kill(self, alien)
     end
@@ -517,7 +518,8 @@ function M.create(ctx)
         local hit_chance = clamp((ctx.MELEE_MODEL.human_base_hit_chance or 0) + melee_bonus, min_hit, max_hit)
         local roll = math.random(1, 100)
         if ctx and ctx.play_melee_hit_alien_sfx then
-            ctx.play_melee_hit_alien_sfx(self)
+            local alien_hit_pos = target_alien.go_id and go.get_position(target_alien.go_id) or nil
+            ctx.play_melee_hit_alien_sfx(self, alien_hit_pos and alien_hit_pos.x or nil, alien_hit_pos and alien_hit_pos.y or nil)
         end
         if roll <= hit_chance then
             spawn_alien_blood_splatter_fx(self, target_alien)
@@ -593,10 +595,14 @@ function M.create(ctx)
         if roll <= hit_chance then
             if target.target_kind == "civilian" then
                 if ctx and ctx.play_civ_melee_hit_sfx then
-                    ctx.play_civ_melee_hit_sfx(self)
+                    local civ_go_id = get_target_go_id(self, target)
+                    local civ_pos = civ_go_id and go.get_position(civ_go_id) or nil
+                    ctx.play_civ_melee_hit_sfx(self, civ_pos and civ_pos.x or nil, civ_pos and civ_pos.y or nil)
                 end
             elseif ctx and ctx.play_melee_hit_human_sfx then
-                ctx.play_melee_hit_human_sfx(self)
+                local human_go_id = get_target_go_id(self, target)
+                local human_pos = human_go_id and go.get_position(human_go_id) or nil
+                ctx.play_melee_hit_human_sfx(self, human_pos and human_pos.x or nil, human_pos and human_pos.y or nil)
             end
             local damage = get_alien_melee_damage(alien and alien.type)
             target.current_health = math.max(0, (target.current_health or 0) - damage)

@@ -696,7 +696,13 @@ function M.extend(runtime, ctx)
     -- Hook for future barricade impact FX integration.
     runtime.play_barricade_hit_fx = function(self, cell_id, destroyed)
         if ctx and ctx.play_break_barricade_sfx then
-            ctx.play_break_barricade_sfx(self)
+            local hit_wx = nil
+            local hit_wy = nil
+            local hit_cell = self.world_grid and self.world_grid[cell_id] or nil
+            if hit_cell then
+                hit_wx, hit_wy = ctx.coords_to_world_pos(hit_cell.xCell, hit_cell.yCell)
+            end
+            ctx.play_break_barricade_sfx(self, hit_wx, hit_wy)
         end
         return false
     end

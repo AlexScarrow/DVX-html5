@@ -597,6 +597,56 @@ SFX_SPEEDY_MOVE_MAX_STACK_VOICES = 4
 SPARKING_WIRE_MIN_INTERVAL_S = 1.2
 SPARKING_WIRE_MAX_INTERVAL_S = 2.8
 SPARKING_WIRE_HARD_COOLDOWN_S = 1.8
+SPATIAL_SFX_ZOOM_OUT_GAIN = 0.65
+SPATIAL_SFX_ZOOM_OUT_GAIN_LOOP = 0.0
+SPATIAL_SFX_ZOOM_IN_GAIN = 1.0
+SPATIAL_DISTANCE_WEIGHT = 1.6
+SPATIAL_ZOOM_WEIGHT = 0.55
+SPATIAL_SFX_MIN_GAIN = 0.05
+FURNACE_FIRE_SPATIAL_MIN_DIST = CELL_WIDTH * 1.1
+FURNACE_FIRE_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+SPARKING_WIRE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.9
+SPARKING_WIRE_SPATIAL_MAX_DIST = CELL_WIDTH * 4.0
+HUMAN_SHOOT_SPATIAL_MIN_DIST = CELL_WIDTH * 0.7
+HUMAN_SHOOT_SPATIAL_MAX_DIST = CELL_WIDTH * 5.0
+TURRET_GUN_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+TURRET_GUN_SPATIAL_MAX_DIST = CELL_WIDTH * 5.2
+HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST = CELL_WIDTH * 0.7
+HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST = CELL_WIDTH * 5.0
+SPEEDY_MOVE_LOOP_SPATIAL_MIN_DIST = CELL_WIDTH * 0.9
+SPEEDY_MOVE_LOOP_SPATIAL_MAX_DIST = CELL_WIDTH * 5.5
+ALIEN_DEATH_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+ALIEN_DEATH_SPATIAL_MAX_DIST = CELL_WIDTH * 5.4
+CIV_MELEE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+CIV_MELEE_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+CIV_RESCUED_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+CIV_RESCUED_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+DOOR_TOGGLE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+DOOR_TOGGLE_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+BREAK_BARRICADE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+BREAK_BARRICADE_SPATIAL_MAX_DIST = CELL_WIDTH * 5.0
+SPITTER_FIRES_SPATIAL_MIN_DIST = CELL_WIDTH * 0.9
+SPITTER_FIRES_SPATIAL_MAX_DIST = CELL_WIDTH * 5.2
+WELDING_SPATIAL_MIN_DIST = CELL_WIDTH * 0.75
+WELDING_SPATIAL_MAX_DIST = CELL_WIDTH * 4.6
+HUMAN_ALERT_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+HUMAN_ALERT_SPATIAL_MAX_DIST = CELL_WIDTH * 5.0
+HUMAN_CONFIRM_SPATIAL_MIN_DIST = CELL_WIDTH * 0.7
+HUMAN_CONFIRM_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+HUMAN_ITEM_RECIEVE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+HUMAN_ITEM_RECIEVE_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+MELEE_HIT_ALIEN_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+MELEE_HIT_ALIEN_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+MELEE_HIT_HUMAN_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+MELEE_HIT_HUMAN_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+BUILD_BARRICADE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+BUILD_BARRICADE_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+VENDING_MACHINE_ON_SPATIAL_MIN_DIST = CELL_WIDTH * 0.8
+VENDING_MACHINE_ON_SPATIAL_MAX_DIST = CELL_WIDTH * 4.8
+FACTORY_PRODUCE_SPATIAL_MIN_DIST = CELL_WIDTH * 0.9
+FACTORY_PRODUCE_SPATIAL_MAX_DIST = CELL_WIDTH * 5.2
+FABRICATOR_WORKING_SPATIAL_MIN_DIST = CELL_WIDTH * 0.85
+FABRICATOR_WORKING_SPATIAL_MAX_DIST = CELL_WIDTH * 5.0
 MP_SETUP_PANEL_X = 640
 MP_SETUP_PANEL_Y = 360
 MP_SETUP_PANEL_W = 1180
@@ -2326,7 +2376,7 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
             end
         end)
     end
-    play_break_barricade_sfx(self)
+    play_break_barricade_sfx(self, fx_x, fx_y)
 
     if hp <= 0 then
         reset_runtime_object_slot_to_empty(door_obj)
@@ -2536,7 +2586,8 @@ multiplayer_apply_toggle_door_event = function(self, payload)
         LOOT_RUNTIME.refresh_door_markers(self)
     end
     if was_open ~= desired_open then
-        play_door_toggle_sfx(self)
+        local door_wx, door_wy = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+        play_door_toggle_sfx(self, door_wx, door_wy)
     end
     local spent_ap = math.max(0, ap_before - (tonumber(unit.current_ap or 0) or 0))
     print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, spent_ap))
@@ -2579,7 +2630,8 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
     if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
         LOOT_RUNTIME.refresh_door_markers(self)
     end
-    play_door_toggle_sfx(self)
+    local door_wx, door_wy = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+    play_door_toggle_sfx(self, door_wx, door_wy)
     print(string.format("%s %s door object #%d. (AP -%d)", unit.display_name, door_obj.isOpen and "opened" or "closed", door_obj.objectId or 0, ap_cost))
     return true
 end
@@ -4188,7 +4240,7 @@ local function spawn_human_reaction_projectile(self, shooter_unit, target_alien,
     if not projectile_id then
         return
     end
-    play_human_shoot_sfx(self)
+    play_human_shoot_sfx(self, from.x, from.y + 20)
 
     go.set_scale(vmath.vector3(SPITTER_PROJECTILE_SIZE * 0.2, SPITTER_PROJECTILE_SIZE * 0.2, 1), projectile_id)
     msg.post(msg.url(nil, projectile_id, "sprite"), "play_animation", { id = hash("human_projectile_1") })
@@ -4692,7 +4744,8 @@ local function update_spitter_projectiles(self, dt)
                             target.is_moving = false
                             target.move_path = nil
                             target.move_path_index = 0
-                            play_alien_death_sfx(self, target.type)
+                            local death_pos = target.go_id and go.get_position(target.go_id) or nil
+                            play_alien_death_sfx(self, target.type, death_pos and death_pos.x or nil, death_pos and death_pos.y or nil)
                             score_record_alien_kill(self, target.type)
                             remove_dead_aliens(self)
                         else
@@ -4959,7 +5012,8 @@ local function resolve_turret_pending_shot(self, shot_id)
                     target_alien.is_moving = false
                     target_alien.move_path = nil
                     target_alien.move_path_index = 0
-                    play_alien_death_sfx(self, target_alien.type)
+                    local death_pos = target_alien.go_id and go.get_position(target_alien.go_id) or nil
+                    play_alien_death_sfx(self, target_alien.type, death_pos and death_pos.x or nil, death_pos and death_pos.y or nil)
                     score_record_alien_kill(self, target_alien.type)
                     remove_dead_aliens(self)
                 end
@@ -5146,7 +5200,7 @@ function process_turret_reactive_fire(self, dt)
                                 self.turret_pending_shots = self.turret_pending_shots or {}
                                 self.next_turret_shot_id = (self.next_turret_shot_id or 0) + 1
                                 local shot_id = self.next_turret_shot_id
-                                play_turret_gun_sfx(self)
+                                play_turret_gun_sfx(self, turret_pos.x, turret_pos.y)
                                 spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
                                 local gun_markers = self.turret_gun_objects or {}
                                 local marker_key = string.format("%d:%d", turret_cell_id, turret_slot_idx)
@@ -5332,7 +5386,8 @@ local function update_spitter_attack_phase(self, dt)
     end
 
     spitter.turn_ap_remaining = math.max(0, (spitter.turn_ap_remaining or 0) - SPITTER_SHOT_AP_COST)
-    play_spitter_fires_sfx(self)
+    local spitter_fire_pos = spitter.go_id and go.get_position(spitter.go_id) or nil
+    play_spitter_fires_sfx(self, spitter_fire_pos and spitter_fire_pos.x or nil, spitter_fire_pos and spitter_fire_pos.y or nil)
     spawn_spitter_projectile(self, spitter, target)
     record_alien_turn_ap_spend(self, spitter.id, "ranged_spent", SPITTER_SHOT_AP_COST)
 
@@ -5349,7 +5404,8 @@ local function update_spitter_attack_phase(self, dt)
         target.current_health = math.max(0, target.current_health - 1)
         if target.target_kind ~= "civilian" then
             trigger_human_portrait_hit_feedback(self, target, 1)
-            play_melee_hit_human_sfx(self)
+            local human_hit_pos = target.go_path and go.get_position(target.go_path) or nil
+            play_melee_hit_human_sfx(self, human_hit_pos and human_hit_pos.x or nil, human_hit_pos and human_hit_pos.y or nil)
         end
         if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
             MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
@@ -7221,8 +7277,9 @@ set_civilian_awake_from_release = function(self, civilian, unit_id)
     civilian.follow_human_id = nil
     civilian.evacuate_to_exit = true
     civilian.current_anim_id = nil
-    play_civ_rescued_sfx(self)
-    spawn_orange_impact_ring_at_world(self, get_civilian_captured_world_pos(self, civilian, cell))
+    local civ_wx, civ_wy = get_civilian_captured_world_pos(self, civilian, cell)
+    play_civ_rescued_sfx(self, civ_wx, civ_wy)
+    spawn_orange_impact_ring_at_world(self, civ_wx, civ_wy)
     refresh_civilian_visuals(self)
     update_human_visual_state(self)
     update_human_ap_debug_label(self)
@@ -8033,7 +8090,8 @@ local function update_civilian_movement(self, dt)
                                 if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
                                     LOOT_RUNTIME.refresh_door_markers(self)
                                 end
-                                play_door_toggle_sfx(self)
+                                local door_wx, door_wy = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+                                play_door_toggle_sfx(self, door_wx, door_wy)
                             end
                         end
                         if not blocked_closed_door then
@@ -8069,7 +8127,8 @@ local function update_civilian_movement(self, dt)
                                 if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
                                     LOOT_RUNTIME.refresh_door_markers(self)
                                 end
-                                play_door_toggle_sfx(self)
+                                local door_wx, door_wy = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+                                play_door_toggle_sfx(self, door_wx, door_wy)
                             end
                         end
                         if not blocked_closed_door then
@@ -9206,7 +9265,7 @@ furnace_update_flail_corpses = function(self, dt)
                     entry.sfx_timer = (tonumber(entry.sfx_timer or 0) or 0) - (tonumber(dt or 0) or 0)
                     if (tonumber(entry.sfx_pulses_left or 0) or 0) > 0 and entry.sfx_timer <= 0 then
                         if play_alien_death_sfx then
-                            play_alien_death_sfx(self, ALIEN_TYPE_CANNON)
+                            play_alien_death_sfx(self, ALIEN_TYPE_CANNON, entry.current_x or nil, entry.base_y or nil)
                         end
                         entry.sfx_pulses_left = (tonumber(entry.sfx_pulses_left or 0) or 0) - 1
                         entry.sfx_timer = math.max(0.15, tonumber(FURNACE_DEATH_FLAIL_SFX_INTERVAL_S or 0.45) or 0.45)
@@ -12427,8 +12486,6 @@ function compute_placeholder_score_breakdown(self)
     }
 end
 
-local stop_level_fx_before_outro
-
 function enter_flow_state(self, next_state)
     local previous_state = self.game_flow_state or FLOW_STATE_GAME
     local target_state = next_state or FLOW_STATE_GAME
@@ -12481,6 +12538,84 @@ set_sound_loop_state = function(self, key, should_play)
     end
 end
 
+get_spatial_listener_world_xy = function(self)
+    local cam = self and self.camera_pos or nil
+    if cam then
+        return tonumber(cam.x or 0) or 0, tonumber(cam.y or 0) or 0
+    end
+    return 0, 0
+end
+
+get_spatial_zoom_gain = function(self, mode_tag)
+    if not self then
+        return 1
+    end
+    local min_zoom = tonumber(self.camera_min_zoom or 0.25) or 0.25
+    local max_zoom = tonumber(self.camera_max_zoom or 1.5) or 1.5
+    if max_zoom <= min_zoom then
+        return 1
+    end
+    local z = tonumber(self.camera_zoom or min_zoom) or min_zoom
+    local t = clamp((z - min_zoom) / (max_zoom - min_zoom), 0, 1)
+    local zoom_out_gain = tonumber(SPATIAL_SFX_ZOOM_OUT_GAIN or 0.65) or 0.65
+    if tostring(mode_tag or "") == "loop" then
+        zoom_out_gain = tonumber(SPATIAL_SFX_ZOOM_OUT_GAIN_LOOP or 0.0) or 0.0
+    end
+    local zoom_in_gain = tonumber(SPATIAL_SFX_ZOOM_IN_GAIN or 1.0) or 1.0
+    return zoom_out_gain + ((zoom_in_gain - zoom_out_gain) * t)
+end
+
+get_spatial_distance_gain = function(distance, min_dist, max_dist)
+    local near_d = math.max(0, tonumber(min_dist or 0) or 0)
+    local far_d = math.max(near_d + 1, tonumber(max_dist or (near_d + 1)) or (near_d + 1))
+    local d = math.max(0, tonumber(distance or 0) or 0)
+    if d <= near_d then
+        return 1
+    end
+    if d >= far_d then
+        return 0
+    end
+    local t = clamp((d - near_d) / (far_d - near_d), 0, 1)
+    local smooth = t * t * (3 - (2 * t))
+    return 1 - smooth
+end
+
+get_spatial_gain_for_world = function(self, world_x, world_y, min_dist, max_dist, mode_tag)
+    local listener_x, listener_y = get_spatial_listener_world_xy(self)
+    local dx = (tonumber(world_x or 0) or 0) - listener_x
+    local dy = (tonumber(world_y or 0) or 0) - listener_y
+    local distance = math.sqrt((dx * dx) + (dy * dy))
+    local distance_gain = clamp(get_spatial_distance_gain(distance, min_dist, max_dist), 0, 1)
+    local zoom_gain = clamp(get_spatial_zoom_gain(self, mode_tag), 0, 1)
+    local distance_weight = math.max(0.01, tonumber(SPATIAL_DISTANCE_WEIGHT or 1.6) or 1.6)
+    local zoom_weight = math.max(0.01, tonumber(SPATIAL_ZOOM_WEIGHT or 0.55) or 0.55)
+    local raw_gain = (distance_gain ^ distance_weight) * (zoom_gain ^ zoom_weight)
+    local min_gain = clamp(tonumber(SPATIAL_SFX_MIN_GAIN or 0.05) or 0.05, 0, 1)
+    return min_gain + ((1 - min_gain) * raw_gain)
+end
+
+play_sfx_one_shot_spatial = function(self, key, world_x, world_y, min_dist, max_dist)
+    if not self or not self.sfx_state then
+        return false
+    end
+    if self.sfx_state.loops ~= true then
+        return false
+    end
+    if self.sfx_state.enabled_by_key and self.sfx_state.enabled_by_key[key] ~= true then
+        return false
+    end
+    local entry = self.sfx_state[key]
+    if not entry or not entry.url then
+        return false
+    end
+    local gain = clamp(get_spatial_gain_for_world(self, world_x, world_y, min_dist, max_dist, "oneshot"), 0, 1)
+    if sound and sound.set_gain then
+        pcall(sound.set_gain, entry.url, gain)
+    end
+    pcall(msg.post, entry.url, "play_sound")
+    return true
+end
+
 update_furnace_fire_loop_sfx = function(self, dt)
     if not (self and self.sfx_state and self.sfx_state.loops == true) then
         return
@@ -12501,7 +12636,34 @@ update_furnace_fire_loop_sfx = function(self, dt)
         gain = 0,
         target = 0
     }
-    local target = active and (tonumber(FURNACE_FIRE_LOOP_GAIN or 0.6) or 0.6) or 0
+    local spatial_mul = 0
+    if active then
+        local listener_x, listener_y = get_spatial_listener_world_xy(self)
+        local nearest_distance = nil
+        for cell_key, _ in pairs(self.furnace_active_cells or {}) do
+            local cell_id = tonumber(cell_key)
+            local cell = cell_id and self.world_grid and self.world_grid[cell_id] or nil
+            if cell then
+                local wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+                local dx = wx - listener_x
+                local dy = wy - listener_y
+                local d = math.sqrt((dx * dx) + (dy * dy))
+                if nearest_distance == nil or d < nearest_distance then
+                    nearest_distance = d
+                end
+            end
+        end
+        if nearest_distance ~= nil then
+            spatial_mul = get_spatial_distance_gain(
+                nearest_distance,
+                tonumber(FURNACE_FIRE_SPATIAL_MIN_DIST or (CELL_WIDTH * 1.1)) or (CELL_WIDTH * 1.1),
+                tonumber(FURNACE_FIRE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+            ) * get_spatial_zoom_gain(self, "loop")
+        else
+            spatial_mul = get_spatial_zoom_gain(self, "loop")
+        end
+    end
+    local target = active and ((tonumber(FURNACE_FIRE_LOOP_GAIN or 0.6) or 0.6) * clamp(spatial_mul, 0, 1)) or 0
     state.target = target
     if target > 0 and entry.playing ~= true then
         entry.playing = true
@@ -12553,7 +12715,7 @@ play_sfx_one_shot = function(self, key)
     pcall(msg.post, entry.url, "play_sound")
 end
 
-play_human_shoot_sfx = function(self)
+play_human_shoot_sfx = function(self, world_x, world_y)
     if self and self.sfx_state then
         self.sfx_state.music_combat_hold_s = math.max(
             tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
@@ -12561,6 +12723,21 @@ play_human_shoot_sfx = function(self)
         )
     end
     local roll = math.random(1, 2)
+    local shot_key = (roll == 2) and "human_shoot_2" or "human_shoot"
+    local has_world = world_x ~= nil and world_y ~= nil
+    if has_world then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            shot_key,
+            world_x,
+            world_y,
+            tonumber(HUMAN_SHOOT_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+            tonumber(HUMAN_SHOOT_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0)
+        )
+        if played then
+            return
+        end
+    end
     if roll == 2 then
         play_sfx_one_shot(self, "human_shoot_2")
     else
@@ -12568,12 +12745,26 @@ play_human_shoot_sfx = function(self)
     end
 end
 
-play_turret_gun_sfx = function(self)
+play_turret_gun_sfx = function(self, world_x, world_y)
     if self and self.sfx_state then
         self.sfx_state.music_combat_hold_s = math.max(
             tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
             tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
         )
+    end
+    local has_world = world_x ~= nil and world_y ~= nil
+    if has_world then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "turret_gun",
+            world_x,
+            world_y,
+            tonumber(TURRET_GUN_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(TURRET_GUN_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.2)) or (CELL_WIDTH * 5.2)
+        )
+        if played then
+            return
+        end
     end
     play_sfx_one_shot(self, "turret_gun")
 end
@@ -12766,16 +12957,34 @@ score_try_auto_publish = function(self, score_state)
     print("SCORE | auto publish attempted (solo).")
 end
 
-play_alien_death_sfx = function(self, alien_type)
+play_alien_death_sfx = function(self, alien_type, world_x, world_y)
+    local sfx_key = nil
     if alien_type == ALIEN_TYPE_CANNON then
-        play_sfx_one_shot(self, "cannonfodder_dies")
+        sfx_key = "cannonfodder_dies"
     elseif alien_type == ALIEN_TYPE_SPEEDY then
-        play_sfx_one_shot(self, "speedy_dies")
+        sfx_key = "speedy_dies"
     elseif alien_type == ALIEN_TYPE_BRUTE then
-        play_sfx_one_shot(self, "brute_dies")
+        sfx_key = "brute_dies"
     elseif alien_type == ALIEN_TYPE_SPITTER then
-        play_sfx_one_shot(self, "spitter_dies")
+        sfx_key = "spitter_dies"
     end
+    if not sfx_key then
+        return
+    end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            sfx_key,
+            world_x,
+            world_y,
+            tonumber(ALIEN_DEATH_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(ALIEN_DEATH_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.4)) or (CELL_WIDTH * 5.4)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, sfx_key)
 end
 
 play_brute_damage_sfx = function(self)
@@ -12788,74 +12997,201 @@ play_brute_damage_sfx = function(self)
     play_sfx_one_shot(self, "brute_damage")
 end
 
-play_melee_hit_alien_sfx = function(self)
+play_melee_hit_alien_sfx = function(self, world_x, world_y)
     if self and self.sfx_state then
         self.sfx_state.music_combat_hold_s = math.max(
             tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
             tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
         )
+    end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "melee_hit_alien",
+            world_x,
+            world_y,
+            tonumber(MELEE_HIT_ALIEN_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(MELEE_HIT_ALIEN_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
     end
     play_sfx_one_shot(self, "melee_hit_alien")
 end
 
-play_melee_hit_human_sfx = function(self)
+play_melee_hit_human_sfx = function(self, world_x, world_y)
     if self and self.sfx_state then
         self.sfx_state.music_combat_hold_s = math.max(
             tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
             tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
         )
+    end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "melee_hit_human",
+            world_x,
+            world_y,
+            tonumber(MELEE_HIT_HUMAN_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(MELEE_HIT_HUMAN_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
     end
     play_sfx_one_shot(self, "melee_hit_human")
 end
 
-play_spitter_fires_sfx = function(self)
+play_spitter_fires_sfx = function(self, world_x, world_y)
     if self and self.sfx_state then
         self.sfx_state.music_combat_hold_s = math.max(
             tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
             tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
         )
+    end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "spitter_fires",
+            world_x,
+            world_y,
+            tonumber(SPITTER_FIRES_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.9)) or (CELL_WIDTH * 0.9),
+            tonumber(SPITTER_FIRES_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.2)) or (CELL_WIDTH * 5.2)
+        )
+        if played then
+            return
+        end
     end
     play_sfx_one_shot(self, "spitter_fires")
 end
 
-play_civ_melee_hit_sfx = function(self)
+play_civ_melee_hit_sfx = function(self, world_x, world_y)
     if self and self.sfx_state then
         self.sfx_state.music_combat_hold_s = math.max(
             tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
             tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
         )
     end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "civ_melee_hit",
+            world_x,
+            world_y,
+            tonumber(CIV_MELEE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(CIV_MELEE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "civ_melee_hit")
 end
 
-play_civ_rescued_sfx = function(self)
+play_civ_rescued_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "civ_rescued",
+            world_x,
+            world_y,
+            tonumber(CIV_RESCUED_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(CIV_RESCUED_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "civ_rescued")
 end
 
 play_human_alien_alert_sfx = function(self, unit)
-    local class_id = tostring(unit and unit.class_id or "")
-    if class_id == UNIT_CLASS_SARGE then
-        play_sfx_one_shot(self, "sarge_alien_alert")
-    elseif class_id == UNIT_CLASS_TECHIE then
-        play_sfx_one_shot(self, "techie_alien_alert")
-    elseif class_id == UNIT_CLASS_MEDIC then
-        play_sfx_one_shot(self, "medic_alien_alert")
-    elseif class_id == UNIT_CLASS_GUNNER then
-        play_sfx_one_shot(self, "gunner_alien_alert")
+    local wx = nil
+    local wy = nil
+    if unit and unit.go_path then
+        local pos = go.get_position(unit.go_path)
+        if pos then
+            wx = pos.x
+            wy = pos.y
+        end
     end
+    if (wx == nil or wy == nil) and unit and unit.cell_id and self and self.world_grid and self.world_grid[unit.cell_id] then
+        local cell = self.world_grid[unit.cell_id]
+        wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+    end
+    local class_id = tostring(unit and unit.class_id or "")
+    local sfx_key = nil
+    if class_id == UNIT_CLASS_SARGE then
+        sfx_key = "sarge_alien_alert"
+    elseif class_id == UNIT_CLASS_TECHIE then
+        sfx_key = "techie_alien_alert"
+    elseif class_id == UNIT_CLASS_MEDIC then
+        sfx_key = "medic_alien_alert"
+    elseif class_id == UNIT_CLASS_GUNNER then
+        sfx_key = "gunner_alien_alert"
+    end
+    if not sfx_key then
+        return
+    end
+    if wx ~= nil and wy ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            sfx_key,
+            wx,
+            wy,
+            tonumber(HUMAN_ALERT_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(HUMAN_ALERT_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, sfx_key)
 end
 
 play_human_confirm_select_sfx = function(self, unit)
-    local class_id = tostring(unit and unit.class_id or "")
-    if class_id == UNIT_CLASS_SARGE then
-        play_sfx_one_shot(self, "sarge_confirm_select")
-    elseif class_id == UNIT_CLASS_TECHIE then
-        play_sfx_one_shot(self, "techie_confirm_select")
-    elseif class_id == UNIT_CLASS_MEDIC then
-        play_sfx_one_shot(self, "medic_confirm_select")
-    elseif class_id == UNIT_CLASS_GUNNER then
-        play_sfx_one_shot(self, "gunner_confirm_select")
+    local wx = nil
+    local wy = nil
+    if unit and unit.go_path then
+        local pos = go.get_position(unit.go_path)
+        if pos then
+            wx = pos.x
+            wy = pos.y
+        end
     end
+    if (wx == nil or wy == nil) and unit and unit.cell_id and self and self.world_grid and self.world_grid[unit.cell_id] then
+        local cell = self.world_grid[unit.cell_id]
+        wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+    end
+    local class_id = tostring(unit and unit.class_id or "")
+    local sfx_key = nil
+    if class_id == UNIT_CLASS_SARGE then
+        sfx_key = "sarge_confirm_select"
+    elseif class_id == UNIT_CLASS_TECHIE then
+        sfx_key = "techie_confirm_select"
+    elseif class_id == UNIT_CLASS_MEDIC then
+        sfx_key = "medic_confirm_select"
+    elseif class_id == UNIT_CLASS_GUNNER then
+        sfx_key = "gunner_confirm_select"
+    end
+    if not sfx_key then
+        return
+    end
+    if wx ~= nil and wy ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            sfx_key,
+            wx,
+            wy,
+            tonumber(HUMAN_CONFIRM_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+            tonumber(HUMAN_CONFIRM_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, sfx_key)
 end
 
 play_power_node_on_sfx = function(self)
@@ -12870,11 +13206,37 @@ play_drag_item_sfx = function(self)
     play_sfx_one_shot(self, "drag_item")
 end
 
-play_break_barricade_sfx = function(self)
+play_break_barricade_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "break_barricade",
+            world_x,
+            world_y,
+            tonumber(BREAK_BARRICADE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(BREAK_BARRICADE_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "break_barricade")
 end
 
-play_build_barricade_sfx = function(self)
+play_build_barricade_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "build_barricade",
+            world_x,
+            world_y,
+            tonumber(BUILD_BARRICADE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(BUILD_BARRICADE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "build_barricade")
 end
 
@@ -12882,7 +13244,20 @@ play_medibay_revive_sfx = function(self)
     play_sfx_one_shot(self, "medibay_revive")
 end
 
-play_door_toggle_sfx = function(self)
+play_door_toggle_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "door_toggle",
+            world_x,
+            world_y,
+            tonumber(DOOR_TOGGLE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(DOOR_TOGGLE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "door_toggle")
 end
 
@@ -12890,15 +13265,54 @@ play_escape_pod_ready_sfx = function(self)
     play_sfx_one_shot(self, "escape_pod_ready")
 end
 
-play_factory_produce_sfx = function(self)
+play_factory_produce_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "factory_produce",
+            world_x,
+            world_y,
+            tonumber(FACTORY_PRODUCE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.9)) or (CELL_WIDTH * 0.9),
+            tonumber(FACTORY_PRODUCE_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.2)) or (CELL_WIDTH * 5.2)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "factory_produce")
 end
 
-play_fabricator_working_sfx = function(self)
+play_fabricator_working_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "fabricator_working",
+            world_x,
+            world_y,
+            tonumber(FABRICATOR_WORKING_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.85)) or (CELL_WIDTH * 0.85),
+            tonumber(FABRICATOR_WORKING_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "fabricator_working")
 end
 
-play_vending_machine_on_sfx = function(self)
+play_vending_machine_on_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "vending_machine_on",
+            world_x,
+            world_y,
+            tonumber(VENDING_MACHINE_ON_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(VENDING_MACHINE_ON_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "vending_machine_on")
 end
 
@@ -12913,11 +13327,71 @@ play_sparking_wire_sfx = function(self)
         return false
     end
     self.sparking_wire_next_allowed_ms = now_ms + cooldown_ms
+    local listener_x, listener_y = get_spatial_listener_world_xy(self)
+    local nearest_wx = nil
+    local nearest_wy = nil
+    local nearest_d2 = nil
+    if self.world_grid then
+        for _, cell in ipairs(self.world_grid) do
+            if cell and cell.isPowered == true and cell.tileID ~= hash("empty") then
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                local has_wiregap = false
+                for _, obj in ipairs(objects) do
+                    if obj and obj.name and obj.isFixed ~= true then
+                        if obj.name == hash("wiregap")
+                            or obj.name == hash("wireGap")
+                            or obj.name == hash("wiregap_straight")
+                            or obj.name == hash("wireGap_straight")
+                            or obj.name == hash("wiregap_corner")
+                            or obj.name == hash("wireGap_corner")
+                        then
+                            has_wiregap = true
+                            break
+                        end
+                    end
+                end
+                if has_wiregap then
+                    local wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+                    local dx = wx - listener_x
+                    local dy = wy - listener_y
+                    local d2 = (dx * dx) + (dy * dy)
+                    if nearest_d2 == nil or d2 < nearest_d2 then
+                        nearest_d2 = d2
+                        nearest_wx = wx
+                        nearest_wy = wy
+                    end
+                end
+            end
+        end
+    end
+    if nearest_wx ~= nil and nearest_wy ~= nil then
+        return play_sfx_one_shot_spatial(
+            self,
+            "sparking_wire",
+            nearest_wx,
+            nearest_wy,
+            tonumber(SPARKING_WIRE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.9)) or (CELL_WIDTH * 0.9),
+            tonumber(SPARKING_WIRE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.0)) or (CELL_WIDTH * 4.0)
+        )
+    end
     play_sfx_one_shot(self, "sparking_wire")
     return true
 end
 
-play_welding_sfx = function(self)
+play_welding_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "welding",
+            world_x,
+            world_y,
+            tonumber(WELDING_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.75)) or (CELL_WIDTH * 0.75),
+            tonumber(WELDING_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.6)) or (CELL_WIDTH * 4.6)
+        )
+        if played then
+            return
+        end
+    end
     play_sfx_one_shot(self, "welding")
 end
 
@@ -12978,16 +13452,47 @@ update_sparking_wire_ambient_sfx = function(self, dt)
 end
 
 play_human_item_recieve_sfx = function(self, unit)
-    local class_id = tostring(unit and unit.class_id or "")
-    if class_id == UNIT_CLASS_SARGE then
-        play_sfx_one_shot(self, "sarge_item_recieve")
-    elseif class_id == UNIT_CLASS_TECHIE then
-        play_sfx_one_shot(self, "techie_item_recieve")
-    elseif class_id == UNIT_CLASS_MEDIC then
-        play_sfx_one_shot(self, "medic_item_recieve")
-    elseif class_id == UNIT_CLASS_GUNNER then
-        play_sfx_one_shot(self, "gunner_item_recieve")
+    local wx = nil
+    local wy = nil
+    if unit and unit.go_path then
+        local pos = go.get_position(unit.go_path)
+        if pos then
+            wx = pos.x
+            wy = pos.y
+        end
     end
+    if (wx == nil or wy == nil) and unit and unit.cell_id and self and self.world_grid and self.world_grid[unit.cell_id] then
+        local cell = self.world_grid[unit.cell_id]
+        wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+    end
+    local class_id = tostring(unit and unit.class_id or "")
+    local sfx_key = nil
+    if class_id == UNIT_CLASS_SARGE then
+        sfx_key = "sarge_item_recieve"
+    elseif class_id == UNIT_CLASS_TECHIE then
+        sfx_key = "techie_item_recieve"
+    elseif class_id == UNIT_CLASS_MEDIC then
+        sfx_key = "medic_item_recieve"
+    elseif class_id == UNIT_CLASS_GUNNER then
+        sfx_key = "gunner_item_recieve"
+    end
+    if not sfx_key then
+        return
+    end
+    if wx ~= nil and wy ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            sfx_key,
+            wx,
+            wy,
+            tonumber(HUMAN_ITEM_RECIEVE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(HUMAN_ITEM_RECIEVE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, sfx_key)
 end
 
 is_directional_move_sfx_allowed = function(self)
@@ -13360,6 +13865,82 @@ update_horizontal_move_sfx_for_actor = function(self, actor_key, is_horizontal_n
     set_sound_loop_state(self, "human_horizontal", (self.sfx_state.horizontal_active_count or 0) > 0)
 end
 
+update_spatial_move_loop_gains = function(self)
+    if not (self and self.sfx_state and self.world_grid) then
+        return
+    end
+    local vertical_entry = self.sfx_state.human_vertical
+    local horizontal_entry = self.sfx_state.human_horizontal
+    local vertical_gain = 0
+    local horizontal_gain = 0
+    if (self.sfx_state.vertical_active_count or 0) > 0 then
+        local best_vertical = 0
+        for _, unit in pairs(self.squad_units or {}) do
+            if unit and unit.is_moving == true then
+                local path = unit.move_path
+                local idx = tonumber(unit.move_path_index or 0) or 0
+                local prev_id = path and path[idx - 1] or nil
+                local next_id = path and path[idx] or nil
+                if prev_id and next_id then
+                    local fx, fy = id_to_coords(prev_id)
+                    local tx, ty = id_to_coords(next_id)
+                    if fx == tx and fy ~= ty then
+                        local ux, uy = coords_to_world_pos(fx, fy)
+                        local gain_here = get_spatial_gain_for_world(
+                            self,
+                            ux,
+                            uy,
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0),
+                            "loop"
+                        )
+                        if gain_here > best_vertical then
+                            best_vertical = gain_here
+                        end
+                    end
+                end
+            end
+        end
+        vertical_gain = best_vertical
+    end
+    if (self.sfx_state.horizontal_active_count or 0) > 0 then
+        local best_horizontal = 0
+        for _, unit in pairs(self.squad_units or {}) do
+            if unit and unit.is_moving == true then
+                local path = unit.move_path
+                local idx = tonumber(unit.move_path_index or 0) or 0
+                local prev_id = path and path[idx - 1] or nil
+                local next_id = path and path[idx] or nil
+                if prev_id and next_id then
+                    local fx, fy = id_to_coords(prev_id)
+                    local tx, ty = id_to_coords(next_id)
+                    if fx ~= tx then
+                        local ux, uy = coords_to_world_pos(fx, fy)
+                        local gain_here = get_spatial_gain_for_world(
+                            self,
+                            ux,
+                            uy,
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0),
+                            "loop"
+                        )
+                        if gain_here > best_horizontal then
+                            best_horizontal = gain_here
+                        end
+                    end
+                end
+            end
+        end
+        horizontal_gain = best_horizontal
+    end
+    if vertical_entry and vertical_entry.playing == true and sound and sound.set_gain then
+        pcall(sound.set_gain, vertical_entry.url, clamp(vertical_gain, 0, 1))
+    end
+    if horizontal_entry and horizontal_entry.playing == true and sound and sound.set_gain then
+        pcall(sound.set_gain, horizontal_entry.url, clamp(horizontal_gain, 0, 1))
+    end
+end
+
 reconcile_horizontal_move_sfx_state = function(self)
     if not (self and self.sfx_state and self.sfx_state.horizontal_active_by_actor) then
         return
@@ -13440,6 +14021,45 @@ update_speedy_move_sfx = function(self)
         end
     end
     self.sfx_state.speedy_playing_by_voice = playing
+    local best_gain = 0
+    for _, alien in ipairs(self.aliens or {}) do
+        if alien and alien.is_dead ~= true and alien.type == ALIEN_TYPE_SPEEDY and alien.is_moving == true then
+            local wx = nil
+            local wy = nil
+            if alien.go_id then
+                local pos = go.get_position(alien.go_id)
+                if pos then
+                    wx = pos.x
+                    wy = pos.y
+                end
+            end
+            if wx == nil and alien.cell_id and self.world_grid and self.world_grid[alien.cell_id] then
+                local cell = self.world_grid[alien.cell_id]
+                wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+            end
+            if wx ~= nil and wy ~= nil then
+                local gain_here = get_spatial_gain_for_world(
+                    self,
+                    wx,
+                    wy,
+                    tonumber(SPEEDY_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.9)) or (CELL_WIDTH * 0.9),
+                    tonumber(SPEEDY_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.5)) or (CELL_WIDTH * 5.5),
+                    "loop"
+                )
+                if gain_here > best_gain then
+                    best_gain = gain_here
+                end
+            end
+        end
+    end
+    if sound and sound.set_gain then
+        local gain = clamp(best_gain, 0, 1)
+        for i = 1, max_voices do
+            if playing[i] == true and urls[i] then
+                pcall(sound.set_gain, urls[i], gain)
+            end
+        end
+    end
 end
 
 local function spawn_exit_test_stash(self)
@@ -21849,7 +22469,8 @@ multiplayer_transport_handle_command = function(self, command)
         local was_open = door_obj.isOpen == true
         door_obj.isOpen = desired_open
         if was_open ~= desired_open then
-            play_door_toggle_sfx(self)
+            local door_wx, door_wy = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+            play_door_toggle_sfx(self, door_wx, door_wy)
         end
         local ap_after = math.max(0, (tonumber(unit.current_ap or 0) or 0) - door_ap_cost)
         table.insert(events, multiplayer_transport_emit_event(self, "toggle_door_applied", {
@@ -22381,7 +23002,7 @@ multiplayer_transport_on_event = function(self, event)
         if not (from_x and from_y and to_x and to_y) then
             return
         end
-        play_spitter_fires_sfx(self)
+        play_spitter_fires_sfx(self, from_x, from_y)
         local projectile_id = factory.create("/ui_factory#ui_factory", vmath.vector3(from_x, from_y, 0.75))
         if not projectile_id then
             return
@@ -24724,8 +25345,8 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
         self_ref.turret_gun_objects = self_ref.turret_gun_objects or {}
         return self_ref.turret_gun_objects
     end,
-    play_break_barricade_sfx = function(self_ref)
-        play_break_barricade_sfx(self_ref)
+    play_break_barricade_sfx = function(self_ref, world_x, world_y)
+        play_break_barricade_sfx(self_ref, world_x, world_y)
     end,
     mp_is_local_host = function(self_ref)
         return self_ref
@@ -24805,8 +25426,8 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_break_barricade_sfx = function(self_ref)
         play_break_barricade_sfx(self_ref)
     end,
-    play_build_barricade_sfx = function(self_ref)
-        play_build_barricade_sfx(self_ref)
+    play_build_barricade_sfx = function(self_ref, world_x, world_y)
+        play_build_barricade_sfx(self_ref, world_x, world_y)
     end,
     play_medibay_revive_sfx = function(self_ref)
         play_medibay_revive_sfx(self_ref)
@@ -24814,20 +25435,20 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_human_item_recieve_sfx = function(self_ref, unit)
         play_human_item_recieve_sfx(self_ref, unit)
     end,
-    play_factory_produce_sfx = function(self_ref)
-        play_factory_produce_sfx(self_ref)
+    play_factory_produce_sfx = function(self_ref, world_x, world_y)
+        play_factory_produce_sfx(self_ref, world_x, world_y)
     end,
-    play_fabricator_working_sfx = function(self_ref)
-        play_fabricator_working_sfx(self_ref)
+    play_fabricator_working_sfx = function(self_ref, world_x, world_y)
+        play_fabricator_working_sfx(self_ref, world_x, world_y)
     end,
-    play_vending_machine_on_sfx = function(self_ref)
-        play_vending_machine_on_sfx(self_ref)
+    play_vending_machine_on_sfx = function(self_ref, world_x, world_y)
+        play_vending_machine_on_sfx(self_ref, world_x, world_y)
     end,
     play_sparking_wire_sfx = function(self_ref)
         play_sparking_wire_sfx(self_ref)
     end,
-    play_welding_sfx = function(self_ref)
-        play_welding_sfx(self_ref)
+    play_welding_sfx = function(self_ref, world_x, world_y)
+        play_welding_sfx(self_ref, world_x, world_y)
     end,
     play_task_done_sfx = function(self_ref)
         play_task_done_sfx(self_ref)
@@ -24864,17 +25485,17 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     emit_combat_fx_event = function(self_ref, payload)
         multiplayer_emit_combat_fx_event(self_ref, payload)
     end,
-    play_alien_death_sfx = function(self_ref, alien_type)
-        play_alien_death_sfx(self_ref, alien_type)
+    play_alien_death_sfx = function(self_ref, alien_type, world_x, world_y)
+        play_alien_death_sfx(self_ref, alien_type, world_x, world_y)
     end,
-    play_melee_hit_alien_sfx = function(self_ref)
-        play_melee_hit_alien_sfx(self_ref)
+    play_melee_hit_alien_sfx = function(self_ref, world_x, world_y)
+        play_melee_hit_alien_sfx(self_ref, world_x, world_y)
     end,
-    play_melee_hit_human_sfx = function(self_ref)
-        play_melee_hit_human_sfx(self_ref)
+    play_melee_hit_human_sfx = function(self_ref, world_x, world_y)
+        play_melee_hit_human_sfx(self_ref, world_x, world_y)
     end,
-    play_civ_melee_hit_sfx = function(self_ref)
-        play_civ_melee_hit_sfx(self_ref)
+    play_civ_melee_hit_sfx = function(self_ref, world_x, world_y)
+        play_civ_melee_hit_sfx(self_ref, world_x, world_y)
     end,
     spawn_impact_ring_at_world = function(self_ref, world_x, world_y, tint, duration_s)
         if LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
@@ -25619,7 +26240,8 @@ local function update_single_unit_movement(self, unit, dt)
         if LOOT_RUNTIME and LOOT_RUNTIME.refresh_door_markers then
             LOOT_RUNTIME.refresh_door_markers(self)
         end
-        play_door_toggle_sfx(self)
+        local door_wx, door_wy = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
+        play_door_toggle_sfx(self, door_wx, door_wy)
     end
     local target_cost = get_step_move_cost(self.world_grid, unit.cell_id, target_cell_id)
     if target_cost > unit.current_ap then
@@ -28753,6 +29375,7 @@ function update(self, dt)
     update_escape_pod_ready_sfx(self)
     update_sparking_wire_ambient_sfx(self, dt)
     update_furnace_fire_loop_sfx(self, dt)
+    update_spatial_move_loop_gains(self)
     tick_human_portrait_hit_feedback(self, dt)
     furnace_update_debug_markers(self, dt)
     furnace_update_flail_corpses(self, dt)

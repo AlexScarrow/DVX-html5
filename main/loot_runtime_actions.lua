@@ -2485,7 +2485,13 @@ function M.extend(runtime, ctx)
         self.factory_instance_cache = instances
         for tile_instance_id, instance in pairs(instances) do
             if self.realtime_rules_enabled ~= true and instance and instance.powered and ctx and ctx.play_factory_produce_sfx then
-                ctx.play_factory_produce_sfx(self)
+                local produce_wx = nil
+                local produce_wy = nil
+                if instance.cell_by_local and instance.cell_by_local[2] then
+                    local conveyor_cell = instance.cell_by_local[2]
+                    produce_wx, produce_wy = ctx.coords_to_world_pos(conveyor_cell.xCell, conveyor_cell.yCell)
+                end
+                ctx.play_factory_produce_sfx(self, produce_wx, produce_wy)
             end
             local pending = count_factory_pending_tokens(self, tile_instance_id)
             local conveyor_cell = instance.cell_by_local[2]
@@ -4111,7 +4117,8 @@ function M.extend(runtime, ctx)
             and (fixable.name == hash("ammo_vending_machine") or fixable.name == hash("med_vending_machine"))
             and runtime.is_object_dependency_met(self.world_grid, fixable)
         then
-            ctx.play_vending_machine_on_sfx(self)
+            local machine_wx, machine_wy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+            ctx.play_vending_machine_on_sfx(self, machine_wx, machine_wy)
         end
         if dependency_id > 0 then
             if dependency_met_pre_fix then
@@ -5261,7 +5268,8 @@ function M.extend(runtime, ctx)
                 end
             end
             if ctx and ctx.play_fabricator_working_sfx then
-                ctx.play_fabricator_working_sfx(self)
+                local fab_wx, fab_wy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                ctx.play_fabricator_working_sfx(self, fab_wx, fab_wy)
             end
             print(string.format("Workshop production started for %s.", selected.label))
         end
@@ -6060,7 +6068,8 @@ function M.extend(runtime, ctx)
                                         drop_cell.barricade_scale_pulse = 0.1
                                         drop_cell.barricade_scale_pulse_timer = 0.22
                                         if ctx and ctx.play_build_barricade_sfx then
-                                            ctx.play_build_barricade_sfx(self)
+                                            local barricade_wx, barricade_wy = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                                            ctx.play_build_barricade_sfx(self, barricade_wx, barricade_wy)
                                         end
                                         consumed = true
                                         runtime.refresh_fix_markers(self)
@@ -6137,7 +6146,8 @@ function M.extend(runtime, ctx)
                                                     ))
                                                 end
                                                 if ctx and ctx.play_build_barricade_sfx then
-                                                    ctx.play_build_barricade_sfx(self)
+                                                    local barricade_wx, barricade_wy = ctx.coords_to_world_pos(drop_cell.xCell, drop_cell.yCell)
+                                                    ctx.play_build_barricade_sfx(self, barricade_wx, barricade_wy)
                                                 end
                                                 consumed = true
                                                 runtime.refresh_fix_markers(self)
@@ -6195,7 +6205,12 @@ function M.extend(runtime, ctx)
                                     print(string.format("WELD FX CALLSITE: triggering overlay on cell %d", drop_cell_id or 0))
                                     runtime.spawn_vent_weld_fx(self, weld_cell, vent_target)
                                     if ctx and ctx.play_welding_sfx then
-                                        ctx.play_welding_sfx(self)
+                                        local weld_wx = nil
+                                        local weld_wy = nil
+                                        if weld_cell then
+                                            weld_wx, weld_wy = ctx.coords_to_world_pos(weld_cell.xCell, weld_cell.yCell)
+                                        end
+                                        ctx.play_welding_sfx(self, weld_wx, weld_wy)
                                     end
                                     print(string.format(
                                         "%s welded vent object #%d using 1 %s. (AP -%d)",
@@ -6283,7 +6298,13 @@ function M.extend(runtime, ctx)
                                             or component_target.name == hash("med_vending_machine"))
                                         and runtime.is_object_dependency_met(self.world_grid, component_target)
                                     then
-                                        ctx.play_vending_machine_on_sfx(self)
+                                        local machine_cell = self.world_grid and self.world_grid[drop_cell_id] or nil
+                                        local machine_wx = nil
+                                        local machine_wy = nil
+                                        if machine_cell then
+                                            machine_wx, machine_wy = ctx.coords_to_world_pos(machine_cell.xCell, machine_cell.yCell)
+                                        end
+                                        ctx.play_vending_machine_on_sfx(self, machine_wx, machine_wy)
                                     end
                                     if component_target.name == hash("nav_computer")
                                         and source_item == ctx.COMPONENT_UI.component_nav_data then

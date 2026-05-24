@@ -481,6 +481,7 @@ ADVISORY_MSG_BACKPACK_FULL = "backpack full"
 ADVISORY_MSG_MOVE_UNIT_CLOSER = "move unit closer"
 ADVISORY_MSG_TRY_AGAIN = "action not confirmed. try again."
 ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST = "deploy nav data and food supplies first"
+ADVISORY_MSG_NO_SPACE_GUN_TURRET = "no space here for gun turret"
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -496,6 +497,7 @@ ADVISORY_ANIM_BACKPACK_FULL = hash("advisory_backpackFull")
 ADVISORY_ANIM_MOVE_UNIT_CLOSER = hash("advisory_moveUnitCloser")
 ADVISORY_ANIM_TRY_AGAIN = hash("advisory_tryAgain")
 ADVISORY_ANIM_DEPLOY_POD_ITEMS_FIRST = hash("advisory_deployPodItems")
+ADVISORY_ANIM_NO_SPACE_GUN_TURRET = hash("advisory_noSpaceGunTurret")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -2436,9 +2438,20 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
     return true
 end
 
-function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type, hidden_reveal_type)
+function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, alien_type, hidden_reveal_type, runtime_ctx)
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
         return false
+    end
+    if runtime_ctx then
+        local mission_type = tostring(
+            runtime_ctx.current_mission_type
+            or runtime_ctx.selected_mission_type
+            or (runtime_ctx.mp_state and runtime_ctx.mp_state.mission_type)
+            or ""
+        )
+        if mission_type == MISSION_TYPE_RESCUE and is_rescue_entry_victory_cell(runtime_ctx, to_cell_id) then
+            return false
+        end
     end
     local speedy_ignores_barricades = alien_type == ALIEN_TYPE_SPEEDY
     local from_cell = world_grid and world_grid[from_cell_id] or nil
@@ -2675,7 +2688,7 @@ function try_toggle_door_with_selected_human(self, unit, world_x, world_y)
     return true
 end
 
-local function get_alien_neighbors(cell_id, world_grid, alien_type, hidden_reveal_type)
+local function get_alien_neighbors(cell_id, world_grid, alien_type, hidden_reveal_type, runtime_ctx)
     local neighbors = {}
     local directions = { "right", "left", "up", "down" }
     local cfg = ALIEN_TYPE_CONFIG[alien_type]
@@ -2687,7 +2700,7 @@ local function get_alien_neighbors(cell_id, world_grid, alien_type, hidden_revea
             local adj_cell = world_grid[adj_id]
             local can_enter_void = can_traverse_void == true
             local is_void = adj_cell.tileID == hash("empty")
-            if (not is_void or can_enter_void) and can_alien_cross_between_cells(world_grid, cell_id, adj_id, alien_type, hidden_reveal_type) then
+            if (not is_void or can_enter_void) and can_alien_cross_between_cells(world_grid, cell_id, adj_id, alien_type, hidden_reveal_type, runtime_ctx) then
                 local step_cost = get_alien_step_move_cost(world_grid, cell_id, adj_id, alien_type)
                 table.insert(neighbors, { id = adj_id, cost = step_cost })
             end
@@ -3122,7 +3135,7 @@ function find_path(world_grid, start_id, end_id, max_action_points, movement_pro
     return nil  -- No path found
 end
 
-local function find_alien_path(world_grid, alien_type, start_id, end_id, max_action_points, hidden_reveal_type)
+local function find_alien_path(world_grid, alien_type, start_id, end_id, max_action_points, hidden_reveal_type, runtime_ctx)
     if not world_grid[start_id] or not world_grid[end_id] then
         return nil
     end
@@ -3162,6 +3175,20 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
                 table.insert(path, 1, current)
             end
 
+            local mission_type = runtime_ctx and tostring(
+                runtime_ctx.current_mission_type
+                or runtime_ctx.selected_mission_type
+                or (runtime_ctx.mp_state and runtime_ctx.mp_state.mission_type)
+                or ""
+            ) or ""
+            if mission_type == MISSION_TYPE_RESCUE then
+                for i = 2, #path do
+                    if is_rescue_entry_victory_cell(runtime_ctx, path[i]) then
+                        return nil
+                    end
+                end
+            end
+
             local total_cost = 0
             for i = 2, #path do
                 local step_cost = get_alien_step_move_cost(world_grid, path[i - 1], path[i], alien_type)
@@ -3177,7 +3204,7 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
 
         table.remove(open_set, current_index)
 
-        local neighbors = get_alien_neighbors(current, world_grid, alien_type, hidden_reveal_type)
+        local neighbors = get_alien_neighbors(current, world_grid, alien_type, hidden_reveal_type, runtime_ctx)
         for _, neighbor_data in ipairs(neighbors) do
             local neighbor_id = neighbor_data.id
             local move_cost = neighbor_data.cost
@@ -3292,7 +3319,8 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
             from_cell_id,
             human_cell_id,
             nil,
-            hidden_reveal_type
+            hidden_reveal_type,
+            self
         )
         local chosen_path = normal_path
         local chosen_cost = normal_cost or math.huge
@@ -3305,6 +3333,21 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
                 MOVEMENT_PROFILE_ALIEN_VENT,
                 { target_cell_id = human_cell_id }
             )
+            local mission_type = tostring(
+                self.current_mission_type
+                or self.selected_mission_type
+                or (self.mp_state and self.mp_state.mission_type)
+                or ""
+            )
+            if vent_path and mission_type == MISSION_TYPE_RESCUE then
+                for i = 2, #vent_path do
+                    if is_rescue_entry_victory_cell(self, vent_path[i]) then
+                        vent_path = nil
+                        vent_cost = nil
+                        break
+                    end
+                end
+            end
             if vent_path and vent_cost and (vent_cost < chosen_cost or vent_cost == chosen_cost) then
                 chosen_path = vent_path
                 chosen_cost = vent_cost
@@ -3343,7 +3386,7 @@ get_blip_fallback_staging_target = function(self, from_cell_id, alien_type, hidd
 
     for candidate_id, candidate_cell in ipairs(self.world_grid) do
         if candidate_id ~= from_cell_id and candidate_cell and candidate_cell.tileID ~= hash("empty") then
-            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil, hidden_reveal_type)
+            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil, hidden_reveal_type, self)
             if candidate_path and candidate_cost and candidate_cost > 0 then
                 local nearest_human_dist = math.huge
                 for _, human_id in ipairs(human_ids) do
@@ -3379,7 +3422,7 @@ get_brute_barricade_staging_target = function(self, from_cell_id)
 
     for cell_id, cell in ipairs(self.world_grid) do
         if cell and cell.tileID ~= hash("empty") and is_cell_barricaded(self.world_grid, cell_id) then
-            local path, cost = find_alien_path(self.world_grid, ALIEN_TYPE_BRUTE, from_cell_id, cell_id, nil)
+            local path, cost = find_alien_path(self.world_grid, ALIEN_TYPE_BRUTE, from_cell_id, cell_id, nil, nil, self)
             if path and cost then
                 if cost < best_cost or (cost == best_cost and (best_target == nil or cell_id < best_target)) then
                     best_target = cell_id
@@ -3472,7 +3515,7 @@ get_alien_clockwise_fallback_cell = function(self, alien)
             local adj_cell = self.world_grid[adj_id]
             local is_void = adj_cell and adj_cell.tileID == hash("empty")
             if adj_cell and ((not is_void) or can_traverse_void) then
-                if can_alien_cross_between_cells(self.world_grid, alien.cell_id, adj_id, alien.type, alien.hidden_reveal_type) then
+                if can_alien_cross_between_cells(self.world_grid, alien.cell_id, adj_id, alien.type, alien.hidden_reveal_type, self) then
                     return adj_id
                 end
             end
@@ -7719,8 +7762,6 @@ local function spawn_civilians_for_current_mission(self)
     for _, cell in ipairs(self.world_grid) do
         if cell
             and cell.tileID ~= hash("empty")
-            and cell.tileID ~= hash("corridor1")
-            and cell.tileID ~= hash("passage1")
             and cell.tileID ~= hash("exterior1")
             and cell.tileID ~= hash("exterior2")
             and is_cell_in_any_rescue_entry_tile(self, cell.idNumber) ~= true
@@ -11869,6 +11910,8 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_TRY_AGAIN
     elseif text == ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST then
         anim_id = ADVISORY_ANIM_DEPLOY_POD_ITEMS_FIRST
+    elseif text == ADVISORY_MSG_NO_SPACE_GUN_TURRET then
+        anim_id = ADVISORY_ANIM_NO_SPACE_GUN_TURRET
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -11944,9 +11987,15 @@ end
 
 function get_current_score_total(self)
     local state = ensure_score_state(self)
+    if self and self.game_won ~= true and LOOT_RUNTIME and LOOT_RUNTIME.get_launch_status then
+        local launch_status = LOOT_RUNTIME.get_launch_status(self) or {}
+        local preview_saved = math.max(0, tonumber(launch_status.seated_humans or 0) or 0)
+        state.metrics = state.metrics or {}
+        state.metrics.humans_escaped_on_launch = preview_saved
+    end
     local result = SCORE_RUNTIME.compute_score(state)
     local total = math.max(0, math.floor((result and result.total) or 0))
-    self.score_display_total = math.max(self.score_display_total or 0, total)
+    self.score_display_total = total
     return self.score_display_total
 end
 
@@ -26070,7 +26119,8 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     ADVISORY_MSG_ONLY_SARGE_FAB = ADVISORY_MSG_ONLY_SARGE_FAB,
     ADVISORY_MSG_BACKPACK_FULL = ADVISORY_MSG_BACKPACK_FULL,
     ADVISORY_MSG_MOVE_UNIT_CLOSER = ADVISORY_MSG_MOVE_UNIT_CLOSER,
-    ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST = ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST
+    ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST = ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST,
+    ADVISORY_MSG_NO_SPACE_GUN_TURRET = ADVISORY_MSG_NO_SPACE_GUN_TURRET
 })
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,

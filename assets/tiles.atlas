@@ -828,6 +828,9 @@ images {
   image: "/assets/images/advisory_deployPodItems.png"
 }
 images {
+  image: "/assets/images/advisory_noSpaceGunTurret.png"
+}
+images {
   image: "/assets/images/tile_cavern_off.png"
 }
 images {

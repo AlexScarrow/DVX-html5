@@ -5973,6 +5973,7 @@ function M.extend(runtime, ctx)
                                     end
                                     if not slot then
                                         print("No valid clicked slot for turret deploy.")
+                                        emit_advisory(self, ctx.ADVISORY_MSG_NO_SPACE_GUN_TURRET)
                                         flash_invalid_drag_units(source_unit, nil)
                                     else
                                         if not try_consume_current_drag_ap(nil) then
@@ -6074,9 +6075,11 @@ function M.extend(runtime, ctx)
                                         local target_slot = find_clicked_drop_slot(drop_cell, world_x, world_y)
                                         if not target_slot then
                                             print("No slot available for obstacle.")
+                                            emit_advisory(self, ctx.ADVISORY_MSG_NO_SPACE_GUN_TURRET)
                                             flash_invalid_drag_units(source_unit, nil)
                                         elseif target_slot.name ~= hash("empty") and target_slot.name ~= hash("obstacle") then
                                             print("Clicked obstacle slot is occupied by another object.")
+                                            emit_advisory(self, ctx.ADVISORY_MSG_NO_SPACE_GUN_TURRET)
                                             flash_invalid_drag_units(source_unit, nil)
                                         else
                                             local current_count = get_obstacle_count(target_slot)

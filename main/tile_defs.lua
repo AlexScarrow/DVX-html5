@@ -337,7 +337,7 @@ function M.create_tile_library(COMPONENT_UI)
 coms.cells[7].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-    lootItems = { "ammo", "ammo", "meds", "material","power","wiring_straight", COMPONENT_UI.component_fuse }
+    lootItems = { "power", "wiring_straight", "meds", "material", COMPONENT_UI.component_fuse }
 }
 coms.cells[2].object1 = {
     name = hash("power_node"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
@@ -441,7 +441,7 @@ canteen.cells[3].object1 = {
 canteen.cells[1].object1 = {
     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-    lootItems = { "plate", "power", "material", "material","material","ammo", COMPONENT_UI.component_fuse }
+    lootItems = { "power", "plate", "material", "ammo","material","ammo", COMPONENT_UI.component_fuse }
 }
 
 
@@ -484,7 +484,7 @@ canteen.cells[5].object1 = {
         "meds",
         --"material"
         -- "buff_armour",
-         "buff_hazmat",
+        -- "buff_hazmat",
         -- "buff_oxygen_mask",
         -- "buff_speed_stims",
         --"buff_night_vision",
@@ -592,17 +592,17 @@ library["canteen"] = canteen
     exit.cells[9].accessDown = false
 
     exit.cells[2].object1 = {
-        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
         offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
         lootItems = {
             "power",
-            "buff_armour",
-            "ammo",
-            "ammo",
-            "ammo",
-            "ammo",
             "power",
-            "power"
+            "power",
+            "ammo",
+            "ammo",
+            "ammo",
+            "ammo",
+            "ammo"
             -- "buff_hazmat",
             -- "buff_oxygen_mask",
             -- "buff_speed_stims",
@@ -612,8 +612,8 @@ library["canteen"] = canteen
         }
     }
 
-    exit.cells[2].object1 = {
-        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+    exit.cells[2].object2 = {
+        name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
         offsetX = -50, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
     }
     
@@ -684,7 +684,7 @@ library["canteen"] = canteen
     armoury.cells[1].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
         offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "material", "material", "material", "material","power","material","plate", COMPONENT_UI.component_fuse }
+        lootItems = { "power", "plate", "material", "material","ammo","material","meds", COMPONENT_UI.component_fuse }
     }
     armoury.cells[2].object1 = {
         name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
@@ -705,7 +705,7 @@ library["canteen"] = canteen
     armoury.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "material","plate", "material","power","plate" ,COMPONENT_UI.component_fuse }
+        lootItems = { "power", "plate", "material","material", "material","ammo","meds" ,COMPONENT_UI.component_fuse }
     }
     armoury.cells[7].object1 = {
         name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 701,
@@ -789,7 +789,7 @@ library["canteen"] = canteen
     medbay.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo", "ammo", "material", "plate" ,"meds", "material", COMPONENT_UI.component_fuse, COMPONENT_UI.component_wiring_straight}
+        lootItems = { "ammo", "ammo", "material", "plate" ,"wiring_straight", "material", COMPONENT_UI.component_fuse, COMPONENT_UI.component_wiring_straight}
     }
      medbay.cells[5].object1 = {
          name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 501,
@@ -1125,7 +1125,7 @@ library["lab"] = lab
     workshop.cells[3].object2 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
         offsetX = -0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "material", "ammo","material","material","material","material","fuse","wiring_straight", COMPONENT_UI.component_fuse }
+        lootItems = { "material", "wiring_straight","material","material","material","material","fuse", COMPONENT_UI.component_fuse }
     }
 
 
@@ -1293,16 +1293,16 @@ library["lab"] = lab
         lootItems = { "plate","plate","buff_armour", "meds", COMPONENT_UI.component_fuse }
     }
 
-    bunkroom.cells[3].object2 = {
-        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+    bunkroom.cells[3].object1 = {
+        name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
         offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
         lootItems = { "ammo","power","buff_melee_right", "meds", COMPONENT_UI.component_fuse }
     }
 
-    bunkroom.cells[5].object2 = {
+    bunkroom.cells[6].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 502,
         offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "ammo","material","ammo", "meds", COMPONENT_UI.component_fuse }
+        lootItems = { "plate","buff_melee_left","ammo", "meds", COMPONENT_UI.component_fuse }
     }
 
     bunkroom.cells[2].object2 = {
@@ -1407,7 +1407,7 @@ library["lab"] = lab
     jungle.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "wiring_straight","fuse","plate", "buff_hazmat","buff_oxygen_mask", "buff_oxygen_mask",COMPONENT_UI.component_fuse }
+        lootItems = { "wiring_straight","plate", "buff_hazmat","buff_oxygen_mask", "buff_oxygen_mask",COMPONENT_UI.component_fuse }
     }
     jungle.cells[9].object1 = {
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,

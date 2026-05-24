@@ -825,6 +825,9 @@ images {
   image: "/assets/images/advisory_tryAgain.png"
 }
 images {
+  image: "/assets/images/advisory_deployPodItems.png"
+}
+images {
   image: "/assets/images/tile_cavern_off.png"
 }
 images {

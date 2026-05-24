@@ -831,6 +831,7 @@ function M.extend(runtime, ctx)
         return tostring(ctx.get_current_mission_type(self) or "") == "purge"
     end
 
+
     local function get_rescue_victory_cell_ids(self, local_cell_override)
         local out = {}
         if not (self and self.level_library and ctx and ctx.coords_to_id) then
@@ -889,6 +890,7 @@ function M.extend(runtime, ctx)
         end
         return count
     end
+
 
     local function find_turret_pickup_target(self, world_x, world_y, required_cell_id)
         if not self.world_grid then
@@ -3651,6 +3653,25 @@ function M.extend(runtime, ctx)
             state.seated_humans = count_alive_humans_on_rescue_local_cell(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
             return state
         end
+        local seat_lookup = {}
+        for _, cell in ipairs(self.world_grid or {}) do
+            local seat_obj = runtime.get_escape_pod_seat_object and runtime.get_escape_pod_seat_object(cell) or nil
+            if seat_obj and cell and cell.idNumber then
+                seat_lookup[cell.idNumber] = true
+            end
+        end
+        state.seated_humans = 0
+        if next(seat_lookup) ~= nil then
+            for _, unit in pairs(self.squad_units or {}) do
+                if unit
+                    and (unit.current_health or 0) > 0
+                    and unit.cell_id
+                    and seat_lookup[unit.cell_id]
+                then
+                    state.seated_humans = state.seated_humans + 1
+                end
+            end
+        end
         if self.world_grid then
             for _, cell in ipairs(self.world_grid) do
                 local socket = runtime.get_escape_pod_power_socket_object and runtime.get_escape_pod_power_socket_object(cell) or nil
@@ -3840,61 +3861,30 @@ function M.extend(runtime, ctx)
             runtime.refresh_exit_objective_state(self)
             return
         end
-        local boarded_any = false
-        local seated_alive_count = 0
         for _, unit in pairs(self.squad_units) do
-            if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
-                seated_alive_count = seated_alive_count + 1
-            end
-        end
-        for _, unit in pairs(self.squad_units) do
+            local on_seat = false
             if unit
                 and (unit.current_health or 0) > 0
-                and unit.in_shuttle ~= true
                 and unit.cell_id
-                and seated_alive_count < 4
+                and self.world_grid
             then
-                local cell = self.world_grid[unit.cell_id]
-                local seat_obj = runtime.get_escape_pod_seat_object and runtime.get_escape_pod_seat_object(cell) or nil
-                if seat_obj then
-                    local old_cell = unit.cell_id
-                    if self.cell_slot_assignments and self.cell_slot_assignments[old_cell] then
-                        self.cell_slot_assignments[old_cell][unit.id] = nil
-                    end
-                    unit.in_shuttle = true
-                    unit.is_selected = false
-                    unit.is_moving = false
-                    unit.move_path = nil
-                    unit.move_path_index = 0
-                    unit.cell_id = nil
-                    if unit.go_path then
-                        go.set_position(SHUTTLE_HIDE_POS, unit.go_path)
-                    end
-                    if unit.shadow_path then
-                        go.set_position(SHUTTLE_HIDE_POS, unit.shadow_path)
-                    end
-                    if self.controlled_unit_id == unit.id then
-                        self.controlled_unit_id = nil
-                    end
-                    seated_alive_count = seated_alive_count + 1
-                    boarded_any = true
-                    print(string.format("%s entered the escape pod.", unit.display_name))
-                end
-            end
-        end
-        if boarded_any and self.squad_units then
-            if not self.controlled_unit_id then
-                for _, scan in pairs(self.squad_units) do
-                    if scan and (scan.current_health or 0) > 0 and scan.in_shuttle ~= true then
-                        self.controlled_unit_id = scan.id
-                        scan.is_selected = true
-                        break
+                local seat_cell = self.world_grid[unit.cell_id]
+                local seat_obj = runtime.get_escape_pod_seat_object and runtime.get_escape_pod_seat_object(seat_cell) or nil
+                on_seat = seat_obj ~= nil
+                if on_seat and unit.escape_pod_prev_on_seat ~= true then
+                    local has_nav = unit_has_backpack_item(unit, ctx.COMPONENT_UI.component_nav_data)
+                    local has_food = unit_has_backpack_item(unit, ctx.COMPONENT_UI.component_food_supplies)
+                    if has_nav or has_food then
+                        emit_advisory(self, ctx.ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST, 1.9)
                     end
                 end
             end
-            ctx.update_human_visual_state(self)
+            if unit then
+                unit.escape_pod_prev_on_seat = on_seat
+            end
         end
         runtime.refresh_exit_objective_state(self)
+        return
     end
 
     runtime.try_scavenge_selected_unit_on_cell = function(self, unit, cell)

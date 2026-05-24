@@ -988,7 +988,7 @@ SOLO_SETUP_MISSION_COUNT = 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
 SOLO_SETUP_MISSION_LEVEL_MAP = {
-    [5] = 6
+    [5] = 6, [6] =7
 }
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
@@ -14328,6 +14328,15 @@ solo_progress_get_row_summary = function(self, row_index)
     }
 end
 
+solo_progress_get_global_total = function(self)
+    local total = 0
+    for slot = 1, SOLO_SETUP_MISSION_COUNT do
+        local entry = solo_progress_get_mission_entry(self, slot)
+        total = total + math.max(0, tonumber(entry.score or 0) or 0)
+    end
+    return total
+end
+
 solo_progress_is_row_unlocked = function(self, row_index)
     local row = math.max(1, math.min(SOLO_SETUP_MISSION_ROWS, tonumber(row_index or 1) or 1))
     if row <= 1 then
@@ -14493,11 +14502,11 @@ solo_progress_render_mission_text = function(self, mission_slot, center_x, cente
     local slot = math.max(1, math.min(SOLO_SETUP_MISSION_COUNT, tonumber(mission_slot or 1) or 1))
     local row = math.floor((slot - 1) / SOLO_SETUP_MISSION_COLS) + 1
     local mission_entry = solo_progress_get_mission_entry(self, slot)
-    local row_goal = solo_progress_get_row_required_score(row)
+    local global_total = solo_progress_get_global_total(self)
     local type_label = solo_progress_get_mission_type_label(self, slot)
     local meta_text = ""
     if tostring(mission_entry.result or "unplayed") ~= "unplayed" then
-        meta_text = solo_progress_format_meta_value(mission_entry.score) .. "/" .. solo_progress_format_meta_value(row_goal)
+        meta_text = solo_progress_format_meta_value(mission_entry.score) .. "/" .. solo_progress_format_meta_value(global_total)
     end
     local unlocked = solo_progress_is_mission_unlocked(self, slot)
     local text_tint = unlocked and SOLO_SETUP_TEXT_TINT_UNLOCKED or SOLO_SETUP_TEXT_TINT_LOCKED

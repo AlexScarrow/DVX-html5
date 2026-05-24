@@ -300,10 +300,11 @@ levels[4] = {
         { x = 8, y = 8, tile = "exterior1" },
         { x = 11, y = 8, tile = "workshop" },
         { x = 5, y = 5, tile = "bunkroom" },
-        { x = 8, y = 5, tile = "portal" },
+        { x = 8, y = 5, tile = "furnace" },
         { x = 11, y = 5, tile = "corridor1" },
         { x = 14, y = 5, tile = "exit" },
         { x = 5, y = 2, tile = "armoury" },
+        { x = 8, y = 2, tile = "portal" },
     }
     levels[7].mission_type = "escape"
     levels[7].spawn_tile = "entry"

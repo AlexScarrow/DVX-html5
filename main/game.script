@@ -985,6 +985,9 @@ SOLO_SETUP_PANEL_SCALE = 1.0
 SOLO_SETUP_MISSION_COUNT = 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
+SOLO_SETUP_MISSION_LEVEL_MAP = {
+    [5] = 6
+}
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
 SOLO_SETUP_MISSION_BASE_X = 100
@@ -14206,8 +14209,10 @@ end
 solo_progress_map_mission_to_level_index = function(self, mission_slot)
     local level_count = solo_progress_get_level_count(self)
     local slot = math.max(1, math.min(SOLO_SETUP_MISSION_COUNT, tonumber(mission_slot or 1) or 1))
-    if slot <= level_count then
-        return slot
+    local mapped = tonumber(SOLO_SETUP_MISSION_LEVEL_MAP and SOLO_SETUP_MISSION_LEVEL_MAP[slot] or slot) or slot
+    mapped = math.max(1, math.floor(mapped))
+    if mapped <= level_count then
+        return mapped
     end
     return level_count
 end

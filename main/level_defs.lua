@@ -271,22 +271,25 @@ levels[4] = {
 
     -- level editor export | level=6 mission=dna_sample
     levels[6] = {
-        { x = 8, y = 12, tile = "coms" },
+        { x = 8, y = 14, tile = "coms" },
+        { x = 11, y = 12, tile = "armoury" },
         { x = 5, y = 11, tile = "coms" },
-        { x = 8, y = 9, tile = "lab" },
-        { x = 11, y = 9, tile = "corridor1" },
-        { x = 2, y = 8, tile = "rescue_entry" },
-        { x = 5, y = 8, tile = "armoury" },
-        { x = 14, y = 8, tile = "jungle" },
-        { x = 4, y = 5, tile = "passage1" },
+        { x = 8, y = 11, tile = "canteen" },
+        { x = 11, y = 9, tile = "showers" },
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "workshop" },
+        { x = 8, y = 8, tile = "factory" },
+        { x = 14, y = 8, tile = "exterior2" },
+        { x = 11, y = 6, tile = "corridor1" },
+        { x = 8, y = 5, tile = "corridor1" },
         { x = 14, y = 5, tile = "passage1" },
-        { x = 5, y = 2, tile = "portal" },
-        { x = 15, y = 2, tile = "portal" },
+        { x = 8, y = 2, tile = "portal" },
+        { x = 14, y = 2, tile = "exit" },
     }
-    levels[6].mission_type = "dna_sample"
-    levels[6].spawn_tile = "rescue_entry"
+    levels[6].mission_type = "escape"
+    levels[6].spawn_tile = "entry"
     levels[6].spawn_cell = 2
-    levels[6].unit_loadouts = levels[3].unit_loadouts
+    levels[6].unit_loadouts = levels[1].unit_loadouts
 
     levels[7] = {
         { x = 5, y = 11, tile = "coms" },

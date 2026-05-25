@@ -304,6 +304,8 @@ levels[4] = {
         { x = 8, y = 6, tile = "furnace" },
         { x = 14, y = 6, tile = "furnace" },
         { x = 2, y = 5, tile = "canteen" },
+        { x = 5, y = 5, tile = "void" },
+        { x = 11, y = 5, tile = "void" },
         { x = 8, y = 3, tile = "workshop" },
         { x = 14, y = 3, tile = "portal" },
         { x = 2, y = 2, tile = "portal" },

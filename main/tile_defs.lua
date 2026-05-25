@@ -1708,6 +1708,60 @@ library["cavern"] = cavern
         
 
         library["furnace"] = furnace
+
+
+        -- =====================================================================
+        -- PASSAGE 1 (vertical only in middle)
+        -- =====================================================================
+        local void = create_tile_prototype("void")
+        void.visualTile = "void"
+        void.powerLightOffAnim = "tile_void"
+        void.powerLightOnAnim = "tile_void"
+
+        for i = 1, 9 do
+            void.cells[i].lightValue = 0
+            void.cells[i].moveValue = 0
+            void.cells[i].coverValue = 0
+            void.cells[i].accessDown = false
+            void.cells[i].accessRight = false
+        end
+
+        -- passage1.cells[5].lightValue = 2
+        -- passage1.cells[4].moveValue = 1
+        -- passage1.cells[3].moveValue = 3
+        -- passage1.cells[6].moveValue = 3
+        -- passage1.cells[9].moveValue = 3
+
+        -- Internal connectivity:
+        -- - Vertical shaft only on right column: 3 <-> 6 <-> 9
+        -- - Single isolated accessible cell: 4
+        -- - Cell 4 remains enterable from left neighbor tile via edge rules.
+        -- passage1.cells[1].accessDown = false   -- blocks 2 <-> 3
+        -- passage1.cells[1].accessRight = false   -- blocks 2 <-> 3
+        -- passage1.cells[2].accessDown = true   -- blocks 2 <-> 3
+        -- passage1.cells[2].accessRight = false   -- blocks 2 <-> 3
+        -- passage1.cells[3].accessRight = false   -- blocks right boundary from 3
+        -- passage1.cells[3].accessDown = false
+        -- passage1.cells[4].accessRight = false   -- blocks 4 <-> 5
+        -- passage1.cells[4].accessDown = false    -- blocks 4 <-> 1
+        -- passage1.cells[5].accessDown = true
+        -- passage1.cells[5].accessRight = false   -- blocks 5 <-> 6
+        -- passage1.cells[6].accessRight = false   -- blocks right boundary from 6
+        -- passage1.cells[6].accessDown = false     -- allows 6 <-> 3
+        -- passage1.cells[7].accessRight = false   -- blocks 7 <-> 8
+        -- passage1.cells[7].accessDown = false    -- blocks 7 <-> 4
+        -- passage1.cells[8].accessDown = true
+        -- passage1.cells[8].accessRight = false   -- blocks 8 <-> 9
+        -- passage1.cells[9].accessRight = false   -- blocks right boundary from 9
+        -- passage1.cells[9].accessDown = false     -- allows 9 <-> 6
+
+
+        -- passage1.cells[5].object1 = {
+        --     name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 601,
+        --     offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+        -- }
+
+        library["void"] = void
     
     return library
 end

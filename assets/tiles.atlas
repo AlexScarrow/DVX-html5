@@ -851,6 +851,9 @@ images {
 images {
   image: "/assets/images/tile_furnace_on.png"
 }
+images {
+  image: "/assets/images/tile_void.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

@@ -1968,6 +1968,13 @@ function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
     if not from_cell or not to_cell then
         return false
     end
+    if from_cell.tileID == hash("empty")
+        or to_cell.tileID == hash("empty")
+        or from_cell.tileID == hash("void")
+        or to_cell.tileID == hash("void")
+    then
+        return false
+    end
 
     local dx = to_cell.xCell - from_cell.xCell
     local dy = to_cell.yCell - from_cell.yCell
@@ -2722,8 +2729,8 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
         local adj_id = get_adjacent_cell(cell_id, dir)
         if adj_id then
             local cell = world_grid[adj_id]
-            -- Check if cell is not VOID (part of a valid tile)
-            if cell.tileID ~= hash("empty") then
+            -- Check if cell is part of traversable terrain.
+            if cell.tileID ~= hash("empty") and cell.tileID ~= hash("void") then
                 local allow_closed_doors = movement_profile == MOVEMENT_PROFILE_HUMAN
                     and path_context
                     and path_context.allow_closed_doors == true
@@ -8932,7 +8939,7 @@ end
 
 local function is_walkable_cell(world_grid, cell_id)
     local cell = world_grid[cell_id]
-    return cell and cell.tileID ~= hash("empty")
+    return cell and cell.tileID ~= hash("empty") and cell.tileID ~= hash("void")
 end
 
 local function create_empty_equipment()

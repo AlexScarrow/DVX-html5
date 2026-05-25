@@ -292,23 +292,23 @@ levels[4] = {
     levels[6].unit_loadouts = levels[1].unit_loadouts
 
     levels[7] = {
-        { x = 8, y = 12, tile = "armoury" },
         { x = 14, y = 12, tile = "exit" },
-        { x = 1, y = 11, tile = "coms" },
-        { x = 11, y = 11, tile = "exterior1" },
-        { x = 8, y = 9, tile = "factory" },
+        { x = 2, y = 11, tile = "coms" },
+        { x = 8, y = 11, tile = "factory" },
         { x = 14, y = 9, tile = "passage1" },
-        { x = 2, y = 8, tile = "exterior2" },
+        { x = 2, y = 8, tile = "canteen" },
         { x = 5, y = 8, tile = "entry" },
+        { x = 8, y = 8, tile = "armoury" },
         { x = 11, y = 8, tile = "exterior2" },
-        { x = 8, y = 6, tile = "furnace" },
         { x = 14, y = 6, tile = "furnace" },
-        { x = 2, y = 5, tile = "canteen" },
+        { x = 2, y = 5, tile = "passage1" },
         { x = 5, y = 5, tile = "void" },
+        { x = 8, y = 5, tile = "workshop" },
         { x = 11, y = 5, tile = "void" },
-        { x = 8, y = 3, tile = "workshop" },
         { x = 14, y = 3, tile = "portal" },
         { x = 2, y = 2, tile = "portal" },
+        { x = 5, y = 2, tile = "corridor1" },
+        { x = 8, y = 2, tile = "furnace" },
     }
     levels[7].mission_type = "escape"
     levels[7].spawn_tile = "entry"

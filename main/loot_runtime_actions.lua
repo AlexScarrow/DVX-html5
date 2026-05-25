@@ -2282,6 +2282,7 @@ function M.extend(runtime, ctx)
                             corpse_unit.is_corpse_stowed = false
                             corpse_unit.is_awake = true
                             corpse_unit.follow_human_id = nil
+                            corpse_unit.evacuate_to_exit = true
                             corpse_unit.is_moving = false
                             corpse_unit.move_path = nil
                             corpse_unit.move_path_index = 0

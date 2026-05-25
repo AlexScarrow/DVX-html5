@@ -988,7 +988,7 @@ SOLO_SETUP_MISSION_COUNT = 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
 SOLO_SETUP_MISSION_LEVEL_MAP = {
-    [5] = 6, [6] =7, [7] = 8
+    [5] = 6, [6] =7, [7] = 8, [8] = 9
 }
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
@@ -14494,7 +14494,8 @@ solo_progress_is_row_unlocked = function(self, row_index)
     local prev_row = row - 1
     local threshold = tonumber(SOLO_SETUP_TIER_THRESHOLDS[prev_row] or 0) or 0
     local summary = solo_progress_get_row_summary(self, prev_row)
-    return summary.all_won == true and summary.total >= threshold
+    local global_total = solo_progress_get_global_total(self)
+    return summary.all_won == true and global_total >= threshold
 end
 
 solo_progress_is_mission_unlocked = function(self, mission_slot)
@@ -14579,6 +14580,18 @@ solo_progress_get_row_required_score = function(row_index)
         return math.max(0, tonumber(SOLO_SETUP_TIER_THRESHOLDS[row] or 0) or 0)
     end
     return math.max(0, tonumber(SOLO_SETUP_TIER_THRESHOLDS[#SOLO_SETUP_TIER_THRESHOLDS] or 0) or 0)
+end
+
+solo_progress_get_row_progress_score = function(self, row_index, row_summary, global_total_override)
+    local row = math.max(1, math.min(SOLO_SETUP_MISSION_ROWS, tonumber(row_index or 1) or 1))
+    if row >= 2 then
+        if global_total_override ~= nil then
+            return math.max(0, tonumber(global_total_override or 0) or 0)
+        end
+        return math.max(0, tonumber(solo_progress_get_global_total(self) or 0) or 0)
+    end
+    local summary = row_summary or solo_progress_get_row_summary(self, row)
+    return math.max(0, tonumber(summary and summary.total or 0) or 0)
 end
 
 solo_progress_format_meta_value = function(value)
@@ -17182,16 +17195,29 @@ function update_flow_ui(self, dt)
             end
             solo_progress_render_mission_text(self, slot, mx, my)
         end
+        local global_total = solo_progress_get_global_total(self)
+        local max_visible_row = SOLO_SETUP_MISSION_ROWS
+        for probe_row = 2, SOLO_SETUP_MISSION_ROWS do
+            if not solo_progress_is_row_unlocked(self, probe_row) then
+                max_visible_row = probe_row - 1
+                break
+            end
+        end
+        if max_visible_row < 1 then
+            max_visible_row = 1
+        end
         for row = 1, 3 do
             local summary = solo_progress_get_row_summary(self, row)
             local threshold = math.max(1, tonumber(SOLO_SETUP_TIER_THRESHOLDS[row] or 1) or 1)
-            local fill_t = clamp((tonumber(summary.total or 0) or 0) / threshold, 0, 1)
+            local progress_score = solo_progress_get_row_progress_score(self, row, summary, global_total)
+            local fill_t = clamp(progress_score / threshold, 0, 1)
             local fill_w = SOLO_SETUP_FILL_BAR_W * fill_t
             local bar_left = SOLO_SETUP_FILL_BAR_X
             local bar_top = SOLO_SETUP_FILL_BAR_Y[row] or SOLO_SETUP_FILL_BAR_Y[1]
             local bar_center_y = SCREEN_HEIGHT - (bar_top + (SOLO_SETUP_FILL_BAR_H * 0.5))
-            local row_meta_text = solo_progress_format_meta_value(summary.total) .. "/" .. solo_progress_format_meta_value(threshold)
-            if fill_w > 0.5 then
+            local row_meta_text = solo_progress_format_meta_value(progress_score) .. "/" .. solo_progress_format_meta_value(threshold)
+            local row_visible = row <= max_visible_row
+            if row_visible and fill_w > 0.5 then
                 set_ui_square_transform(
                     self,
                     self.ui.solo_progress_row_fill[row],
@@ -17211,7 +17237,7 @@ function update_flow_ui(self, dt)
                     SOLO_SETUP_ROW_TOTAL_SPACING,
                     SOLO_SETUP_ROW_TOTAL_SCALE,
                     vmath.vector4(1, 1, 1, 1.0),
-                    (tonumber(summary.total or 0) or 0) <= 0
+                    progress_score <= 0
                 )
             else
                 set_ui_square_transform(self, self.ui.solo_progress_row_fill[row], -9999, -9999, SOLO_SETUP_UI_Z + 0.002, hidden, SOLO_SETUP_FILL_BAR_W, SOLO_SETUP_FILL_BAR_H)

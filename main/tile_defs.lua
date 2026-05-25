@@ -1407,7 +1407,7 @@ library["lab"] = lab
     jungle.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
         offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-        lootItems = { "wiring_straight","plate", "buff_hazmat","buff_oxygen_mask", "buff_oxygen_mask",COMPONENT_UI.component_fuse }
+        lootItems = { "wiring_straight","plate", "buff_hazmat","buff_hazmat", "buff_oxygen_mask","meds",COMPONENT_UI.component_fuse }
     }
     jungle.cells[9].object1 = {
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,

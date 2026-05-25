@@ -361,6 +361,7 @@ levels[4] = {
     levels[9] = {
         { x = 2, y = 11, tile = "medbay" },
         { x = 5, y = 11, tile = "armoury" },
+        { x = 8, y = 11, tile = "exterior2" },
         { x = 14, y = 11, tile = "coms" },
         { x = 2, y = 8, tile = "jungle" },
         { x = 5, y = 8, tile = "jungle" },

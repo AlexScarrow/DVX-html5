@@ -1515,6 +1515,7 @@ ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
 SFX_TEST_FAVOR_SPEEDY_REVEAL = false
 TILE_OPACITY = 1
+STARTUP_ROOM_TILE_FADE_DURATION_S = 10.0
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
     [ALIEN_TYPE_BLIP] = (ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.blip) or { ap_per_turn = 1, hp = 1, can_traverse_void = false, revealable = true, marker_tint = vmath.vector4(0.85, 0.3, 1.0, 1.0) },
@@ -6419,6 +6420,110 @@ local function is_rescue_entry_tile_name(tile_name)
     return name == RESCUE_ENTRY_TILE_NAME or name == RESCUE_ENTRY_TILE_NAME_ALT
 end
 
+startup_room_tile_fade_is_tutorial_exempt = function(self)
+    if not self then
+        return true
+    end
+    if self.tutorial_mode == true then
+        return true
+    end
+    local mission_type = tostring(self.current_mission_type or self.selected_mission_type or "")
+    return mission_type == MISSION_TYPE_TUTORIAL
+end
+
+startup_room_tile_fade_is_allowed_tile = function(tile_name)
+    local name = tostring(tile_name or "")
+    if name == "" then
+        return false
+    end
+    return true
+end
+
+setup_startup_room_tile_fade = function(self)
+    self.startup_room_tile_fade = nil
+    if startup_room_tile_fade_is_tutorial_exempt(self) then
+        return
+    end
+    local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if not selected_level or not self.tile_base_objects then
+        return
+    end
+    local targets = {}
+    for placement_index, placement in ipairs(selected_level) do
+        if placement and startup_room_tile_fade_is_allowed_tile(placement.tile) then
+            local tile_id = self.tile_base_objects[placement_index]
+            if tile_id then
+                targets[placement_index] = tile_id
+                pcall(go.set, msg.url(nil, tile_id, "sprite"), "tint", vmath.vector4(0, 0, 0, TILE_OPACITY))
+            end
+            local alpha_id = self.tile_alpha_layers and self.tile_alpha_layers[placement_index] or nil
+            if alpha_id then
+                pcall(go.set, msg.url(nil, alpha_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 1))
+            end
+            local light_id = self.tile_light_layers and self.tile_light_layers[placement_index] or nil
+            if light_id then
+                pcall(go.set, msg.url(nil, light_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 1))
+            end
+        end
+    end
+    if next(targets) then
+        self.startup_room_tile_fade = {
+            elapsed_s = 0,
+            duration_s = STARTUP_ROOM_TILE_FADE_DURATION_S,
+            factor = 0,
+            targets = targets
+        }
+    end
+end
+
+update_startup_room_tile_fade = function(self, dt)
+    local state = self and self.startup_room_tile_fade or nil
+    if not state then
+        return
+    end
+    local duration_s = tonumber(state.duration_s or STARTUP_ROOM_TILE_FADE_DURATION_S) or STARTUP_ROOM_TILE_FADE_DURATION_S
+    if duration_s <= 0 then
+        duration_s = 0.001
+    end
+    state.elapsed_s = (tonumber(state.elapsed_s or 0) or 0) + (tonumber(dt or 0) or 0)
+    local alpha = math.max(0, math.min(1, state.elapsed_s / duration_s))
+    state.factor = alpha
+    local tint = vmath.vector4(alpha, alpha, alpha, TILE_OPACITY)
+    for _, tile_id in pairs(state.targets or {}) do
+        if tile_id then
+            pcall(go.set, msg.url(nil, tile_id, "sprite"), "tint", tint)
+        end
+    end
+    if alpha >= 1 then
+        self.startup_room_tile_fade = nil
+    end
+end
+
+startup_room_tile_fade_get_factor = function(self, tile_instance_id)
+    local state = self and self.startup_room_tile_fade or nil
+    if not state then
+        return 1
+    end
+    local key = tonumber(tile_instance_id or 0) or 0
+    if key <= 0 then
+        return 1
+    end
+    if not (state.targets and state.targets[key]) then
+        return 1
+    end
+    local factor = tonumber(state.factor or 0) or 0
+    return math.max(0, math.min(1, factor))
+end
+
+apply_startup_room_tile_fade_to_tint = function(self, tile_instance_id, tint)
+    local t = tint or vmath.vector4(1, 1, 1, 1)
+    local factor = startup_room_tile_fade_get_factor(self, tile_instance_id)
+    if factor >= 1 then
+        return t
+    end
+    return vmath.vector4(t.x * factor, t.y * factor, t.z * factor, t.w)
+end
+
 local function get_rescue_entry_victory_cell_ids(self, local_cell_override)
     local out = {}
     local level = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
@@ -8786,6 +8891,43 @@ update_smooth_zoom = function(self, dt)
     local alpha = 1 - math.exp(-speed * dt)
     local next_zoom = self.camera_zoom + (diff * alpha)
     zoom_camera_at_screen_point(self, next_zoom, self.zoom_focus_x or (SCREEN_WIDTH * 0.5), self.zoom_focus_y or (SCREEN_HEIGHT * 0.5))
+end
+
+center_camera_on_living_humans_max_zoom_out = function(self)
+    if not self or self.tutorial_mode == true then
+        return
+    end
+    local zoom = tonumber(self.camera_min_zoom or self.camera_zoom or 1.0) or 1.0
+    if zoom <= 0 then
+        zoom = 1.0
+    end
+    self.zoom_target = nil
+    self.camera_zoom = zoom
+    local sum_x = 0
+    local sum_y = 0
+    local count = 0
+    if self.squad_units then
+        for _, unit in pairs(self.squad_units) do
+            if unit and unit.cell_id and (unit.current_health or 0) > 0 then
+                local wx = nil
+                local wy = nil
+                local cell = self.world_grid and self.world_grid[unit.cell_id] or nil
+                if cell then
+                    wx, wy = coords_to_world_pos(cell.xCell, cell.yCell)
+                end
+                if wx and wy then
+                    sum_x = sum_x + wx
+                    sum_y = sum_y + wy
+                    count = count + 1
+                end
+            end
+        end
+    end
+    if count > 0 then
+        self.camera_pos.x = sum_x / count
+        self.camera_pos.y = sum_y / count
+    end
+    apply_camera_transform(self)
 end
 
 local function is_walkable_cell(world_grid, cell_id)
@@ -17901,11 +18043,13 @@ finish_level_load_after_clear = function(self, level_index)
 
     spawn_visuals(self)
     apply_aesthetic_mode(self)
+    setup_startup_room_tile_fade(self)
     if self.spawn_human_unit_fn then
         self.spawn_human_unit_fn(self)
     else
         spawn_human_unit(self)
     end
+    center_camera_on_living_humans_max_zoom_out(self)
     spawn_initial_blips(self, INITIAL_BLIP_COUNT)
     spawn_civilians_for_current_mission(self)
     refresh_civilian_visuals(self)
@@ -17967,6 +18111,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
     self.path_highlight_cells = {}
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
+    self.startup_room_tile_fade = nil
     clear_ranged_hit_preview(self)
 
     local function safe_delete(go_id)
@@ -18693,7 +18838,7 @@ apply_computer_emissive_accents = function(self, dt)
             elseif powered and self.tile_light_is_jungle and self.tile_light_is_jungle[tile_instance_id] then
                 tint = white_tint
             end
-            pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", tint)
+            pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", apply_startup_room_tile_fade_to_tint(self, tile_instance_id, tint))
         end
     end
 
@@ -30325,9 +30470,11 @@ function update(self, dt)
             end
             local was_powered = self.tile_alpha_power_state[tile_instance_id]
             local now_on = always_visible or tile_powered
-            if was_powered == nil or was_powered ~= now_on then
+            local fade_factor = startup_room_tile_fade_get_factor(self, tile_instance_id)
+            local fade_active = fade_factor < 1
+            if was_powered == nil or was_powered ~= now_on or (now_on and fade_active) then
                 if now_on then
-                    go.set(msg.url(nil, alpha_go, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                    go.set(msg.url(nil, alpha_go, "sprite"), "tint", vmath.vector4(fade_factor, fade_factor, fade_factor, 1))
                 else
                     go.set(msg.url(nil, alpha_go, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
                 end
@@ -30335,6 +30482,7 @@ function update(self, dt)
             end
         end
     end
+    update_startup_room_tile_fade(self, dt)
     local alien_turn_overlay_active = self.alien_turn_active
         or self.pending_spitter_attack_phase
         or self.pending_melee_attack_phase

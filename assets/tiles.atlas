@@ -485,13 +485,25 @@ images {
   image: "/assets/images/human_sarge_normal.png"
 }
 images {
+  image: "/assets/images/human_sarge_hazmat.png"
+}
+images {
   image: "/assets/images/human_techie_normal.png"
+}
+images {
+  image: "/assets/images/human_techie_hazmat.png"
 }
 images {
   image: "/assets/images/human_medic_normal.png"
 }
 images {
+  image: "/assets/images/human_medic_hazmat.png"
+}
+images {
   image: "/assets/images/human_gunner_normal.png"
+}
+images {
+  image: "/assets/images/human_gunner_hazmat.png"
 }
 images {
   image: "/assets/images/tile_exterior1_boardGame.png"

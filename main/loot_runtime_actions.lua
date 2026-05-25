@@ -444,13 +444,29 @@ function M.extend(runtime, ctx)
         if not unit then
             return hash("human_sarge")
         end
+        local has_hazmat = false
+        if (not boardgame) and runtime and runtime.unit_has_equipped_buff_kind then
+            has_hazmat = runtime.unit_has_equipped_buff_kind(unit, "hazmat_suit") == true
+        end
         if unit.class_id == ctx.UNIT_CLASS_SARGE then
+            if has_hazmat then
+                return hash("human_sarge_hazmat")
+            end
             return boardgame and hash("human_sarge_boardgame") or hash("human_sarge")
         elseif unit.class_id == ctx.UNIT_CLASS_TECHIE then
+            if has_hazmat then
+                return hash("human_techie_hazmat")
+            end
             return boardgame and hash("human_techie_boardgame") or hash("human_techie")
         elseif unit.class_id == ctx.UNIT_CLASS_MEDIC then
+            if has_hazmat then
+                return hash("human_medic_hazmat")
+            end
             return boardgame and hash("human_medic_boardgame") or hash("human_medic")
         elseif unit.class_id == ctx.UNIT_CLASS_GUNNER then
+            if has_hazmat then
+                return hash("human_gunner_hazmat")
+            end
             return boardgame and hash("human_gunner_boardgame") or hash("human_gunner")
         end
         return boardgame and hash("human_sarge_boardgame") or hash("human_sarge")

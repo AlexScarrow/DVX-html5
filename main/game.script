@@ -18683,6 +18683,9 @@ get_human_anim_for_aesthetic = function(self, unit)
         if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
             return hash("human_" .. base_name .. "_boardgame")
         end
+        if unit_has_equipped_buff_kind(unit, "hazmat_suit") then
+            return hash("human_" .. base_name .. "_hazmat")
+        end
         local cell = self.world_grid and unit.cell_id and self.world_grid[unit.cell_id] or nil
         if cell then
             local is_outside = (cell.isOutside == true)

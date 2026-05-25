@@ -404,7 +404,27 @@ levels[4] = {
     levels[10].mission_type = "dna_sample"
     levels[10].spawn_tile = "rescue_entry"
     levels[10].spawn_cell = 2
-    levels[10].unit_loadouts = levels[3].unit_loadouts
+    --levels[10].unit_loadouts = levels[3].unit_loadouts
+    levels[10].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = {},
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power", "plate","plate" },
+            starting_equipped_buffs = {top = "buff_night_vision"}
+        },
+        medic = {
+            starting_backpack_items = { "meds","meds"},
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = { "ammo", "ammo"},
+            starting_equipped_buffs = {}
+        }
+    }
 
     levels[11] = {
         { x = 10, y = 13, tile = "coms" },

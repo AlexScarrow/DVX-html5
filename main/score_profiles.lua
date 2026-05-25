@@ -21,7 +21,7 @@ M.PROFILES = {
             tile_powered_first_time = 50,
             spawn_point_destroyed = 40,
             civilian_escorted = 0,
-            human_escaped_alive = 250,
+            human_escaped_alive = 500,
             win_bonus = 500,
             fail_bonus = 0
         },
@@ -55,7 +55,7 @@ M.PROFILES = {
             tile_powered_first_time = 15,
             spawn_point_destroyed = 35,
             civilian_escorted = 300,
-            human_escaped_alive = 200,
+            human_escaped_alive = 500,
             win_bonus = 450,
             fail_bonus = 0
         },
@@ -86,7 +86,7 @@ M.PROFILES = {
             tile_powered_first_time = 10,
             spawn_point_destroyed = 25,
             civilian_escorted = 0,
-            human_escaped_alive = 0,
+            human_escaped_alive = 500,
             win_bonus = 0,
             fail_bonus = 0
         },
@@ -118,7 +118,7 @@ M.PROFILES = {
             spawn_point_destroyed = 180,
             purge_portal_deployment = 1000,
             civilian_escorted = 0,
-            human_escaped_alive = 0,
+            human_escaped_alive = 500,
             win_bonus = 550,
             fail_bonus = 0
         },

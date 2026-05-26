@@ -83,7 +83,7 @@ NIGHTVISION_UNPOWERED_TINT = vmath.vector4(0.16, 0.36, 0.18, 1)
 NIGHTVISION_POWER_NODE_TINT = vmath.vector4(0.45, 1.0, 0.55, 1)
 NIGHTVISION_REVEAL_DELAY_S = 0.0
 NIGHTVISION_REVEAL_FADE_S = 2.0
-CIVILIAN_MAX_ACTION_POINTS = 3
+CIVILIAN_MAX_ACTION_POINTS = 5
 CIVILIAN_MAX_HEALTH = 10
 CIVILIAN_SPAWN_HEALTH = 3
 CIVILIAN_OBJECT_NAME = hash("civilian_spawn")
@@ -8168,6 +8168,64 @@ local function update_civilian_movement(self, dt)
     if get_current_mission_type(self) == MISSION_TYPE_RESCUE then
         rescue_victory_lookup = build_cell_lookup(get_rescue_entry_victory_cell_ids(self))
     end
+    local function apply_civilian_move_hazard_damage(civilian, entered_cell_id)
+        if not (civilian and entered_cell_id and self.world_grid) then
+            return
+        end
+        local moved_cell = self.world_grid[entered_cell_id]
+        if not moved_cell then
+            return
+        end
+        local has_fire, has_gas = get_cell_hazard_flags(moved_cell)
+        local gas_applies = has_gas and civilian.is_awake == true
+        local step_hazard_damage = 0
+        if has_fire then
+            step_hazard_damage = step_hazard_damage + 1
+        end
+        if gas_applies then
+            step_hazard_damage = step_hazard_damage + 1
+        end
+        if step_hazard_damage <= 0 then
+            return
+        end
+        civilian.current_health = math.max(0, (civilian.current_health or 0) - step_hazard_damage)
+        civilian.hazard_flash_tint = has_fire and vmath.vector4(1.0, 0.78, 0.25, 1)
+            or vmath.vector4(0.58, 1.0, 0.66, 1)
+        civilian.hazard_flash_active = true
+        civilian.hazard_flash_token = (civilian.hazard_flash_token or 0) + 1
+        local civilian_flash_token = civilian.hazard_flash_token
+        multiplayer_emit_combat_fx_event(self, {
+            fx_type = "hazard_flash",
+            target_kind = "civilian",
+            target_id = civilian.id,
+            tint_r = civilian.hazard_flash_tint.x,
+            tint_g = civilian.hazard_flash_tint.y,
+            tint_b = civilian.hazard_flash_tint.z,
+            duration_s = 0.75
+        })
+        timer.delay(0.75, false, function()
+            if civilian and civilian.hazard_flash_token == civilian_flash_token then
+                civilian.hazard_flash_active = false
+            end
+        end)
+        print(string.format(
+            "MOVE HAZARD | %s took %d damage on cell %d [fire=%s gas=%s gas_applied=%s awake=%s] (HP=%d)",
+            civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0)),
+            step_hazard_damage,
+            tonumber(entered_cell_id or 0) or 0,
+            has_fire and "y" or "n",
+            has_gas and "y" or "n",
+            gas_applies and "y" or "n",
+            civilian.is_awake == true and "y" or "n",
+            civilian.current_health or 0
+        ))
+        if civilian.current_health <= 0 then
+            civilian.is_dead = true
+            civilian.is_awake = false
+            print(string.format("%s died from movement hazard", civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0))))
+        end
+        refresh_civilian_visuals(self)
+    end
     for _, civilian in ipairs(self.civilians or {}) do
         if civilian and civilian.is_dead ~= true and civilian.is_moving and civilian.move_path then
             local civilian_sfx_key = "civ_" .. tostring(civilian.id or 0)
@@ -8294,6 +8352,7 @@ local function update_civilian_movement(self, dt)
                             ensure_civilian_cell_slot_assignment(self, civilian, civilian.cell_id, civilian.entry_slot_index)
                             trigger_unit_tile_bump_sfx(self, "civ")
                             furnace_resolve_cell_entry(self, civilian.cell_id, "civilian_move_step")
+                            apply_civilian_move_hazard_damage(civilian, civilian.cell_id)
                             if civilian.is_dead == true then
                                 stop_civilian_motion()
                                 refresh_civilian_visuals(self)
@@ -8395,6 +8454,7 @@ local function update_civilian_movement(self, dt)
                                     ensure_civilian_cell_slot_assignment(self, civilian, target_cell_id, civilian.entry_slot_index)
                                     trigger_unit_tile_bump_sfx(self, "civ")
                                     furnace_resolve_cell_entry(self, target_cell_id, "civilian_move_step")
+                                    apply_civilian_move_hazard_damage(civilian, target_cell_id)
                                     if civilian.is_dead == true then
                                         stop_civilian_motion()
                                         refresh_civilian_visuals(self)
@@ -9193,19 +9253,20 @@ local function apply_start_of_turn_environment_damage(self)
             local cell = self.world_grid[civilian.cell_id]
             local damage = 0
             local has_fire, has_gas, has_outside = get_cell_hazard_flags(cell)
+            local gas_applies = has_gas and civilian.is_awake == true
             if has_outside then
                 damage = damage + outside_damage
             end
             if has_fire then
                 damage = damage + fire_damage
             end
-            if has_gas then
+            if gas_applies then
                 damage = damage + gas_damage
             end
             if damage > 0 then
                 civilian.current_health = math.max(0, (civilian.current_health or 0) - damage)
                 civilian.hazard_flash_tint = has_fire and vmath.vector4(1.0, 0.78, 0.25, 1)
-                    or (has_gas and vmath.vector4(0.58, 1.0, 0.66, 1) or vmath.vector4(0.62, 0.82, 1.0, 1))
+                    or (gas_applies and vmath.vector4(0.58, 1.0, 0.66, 1) or vmath.vector4(0.62, 0.82, 1.0, 1))
                 civilian.hazard_flash_active = true
                 civilian.hazard_flash_token = (civilian.hazard_flash_token or 0) + 1
                 local civilian_flash_token = civilian.hazard_flash_token
@@ -9224,13 +9285,16 @@ local function apply_start_of_turn_environment_damage(self)
                     end
                 end)
                 print(string.format(
-                    "TURN HAZARD | %s took %d damage (HP=%d) [outside=%s fire=%s gas=%s]",
+                    "TURN HAZARD | %s took %d damage (HP=%d) [outside=%s fire=%s gas=%s gas_applied=%s awake=%s rescued=%s]",
                     civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0)),
                     damage,
                     civilian.current_health or 0,
                     has_outside and "y" or "n",
                     has_fire and "y" or "n",
-                    has_gas and "y" or "n"
+                    has_gas and "y" or "n",
+                    gas_applies and "y" or "n",
+                    civilian.is_awake == true and "y" or "n",
+                    civilian.is_rescued == true and "y" or "n"
                 ))
                 if civilian.current_health <= 0 then
                     civilian.is_dead = true

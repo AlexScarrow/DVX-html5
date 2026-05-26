@@ -1055,6 +1055,8 @@ SOLO_SCORE_BREAKDOWN_LABELS = {
     "civs",
     "dna"
 }
+RUNTIME_MEMORY_PROBE_ENABLED = true
+RUNTIME_MEMORY_PROBE_INTERVAL_S = 10.0
 AESTHETIC_BUTTON_X = NEW_TURN_BUTTON_X + NEW_TURN_BUTTON_W + 64
 AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
 AESTHETIC_BUTTON_W = 120
@@ -11382,6 +11384,49 @@ log_runtime_reference_audit = function(self, phase)
     elseif phase == "post_clear" then
         self.runtime_ref_audit.last_post_clear = c
     end
+end
+
+update_runtime_memory_probe = function(self, dt)
+    if not self or RUNTIME_MEMORY_PROBE_ENABLED ~= true then
+        return
+    end
+    local interval_s = math.max(1, tonumber(RUNTIME_MEMORY_PROBE_INTERVAL_S or 10.0) or 10.0)
+    self.runtime_memory_probe_timer = (tonumber(self.runtime_memory_probe_timer or interval_s) or interval_s) - (tonumber(dt or 0) or 0)
+    if self.runtime_memory_probe_timer > 0 then
+        return
+    end
+    self.runtime_memory_probe_timer = interval_s
+    local gc_ok, gc_kb_raw = pcall(collectgarbage, "count")
+    local gc_kb = gc_ok and math.max(0, tonumber(gc_kb_raw or 0) or 0) or 0
+    local refs = collect_runtime_reference_counts(self)
+    local aliens_alive = 0
+    for _, alien in ipairs(self.aliens or {}) do
+        if alien and alien.is_dead ~= true then
+            aliens_alive = aliens_alive + 1
+        end
+    end
+    local civilians_alive = 0
+    for _, civilian in ipairs(self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true then
+            civilians_alive = civilians_alive + 1
+        end
+    end
+    local score_events = 0
+    if self.score_state and self.score_state.events_log then
+        score_events = #self.score_state.events_log
+    end
+    print(string.format(
+        "MEM PROBE | lua_kb=%d refs=%d aliens_alive=%d civilians_alive=%d spitter_proj=%d turret_proj=%d world_items=%d hazard_fx=%d score_events=%d",
+        math.floor(gc_kb + 0.5),
+        tonumber(refs and refs.total or 0) or 0,
+        aliens_alive,
+        civilians_alive,
+        count_non_nil_entries(self.spitter_projectiles),
+        count_non_nil_entries(self.turret_projectiles),
+        count_non_nil_entries(self.world_item_instances),
+        count_non_nil_entries(self.hazard_fx_objects),
+        score_events
+    ))
 end
 
 local function initialize_unit_ui(self)
@@ -30403,6 +30448,7 @@ function init(self)
     self.score_state = nil
     ensure_score_state(self)
     self.score_display_total = 0
+    self.runtime_memory_probe_timer = tonumber(RUNTIME_MEMORY_PROBE_INTERVAL_S or 10.0) or 10.0
     self.multiplayer_mode_active = false
     print("SCORE TRACE READY | scoring runtime initialized")
     score_log_snapshot(self, "init")
@@ -30490,6 +30536,7 @@ function update(self, dt)
         end
     end
     multiplayer_update_telemetry(self, dt)
+    update_runtime_memory_probe(self, dt)
     if self.sfx_state and self.sfx_state.boot_deferred ~= true then
         self.sfx_state.boot_deferred = true
         refresh_ambient_sfx_state(self)

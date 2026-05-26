@@ -1,6 +1,7 @@
 local score_profiles = require("main.score_profiles")
 
 local M = {}
+local MAX_EVENTS_LOG_ENTRIES = 512
 
 local function shallow_copy_table(src)
     local out = {}
@@ -68,6 +69,12 @@ local function log_event(state, name, payload)
         name = name,
         payload = payload or {}
     })
+    local overflow = #state.events_log - MAX_EVENTS_LOG_ENTRIES
+    if overflow > 0 then
+        for _ = 1, overflow do
+            table.remove(state.events_log, 1)
+        end
+    end
 end
 
 function M.create_state(mission_type)

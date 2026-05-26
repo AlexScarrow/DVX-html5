@@ -1029,6 +1029,32 @@ SOLO_SETUP_ROW_TOTAL_SPACING = 8
 SOLO_SETUP_ROW_TOTAL_OFFSET_Y = 0
 SOLO_SETUP_TEXT_TINT_UNLOCKED = vmath.vector4(0.22, 0.96, 0.3, 0.98)
 SOLO_SETUP_TEXT_TINT_LOCKED = vmath.vector4(1, 1, 1, 0.98)
+SOLO_SCORE_BREAKDOWN_PANEL_X = SCREEN_WIDTH * 0.5
+SOLO_SCORE_BREAKDOWN_PANEL_Y = 63
+SOLO_SCORE_BREAKDOWN_PANEL_W = 300
+SOLO_SCORE_BREAKDOWN_PANEL_H = 120
+SOLO_SCORE_BREAKDOWN_PANEL_SCALE = 1.0
+SOLO_SCORE_BREAKDOWN_PANEL_Z = SOLO_SETUP_UI_Z + 0.004
+SOLO_SCORE_BREAKDOWN_TEXT_Z = SOLO_SETUP_UI_Z + 0.007
+SOLO_SCORE_BREAKDOWN_ROW_COUNT = 6
+SOLO_SCORE_BREAKDOWN_LABEL_MAX_CHARS = 16
+SOLO_SCORE_BREAKDOWN_VALUE_MAX_CHARS = 7
+SOLO_SCORE_BREAKDOWN_ROW_SPACING = 16
+SOLO_SCORE_BREAKDOWN_FIRST_ROW_OFFSET_Y = 40
+SOLO_SCORE_BREAKDOWN_LABEL_X_OFFSET = -134
+SOLO_SCORE_BREAKDOWN_VALUE_X_OFFSET = 108
+SOLO_SCORE_BREAKDOWN_LABEL_SCALE = 0.275
+SOLO_SCORE_BREAKDOWN_LABEL_SPACING = 4
+SOLO_SCORE_BREAKDOWN_VALUE_SCALE = 0.425
+SOLO_SCORE_BREAKDOWN_VALUE_SPACING = 5
+SOLO_SCORE_BREAKDOWN_LABELS = {
+    "total",
+    "squad",
+    "aliens",
+    "portals",
+    "civs",
+    "dna"
+}
 AESTHETIC_BUTTON_X = NEW_TURN_BUTTON_X + NEW_TURN_BUTTON_W + 64
 AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
 AESTHETIC_BUTTON_W = 120
@@ -11463,6 +11489,9 @@ local function initialize_unit_ui(self)
         solo_progress_mission_type_letters = {},
         solo_progress_mission_meta_digits = {},
         solo_progress_row_total_digits = {},
+        solo_score_breakdown_panel = nil,
+        solo_score_breakdown_label_letters = {},
+        solo_score_breakdown_value_digits = {},
         advisory_sprite = nil,
         ready_buttons = {},
         mp_debug_player_buttons = {},
@@ -11694,6 +11723,20 @@ local function initialize_unit_ui(self)
     self.ui.tutorial_panel = create_outro_marker_sprite(hash("tutorial1"), TUTORIAL_PANEL_Z)
     self.ui.flow_solo_setup_panel = create_ui_marker_sprite(hash("solo_setup_panel"), SOLO_SETUP_UI_Z + 0.001)
     self.ui.flow_solo_mission_select = create_ui_marker_sprite(hash("solo_selected_mission_frame"), SOLO_SETUP_UI_Z + 0.002)
+    self.ui.solo_score_breakdown_panel = create_ui_marker_sprite(hash("solo_score_breakdown_panel"), SOLO_SCORE_BREAKDOWN_PANEL_Z)
+    if self.ui.solo_score_breakdown_panel then
+        pcall(go.set, msg.url(nil, self.ui.solo_score_breakdown_panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
+    for row = 1, SOLO_SCORE_BREAKDOWN_ROW_COUNT do
+        self.ui.solo_score_breakdown_label_letters[row] = self.ui.solo_score_breakdown_label_letters[row] or {}
+        self.ui.solo_score_breakdown_value_digits[row] = self.ui.solo_score_breakdown_value_digits[row] or {}
+        for ci = 1, SOLO_SCORE_BREAKDOWN_LABEL_MAX_CHARS do
+            self.ui.solo_score_breakdown_label_letters[row][ci] = create_ui_marker_sprite(hash("letter_a"), SOLO_SCORE_BREAKDOWN_TEXT_Z)
+        end
+        for ci = 1, SOLO_SCORE_BREAKDOWN_VALUE_MAX_CHARS do
+            self.ui.solo_score_breakdown_value_digits[row][ci] = create_ui_marker_sprite(hash("score_0"), SOLO_SCORE_BREAKDOWN_TEXT_Z)
+        end
+    end
     self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
     for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
         self.ui.flow_mp_mission_buttons[i] = create_ui_marker_sprite(multiplayer_get_mission_anim_id(mission_type), MP_SETUP_UI_Z)
@@ -11942,6 +11985,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.tutorial_panel, -9999, -9999, TUTORIAL_PANEL_Z, hidden, TUTORIAL_PANEL_W, TUTORIAL_PANEL_H)
     set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
     set_ui_square_transform(self, self.ui.flow_solo_mission_select, -9999, -9999, SOLO_SETUP_UI_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.solo_score_breakdown_panel, -9999, -9999, SOLO_SCORE_BREAKDOWN_PANEL_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_SCALE_X, MP_SETUP_PANEL_SCALE_Y)
     if self.ui.flow_mp_mission_buttons then
         for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
@@ -12002,6 +12046,42 @@ local function set_ui_hidden(self)
                         hidden,
                         SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SETUP_ROW_TOTAL_SCALE,
                         SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SETUP_ROW_TOTAL_SCALE
+                    )
+                end
+            end
+        end
+    end
+    if self.ui.solo_score_breakdown_label_letters then
+        for _, row_letters in ipairs(self.ui.solo_score_breakdown_label_letters) do
+            if row_letters then
+                for _, letter_id in ipairs(row_letters) do
+                    set_ui_square_transform(
+                        self,
+                        letter_id,
+                        -9999,
+                        -9999,
+                        SOLO_SCORE_BREAKDOWN_TEXT_Z,
+                        hidden,
+                        SOLO_SCORE_BREAKDOWN_LABEL_SCALE,
+                        SOLO_SCORE_BREAKDOWN_LABEL_SCALE
+                    )
+                end
+            end
+        end
+    end
+    if self.ui.solo_score_breakdown_value_digits then
+        for _, row_digits in ipairs(self.ui.solo_score_breakdown_value_digits) do
+            if row_digits then
+                for _, digit_id in ipairs(row_digits) do
+                    set_ui_square_transform(
+                        self,
+                        digit_id,
+                        -9999,
+                        -9999,
+                        SOLO_SCORE_BREAKDOWN_TEXT_Z,
+                        hidden,
+                        SCORE_HUD_DIGIT_DRAW_W * 0.021 * SOLO_SCORE_BREAKDOWN_VALUE_SCALE,
+                        SCORE_HUD_DIGIT_DRAW_H * 0.021 * SOLO_SCORE_BREAKDOWN_VALUE_SCALE
                     )
                 end
             end
@@ -14515,11 +14595,19 @@ solo_progress_get_mission_entry = function(self, mission_slot)
     local slot_key = tostring(math.max(1, math.min(SOLO_SETUP_MISSION_COUNT, tonumber(mission_slot or 1) or 1)))
     local entry = state.mission[slot_key]
     if type(entry) ~= "table" then
-        entry = { score = 0, result = "unplayed" }
+        entry = { score = 0, result = "unplayed", score_details = {} }
         state.mission[slot_key] = entry
     end
     entry.score = math.max(0, tonumber(entry.score or 0) or 0)
     entry.result = tostring(entry.result or "unplayed")
+    local details = type(entry.score_details) == "table" and entry.score_details or {}
+    details.squad_survived_points = math.max(0, tonumber(details.squad_survived_points or 0) or 0)
+    details.aliens_killed_points = math.max(0, tonumber(details.aliens_killed_points or 0) or 0)
+    details.alien_portals_destroyed_points = math.max(0, tonumber(details.alien_portals_destroyed_points or 0) or 0)
+    details.civilians_rescued_points = math.max(0, tonumber(details.civilians_rescued_points or 0) or 0)
+    details.dna_retrieved_points = math.max(0, tonumber(details.dna_retrieved_points or 0) or 0)
+    details.boss_destroyed_points = math.max(0, tonumber(details.boss_destroyed_points or 0) or 0)
+    entry.score_details = details
     return entry
 end
 
@@ -14577,7 +14665,19 @@ solo_progress_get_default_selected_slot = function(self)
     return 1
 end
 
-solo_progress_record_result = function(self, mission_slot, result, score_total)
+solo_progress_make_score_details = function(score_breakdown)
+    local b = type(score_breakdown) == "table" and score_breakdown or {}
+    return {
+        squad_survived_points = math.max(0, tonumber(b.humans_escaped_points or 0) or 0),
+        aliens_killed_points = math.max(0, tonumber(b.aliens_killed_points or 0) or 0),
+        alien_portals_destroyed_points = math.max(0, tonumber(b.spawn_points_points or 0) or 0),
+        civilians_rescued_points = math.max(0, tonumber(b.civilian_escorted_points or 0) or 0),
+        dna_retrieved_points = math.max(0, tonumber(b.dna_retrieved_points or 0) or 0),
+        boss_destroyed_points = math.max(0, tonumber(b.boss_destroyed_points or 0) or 0)
+    }
+end
+
+solo_progress_record_result = function(self, mission_slot, result, score_total, score_breakdown)
     if not self then
         return
     end
@@ -14589,6 +14689,7 @@ solo_progress_record_result = function(self, mission_slot, result, score_total)
     end
     entry.result = final_result
     entry.score = (final_result == "win") and math.max(0, tonumber(score_total or 0) or 0) or 0
+    entry.score_details = solo_progress_make_score_details((final_result == "win") and score_breakdown or nil)
     solo_progress_save_state(self)
 end
 
@@ -14721,6 +14822,29 @@ solo_progress_draw_meta_nodes = function(self, nodes, text, center_x, center_y, 
     end
 end
 
+solo_progress_draw_letter_nodes_left = function(self, nodes, text, left_x, center_y, spacing, scale, tint)
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    if not nodes then
+        return
+    end
+    for i = 1, #nodes do
+        set_ui_square_transform(self, nodes[i], -9999, -9999, SOLO_SCORE_BREAKDOWN_TEXT_Z, hidden, scale, scale)
+    end
+    local normalized = string.lower(tostring(text or ""))
+    normalized = string.gsub(normalized, "[^a-z]", "")
+    if normalized == "" then
+        return
+    end
+    local count = math.min(#normalized, #nodes)
+    local start_x = tonumber(left_x or 0) or 0
+    for i = 1, count do
+        local glyph_id = nodes[i]
+        local ch = string.sub(normalized, i, i)
+        msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+        set_ui_square_transform(self, glyph_id, start_x + ((i - 1) * spacing), center_y, SOLO_SCORE_BREAKDOWN_TEXT_Z, tint, scale, scale)
+    end
+end
+
 solo_progress_render_mission_text = function(self, mission_slot, center_x, center_y)
     if not (self and self.ui and self.ui.solo_progress_mission_type_letters and self.ui.solo_progress_mission_meta_digits) then
         return
@@ -14759,6 +14883,88 @@ solo_progress_render_mission_text = function(self, mission_slot, center_x, cente
         text_tint,
         (tonumber(mission_entry.score or 0) or 0) <= 0
     )
+end
+
+solo_progress_render_score_breakdown_panel = function(self, mission_slot)
+    if not (self and self.ui) then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    local slot = math.max(1, math.min(SOLO_SETUP_MISSION_COUNT, tonumber(mission_slot or 1) or 1))
+    local mission_entry = solo_progress_get_mission_entry(self, slot)
+    local has_result = tostring(mission_entry.result or "unplayed") ~= "unplayed"
+    if not has_result then
+        set_ui_square_transform(self, self.ui.solo_score_breakdown_panel, -9999, -9999, SOLO_SCORE_BREAKDOWN_PANEL_Z, hidden, 1, 1)
+        for row = 1, SOLO_SCORE_BREAKDOWN_ROW_COUNT do
+            solo_progress_draw_letter_nodes(
+                self,
+                self.ui.solo_score_breakdown_label_letters and self.ui.solo_score_breakdown_label_letters[row] or nil,
+                "",
+                -9999,
+                -9999,
+                SOLO_SCORE_BREAKDOWN_LABEL_SPACING,
+                SOLO_SCORE_BREAKDOWN_LABEL_SCALE,
+                hidden
+            )
+            solo_progress_draw_meta_nodes(
+                self,
+                self.ui.solo_score_breakdown_value_digits and self.ui.solo_score_breakdown_value_digits[row] or nil,
+                "",
+                -9999,
+                -9999,
+                SOLO_SCORE_BREAKDOWN_VALUE_SPACING,
+                SOLO_SCORE_BREAKDOWN_VALUE_SCALE,
+                hidden,
+                false
+            )
+        end
+        return
+    end
+    set_ui_square_transform(
+        self,
+        self.ui.solo_score_breakdown_panel,
+        SOLO_SCORE_BREAKDOWN_PANEL_X,
+        SOLO_SCORE_BREAKDOWN_PANEL_Y,
+        SOLO_SCORE_BREAKDOWN_PANEL_Z,
+        vmath.vector4(1, 1, 1, 1),
+        SOLO_SCORE_BREAKDOWN_PANEL_SCALE,
+        SOLO_SCORE_BREAKDOWN_PANEL_SCALE
+    )
+    local text_tint = vmath.vector4(0.95, 1.0, 0.96, 1.0)
+    local details = mission_entry.score_details or {}
+    local values = {
+        math.max(0, tonumber(mission_entry.score or 0) or 0),
+        math.max(0, tonumber(details.squad_survived_points or 0) or 0),
+        math.max(0, tonumber(details.aliens_killed_points or 0) or 0),
+        math.max(0, tonumber(details.alien_portals_destroyed_points or 0) or 0),
+        math.max(0, tonumber(details.civilians_rescued_points or 0) or 0),
+        math.max(0, tonumber(details.dna_retrieved_points or 0) or 0)
+    }
+    for row = 1, SOLO_SCORE_BREAKDOWN_ROW_COUNT do
+        local row_y = SOLO_SCORE_BREAKDOWN_PANEL_Y + SOLO_SCORE_BREAKDOWN_FIRST_ROW_OFFSET_Y - ((row - 1) * SOLO_SCORE_BREAKDOWN_ROW_SPACING)
+        local value_tint = (row == 1) and vmath.vector4(0.22, 0.96, 0.3, 1.0) or text_tint
+        solo_progress_draw_letter_nodes_left(
+            self,
+            self.ui.solo_score_breakdown_label_letters and self.ui.solo_score_breakdown_label_letters[row] or nil,
+            "",
+            SOLO_SCORE_BREAKDOWN_PANEL_X + SOLO_SCORE_BREAKDOWN_LABEL_X_OFFSET,
+            row_y,
+            SOLO_SCORE_BREAKDOWN_LABEL_SPACING,
+            SOLO_SCORE_BREAKDOWN_LABEL_SCALE,
+            text_tint
+        )
+        solo_progress_draw_meta_nodes(
+            self,
+            self.ui.solo_score_breakdown_value_digits and self.ui.solo_score_breakdown_value_digits[row] or nil,
+            tostring(math.floor((values[row] or 0) + 0.5)),
+            SOLO_SCORE_BREAKDOWN_PANEL_X + SOLO_SCORE_BREAKDOWN_VALUE_X_OFFSET,
+            row_y,
+            SOLO_SCORE_BREAKDOWN_VALUE_SPACING,
+            SOLO_SCORE_BREAKDOWN_VALUE_SCALE,
+            value_tint,
+            false
+        )
+    end
 end
 
 solo_progress_ui_ensure_nodes = function(self)
@@ -16799,7 +17005,7 @@ function enter_mission_outro(self, result, reason)
         and self.solo_active_mission_slot
     then
         local solo_score_total = math.max(0, tonumber(self.flow_score_breakdown and self.flow_score_breakdown.total or 0) or 0)
-        solo_progress_record_result(self, self.solo_active_mission_slot, final_result, solo_score_total)
+        solo_progress_record_result(self, self.solo_active_mission_slot, final_result, solo_score_total, self.flow_score_breakdown and self.flow_score_breakdown.score_breakdown or nil)
     end
     self.end_result = final_result
     self.end_mission_type = mission_type
@@ -17259,6 +17465,7 @@ function update_flow_ui(self, dt)
             end
             solo_progress_render_mission_text(self, slot, mx, my)
         end
+        solo_progress_render_score_breakdown_panel(self, selected_slot)
         local global_total = solo_progress_get_global_total(self)
         local max_visible_row = SOLO_SETUP_MISSION_ROWS
         for probe_row = 2, SOLO_SETUP_MISSION_ROWS do

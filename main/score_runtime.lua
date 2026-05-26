@@ -44,6 +44,7 @@ local function ensure_state(state)
     m.humans_escaped_on_launch = tonumber(m.humans_escaped_on_launch or 0) or 0
     m.purge_portal_deployments = tonumber(m.purge_portal_deployments or 0) or 0
     m.holdout_turns_survived = tonumber(m.holdout_turns_survived or 0) or 0
+    m.bosses_destroyed_count = tonumber(m.bosses_destroyed_count or 0) or 0
     m.humans_alive_at_end = tonumber(m.humans_alive_at_end or 0) or 0
     m.mission_complete = m.mission_complete == true
     m.mission_failed = m.mission_failed == true
@@ -187,6 +188,13 @@ function M.record_humans_alive_at_end(state, count)
     return state
 end
 
+function M.record_boss_destroyed(state)
+    state = ensure_state(state)
+    state.metrics.bosses_destroyed_count = (tonumber(state.metrics.bosses_destroyed_count or 0) or 0) + 1
+    log_event(state, "boss_destroyed", { total = state.metrics.bosses_destroyed_count })
+    return state
+end
+
 function M.record_mission_complete(state)
     state = ensure_state(state)
     state.metrics.mission_complete = true
@@ -250,6 +258,12 @@ function M.compute_score(state, mission_type_override)
     breakdown.humans_escaped_points = (m.humans_escaped_on_launch or 0) * (points.human_escaped_alive or 0)
     breakdown.purge_portal_deploy_points = (m.purge_portal_deployments or 0) * (points.purge_portal_deployment or 0)
     breakdown.holdout_survival_points = (m.holdout_turns_survived or 0) * (holdout.points_per_turn_survived or 0)
+    local dna_retrieved_count = 0
+    if mission_type == "holdout" and m.mission_complete == true then
+        dna_retrieved_count = 1
+    end
+    breakdown.dna_retrieved_points = dna_retrieved_count * (points.dna_retrieved or 0)
+    breakdown.boss_destroyed_points = (m.bosses_destroyed_count or 0) * (points.boss_destroyed or 0)
 
     breakdown.efficiency_points = 0
     if m.mission_complete == true then

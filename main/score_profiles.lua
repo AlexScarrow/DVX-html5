@@ -87,6 +87,8 @@ M.PROFILES = {
             spawn_point_destroyed = 25,
             civilian_escorted = 0,
             human_escaped_alive = 500,
+            dna_retrieved = 1000,
+            boss_destroyed = 0,
             win_bonus = 0,
             fail_bonus = 0
         },

@@ -988,7 +988,7 @@ SOLO_SETUP_MISSION_COUNT = 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
 SOLO_SETUP_MISSION_LEVEL_MAP = {
-    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10
+    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10, [10] = 11, [11]=12
 }
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
@@ -14667,10 +14667,14 @@ end
 
 solo_progress_make_score_details = function(score_breakdown)
     local b = type(score_breakdown) == "table" and score_breakdown or {}
+    local spawn_points = math.max(0, tonumber(b.spawn_points_points or 0) or 0)
+    local purge_portals = math.max(0, tonumber(b.purge_portal_deploy_points or 0) or 0)
     return {
         squad_survived_points = math.max(0, tonumber(b.humans_escaped_points or 0) or 0),
         aliens_killed_points = math.max(0, tonumber(b.aliens_killed_points or 0) or 0),
-        alien_portals_destroyed_points = math.max(0, tonumber(b.spawn_points_points or 0) or 0),
+        -- Purge missions score portal objective via purge_portal_deploy_points.
+        -- Keep spawn_points_points as fallback for modes that use spawn-point destruction.
+        alien_portals_destroyed_points = math.max(spawn_points, purge_portals),
         civilians_rescued_points = math.max(0, tonumber(b.civilian_escorted_points or 0) or 0),
         dna_retrieved_points = math.max(0, tonumber(b.dna_retrieved_points or 0) or 0),
         boss_destroyed_points = math.max(0, tonumber(b.boss_destroyed_points or 0) or 0)

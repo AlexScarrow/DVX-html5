@@ -427,19 +427,25 @@ levels[4] = {
     }
 
     levels[11] = {
-        { x = 10, y = 13, tile = "coms" },
-        { x = 11, y = 10, tile = "canteen" },
-        { x = 14, y = 10, tile = "jungle" },
-        { x = 2, y = 8, tile = "coms" },
+        { x = 11, y = 14, tile = "coms" },
+        { x = 2, y = 11, tile = "coms" },
+        { x = 11, y = 11, tile = "canteen" },
+        { x = 14, y = 11, tile = "jungle" },
+        { x = 2, y = 8, tile = "armoury" },
         { x = 5, y = 8, tile = "exterior2" },
         { x = 8, y = 8, tile = "rescue_entry" },
-        { x = 11, y = 7, tile = "bunkroom" },
-        { x = 14, y = 7, tile = "exterior1" },
-        { x = 2, y = 5, tile = "portal" },
-        { x = 5, y = 5, tile = "corridor1" },
-        { x = 8, y = 5, tile = "corridor1" },
-        { x = 11, y = 4, tile = "armoury" },
-        { x = 14, y = 4, tile = "portal" },
+        { x = 11, y = 8, tile = "bunkroom" },
+        { x = 14, y = 8, tile = "jungle" },
+        { x = 2, y = 5, tile = "furnace" },
+        { x = 5, y = 5, tile = "cavern" },
+        { x = 8, y = 5, tile = "void" },
+        { x = 11, y = 5, tile = "void" },
+        { x = 14, y = 5, tile = "furnace" },
+        { x = 2, y = 2, tile = "corridor1" },
+        { x = 5, y = 2, tile = "corridor1" },
+        { x = 8, y = 2, tile = "portal" },
+        { x = 11, y = 2, tile = "void" },
+        { x = 14, y = 2, tile = "portal" },
     }
     levels[11].mission_type = "purge"
     levels[11].spawn_tile = "rescue_entry"

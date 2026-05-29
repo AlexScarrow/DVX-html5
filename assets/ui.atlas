@@ -58,6 +58,12 @@ images {
 images {
   image: "/assets/images/selected_portrait.png"
 }
+images {
+  image: "/assets/images/button_computerGame_mode.png"
+}
+images {
+  image: "/assets/images/button_boardGame_mode.png"
+}
 margin: 0
 extrude_borders: 0
 inner_padding: 0

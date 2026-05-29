@@ -10600,6 +10600,18 @@ update_realtime_toggle_button_visual = function(self)
     pcall(go.set, msg.url(nil, self.ui.realtime_toggle_button, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
 end
 
+update_aesthetic_toggle_button_visual = function(self)
+    if not (self and self.ui and self.ui.aesthetic_toggle_button_art) then
+        return
+    end
+    local anim_id = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
+        and hash("button_boardGame_mode")
+        or hash("button_computerGame_mode")
+    pcall(msg.post, msg.url(nil, self.ui.aesthetic_toggle_button_art, "sprite"), "play_animation", { id = anim_id })
+    pcall(go.set, msg.url(nil, self.ui.aesthetic_toggle_button_art, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, self.ui.aesthetic_toggle_button_art, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+end
+
 update_mp_lag_sim_button_visual = function(self)
     if not (self and self.ui and self.ui.lag_sim_button) then
         return
@@ -10907,6 +10919,7 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
         or go_id == self.ui.flow_mp_back_button
         or go_id == self.ui.launch_button
         or go_id == self.ui.realtime_toggle_button
+        or go_id == self.ui.aesthetic_toggle_button
         or go_id == self.ui.zoom_in_button
         or go_id == self.ui.zoom_out_button
     )
@@ -11466,6 +11479,7 @@ local function initialize_unit_ui(self)
         exit_button_debug_hitbox = nil,
         lag_sim_button = nil,
         aesthetic_toggle_button = nil,
+        aesthetic_toggle_button_art = nil,
         zoom_slider_track = nil,
         zoom_slider_knob = nil,
         transport_status_dot = nil,
@@ -11667,6 +11681,8 @@ local function initialize_unit_ui(self)
     self.ui.realtime_toggle_button = create_ui_marker_sprite(hash("realtime_button_off"), LAUNCH_BUTTON_Z)
     update_realtime_toggle_button_visual(self)
     self.ui.aesthetic_toggle_button = create_ui_square(0, 0, AESTHETIC_BUTTON_Z, vmath.vector4(0.55, 0.45, 0.85, 0.95), AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+    self.ui.aesthetic_toggle_button_art = create_ui_square_alpha(0, 0, AESTHETIC_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
+    update_aesthetic_toggle_button_visual(self)
     self.ui.zoom_in_button = create_ui_square(0, 0, ZOOM_IN_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     self.ui.zoom_out_button = create_ui_square(0, 0, ZOOM_OUT_BUTTON_Z, vmath.vector4(0.2, 0.55, 0.95, 0.95), ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
     self.ui.zoom_slider_track = create_ui_marker_sprite(hash("zoom_slider_track"), ZOOM_SLIDER_Z)
@@ -11986,6 +12002,7 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.launch_button_art, -9999, -9999, LAUNCH_BUTTON_Z + 0.001, hidden, 1, (LAUNCH_BUTTON_H * 0.021) * 0.75)
     set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
     set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+    set_ui_square_transform(self, self.ui.aesthetic_toggle_button_art, -9999, -9999, AESTHETIC_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
     set_ui_square_transform(self, self.ui.zoom_slider_track, -9999, -9999, ZOOM_SLIDER_Z, hidden, 1, 1)
@@ -18644,6 +18661,7 @@ function update_global_ui_buttons(self)
         set_ui_square_transform(self, self.ui.lag_sim_button, -9999, -9999, EXIT_BUTTON_Z + 0.001, hidden, MP_LAG_SIM_BUTTON_W, MP_LAG_SIM_BUTTON_H)
         set_ui_square_transform(self, self.ui.realtime_toggle_button, -9999, -9999, LAUNCH_BUTTON_Z, hidden, REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021, REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021)
         set_ui_square_transform(self, self.ui.aesthetic_toggle_button, -9999, -9999, AESTHETIC_BUTTON_Z, hidden, AESTHETIC_BUTTON_W, AESTHETIC_BUTTON_H)
+        set_ui_square_transform(self, self.ui.aesthetic_toggle_button_art, -9999, -9999, AESTHETIC_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.zoom_in_button, -9999, -9999, ZOOM_IN_BUTTON_Z, hidden, ZOOM_IN_BUTTON_W, ZOOM_IN_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_out_button, -9999, -9999, ZOOM_OUT_BUTTON_Z, hidden, ZOOM_OUT_BUTTON_W, ZOOM_OUT_BUTTON_H)
         set_ui_square_transform(self, self.ui.zoom_slider_track, -9999, -9999, ZOOM_SLIDER_Z, hidden, 1, 1)
@@ -18881,18 +18899,26 @@ function update_global_ui_buttons(self)
         REALTIME_TOGGLE_BUTTON_DRAW_W * 0.021,
         REALTIME_TOGGLE_BUTTON_DRAW_H * 0.021
     )
-    local aesthetic_color = self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME
-        and vmath.vector4(0.45, 0.35, 0.75, 0.95)
-        or vmath.vector4(0.2, 0.55, 0.9, 0.95)
+    update_aesthetic_toggle_button_visual(self)
     set_ui_square_transform(
         self,
         self.ui.aesthetic_toggle_button,
         AESTHETIC_BUTTON_X,
         AESTHETIC_BUTTON_Y,
         AESTHETIC_BUTTON_Z,
-        aesthetic_color,
+        vmath.vector4(1, 1, 1, 0),
         AESTHETIC_BUTTON_W,
         AESTHETIC_BUTTON_H
+    )
+    set_ui_square_transform(
+        self,
+        self.ui.aesthetic_toggle_button_art,
+        AESTHETIC_BUTTON_X,
+        AESTHETIC_BUTTON_Y,
+        AESTHETIC_BUTTON_Z + 0.001,
+        vmath.vector4(1, 1, 1, 1),
+        1,
+        1
     )
     set_ui_square_transform(
         self,

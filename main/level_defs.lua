@@ -504,14 +504,13 @@ levels[4] = {
         { x = 14, y = 7, tile = "exit" },
         { x = 2, y = 5, tile = "showers" },
         { x = 5, y = 5, tile = "corridor1" },
-        { x = 8, y = 5, tile = "corridor1" },
+        { x = 8, y = 5, tile = "furnace" },
         { x = 11, y = 5, tile = "corridor1" },
         { x = 14, y = 4, tile = "workshop" },
         { x = 2, y = 2, tile = "bunkroom" },
         { x = 5, y = 2, tile = "portal" },
-        { x = 8, y = 2, tile = "cavern" },
+        { x = 8, y = 2, tile = "portal" },
         { x = 11, y = 2, tile = "cavern" },
-        { x = 14, y = 1, tile = "portal" },
     }
     levels[13].mission_type = "escape"
     levels[13].spawn_tile = "entry"

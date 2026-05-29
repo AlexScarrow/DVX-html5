@@ -1001,6 +1001,7 @@ SOLO_SETUP_FILL_BAR_H = 20
 SOLO_SETUP_FILL_BAR_X = 100
 SOLO_SETUP_FILL_BAR_Y = { 160, 300, 440 }
 SOLO_SETUP_TIER_THRESHOLDS = { 10000, 30000, 45000 }
+SOLO_SETUP_DEBUG_UNLOCK_ALL_MISSIONS = true
 SOLO_SETUP_LOCK_ICON_W = 50
 SOLO_SETUP_LOCK_ICON_H = 50
 SOLO_SETUP_LOCK_ICON_X = 1100
@@ -14685,6 +14686,9 @@ end
 
 solo_progress_is_row_unlocked = function(self, row_index)
     local row = math.max(1, math.min(SOLO_SETUP_MISSION_ROWS, tonumber(row_index or 1) or 1))
+    if SOLO_SETUP_DEBUG_UNLOCK_ALL_MISSIONS == true then
+        return true
+    end
     if row <= 1 then
         return true
     end

@@ -5247,6 +5247,18 @@ handle_human_death_loot_drop = function(self, unit, source_tag)
             dropped = dropped + 1
         end
     end
+    if type(unit.equipment) == "table" then
+        for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
+            local equipped_item_type = unit.equipment[slot_name]
+            if equipped_item_type == "buff_flamer" then
+                LOOT_RUNTIME.create_world_item_instance(self, equipped_item_type, death_cell_id, unit.id, {
+                    dropped_from_death = true
+                })
+                unit.equipment[slot_name] = nil
+                dropped = dropped + 1
+            end
+        end
+    end
     unit.backpack_items = {}
     unit.backpack_used = 0
     unit.carrying_corpse_id = nil

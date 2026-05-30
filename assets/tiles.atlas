@@ -242,6 +242,9 @@ images {
   image: "/assets/images/buff_speed_stims.png"
 }
 images {
+  image: "/assets/images/buff_flamer.png"
+}
+images {
   image: "/assets/images/command_star.png"
 }
 images {
@@ -591,6 +594,15 @@ images {
 }
 images {
   image: "/assets/images/bomb.png"
+}
+images {
+  image: "/assets/images/weed1.png"
+}
+images {
+  image: "/assets/images/weed2.png"
+}
+images {
+  image: "/assets/images/weed3.png"
 }
 images {
   image: "/assets/images/impactRing.png"

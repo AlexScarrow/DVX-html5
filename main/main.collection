@@ -163,6 +163,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_flamer"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/flamer.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_furnace_fire"
   data: "components {\n"
   "  id: \"sound\"\n"
@@ -898,6 +906,36 @@ embedded_instances {
   "  id: \"fire_fx_factory\"\n"
   "  type: \"factory\"\n"
   "  data: \"prototype: \\\"/main/fire_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "fire_jet_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"fire_jet_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/fire_jet_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "fire_jet_med_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"fire_jet_med_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/fire_jet_med_fx.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "fire_jet_long_fx_factory"
+  data: "embedded_components {\n"
+  "  id: \"fire_jet_long_fx_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/fire_jet_long_fx.go\\\"\\n"
   "\"\n"
   "}\n"
   ""

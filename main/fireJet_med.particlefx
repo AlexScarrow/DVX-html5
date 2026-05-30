@@ -29,13 +29,13 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 0.75
+      y: 1.0
     }
   }
   properties {
     key: EMITTER_KEY_PARTICLE_SPEED
     points {
-      y: 200.0
+      y: 300.0
     }
   }
   properties {
@@ -71,7 +71,7 @@ emitters {
   particle_properties {
     key: PARTICLE_KEY_SCALE
     points {
-      y: 1.0
+      y: 1.5
     }
   }
   particle_properties {

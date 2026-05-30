@@ -3597,6 +3597,8 @@ function M.extend(runtime, ctx)
         state.purge_extract_ready = false
         state.purge_time_remaining_s = 0
         state.purge_time_expired = false
+        state.cleanse_weed_count = 0
+        state.cleanse_portal_destroyed = false
         if self.squad_units then
             for _, unit in pairs(self.squad_units) do
                 if unit and unit.in_shuttle == true and (unit.current_health or 0) > 0 then
@@ -3667,6 +3669,14 @@ function M.extend(runtime, ctx)
             state.purge_extract_ready = purge_status.extract_ready == true
             state.purge_time_remaining_s = tonumber(purge_status.remaining_s or 0) or 0
             state.purge_time_expired = purge_status.expired == true
+            state.seated_humans = count_alive_humans_on_rescue_local_cell(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
+            return state
+        end
+        if (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
+            local cleanse_status = (ctx and ctx.get_cleanse_mission_status and ctx.get_cleanse_mission_status(self)) or {}
+            local purge_status = (ctx and ctx.get_purge_mission_status and ctx.get_purge_mission_status(self)) or {}
+            state.cleanse_weed_count = tonumber(cleanse_status.weed_count or 0) or 0
+            state.cleanse_portal_destroyed = (cleanse_status.portal_destroyed == true) or (purge_status.bomb_planted == true)
             state.seated_humans = count_alive_humans_on_rescue_local_cell(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
             return state
         end
@@ -3779,6 +3789,19 @@ function M.extend(runtime, ctx)
                 exit_tile_powered = true
             }
         end
+        if (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
+            return {
+                can_launch = (tonumber(state.cleanse_weed_count or 0) or 0) <= 0
+                    and state.cleanse_portal_destroyed == true,
+                seated_humans = state.seated_humans or 0,
+                cleanse_weed_count = tonumber(state.cleanse_weed_count or 0) or 0,
+                cleanse_portal_destroyed = state.cleanse_portal_destroyed == true,
+                power_loaded = 0,
+                nav_ready = true,
+                supplies_ready = true,
+                exit_tile_powered = true
+            }
+        end
         return {
             can_launch = state.seated_humans >= 1
                 and state.power_loaded >= 9
@@ -3814,6 +3837,12 @@ function M.extend(runtime, ctx)
                     status.purge_timer_started and "yes" or "no",
                     status.purge_extract_ready and "yes" or "no",
                     status.purge_time_expired and "yes" or "no"
+                ))
+            elseif (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
+                print(string.format(
+                    "Launch blocked | cleanse_weeds=%d portal_destroyed=%s",
+                    tonumber(status.cleanse_weed_count or 0) or 0,
+                    status.cleanse_portal_destroyed and "yes" or "no"
                 ))
             else
                 print(string.format(
@@ -3855,6 +3884,18 @@ function M.extend(runtime, ctx)
             ))
             return true
         end
+        if (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
+            self.game_won = true
+            self.launch_fx_timer = 1.2
+            record_launch_success(self, status.seated_humans or 0)
+            runtime.refresh_exit_objective_state(self)
+            print(string.format(
+                "CLEANSE | launch confirmed. weeds=%d portal_destroyed=%s",
+                tonumber(status.cleanse_weed_count or 0) or 0,
+                status.cleanse_portal_destroyed and "yes" or "no"
+            ))
+            return true
+        end
         self.game_won = true
         self.launch_fx_timer = 1.2
         record_launch_success(self, status.seated_humans or 0)
@@ -3875,6 +3916,10 @@ function M.extend(runtime, ctx)
             return
         end
         if is_purge_mission(self) then
+            runtime.refresh_exit_objective_state(self)
+            return
+        end
+        if (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
             runtime.refresh_exit_objective_state(self)
             return
         end
@@ -6498,7 +6543,10 @@ function M.extend(runtime, ctx)
                                     remove_source_item()
                                     local item_meta = {}
                                     if source_item == PURGE_BOMB_ITEM_TYPE
-                                        and is_purge_mission(self)
+                                        and (
+                                            is_purge_mission(self)
+                                            or ((ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse")
+                                        )
                                         and ctx
                                         and ctx.get_purge_bomb_target_lookup
                                     then

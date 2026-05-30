@@ -528,6 +528,7 @@ SFX_SPEEDY_DIES_URL = "main:/sfx_speedy_dies#sound"
 SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
 SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
 SFX_SPITTER_FIRES_URL = "main:/sfx_spitter_fires#sound"
+SFX_FLAMER_URL = "main:/sfx_flamer#sound"
 SFX_FURNACE_FIRE_URL = "main:/sfx_furnace_fire#sound"
 SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
@@ -658,11 +659,11 @@ MP_SETUP_PANEL_W = 1180
 MP_SETUP_PANEL_H = 640
 MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z + 0.005
 MP_SETUP_UI_Z = FLOW_UI_BUTTON_Z
-MP_SETUP_MISSION_BTN_X = { 169, 297, 425, 553 }
+MP_SETUP_MISSION_BTN_X = { 169, 266, 363, 460, 557 }
 MP_SETUP_MISSION_BTN_Y = 528
 MP_SETUP_MISSION_BTN_W = 48
 MP_SETUP_MISSION_BTN_H = 40
-MP_SETUP_MISSION_TYPES = { "escape", "rescue", "purge", "dna_sample" }
+MP_SETUP_MISSION_TYPES = { "escape", "rescue", "purge", "cleanse", "dna_sample" }
 MP_SETUP_BTN_2P_X = 820
 MP_SETUP_BTN_3P_X = 980
 MP_SETUP_BTN_4P_X = 1130
@@ -898,7 +899,9 @@ MISSION_TYPE_ESCAPE = "escape"
 MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
+MISSION_TYPE_CLEANSE = "cleanse"
 MISSION_TYPE_TUTORIAL = "tutorial"
+CLEANSE_WEED_BLOCKED = {}
 RESCUE_ENTRY_TILE_NAME = "rescue_entry"
 RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
 RESCUE_ENTRY_VICTORY_LOCAL_CELL = 5
@@ -988,7 +991,7 @@ SOLO_SETUP_MISSION_COUNT = 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
 SOLO_SETUP_MISSION_LEVEL_MAP = {
-    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10, [10] = 11, [11]=12, [12] = 13, [13]=14
+    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10, [10] = 11, [11]=12, [12] = 13, [13]=14,[14]=15
 }
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
@@ -1407,6 +1410,7 @@ OUTRO_SEQUENCES = require("main.outro_sequences")
 LEVEL_EDITOR = require("main.level_editor")
 local TUTORIAL_STEP_DEFS = require("main.tutorial_step_defs").STEPS
 LOOT_RUNTIME = {}
+CLEANSE_RUNTIME = {}
 MELEE_RUNTIME = {}
 HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
 HUMAN_TINT_TECHIE = vmath.vector4(1, 1, 1, 1)
@@ -2489,6 +2493,14 @@ function can_alien_cross_between_cells(world_grid, from_cell_id, to_cell_id, ali
         if mission_type == MISSION_TYPE_RESCUE and is_rescue_entry_victory_cell(runtime_ctx, to_cell_id) then
             return false
         end
+        if CLEANSE_RUNTIME
+            and CLEANSE_RUNTIME.cleanse_is_active_mission
+            and CLEANSE_RUNTIME.cleanse_blocks_alien_entry
+            and CLEANSE_RUNTIME.cleanse_is_active_mission(runtime_ctx)
+            and CLEANSE_RUNTIME.cleanse_blocks_alien_entry(runtime_ctx, alien_type, to_cell_id)
+        then
+            return false
+        end
     end
     local speedy_ignores_barricades = alien_type == ALIEN_TYPE_SPEEDY
     local from_cell = world_grid and world_grid[from_cell_id] or nil
@@ -2536,6 +2548,9 @@ end
 
 function can_human_cross_between_cells(world_grid, from_cell_id, to_cell_id)
     if not can_cross_between_cells(world_grid, from_cell_id, to_cell_id) then
+        return false
+    end
+    if CLEANSE_WEED_BLOCKED and CLEANSE_WEED_BLOCKED[to_cell_id] == true then
         return false
     end
     local _, _, door_closed = get_edge_door_context(world_grid, from_cell_id, to_cell_id)
@@ -2760,12 +2775,14 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
             local cell = world_grid[adj_id]
             -- Check if cell is part of traversable terrain.
             if cell.tileID ~= hash("empty") and cell.tileID ~= hash("void") then
+                if not (CLEANSE_WEED_BLOCKED and CLEANSE_WEED_BLOCKED[adj_id] == true) then
                 local allow_closed_doors = movement_profile == MOVEMENT_PROFILE_HUMAN
                     and path_context
                     and path_context.allow_closed_doors == true
                 local step_cost = get_human_step_move_cost(world_grid, cell_id, adj_id, allow_closed_doors)
                 if step_cost < math.huge then
                     table.insert(neighbors, { id = adj_id, cost = step_cost })
+                end
                 end
             end
         end
@@ -7059,6 +7076,20 @@ get_spawn_pressure_profile = function(self)
     if mission_type == MISSION_TYPE_ESCAPE then
         extra_spawn = tonumber(DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER[tier] or 0) or 0
     end
+    if mission_type == MISSION_TYPE_CLEANSE then
+        local status = CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status and CLEANSE_RUNTIME.cleanse_get_status(self) or nil
+        local weeds = tonumber(status and status.weed_count or 0) or 0
+        if weeds >= 8 then
+            tier = math.max(tier, 1)
+        end
+        if weeds >= 18 then
+            tier = math.max(tier, 2)
+        end
+        if weeds >= 32 then
+            tier = math.max(tier, 3)
+        end
+        profile = DIFFICULTY_PRESSURE_BY_TIER[tier] or profile
+    end
     return {
         tier = tier,
         spawn_delta = (tonumber(profile and profile.spawn_delta or 0) or 0) + extra_spawn,
@@ -7320,6 +7351,49 @@ local function update_all_humans_dead_loss(self)
     self.game_won = false
     print("MISSION | FAILURE all humans are dead.")
     enter_mission_outro(self, "lose", "all_humans_dead")
+end
+
+refresh_cleanse_global_blocked_cells = function(self)
+    CLEANSE_WEED_BLOCKED = {}
+    if not (CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_is_active_mission and CLEANSE_RUNTIME.cleanse_cell_has_weed) then
+        return
+    end
+    if CLEANSE_RUNTIME.cleanse_is_active_mission(self) ~= true then
+        return
+    end
+    for _, cell in ipairs(self.world_grid or {}) do
+        if cell and CLEANSE_RUNTIME.cleanse_cell_has_weed(self, cell.idNumber) then
+            CLEANSE_WEED_BLOCKED[cell.idNumber] = true
+        end
+    end
+end
+
+update_cleanse_runtime = function(self)
+    if not (CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status) then
+        return
+    end
+    if CLEANSE_RUNTIME.cleanse_is_active_mission and CLEANSE_RUNTIME.cleanse_is_active_mission(self) ~= true then
+        return
+    end
+    if self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+    then
+        return
+    end
+    local status = CLEANSE_RUNTIME.cleanse_get_status(self) or {}
+    if status.mission_failed == true then
+        local state = ensure_score_state(self)
+        SCORE_RUNTIME.record_mission_failed(state)
+        self.game_won = false
+        local reason = status.all_infected and "cleanse_all_cells_infected" or "all_humans_dead"
+        enter_mission_outro(self, "lose", reason)
+        return
+    end
+    if status.mission_complete == true and (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME then
+        self.game_won = true
+        enter_mission_outro(self, "win", "cleanse_complete")
+    end
 end
 
 local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
@@ -9773,6 +9847,12 @@ furnace_kill_units_on_cell = function(self, active_cell_id)
 end
 
 furnace_resolve_cell_entry = function(self, cell_id, reason_tag)
+    if CLEANSE_RUNTIME
+        and CLEANSE_RUNTIME.cleanse_resolve_cell_entry
+        and CLEANSE_RUNTIME.cleanse_resolve_cell_entry(self, cell_id, reason_tag) == true
+    then
+        return true
+    end
     if not furnace_is_cell_active(self, cell_id) then
         return false
     end
@@ -11056,6 +11136,7 @@ multiplayer_normalize_mission_type = function(mission_type)
     if value == MISSION_TYPE_ESCAPE
         or value == MISSION_TYPE_RESCUE
         or value == MISSION_TYPE_PURGE
+        or value == MISSION_TYPE_CLEANSE
         or value == MISSION_TYPE_DNA_SAMPLE
         or value == MISSION_TYPE_TUTORIAL
     then
@@ -11069,6 +11150,8 @@ multiplayer_get_mission_anim_id = function(mission_type)
     if m == MISSION_TYPE_RESCUE then
         return hash("mp_btn_mission_rescue")
     elseif m == MISSION_TYPE_PURGE then
+        return hash("mp_btn_mission_purge")
+    elseif m == MISSION_TYPE_CLEANSE then
         return hash("mp_btn_mission_purge")
     elseif m == MISSION_TYPE_DNA_SAMPLE then
         return hash("mp_btn_mission_dna")
@@ -12330,6 +12413,8 @@ function ensure_score_state(self)
         score_profile_id = "escort"
     elseif mission_type == MISSION_TYPE_PURGE then
         score_profile_id = "purge_and_power"
+    elseif mission_type == MISSION_TYPE_CLEANSE then
+        score_profile_id = "purge_and_power"
     elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
         score_profile_id = "holdout"
     end
@@ -12827,6 +12912,8 @@ local function get_objective_reminder_anim_id(self)
         return hash("objective_rescue")
     elseif mission_type == MISSION_TYPE_PURGE then
         return hash("objective_purge")
+    elseif mission_type == MISSION_TYPE_CLEANSE then
+        return hash("objective_purge")
     elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
         return hash("objective_dna")
     end
@@ -13249,6 +13336,23 @@ play_human_shoot_sfx = function(self, world_x, world_y)
     else
         play_sfx_one_shot(self, "human_shoot")
     end
+end
+
+play_flamer_fire_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "flamer",
+            world_x,
+            world_y,
+            tonumber(HUMAN_SHOOT_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+            tonumber(HUMAN_SHOOT_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "flamer")
 end
 
 play_turret_gun_sfx = function(self, world_x, world_y)
@@ -14795,6 +14899,8 @@ solo_progress_get_mission_type_label = function(self, mission_slot)
         label = "rescue"
     elseif mission_type == MISSION_TYPE_PURGE then
         label = "purge"
+    elseif mission_type == MISSION_TYPE_CLEANSE then
+        label = "cleanse"
     elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
         label = "dna"
     end
@@ -18306,7 +18412,38 @@ finish_level_load_after_clear = function(self, level_index)
     self.tile_library = require("main.tile_defs").create_tile_library(COMPONENT_UI)
     self.level_library = require("main.level_defs").create_level_library()
     self.world_grid = create_world_grid()
-    self.world_grid = bake_level_to_world_grid(self.world_grid, self.level_library[level_index], self.tile_library)
+    local selected_level_design = self.level_library[level_index]
+    self.world_grid = bake_level_to_world_grid(self.world_grid, selected_level_design, self.tile_library)
+    if multiplayer_normalize_mission_type(self.current_mission_type) == MISSION_TYPE_CLEANSE then
+        local armoury_tile_instances = {}
+        local flamer_injected = false
+        for placement_index, placement in ipairs(selected_level_design or {}) do
+            if placement and tostring(placement.tile or "") == "armoury" then
+                armoury_tile_instances[placement_index] = true
+            end
+        end
+        for _, cell in ipairs(self.world_grid or {}) do
+            if flamer_injected ~= true and cell and armoury_tile_instances[tonumber(cell.tileInstanceId or 0) or 0] == true then
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                for _, obj in ipairs(objects) do
+                    if obj and obj.name == hash("loot_crate") then
+                        obj.lootItems = obj.lootItems or {}
+                        local keep = {}
+                        for _, item in ipairs(obj.lootItems) do
+                            if item ~= "buff_flamer" then
+                                keep[#keep + 1] = item
+                            end
+                        end
+                        obj.lootItems = keep
+                        table.insert(obj.lootItems, 1, "buff_flamer")
+                        print(string.format("CLEANSE | injected buff_flamer into armoury crate object=%d", tonumber(obj.objectId or 0) or 0))
+                        flamer_injected = true
+                        break
+                    end
+                end
+            end
+        end
+    end
 
     self.alien_turn_active = false
     self.alien_turn_waiting_for_advance = false
@@ -18359,6 +18496,7 @@ finish_level_load_after_clear = function(self, level_index)
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
     self.purge_turns_remaining = 0
+    self.cleanse_state = {}
     self.end_result = ""
     self.end_mission_type = ""
     self.end_outro_sequence_id = ""
@@ -18416,6 +18554,10 @@ finish_level_load_after_clear = function(self, level_index)
     self.civilian_hp_bar_fill_visuals = {}
 
     spawn_visuals(self)
+    if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_initialize_for_level then
+        CLEANSE_RUNTIME.cleanse_initialize_for_level(self)
+    end
+    refresh_cleanse_global_blocked_cells(self)
     apply_aesthetic_mode(self)
     setup_startup_room_tile_fade(self)
     if self.spawn_human_unit_fn then
@@ -22806,6 +22948,46 @@ multiplayer_transport_handle_command = function(self, command)
         return events
     end
 
+    if cmd_type == "cleanse_flamer" then
+        local unit_id = payload.unit_id
+        local target_cell_id = tonumber(payload.target_cell_id or 0) or 0
+        local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
+        if expected_turn_id ~= (self.mp_state.turn_id or 1) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "cleanse_flamer",
+                reason = "stale_turn_id"
+            }))
+            return events
+        end
+        if not multiplayer_player_owns_unit(self, sender, unit_id) then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "cleanse_flamer",
+                reason = "unit_not_owned_by_sender"
+            }))
+            return events
+        end
+        local unit = self.squad_units and self.squad_units[unit_id] or nil
+        if not unit or (tonumber(unit.current_health or 0) or 0) <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "cleanse_flamer",
+                reason = "unit_not_actionable"
+            }))
+            return events
+        end
+        if target_cell_id <= 0 then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "cleanse_flamer",
+                reason = "invalid_target"
+            }))
+            return events
+        end
+        table.insert(events, multiplayer_transport_emit_event(self, "cleanse_flamer_applied", {
+            unit_id = unit_id,
+            target_cell_id = target_cell_id
+        }))
+        return events
+    end
+
     if cmd_type == "release_civilian" then
         local expected_turn_id = tonumber(payload.turn_id or (self.mp_state.turn_id or 1))
         if expected_turn_id ~= (self.mp_state.turn_id or 1) then
@@ -24718,6 +24900,25 @@ multiplayer_transport_on_event = function(self, event)
         end
         return
     end
+    if event.type == "cleanse_flamer_applied" then
+        if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
+            multiplayer_queue_pending_event(self, event)
+            return
+        end
+        if not multiplayer_apply_cleanse_flamer_event(self, event.payload or {}) then
+            print("MP COMMAND | cleanse_flamer_applied ignored.")
+        end
+        return
+    end
+    if event.type == "cleanse_state_sync" then
+        if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_apply_sync_payload then
+            local payload = event.payload or {}
+            local cleanse_payload = payload.cleanse or {}
+            CLEANSE_RUNTIME.cleanse_apply_sync_payload(self, cleanse_payload)
+            refresh_cleanse_global_blocked_cells(self)
+        end
+        return
+    end
     if event.type == "release_civilian_applied" then
         if self.mp_state.awaiting_snapshot and self.mp_state.snapshot_blocking == true then
             multiplayer_queue_pending_event(self, event)
@@ -26583,6 +26784,12 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     get_current_mission_type = get_current_mission_type,
     get_dna_mission_status = get_dna_mission_status,
     get_purge_mission_status = get_purge_mission_status,
+    get_cleanse_mission_status = function(self_ref)
+        if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status then
+            return CLEANSE_RUNTIME.cleanse_get_status(self_ref)
+        end
+        return nil
+    end,
     get_purge_bomb_target_lookup = get_purge_bomb_target_lookup,
     count_purge_locked_portal_bombs = count_purge_locked_portal_bombs,
     mark_purge_launch_pressed = mark_purge_launch_pressed,
@@ -26662,6 +26869,21 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST = ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST,
     ADVISORY_MSG_NO_SPACE_GUN_TURRET = ADVISORY_MSG_NO_SPACE_GUN_TURRET
 })
+CLEANSE_RUNTIME = require("main.cleanse_runtime").extend(CLEANSE_RUNTIME, {
+    get_current_mission_type = get_current_mission_type,
+    CELL_WIDTH = CELL_WIDTH,
+    coords_to_world_pos = coords_to_world_pos,
+    coords_to_id = coords_to_id,
+    get_adjacent_cell = get_adjacent_cell,
+    can_cross_between_cells = can_cross_between_cells,
+    is_cell_barricaded = is_cell_barricaded,
+    get_edge_door_context = get_edge_door_context,
+    get_purge_bomb_target_lookup = get_purge_bomb_target_lookup,
+    get_purge_mission_status = get_purge_mission_status,
+    furnace_kill_units_on_cell = furnace_kill_units_on_cell,
+    unit_has_equipped_buff_kind = unit_has_equipped_buff_kind,
+    play_flamer_fire_sfx = play_flamer_fire_sfx
+})
 MELEE_RUNTIME = require("main.melee_runtime").create({
     MELEE_MODEL = require("main.config").MELEE_MODEL,
     BUFFS = BUFFS,
@@ -26734,6 +26956,26 @@ local function next_turn_reset_human_ap(self)
 
     apply_start_of_turn_environment_damage(self)
     furnace_process_start_of_turn(self)
+    if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_on_new_turn_start then
+        local cleanse_should_step = true
+        if self.mp_state and self.mp_state.enabled then
+            cleanse_should_step = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        end
+        if cleanse_should_step then
+            CLEANSE_RUNTIME.cleanse_on_new_turn_start(self)
+            if self.mp_state
+                and self.mp_state.enabled
+                and self.mp_state.local_player_id == self.mp_state.host_player_id
+                and CLEANSE_RUNTIME.cleanse_build_sync_payload
+            then
+                multiplayer_transport_broadcast_event(self, "cleanse_state_sync", {
+                    turn_id = self.mp_state.turn_id or 1,
+                    cleanse = CLEANSE_RUNTIME.cleanse_build_sync_payload(self)
+                })
+            end
+        end
+    end
+    refresh_cleanse_global_blocked_cells(self)
 
     for _, unit in pairs(self.squad_units) do
         -- Turn boundaries are authoritative movement boundaries:
@@ -29185,6 +29427,24 @@ multiplayer_apply_release_civilian_event = function(self, payload)
     return false
 end
 
+multiplayer_apply_cleanse_flamer_event = function(self, payload)
+    if type(payload) ~= "table" then
+        return false
+    end
+    local unit_id = payload.unit_id
+    local target_cell_id = tonumber(payload.target_cell_id or 0) or 0
+    local unit = self.squad_units and self.squad_units[unit_id] or nil
+    if not unit or target_cell_id <= 0 then
+        return false
+    end
+    if not (CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_try_fire_flamer) then
+        return false
+    end
+    local handled, status = CLEANSE_RUNTIME.cleanse_try_fire_flamer(self, unit, target_cell_id)
+    refresh_cleanse_global_blocked_cells(self)
+    return handled == true and status == "fired"
+end
+
 local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y)
     if not unit or not unit.is_selected then
         return false
@@ -29320,6 +29580,57 @@ local function try_manual_human_shot(self, unit, clicked_cell_id, world_x, world
     return true
 end
 
+try_cleanse_flamer_shot = function(self, unit, clicked_cell_id, world_x, world_y)
+    if not (CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_try_fire_flamer) then
+        return false
+    end
+    if unit_has_equipped_buff_kind(unit, "flamer") ~= true then
+        return false
+    end
+    local target_cell_id = nil
+    local clicked_alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
+    if clicked_alien and clicked_alien.is_dead ~= true and clicked_alien.cell_id then
+        target_cell_id = clicked_alien.cell_id
+    elseif CLEANSE_RUNTIME.cleanse_get_clicked_weed_cell then
+        target_cell_id = CLEANSE_RUNTIME.cleanse_get_clicked_weed_cell(self, world_x, world_y, 64)
+    end
+    if not target_cell_id then
+        return false
+    end
+    if CLEANSE_RUNTIME.cleanse_can_attempt_flamer and CLEANSE_RUNTIME.cleanse_can_attempt_flamer(self, unit, target_cell_id) ~= true then
+        print("Flamethrower target out of range or invalid.")
+        return true
+    end
+    if self.mp_state and self.mp_state.enabled then
+        multiplayer_transport_send_command(self, "cleanse_flamer", {
+            turn_id = self.mp_state.turn_id or 1,
+            unit_id = unit.id,
+            target_cell_id = target_cell_id
+        }, multiplayer_get_active_player_id_for_commands(self))
+        return true
+    end
+    local handled, status = CLEANSE_RUNTIME.cleanse_try_fire_flamer(self, unit, target_cell_id)
+    if handled ~= true then
+        return false
+    end
+    if status == "fired" then
+        refresh_cleanse_global_blocked_cells(self)
+        return true
+    end
+    if status == "blocked" then
+        print("Flamethrower blocked by closed door or barricade.")
+        return true
+    end
+    if status == "diagonal" then
+        print("Flamethrower cannot fire diagonally.")
+        return true
+    end
+    if status == "out_of_range" then
+        return false
+    end
+    return true
+end
+
 local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     local unit = get_controlled_unit(self)
     if not unit or not unit.cell_id then
@@ -29446,6 +29757,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.ui_close_on_next_non_unit_click = false
             update_human_visual_state(self)
             update_human_ap_debug_label(self)
+            return true
+        end
+        if try_cleanse_flamer_shot(self, unit, clicked_cell_id, world_x, world_y) then
+            self.ui_close_on_next_non_unit_click = false
             return true
         end
         if try_manual_human_shot(self, unit, clicked_cell_id, world_x, world_y) then
@@ -30267,6 +30582,7 @@ function init(self)
             brute_dies = true,
             spitter_dies = true,
             spitter_fires = true,
+            flamer = true,
             furnace_fire = true,
             brute_damage = true,
             melee_hit_alien = true,
@@ -30320,6 +30636,7 @@ function init(self)
         brute_dies = { url = msg.url(SFX_BRUTE_DIES_URL), playing = false },
         spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
         spitter_fires = { url = msg.url(SFX_SPITTER_FIRES_URL), playing = false },
+        flamer = { url = msg.url(SFX_FLAMER_URL), playing = false },
         furnace_fire = { url = msg.url(SFX_FURNACE_FIRE_URL), playing = false },
         brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },
@@ -31162,8 +31479,12 @@ function update(self, dt)
         LOOT_RUNTIME.update_workshop_underlay_animations(self, dt)
     end
     update_human_visual_state(self)
+    if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_update_visuals then
+        CLEANSE_RUNTIME.cleanse_update_visuals(self, dt)
+    end
     update_derple_feedback_triggers(self, dt)
     update_purge_runtime(self)
+    update_cleanse_runtime(self)
     update_all_humans_dead_loss(self)
     if not in_outro_flow then
         update_exit_green_smoke_fx(self)

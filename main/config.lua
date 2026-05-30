@@ -342,6 +342,22 @@ M.BUFFS = {
         equipped_draw_scale = 0.4,
         info_pixel_w = 256,
         info_pixel_h = 256
+    },
+    flamer = {
+        id = "flamer",
+        item_type = "buff_flamer",
+        buff_kind = "flamer",
+        slot = "right",
+        ui_anim = "buff_flamer",
+        world_anim = "buff_flamer",
+        info_anim = "melee_info",
+        ui_pixel_w = 64,
+        ui_pixel_h = 64,
+        world_draw_scale = 0.5,
+        backpack_draw_scale = 0.35,
+        equipped_draw_scale = 0.4,
+        info_pixel_w = 256,
+        info_pixel_h = 256
     }
 }
 

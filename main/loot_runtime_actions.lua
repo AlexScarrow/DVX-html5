@@ -3792,7 +3792,8 @@ function M.extend(runtime, ctx)
         if (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
             return {
                 can_launch = (tonumber(state.cleanse_weed_count or 0) or 0) <= 0
-                    and state.cleanse_portal_destroyed == true,
+                    and state.cleanse_portal_destroyed == true
+                    and (tonumber(state.seated_humans or 0) or 0) >= 1,
                 seated_humans = state.seated_humans or 0,
                 cleanse_weed_count = tonumber(state.cleanse_weed_count or 0) or 0,
                 cleanse_portal_destroyed = state.cleanse_portal_destroyed == true,
@@ -3840,9 +3841,10 @@ function M.extend(runtime, ctx)
                 ))
             elseif (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
                 print(string.format(
-                    "Launch blocked | cleanse_weeds=%d portal_destroyed=%s",
+                    "Launch blocked | cleanse_weeds=%d portal_destroyed=%s seated=%d",
                     tonumber(status.cleanse_weed_count or 0) or 0,
-                    status.cleanse_portal_destroyed and "yes" or "no"
+                    status.cleanse_portal_destroyed and "yes" or "no",
+                    tonumber(status.seated_humans or 0) or 0
                 ))
             else
                 print(string.format(

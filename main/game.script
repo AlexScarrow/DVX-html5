@@ -7402,10 +7402,6 @@ update_cleanse_runtime = function(self)
         enter_mission_outro(self, "lose", reason)
         return
     end
-    if status.mission_complete == true and (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_GAME then
-        self.game_won = true
-        enter_mission_outro(self, "win", "cleanse_complete")
-    end
 end
 
 local function get_nearest_reachable_rescue_victory_path_for_civilian(self, civilian)
@@ -17197,11 +17193,15 @@ function enter_mission_outro(self, result, reason)
     end
     self.end_result = final_result
     self.end_mission_type = mission_type
+    local outro_mission_type = mission_type
+    if mission_type == MISSION_TYPE_CLEANSE then
+        outro_mission_type = MISSION_TYPE_PURGE
+    end
     local preview_override = tostring(self.debug_outro_sequence_override or "")
     if preview_override ~= "" then
         self.end_outro_sequence_id = preview_override
     else
-        self.end_outro_sequence_id = string.format("%s_%s", mission_type, final_result)
+        self.end_outro_sequence_id = string.format("%s_%s", outro_mission_type, final_result)
     end
     self.end_reason = tostring(reason or "unknown")
     self.end_session_origin = (self.mp_state and self.mp_state.enabled) and "multiplayer" or "solo"

@@ -10775,6 +10775,10 @@ clear_ranged_hit_preview = function(self)
     self.pending_manual_shot_chance = nil
     self.ranged_hit_preview_fading_out = false
     self.ranged_hit_preview_fade_alpha = 0
+    self.pending_flamer_confirm_unit_id = nil
+    self.pending_flamer_confirm_cell_id = nil
+    self.pending_flamer_confirm_alien_id = nil
+    self.pending_flamer_confirm_is_weed = nil
 end
 
 local function clear_locked_manual_target(self)
@@ -10806,6 +10810,16 @@ show_ranged_hit_preview = function(self, unit, alien, hit_chance)
     self.pending_manual_shot_chance = math.max(0, math.min(99, math.floor((tonumber(hit_chance) or 0) + 0.5)))
     self.ranged_hit_preview_fading_out = false
     self.ranged_hit_preview_fade_alpha = 1
+end
+
+show_flamer_confirm_preview = function(self, unit_id, target_cell_id, alien_id, is_weed_target)
+    if not self then
+        return
+    end
+    self.pending_flamer_confirm_unit_id = unit_id
+    self.pending_flamer_confirm_cell_id = tonumber(target_cell_id or 0) or 0
+    self.pending_flamer_confirm_alien_id = tonumber(alien_id or 0) or 0
+    self.pending_flamer_confirm_is_weed = is_weed_target == true
 end
 
 update_ranged_hit_preview_hud = function(self, visible)
@@ -10880,6 +10894,71 @@ update_ranged_hit_preview_hud = function(self, visible)
         RANGED_HIT_PREVIEW_PERCENT_DRAW_H,
         tint
     )
+end
+
+update_flamer_confirm_hud = function(self, visible)
+    if not (self and self.ui and self.ui.flamer_confirm_marker) then
+        return
+    end
+    local marker = self.ui.flamer_confirm_marker
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    local function hide_marker()
+        go.set_position(vmath.vector3(-9999, -9999, RANGED_HIT_PREVIEW_Z), marker)
+        go.set_scale(vmath.vector3((70 * 0.021) * 0.75, (70 * 0.021) * 0.75, 1), marker)
+        go.set(msg.url(nil, marker, "sprite"), "tint", hidden)
+    end
+    if visible ~= true
+        or not self.pending_flamer_confirm_unit_id
+        or not self.pending_flamer_confirm_cell_id
+    then
+        hide_marker()
+        return
+    end
+    local pending_unit = self.squad_units and self.squad_units[self.pending_flamer_confirm_unit_id] or nil
+    if not pending_unit
+        or (tonumber(pending_unit.current_health or 0) or 0) <= 0
+        or unit_has_equipped_buff_kind(pending_unit, "flamer") ~= true
+    then
+        self.pending_flamer_confirm_unit_id = nil
+        self.pending_flamer_confirm_cell_id = nil
+        self.pending_flamer_confirm_alien_id = nil
+        self.pending_flamer_confirm_is_weed = nil
+        hide_marker()
+        return
+    end
+    local world_x = nil
+    local world_y = nil
+    local alien_id = tonumber(self.pending_flamer_confirm_alien_id or 0) or 0
+    if alien_id > 0 then
+        local alien = find_alien_by_id(self, alien_id)
+        if not alien or alien.is_dead or not alien.go_id then
+            self.pending_flamer_confirm_unit_id = nil
+            self.pending_flamer_confirm_cell_id = nil
+            self.pending_flamer_confirm_alien_id = nil
+            self.pending_flamer_confirm_is_weed = nil
+            hide_marker()
+            return
+        end
+        local pos = go.get_position(alien.go_id)
+        world_x = pos.x
+        world_y = pos.y + (RANGED_HIT_PREVIEW_OFFSET_Y * 0.75)
+    else
+        local cell_id = tonumber(self.pending_flamer_confirm_cell_id or 0) or 0
+        local cell = self.world_grid and self.world_grid[cell_id] or nil
+        if not cell then
+            self.pending_flamer_confirm_unit_id = nil
+            self.pending_flamer_confirm_cell_id = nil
+            self.pending_flamer_confirm_alien_id = nil
+            self.pending_flamer_confirm_is_weed = nil
+            hide_marker()
+            return
+        end
+        world_x, world_y = coords_to_world_pos(cell.xCell, cell.yCell)
+    end
+    local draw_scale = 1 / math.max(0.001, self.camera_zoom or 1)
+    go.set_position(vmath.vector3(world_x, world_y, RANGED_HIT_PREVIEW_Z), marker)
+    go.set_scale(vmath.vector3((70 * 0.021) * 0.75 * draw_scale, (70 * 0.021) * 0.75 * draw_scale, 1), marker)
+    go.set(msg.url(nil, marker, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
 end
 
 local function ui_is_button_node(self, go_id)
@@ -11559,6 +11638,7 @@ local function initialize_unit_ui(self)
         score_digit_icons = {},
         ranged_hit_preview_digits = {},
         ranged_hit_preview_percent = nil,
+        flamer_confirm_marker = nil,
         mp_version_digit_icons = {},
         objective_button = nil,
         objective_reminder = nil,
@@ -11711,6 +11791,7 @@ local function initialize_unit_ui(self)
         end
     end
     self.ui.ranged_hit_preview_percent = create_ui_marker_sprite(hash("score_percent"), RANGED_HIT_PREVIEW_Z)
+    self.ui.flamer_confirm_marker = create_ui_marker_sprite(hash("flamer_confirm"), RANGED_HIT_PREVIEW_Z)
     self.ui.objective_button = create_ui_marker_sprite(hash("objective_button"), OBJECTIVE_BUTTON_Z)
     self.ui.objective_reminder = create_ui_marker_sprite(hash("objective_escape"), OBJECTIVE_REMINDER_Z)
     self.ui.fabricator_transaction_panel = create_ui_marker_sprite(hash("fabricator_panel"), NEW_TURN_BUTTON_Z)
@@ -12049,6 +12130,18 @@ local function set_ui_hidden(self)
             hidden,
             RANGED_HIT_PREVIEW_PERCENT_DRAW_W * 0.021,
             RANGED_HIT_PREVIEW_PERCENT_DRAW_H * 0.021
+        )
+    end
+    if self.ui.flamer_confirm_marker then
+        set_ui_square_transform(
+            self,
+            self.ui.flamer_confirm_marker,
+            -9999,
+            -9999,
+            RANGED_HIT_PREVIEW_Z,
+            hidden,
+            70 * 0.021,
+            70 * 0.021
         )
     end
     set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, 1, 1)
@@ -12458,6 +12551,7 @@ function update_score_hud(self, visible)
             set_ui_square_transform(self, digit_id, -9999, -9999, SCORE_HUD_Z, hidden, SCORE_HUD_DIGIT_DRAW_W * 0.021, SCORE_HUD_DIGIT_DRAW_H * 0.021)
         end
         update_ranged_hit_preview_hud(self, false)
+        update_flamer_confirm_hud(self, false)
         return
     end
 
@@ -12487,6 +12581,7 @@ function update_score_hud(self, visible)
         end
     end
     update_ranged_hit_preview_hud(self, true)
+    update_flamer_confirm_hud(self, true)
 end
 
 update_score_flow_digits = function(self, visible)
@@ -29597,22 +29692,53 @@ try_cleanse_flamer_shot = function(self, unit, clicked_cell_id, world_x, world_y
         return false
     end
     if unit_has_equipped_buff_kind(unit, "flamer") ~= true then
+        self.pending_flamer_confirm_unit_id = nil
+        self.pending_flamer_confirm_cell_id = nil
+        self.pending_flamer_confirm_alien_id = nil
+        self.pending_flamer_confirm_is_weed = nil
         return false
     end
     local target_cell_id = nil
+    local target_alien_id = nil
+    local target_is_weed = false
     local clicked_alien = get_clicked_alien_in_cell(self, clicked_cell_id, world_x, world_y)
     if clicked_alien and clicked_alien.is_dead ~= true and clicked_alien.cell_id then
         target_cell_id = clicked_alien.cell_id
+        target_alien_id = clicked_alien.id
     elseif CLEANSE_RUNTIME.cleanse_get_clicked_weed_cell then
-        target_cell_id = CLEANSE_RUNTIME.cleanse_get_clicked_weed_cell(self, world_x, world_y, 64)
+        target_cell_id = CLEANSE_RUNTIME.cleanse_get_clicked_weed_cell(self, world_x, world_y, 128)
+        target_is_weed = target_cell_id ~= nil
     end
     if not target_cell_id then
+        self.pending_flamer_confirm_unit_id = nil
+        self.pending_flamer_confirm_cell_id = nil
+        self.pending_flamer_confirm_alien_id = nil
+        self.pending_flamer_confirm_is_weed = nil
         return false
     end
     if CLEANSE_RUNTIME.cleanse_can_attempt_flamer and CLEANSE_RUNTIME.cleanse_can_attempt_flamer(self, unit, target_cell_id) ~= true then
+        self.pending_flamer_confirm_unit_id = nil
+        self.pending_flamer_confirm_cell_id = nil
+        self.pending_flamer_confirm_alien_id = nil
+        self.pending_flamer_confirm_is_weed = nil
         print("Flamethrower target out of range or invalid.")
         return true
     end
+    local pending_unit_id = tostring(self.pending_flamer_confirm_unit_id or "")
+    local pending_cell_id = tonumber(self.pending_flamer_confirm_cell_id or 0) or 0
+    local pending_alien_id = tonumber(self.pending_flamer_confirm_alien_id or 0) or 0
+    local current_alien_id = tonumber(target_alien_id or 0) or 0
+    local same_pending = pending_unit_id == tostring(unit.id or "")
+        and pending_cell_id == target_cell_id
+        and pending_alien_id == current_alien_id
+    if not same_pending then
+        show_flamer_confirm_preview(self, unit.id, target_cell_id, target_alien_id, target_is_weed)
+        return true
+    end
+    self.pending_flamer_confirm_unit_id = nil
+    self.pending_flamer_confirm_cell_id = nil
+    self.pending_flamer_confirm_alien_id = nil
+    self.pending_flamer_confirm_is_weed = nil
     if self.mp_state and self.mp_state.enabled then
         multiplayer_transport_send_command(self, "cleanse_flamer", {
             turn_id = self.mp_state.turn_id or 1,
@@ -29652,6 +29778,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     local clicked_unit = get_clicked_unit_in_cell(self, clicked_cell_id, world_x, world_y)
     if clicked_unit then
         clear_ranged_hit_preview(self)
+        self.pending_flamer_confirm_unit_id = nil
+        self.pending_flamer_confirm_cell_id = nil
+        self.pending_flamer_confirm_alien_id = nil
+        self.pending_flamer_confirm_is_weed = nil
         if not multiplayer_can_control_unit(self, clicked_unit.id) then
             print(string.format(
                 "MP CONTROL | blocked | acting_as=%s unit=%s",
@@ -29751,6 +29881,10 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
     end
     if not (unit and (unit.current_health or 0) > 0) then
         clear_ranged_hit_preview(self)
+        self.pending_flamer_confirm_unit_id = nil
+        self.pending_flamer_confirm_cell_id = nil
+        self.pending_flamer_confirm_alien_id = nil
+        self.pending_flamer_confirm_is_weed = nil
         if unit.is_selected then
             unit.is_selected = false
             update_human_visual_state(self)

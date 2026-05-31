@@ -605,6 +605,9 @@ images {
   image: "/assets/images/weed3.png"
 }
 images {
+  image: "/assets/images/flamer_confirm.png"
+}
+images {
   image: "/assets/images/impactRing.png"
 }
 images {

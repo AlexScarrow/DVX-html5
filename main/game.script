@@ -11639,6 +11639,7 @@ local function initialize_unit_ui(self)
         ranged_hit_preview_digits = {},
         ranged_hit_preview_percent = nil,
         flamer_confirm_marker = nil,
+        flamer_ammo_icons = {},
         mp_version_digit_icons = {},
         objective_button = nil,
         objective_reminder = nil,
@@ -11792,6 +11793,9 @@ local function initialize_unit_ui(self)
     end
     self.ui.ranged_hit_preview_percent = create_ui_marker_sprite(hash("score_percent"), RANGED_HIT_PREVIEW_Z)
     self.ui.flamer_confirm_marker = create_ui_marker_sprite(hash("flamer_confirm"), RANGED_HIT_PREVIEW_Z)
+    for i = 1, 10 do
+        self.ui.flamer_ammo_icons[i] = create_ui_marker_sprite(hash("flamer_confirm"), HUMAN_UI_COMMAND_ICON_Z)
+    end
     self.ui.objective_button = create_ui_marker_sprite(hash("objective_button"), OBJECTIVE_BUTTON_Z)
     self.ui.objective_reminder = create_ui_marker_sprite(hash("objective_escape"), OBJECTIVE_REMINDER_Z)
     self.ui.fabricator_transaction_panel = create_ui_marker_sprite(hash("fabricator_panel"), NEW_TURN_BUTTON_Z)
@@ -12143,6 +12147,11 @@ local function set_ui_hidden(self)
             70 * 0.021,
             70 * 0.021
         )
+    end
+    if self.ui.flamer_ammo_icons then
+        for _, icon_id in ipairs(self.ui.flamer_ammo_icons) do
+            set_ui_square_transform(self, icon_id, -9999, -9999, HUMAN_UI_COMMAND_ICON_Z, hidden, (70 * 0.021) * 0.5, (70 * 0.021) * 0.5)
+        end
     end
     set_ui_square_transform(self, self.ui.objective_button, -9999, -9999, OBJECTIVE_BUTTON_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.objective_reminder, -9999, -9999, OBJECTIVE_REMINDER_Z, hidden, 1, 1)
@@ -17149,6 +17158,9 @@ stop_level_fx_before_outro = function(self)
             self.exit_green_smoke_fx_objects[key] = nil
         end
     end
+    if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_clear_state then
+        CLEANSE_RUNTIME.cleanse_clear_state(self)
+    end
     self.exit_green_smoke_fx_power_state = {}
     if self.wiregap_fx_objects then
         for i, fx_id in ipairs(self.wiregap_fx_objects) do
@@ -20254,6 +20266,29 @@ function update_selected_unit_ui(self)
         set_ui_square_transform(self, self.ui.ap_pips[i], UI_BAR_AP_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, ap_color, UI_BAR_PIP_SIZE, pip_h)
         set_ui_square_transform(self, self.ui.hp_pips[i], UI_BAR_HP_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, hp_color, UI_BAR_PIP_SIZE, pip_h)
         set_ui_square_transform(self, self.ui.ammo_pips[i], UI_BAR_AMMO_X + panel_dx, pip_y + panel_dy, HUMAN_UI_BASE_Z, ammo_color, UI_BAR_PIP_SIZE, pip_h)
+    end
+    local flamer_shots = 0
+    if unit_has_equipped_buff_kind(unit, "flamer")
+        and CLEANSE_RUNTIME
+        and CLEANSE_RUNTIME.cleanse_get_flamer_shots
+    then
+        flamer_shots = math.max(0, math.floor((tonumber(CLEANSE_RUNTIME.cleanse_get_flamer_shots(self, unit) or 0) or 0) + 0.5))
+    end
+    if self.ui.flamer_ammo_icons then
+        local max_icons = #self.ui.flamer_ammo_icons
+        local consumed = math.max(0, max_icons - flamer_shots)
+        local icon_x = (UI_PANEL_X + (UI_PANEL_W * 0.5) + 28)
+        local top_y = (UI_PANEL_Y + 140)
+        local step_y = 24
+        local flamer_icon_scale = (70 * 0.021) * 0.5 * 0.75 * 0.5
+        for i, icon_id in ipairs(self.ui.flamer_ammo_icons) do
+            if i > consumed and flamer_shots > 0 then
+                local icon_y = top_y - ((i - 1) * step_y)
+                set_ui_square_transform(self, icon_id, icon_x, icon_y, HUMAN_UI_COMMAND_ICON_Z, vmath.vector4(1, 1, 1, 1), flamer_icon_scale, flamer_icon_scale)
+            else
+                set_ui_square_transform(self, icon_id, -9999, -9999, HUMAN_UI_COMMAND_ICON_Z, vmath.vector4(0, 0, 0, 0), flamer_icon_scale, flamer_icon_scale)
+            end
+        end
     end
 
     local show_command = unit.class_id == UNIT_CLASS_SARGE
@@ -26648,6 +26683,9 @@ function try_exit_game_button(self, screen_x, screen_y)
         and screen_x <= (EXIT_BUTTON_X + half_w)
         and screen_y >= (EXIT_BUTTON_Y - half_h)
         and screen_y <= (EXIT_BUTTON_Y + half_h) then
+        if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_clear_state then
+            CLEANSE_RUNTIME.cleanse_clear_state(self)
+        end
         if self.mp_state and self.mp_state.enabled then
             local local_player_id = tostring(self.mp_state.local_player_id or "p1")
             local host_player_id = tostring(self.mp_state.host_player_id or "p1")
@@ -29698,6 +29736,18 @@ try_cleanse_flamer_shot = function(self, unit, clicked_cell_id, world_x, world_y
         self.pending_flamer_confirm_is_weed = nil
         return false
     end
+    if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_flamer_shots then
+        local shots_left = tonumber(CLEANSE_RUNTIME.cleanse_get_flamer_shots(self, unit) or 0) or 0
+        if shots_left <= 0 then
+            self.pending_flamer_confirm_unit_id = nil
+            self.pending_flamer_confirm_cell_id = nil
+            self.pending_flamer_confirm_alien_id = nil
+            self.pending_flamer_confirm_is_weed = nil
+            print("Flamethrower is out of ammo.")
+            show_advisory(self, ADVISORY_MSG_NO_AMMO)
+            return true
+        end
+    end
     local target_cell_id = nil
     local target_alien_id = nil
     local target_is_weed = false
@@ -29717,12 +29767,21 @@ try_cleanse_flamer_shot = function(self, unit, clicked_cell_id, world_x, world_y
         return false
     end
     if CLEANSE_RUNTIME.cleanse_can_attempt_flamer and CLEANSE_RUNTIME.cleanse_can_attempt_flamer(self, unit, target_cell_id) ~= true then
+        if CLEANSE_RUNTIME.cleanse_get_flamer_shots and (tonumber(CLEANSE_RUNTIME.cleanse_get_flamer_shots(self, unit) or 0) or 0) <= 0 then
+            print("Flamethrower is out of ammo.")
+            show_advisory(self, ADVISORY_MSG_NO_AMMO)
+            return true
+        end
         self.pending_flamer_confirm_unit_id = nil
         self.pending_flamer_confirm_cell_id = nil
         self.pending_flamer_confirm_alien_id = nil
         self.pending_flamer_confirm_is_weed = nil
+        local clicked_alien_same_cell = clicked_alien and clicked_alien.cell_id == unit.cell_id
+        if clicked_alien_same_cell then
+            return false
+        end
         print("Flamethrower target out of range or invalid.")
-        return true
+        return false
     end
     local pending_unit_id = tostring(self.pending_flamer_confirm_unit_id or "")
     local pending_cell_id = tonumber(self.pending_flamer_confirm_cell_id or 0) or 0
@@ -29765,6 +29824,11 @@ try_cleanse_flamer_shot = function(self, unit, clicked_cell_id, world_x, world_y
     end
     if status == "out_of_range" then
         return false
+    end
+    if status == "no_ammo" then
+        print("Flamethrower is out of ammo.")
+        show_advisory(self, ADVISORY_MSG_NO_AMMO)
+        return true
     end
     return true
 end

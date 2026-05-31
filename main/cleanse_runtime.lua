@@ -23,6 +23,7 @@ function M.extend(runtime, ctx)
     local WEED_DYING_PULSE_AMPLITUDE_MUL = 2.0
     local WEED_NEIGHBOR_DIRS = { "up", "left", "right", "down" }
     local FLAME_CELL_TURNS = 2
+    local FLAMER_MAX_SHOTS = 10
     local FLAME_MARKER_Z = 0.74
 
     local function is_cleanse_mission(self)
@@ -114,6 +115,7 @@ function M.extend(runtime, ctx)
             weed_anim_cells = {},
             total_valid_cells = 0,
             flame_cells = {},
+            flamer_shots_by_unit_id = {},
             flame_visual_reveal_s_by_cell = {},
             flame_fx_objects = {},
             flame_marker_objects = {},
@@ -173,6 +175,57 @@ function M.extend(runtime, ctx)
         state.weed_cells[cell_id] = true
         state.cleanse_visuals_dirty = true
         return true
+    end
+
+    local function get_unit_id_key(unit)
+        return tostring(unit and unit.id or "")
+    end
+
+    local function get_or_init_flamer_shots(self, unit, allow_init)
+        local state = self and self.cleanse_state or nil
+        if not (state and unit and unit.id) then
+            return 0
+        end
+        state.flamer_shots_by_unit_id = state.flamer_shots_by_unit_id or {}
+        local key = get_unit_id_key(unit)
+        if key == "" then
+            return 0
+        end
+        if not (ctx and ctx.unit_has_equipped_buff_kind and ctx.unit_has_equipped_buff_kind(unit, "flamer")) then
+            state.flamer_shots_by_unit_id[key] = nil
+            return 0
+        end
+        local shots = tonumber(state.flamer_shots_by_unit_id[key] or -1) or -1
+        if shots < 0 and allow_init == true then
+            shots = FLAMER_MAX_SHOTS
+            state.flamer_shots_by_unit_id[key] = shots
+        end
+        if shots < 0 then
+            return 0
+        end
+        return math.max(0, math.floor(shots + 0.5))
+    end
+
+    local function consume_flamer_shot(self, unit)
+        local state = self and self.cleanse_state or nil
+        if not (state and unit and unit.id) then
+            return false, 0
+        end
+        local current = get_or_init_flamer_shots(self, unit, true)
+        if current <= 0 then
+            return false, 0
+        end
+        local next_shots = current - 1
+        local key = get_unit_id_key(unit)
+        state.flamer_shots_by_unit_id[key] = next_shots
+        if next_shots <= 0 and type(unit.equipment) == "table" then
+            for slot_name, item_type in pairs(unit.equipment) do
+                if item_type == "buff_flamer" then
+                    unit.equipment[slot_name] = nil
+                end
+            end
+        end
+        return true, next_shots
     end
 
     local function get_weed_pulse_style(cell_id)
@@ -680,6 +733,7 @@ function M.extend(runtime, ctx)
         local state = self.cleanse_state or {}
         local weed_cells = {}
         local flame_cells = {}
+        local flamer_shots = {}
         for cell_id, present in pairs(state.weed_cells or {}) do
             if present == true then
                 weed_cells[#weed_cells + 1] = tonumber(cell_id or 0) or 0
@@ -694,9 +748,19 @@ function M.extend(runtime, ctx)
                 }
             end
         end
+        for unit_id_key, shots in pairs(state.flamer_shots_by_unit_id or {}) do
+            local count = math.max(0, math.floor((tonumber(shots or 0) or 0) + 0.5))
+            if count > 0 then
+                flamer_shots[#flamer_shots + 1] = {
+                    unit_id = tostring(unit_id_key or ""),
+                    shots = count
+                }
+            end
+        end
         return {
             weed_cells = weed_cells,
             flame_cells = flame_cells,
+            flamer_shots = flamer_shots,
             total_valid_cells = tonumber(state.total_valid_cells or 0) or 0,
             portal_center_cell_id = tonumber(state.portal_center_cell_id or 0) or 0
         }
@@ -709,6 +773,7 @@ function M.extend(runtime, ctx)
         local state = self.cleanse_state or {}
         state.weed_cells = {}
         state.flame_cells = {}
+        state.flamer_shots_by_unit_id = {}
         state.flame_visual_reveal_s_by_cell = {}
         clear_weed_visuals(state)
         state.total_valid_cells = tonumber(payload.total_valid_cells or state.total_valid_cells or 0) or 0
@@ -726,6 +791,13 @@ function M.extend(runtime, ctx)
                 state.flame_cells[key] = turns_left
             end
         end
+        for _, row in ipairs(payload.flamer_shots or {}) do
+            local unit_id_key = tostring(row and row.unit_id or "")
+            local shots = math.max(0, math.floor((tonumber(row and row.shots or 0) or 0) + 0.5))
+            if unit_id_key ~= "" and shots > 0 then
+                state.flamer_shots_by_unit_id[unit_id_key] = shots
+            end
+        end
         self.cleanse_state = state
         state.cleanse_visuals_dirty = true
         return true
@@ -740,6 +812,9 @@ function M.extend(runtime, ctx)
         end
         if not (ctx.unit_has_equipped_buff_kind and ctx.unit_has_equipped_buff_kind(unit, "flamer")) then
             return false, "no_flamer"
+        end
+        if get_or_init_flamer_shots(self, unit, true) <= 0 then
+            return false, "no_ammo"
         end
         local from_cell = self.world_grid and self.world_grid[unit.cell_id] or nil
         local to_cell = self.world_grid and self.world_grid[target_cell_id] or nil
@@ -792,6 +867,10 @@ function M.extend(runtime, ctx)
         end
         if #flame_cells <= 0 then
             return true, "blocked"
+        end
+        local consumed_ok = consume_flamer_shot(self, unit)
+        if consumed_ok ~= true then
+            return false, "no_ammo"
         end
         local state = self.cleanse_state or {}
         state.flame_cells = state.flame_cells or {}
@@ -881,6 +960,9 @@ function M.extend(runtime, ctx)
         if not (ctx.unit_has_equipped_buff_kind and ctx.unit_has_equipped_buff_kind(unit, "flamer")) then
             return false
         end
+        if get_or_init_flamer_shots(self, unit, true) <= 0 then
+            return false
+        end
         local from_cell = self.world_grid and unit and unit.cell_id and self.world_grid[unit.cell_id] or nil
         local to_cell = self.world_grid and self.world_grid[target_cell_id] or nil
         if not from_cell or not to_cell then
@@ -893,6 +975,17 @@ function M.extend(runtime, ctx)
         end
         local range = math.abs(dx) + math.abs(dy)
         return range >= 1 and range <= 3
+    end
+
+    runtime.cleanse_get_flamer_shots = function(self, unit)
+        if not is_cleanse_mission(self) then
+            return 0
+        end
+        return get_or_init_flamer_shots(self, unit, true)
+    end
+
+    runtime.cleanse_get_flamer_max_shots = function()
+        return FLAMER_MAX_SHOTS
     end
 
     runtime.cleanse_get_clicked_weed_cell = function(self, world_x, world_y, hit_size_px)

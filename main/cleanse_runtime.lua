@@ -286,10 +286,8 @@ function M.extend(runtime, ctx)
 
     local function get_weed_tint_for_cell(self, state, cell_id, alpha)
         local a = tonumber(alpha or 1) or 1
-        local cell = self.world_grid and self.world_grid[cell_id] or nil
-        local unpowered = (not cell) or cell.isPowered ~= true
         local flaming = (tonumber(state and state.flame_cells and state.flame_cells[cell_id] or 0) or 0) > 0
-        if unpowered or flaming then
+        if flaming then
             return vmath.vector4(0, 0, 0, a)
         end
         return vmath.vector4(1, 1, 1, a)

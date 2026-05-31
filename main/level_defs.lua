@@ -587,6 +587,53 @@ levels[4] = {
         }
     }
 
+    levels[16] = {
+        { x = 11, y = 14, tile = "coms" },
+        { x = 2, y = 13, tile = "armoury" },
+        { x = 8, y = 11, tile = "medbay" },
+        { x = 11, y = 11, tile = "armoury" },
+        { x = 2, y = 10, tile = "canteen" },
+        { x = 5, y = 8, tile = "exterior1" },
+        { x = 8, y = 8, tile = "jungle" },
+        { x = 11, y = 8, tile = "exterior2" },
+        { x = 14, y = 8, tile = "rescue_entry" },
+        { x = 2, y = 7, tile = "void" },
+        { x = 5, y = 5, tile = "bunkroom" },
+        { x = 8, y = 5, tile = "showers" },
+        { x = 11, y = 5, tile = "void" },
+        { x = 14, y = 5, tile = "void" },
+        { x = 2, y = 4, tile = "portal" },
+        { x = 5, y = 2, tile = "cavern" },
+        { x = 8, y = 2, tile = "corridor1" },
+        { x = 11, y = 2, tile = "corridor1" },
+        { x = 14, y = 2, tile = "portal" },
+    }
+    levels[16].mission_type = "cleanse"
+    levels[16].spawn_tile = "rescue_entry"
+    levels[16].spawn_cell = 2
+    levels[16].unit_loadouts = {
+        sarge = {
+            starting_backpack_items = { "bomb" },
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        techie = {
+            starting_backpack_items = { "power", "power" },
+            starting_equipped_buffs = {
+                top = "buff_night_vision"
+            }
+        },
+        medic = {
+            starting_backpack_items = { "meds", "meds" },
+            starting_equipped_buffs = {}
+        },
+        gunner = {
+            starting_backpack_items = { "ammo", "ammo" },
+            starting_equipped_buffs = {}
+        }
+    }
+
     return levels
 end
 

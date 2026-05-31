@@ -6,6 +6,7 @@ local MISSION_ORDER = {
     "escape",
     "rescue",
     "purge",
+    "cleanse",
     "dna_sample"
 }
 
@@ -13,6 +14,7 @@ local MISSION_TO_SPAWN_TILE = {
     escape = "entry",
     rescue = "rescue_entry",
     purge = "rescue_entry",
+    cleanse = "rescue_entry",
     dna_sample = "rescue_entry"
 }
 
@@ -189,7 +191,7 @@ local function mission_for_level(level_def)
         return "escape"
     end
     local m = tostring(level_def.mission_type or "escape")
-    if m ~= "escape" and m ~= "rescue" and m ~= "purge" and m ~= "dna_sample" then
+    if m ~= "escape" and m ~= "rescue" and m ~= "purge" and m ~= "cleanse" and m ~= "dna_sample" then
         return "escape"
     end
     return m

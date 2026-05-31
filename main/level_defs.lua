@@ -542,7 +542,7 @@ levels[4] = {
 
     levels[15] = {
         { x = 11, y = 14, tile = "coms" },
-        { x = 5, y = 11, tile = "coms" },
+        { x = 2, y = 13, tile = "armoury" },
         { x = 8, y = 11, tile = "medbay" },
         { x = 11, y = 11, tile = "armoury" },
         { x = 2, y = 10, tile = "canteen" },
@@ -550,13 +550,16 @@ levels[4] = {
         { x = 8, y = 8, tile = "jungle" },
         { x = 11, y = 8, tile = "exterior2" },
         { x = 14, y = 8, tile = "rescue_entry" },
+        { x = 2, y = 7, tile = "void" },
         { x = 5, y = 5, tile = "bunkroom" },
         { x = 8, y = 5, tile = "showers" },
-        { x = 11, y = 5, tile = "portal" },
-        { x = 2, y = 2, tile = "portal" },
-        { x = 5, y = 2, tile = "workshop" },
+        { x = 11, y = 5, tile = "void" },
+        { x = 14, y = 5, tile = "void" },
+        { x = 2, y = 4, tile = "portal" },
+        { x = 5, y = 2, tile = "cavern" },
         { x = 8, y = 2, tile = "corridor1" },
-        { x = 11, y = 2, tile = "portal" },
+        { x = 11, y = 2, tile = "corridor1" },
+        { x = 14, y = 2, tile = "portal" },
     }
     levels[15].mission_type = "cleanse"
     levels[15].spawn_tile = "rescue_entry"

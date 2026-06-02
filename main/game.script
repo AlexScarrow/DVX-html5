@@ -440,17 +440,22 @@ DEMO_TITLE_BUTTON_X = TITLE_SOLO_BUTTON_X
 DEMO_TITLE_BUTTON_Y = 86
 DEMO_BUTTON_W = 280
 DEMO_BUTTON_H = 70
+DEMO_TITLE_BUTTON_ART_Z = FLOW_UI_BUTTON_Z + 0.05
 DEMO_EXPLAINER_X = SCREEN_WIDTH * 0.5
 DEMO_EXPLAINER_Y = SCREEN_HEIGHT * 0.40
-DEMO_EXPLAINER_SCALE = 0.42
+DEMO_EXPLAINER_SCALE = 0.75
 DEMO_SELECT_TUTORIAL_BUTTON_X = SCREEN_WIDTH * 0.5
-DEMO_SELECT_TUTORIAL_BUTTON_Y = TITLE_TUTORIAL_BUTTON_Y
+DEMO_SELECT_CENTER_BUTTON_Y = SCREEN_HEIGHT * 0.5
+DEMO_SELECT_BUTTON_STEP_Y = 86
+DEMO_SELECT_TUTORIAL_BUTTON_Y = DEMO_SELECT_CENTER_BUTTON_Y + (DEMO_SELECT_BUTTON_STEP_Y * 2)
 DEMO_SELECT_LEVEL1_BUTTON_X = SCREEN_WIDTH * 0.5
-DEMO_SELECT_LEVEL1_BUTTON_Y = TITLE_SOLO_BUTTON_Y + 26
+DEMO_SELECT_LEVEL1_BUTTON_Y = DEMO_SELECT_CENTER_BUTTON_Y + DEMO_SELECT_BUTTON_STEP_Y
 DEMO_SELECT_LEVEL2_BUTTON_X = SCREEN_WIDTH * 0.5
-DEMO_SELECT_LEVEL2_BUTTON_Y = TITLE_SOLO_BUTTON_Y - 60
+DEMO_SELECT_LEVEL2_BUTTON_Y = DEMO_SELECT_CENTER_BUTTON_Y
 DEMO_SELECT_LEVEL3_BUTTON_X = SCREEN_WIDTH * 0.5
-DEMO_SELECT_LEVEL3_BUTTON_Y = TITLE_MULTIPLAYER_BUTTON_Y - 30
+DEMO_SELECT_LEVEL3_BUTTON_Y = DEMO_SELECT_CENTER_BUTTON_Y - DEMO_SELECT_BUTTON_STEP_Y
+DEMO_SELECT_BACK_BUTTON_X = SCREEN_WIDTH * 0.5
+DEMO_SELECT_BACK_BUTTON_Y = DEMO_SELECT_CENTER_BUTTON_Y - (DEMO_SELECT_BUTTON_STEP_Y * 2)
 DEMO_RESULT_PANEL_X = SCREEN_WIDTH * 0.5
 DEMO_RESULT_PANEL_Y = SCREEN_HEIGHT * 0.56
 DEMO_RESULT_PANEL_SCALE = 0.7
@@ -11814,6 +11819,7 @@ local function initialize_unit_ui(self)
         flow_demo_select_level1_art = nil,
         flow_demo_select_level2_art = nil,
         flow_demo_select_level3_art = nil,
+        flow_demo_select_back_art = nil,
         flow_demo_result_win_art = nil,
         flow_demo_result_lose_art = nil,
         flow_demo_result_back_art = nil,
@@ -12088,12 +12094,13 @@ local function initialize_unit_ui(self)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_debug_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
-    self.ui.flow_title_demo_button_art = create_ui_marker_sprite(hash("demo_title_button"), FLOW_UI_BUTTON_Z + 0.001)
+    self.ui.flow_title_demo_button_art = create_ui_marker_sprite(hash("demo_title_button"), DEMO_TITLE_BUTTON_ART_Z)
     self.ui.flow_demo_explainer_art = create_ui_marker_sprite(hash("demo_explainer"), FLOW_UI_BUTTON_Z + 0.001)
     self.ui.flow_demo_select_tutorial_art = create_ui_marker_sprite(hash("demo_select_tutorial_button"), FLOW_UI_BUTTON_Z + 0.001)
     self.ui.flow_demo_select_level1_art = create_ui_marker_sprite(hash("demo_select_level1_button"), FLOW_UI_BUTTON_Z + 0.001)
     self.ui.flow_demo_select_level2_art = create_ui_marker_sprite(hash("demo_select_level2_button"), FLOW_UI_BUTTON_Z + 0.001)
     self.ui.flow_demo_select_level3_art = create_ui_marker_sprite(hash("demo_select_level3_button"), FLOW_UI_BUTTON_Z + 0.001)
+    self.ui.flow_demo_select_back_art = create_ui_marker_sprite(hash("back_button"), FLOW_UI_BUTTON_Z + 0.001)
     self.ui.flow_demo_result_win_art = create_ui_marker_sprite(hash("demo_result_win"), DEMO_RESULT_PANEL_Z)
     self.ui.flow_demo_result_lose_art = create_ui_marker_sprite(hash("demo_result_lose"), DEMO_RESULT_PANEL_Z)
     self.ui.flow_demo_result_back_art = create_ui_marker_sprite(hash("back_button"), FLOW_UI_BUTTON_Z + 0.001)
@@ -12114,6 +12121,9 @@ local function initialize_unit_ui(self)
     end
     if self.ui.flow_demo_select_level3_art then
         pcall(go.set, msg.url(nil, self.ui.flow_demo_select_level3_art, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
+    if self.ui.flow_demo_select_back_art then
+        pcall(go.set, msg.url(nil, self.ui.flow_demo_select_back_art, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
     end
     if self.ui.flow_demo_result_win_art then
         pcall(go.set, msg.url(nil, self.ui.flow_demo_result_win_art, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
@@ -12403,12 +12413,13 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
-    set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
     set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_demo_select_level3_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_demo_select_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_demo_result_win_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
     set_ui_square_transform(self, self.ui.flow_demo_result_lose_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
     set_ui_square_transform(self, self.ui.flow_demo_result_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -16931,7 +16942,7 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
             set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_SETUP_UNIT_POOL_W * 0.021, MP_SETUP_UNIT_POOL_H * 0.021)
         end
     end
-    local lobby_back_box_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.74, 0.26, 0.26, 0.42) or vmath.vector4(0.74, 0.26, 0.26, 0)
+    local lobby_back_box_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.74, 0.26, 0.26, 0) or vmath.vector4(0.74, 0.26, 0.26, 0)
     set_ui_square_transform(self, boxes[1], MP_LOBBY_BACK_BTN_X + 10, mp_lobby_y(MP_LOBBY_BACK_BTN_Y - 25), MP_SETUP_UI_Z, lobby_back_box_tint, MP_LOBBY_BACK_BTN_W, MP_LOBBY_BACK_BTN_H)
     if self.ui.flow_mp_lobby_back_button then
         set_ui_square_transform(
@@ -17749,12 +17760,13 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level3_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_demo_select_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_result_win_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_result_lose_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_result_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -17802,11 +17814,11 @@ function update_flow_ui(self, dt)
         if demo_is_build_enabled(self) then
             set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.08, 0.16, 0.28, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
             update_flow_title_space_grid_background(self, dt)
-            set_ui_square_transform(self, self.ui.flow_title_planet, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
-            set_ui_square_transform(self, self.ui.flow_title_xenos_word, (SCREEN_WIDTH * 0.5) - 40, (SCREEN_HEIGHT * 0.5) + 160, FLOW_UI_PANEL_Z + 0.003, vmath.vector4(1, 1, 1, 0.5), 0.75, 0.75)
-            set_ui_square_transform(self, self.ui.flow_title_derples_word, SCREEN_WIDTH * 0.5, (SCREEN_HEIGHT * 0.5) + 180, FLOW_UI_PANEL_Z + 0.004, vmath.vector4(1, 1, 1, 1), 0.5, 0.5)
+            set_ui_square_transform(self, self.ui.flow_title_planet, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 0), 1, 1)
+            set_ui_square_transform(self, self.ui.flow_title_xenos_word, (SCREEN_WIDTH * 0.5) - 40, (SCREEN_HEIGHT * 0.5) + 240, FLOW_UI_PANEL_Z + 0.003, vmath.vector4(1, 1, 1, 0.5), 0.375, 0.375)
+            set_ui_square_transform(self, self.ui.flow_title_derples_word, SCREEN_WIDTH * 0.5, (SCREEN_HEIGHT * 0.5) + 260, FLOW_UI_PANEL_Z + 0.004, vmath.vector4(1, 1, 1, 1), 0.25, 0.25)
             set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
-            set_ui_square_transform(self, self.ui.flow_title_demo_button_art, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
+            set_ui_square_transform(self, self.ui.flow_title_demo_button_art, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, DEMO_TITLE_BUTTON_ART_Z, vmath.vector4(1, 1, 1, 1), 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_explainer_art, DEMO_EXPLAINER_X, DEMO_EXPLAINER_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
             set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
             set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.35), DEMO_BUTTON_W, DEMO_BUTTON_H)
@@ -17815,6 +17827,7 @@ function update_flow_ui(self, dt)
             set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_select_level3_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+            set_ui_square_transform(self, self.ui.flow_demo_select_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_result_win_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
             set_ui_square_transform(self, self.ui.flow_demo_result_lose_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
             set_ui_square_transform(self, self.ui.flow_demo_result_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -17843,12 +17856,13 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.35), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.35), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.35), 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level3_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_demo_select_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_result_win_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_result_lose_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_result_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -17918,16 +17932,17 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
-        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
-        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, DEMO_SELECT_TUTORIAL_BUTTON_X, DEMO_SELECT_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.3), DEMO_BUTTON_W, DEMO_BUTTON_H)
-        set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_SELECT_LEVEL1_BUTTON_X, DEMO_SELECT_LEVEL1_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.3), DEMO_BUTTON_W, DEMO_BUTTON_H)
-        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, DEMO_SELECT_LEVEL2_BUTTON_X, DEMO_SELECT_LEVEL2_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.3), DEMO_BUTTON_W, DEMO_BUTTON_H)
-        set_ui_square_transform(self, self.ui.flow_title_debug_button, DEMO_SELECT_LEVEL3_BUTTON_X, DEMO_SELECT_LEVEL3_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.3), DEMO_BUTTON_W, DEMO_BUTTON_H)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, DEMO_SELECT_TUTORIAL_BUTTON_X, DEMO_SELECT_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_SELECT_LEVEL1_BUTTON_X, DEMO_SELECT_LEVEL1_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, DEMO_SELECT_LEVEL2_BUTTON_X, DEMO_SELECT_LEVEL2_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
+        set_ui_square_transform(self, self.ui.flow_title_debug_button, DEMO_SELECT_LEVEL3_BUTTON_X, DEMO_SELECT_LEVEL3_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, DEMO_SELECT_TUTORIAL_BUTTON_X, DEMO_SELECT_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, DEMO_SELECT_LEVEL1_BUTTON_X, DEMO_SELECT_LEVEL1_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, DEMO_SELECT_LEVEL2_BUTTON_X, DEMO_SELECT_LEVEL2_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level3_art, DEMO_SELECT_LEVEL3_BUTTON_X, DEMO_SELECT_LEVEL3_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
+        set_ui_square_transform(self, self.ui.flow_demo_select_back_art, DEMO_SELECT_BACK_BUTTON_X, DEMO_SELECT_BACK_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_result_win_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_result_lose_art, -9999, -9999, DEMO_RESULT_PANEL_Z, hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_result_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -17940,16 +17955,17 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
-        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, DEMO_BUTTON_W, DEMO_BUTTON_H)
-        set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_RESULT_BACK_BUTTON_X, DEMO_RESULT_BACK_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.3), DEMO_BUTTON_W, DEMO_BUTTON_H)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_RESULT_BACK_BUTTON_X, DEMO_RESULT_BACK_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, DEMO_BUTTON_W, DEMO_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_title_debug_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, DEMO_BUTTON_W, DEMO_BUTTON_H)
         set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_select_level3_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_demo_select_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_result_back_art, DEMO_RESULT_BACK_BUTTON_X, DEMO_RESULT_BACK_BUTTON_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         local is_win = tostring(self.demo_result or "") == "win"
         set_ui_square_transform(self, self.ui.flow_demo_result_win_art, is_win and DEMO_RESULT_PANEL_X or -9999, is_win and DEMO_RESULT_PANEL_Y or -9999, DEMO_RESULT_PANEL_Z, is_win and vmath.vector4(1, 1, 1, 1) or hidden, DEMO_RESULT_PANEL_SCALE, DEMO_RESULT_PANEL_SCALE)
@@ -18006,8 +18022,8 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_score_submit_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         set_ui_square_transform(self, self.ui.flow_score_title_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 250, 56)
         if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE or SOLO_SETUP_HITBOX_DEBUG_VISIBLE then
-            set_ui_square_transform(self, self.ui.flow_debug_solo_back_hitbox, SOLO_SETUP_BACK_HIT_X, SOLO_SETUP_BACK_HIT_Y, MP_SETUP_UI_Z + 0.03, vmath.vector4(1.0, 0.15, 0.85, 0.78), SOLO_SETUP_ACTION_HIT_W, SOLO_SETUP_ACTION_HIT_H)
-            set_ui_square_transform(self, self.ui.flow_debug_solo_launch_hitbox, SOLO_SETUP_LAUNCH_HIT_X, SOLO_SETUP_LAUNCH_HIT_Y, MP_SETUP_UI_Z + 0.03, vmath.vector4(0.18, 0.95, 0.24, 0.78), SOLO_SETUP_ACTION_HIT_W, SOLO_SETUP_ACTION_HIT_H)
+            set_ui_square_transform(self, self.ui.flow_debug_solo_back_hitbox, SOLO_SETUP_BACK_HIT_X, SOLO_SETUP_BACK_HIT_Y, MP_SETUP_UI_Z + 0.03, vmath.vector4(1.0, 0.15, 0.85, 0), SOLO_SETUP_ACTION_HIT_W, SOLO_SETUP_ACTION_HIT_H)
+            set_ui_square_transform(self, self.ui.flow_debug_solo_launch_hitbox, SOLO_SETUP_LAUNCH_HIT_X, SOLO_SETUP_LAUNCH_HIT_Y, MP_SETUP_UI_Z + 0.03, vmath.vector4(0.18, 0.95, 0.24, 0), SOLO_SETUP_ACTION_HIT_W, SOLO_SETUP_ACTION_HIT_H)
         else
             set_ui_square_transform(self, self.ui.flow_debug_solo_back_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, SOLO_SETUP_ACTION_HIT_W, SOLO_SETUP_ACTION_HIT_H)
             set_ui_square_transform(self, self.ui.flow_debug_solo_launch_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, SOLO_SETUP_ACTION_HIT_W, SOLO_SETUP_ACTION_HIT_H)
@@ -18040,7 +18056,7 @@ function update_flow_ui(self, dt)
             local unlocked = solo_progress_is_mission_unlocked(self, slot)
             local mask_tint = unlocked and hidden or vmath.vector4(0, 0, 0, 0.5)
             set_ui_square_transform(self, self.ui.solo_progress_locked_masks[slot], mx, my, SOLO_SETUP_UI_Z + 0.002, mask_tint, SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
-            local hitbox_tint = unlocked and vmath.vector4(0.1, 0.95, 0.2, 0.22) or vmath.vector4(0.95, 0.2, 0.2, 0.22)
+            local hitbox_tint = unlocked and vmath.vector4(0.1, 0.95, 0.2, 0) or vmath.vector4(0.95, 0.2, 0.2, 0)
             if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE or SOLO_SETUP_HITBOX_DEBUG_VISIBLE then
                 set_ui_square_transform(self, self.ui.solo_progress_mission_hitboxes[slot], mx, my, SOLO_SETUP_UI_Z + 0.03, hitbox_tint, SOLO_SETUP_MISSION_BOX_W, SOLO_SETUP_MISSION_BOX_H)
             else
@@ -18204,7 +18220,7 @@ function update_flow_ui(self, dt)
         end
         local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
         set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] - 1, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
-        local flow_back_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.2, 0.95, 0.2, 0.45) or vmath.vector4(1, 1, 1, 0)
+        local flow_back_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.2, 0.95, 0.2, 0) or vmath.vector4(1, 1, 1, 0)
         set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, flow_back_tint, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE then
             set_ui_square_transform(self, self.ui.flow_debug_solo_back_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H)
@@ -18319,7 +18335,7 @@ function update_flow_ui(self, dt)
         end
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0), 170, 52)
         if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE then
-            set_ui_square_transform(self, self.ui.flow_debug_outro_skip_hitbox, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z + 0.03, vmath.vector4(0.1, 1.0, 0.2, 0.72), 170, 52)
+            set_ui_square_transform(self, self.ui.flow_debug_outro_skip_hitbox, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z + 0.03, vmath.vector4(0.1, 1.0, 0.2, 0), 170, 52)
         end
         set_ui_square_transform(self, self.ui.flow_outro_skip_button_art, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
@@ -18735,6 +18751,10 @@ function handle_flow_touch(self, input_x, input_y)
         end
         if is_point_in_screen_rect(input_x, input_y, DEMO_SELECT_LEVEL3_BUTTON_X, DEMO_SELECT_LEVEL3_BUTTON_Y, DEMO_BUTTON_W, DEMO_BUTTON_H) then
             start_demo_level_game_flow(self, 3)
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, DEMO_SELECT_BACK_BUTTON_X, DEMO_SELECT_BACK_BUTTON_Y, DEMO_BUTTON_W, DEMO_BUTTON_H) then
+            enter_flow_state(self, FLOW_STATE_TITLE)
             return true
         end
         return true
@@ -19424,7 +19444,7 @@ function update_global_ui_buttons(self)
         update_mp_lag_sim_button_visual(self)
     end
     if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE then
-        set_ui_square_transform(self, self.ui.exit_button_debug_hitbox, EXIT_BUTTON_X, EXIT_BUTTON_Y, EXIT_BUTTON_Z + 0.03, vmath.vector4(0.1, 1.0, 0.2, 0.72), EXIT_BUTTON_W, EXIT_BUTTON_H)
+        set_ui_square_transform(self, self.ui.exit_button_debug_hitbox, EXIT_BUTTON_X, EXIT_BUTTON_Y, EXIT_BUTTON_Z + 0.03, vmath.vector4(0.1, 1.0, 0.2, 0), EXIT_BUTTON_W, EXIT_BUTTON_H)
     else
         set_ui_square_transform(self, self.ui.exit_button_debug_hitbox, -9999, -9999, EXIT_BUTTON_Z + 0.03, vmath.vector4(0, 0, 0, 0), EXIT_BUTTON_W, EXIT_BUTTON_H)
     end
@@ -20930,7 +20950,7 @@ update_human_portrait_ui = function(self)
             if self.ui.human_portrait_hitbox_debug then
                 local hx, hy = get_human_portrait_screen_pos(i)
                 local hitbox_tint = HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE
-                    and vmath.vector4(0.1, 1.0, 0.25, 0.32)
+                    and vmath.vector4(0.1, 1.0, 0.25, 0)
                     or hidden
                 set_ui_square_transform(
                     self,

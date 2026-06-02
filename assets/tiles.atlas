@@ -884,6 +884,30 @@ images {
 images {
   image: "/assets/images/tile_void.png"
 }
+images {
+  image: "/assets/images/demo_title_button.png"
+}
+images {
+  image: "/assets/images/demo_select_tutorial_button.png"
+}
+images {
+  image: "/assets/images/demo_select_level1_button.png"
+}
+images {
+  image: "/assets/images/demo_select_level2_button.png"
+}
+images {
+  image: "/assets/images/demo_select_level3_button.png"
+}
+images {
+  image: "/assets/images/demo_result_win.png"
+}
+images {
+  image: "/assets/images/demo_result_lose.png"
+}
+images {
+  image: "/assets/images/demo_explainer.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

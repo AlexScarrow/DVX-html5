@@ -128,6 +128,9 @@ local function create_text_markers(self, text, z)
     local chars = tostring(text or "")
     for i = 1, #chars do
         markers[i] = self.create_ui_marker_sprite(hash("letter_a"), z or (BTN_Z + 0.003))
+        if markers[i] then
+            pcall(go.set, msg.url(nil, markers[i], "sprite"), "blend_mode", hash("alpha"))
+        end
     end
     return markers
 end
@@ -957,9 +960,9 @@ local function show_ui(self)
             msg.post(msg.url(nil, digits[1], "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, 1, 1)) })
             msg.post(msg.url(nil, digits[2], "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, 2, 2)) })
             msg.post(msg.url(nil, digits[3], "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, 3, 3)) })
-            self.set_ui_square_transform(self, digits[1], level_x - 16, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.2, 0.2)
-            self.set_ui_square_transform(self, digits[2], level_x, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.2, 0.2)
-            self.set_ui_square_transform(self, digits[3], level_x + 16, by, BTN_Z + 0.002, vmath.vector4(1, 1, 1, 1), 0.2, 0.2)
+            self.set_ui_square_transform(self, digits[1], level_x - 16, by, BTN_Z + 0.002, vmath.vector4(0, 0, 0, 1), 0.2, 0.2)
+            self.set_ui_square_transform(self, digits[2], level_x, by, BTN_Z + 0.002, vmath.vector4(0, 0, 0, 1), 0.2, 0.2)
+            self.set_ui_square_transform(self, digits[3], level_x + 16, by, BTN_Z + 0.002, vmath.vector4(0, 0, 0, 1), 0.2, 0.2)
         elseif digits then
             self.set_ui_square_transform(self, digits[1], -9999, -9999, BTN_Z + 0.002, hidden, 0.2, 0.2)
             self.set_ui_square_transform(self, digits[2], -9999, -9999, BTN_Z + 0.002, hidden, 0.2, 0.2)
@@ -1390,6 +1393,15 @@ function M.init(self, deps)
         local d1 = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
         local d2 = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
         local d3 = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
+        if d1 then
+            pcall(go.set, msg.url(nil, d1, "sprite"), "blend_mode", hash("alpha"))
+        end
+        if d2 then
+            pcall(go.set, msg.url(nil, d2, "sprite"), "blend_mode", hash("alpha"))
+        end
+        if d3 then
+            pcall(go.set, msg.url(nil, d3, "sprite"), "blend_mode", hash("alpha"))
+        end
         self.level_editor.level_button_digits[i] = { d1, d2, d3 }
     end
     ui.save_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), ACTION_W, ACTION_H)

@@ -588,23 +588,23 @@ levels[4] = {
     }
 
     levels[16] = {
-        { x = 11, y = 14, tile = "coms" },
-        { x = 2, y = 13, tile = "armoury" },
+        { x = 5, y = 14, tile = "coms" },
+        { x = 5, y = 11, tile = "canteen" },
         { x = 8, y = 11, tile = "medbay" },
-        { x = 11, y = 11, tile = "armoury" },
-        { x = 2, y = 10, tile = "canteen" },
-        { x = 5, y = 8, tile = "exterior1" },
-        { x = 8, y = 8, tile = "jungle" },
-        { x = 11, y = 8, tile = "exterior2" },
-        { x = 14, y = 8, tile = "rescue_entry" },
-        { x = 2, y = 7, tile = "void" },
-        { x = 5, y = 5, tile = "bunkroom" },
-        { x = 8, y = 5, tile = "showers" },
+        { x = 11, y = 11, tile = "coms" },
+        { x = 2, y = 8, tile = "rescue_entry" },
+        { x = 5, y = 8, tile = "bunkroom" },
+        { x = 8, y = 8, tile = "workshop" },
+        { x = 11, y = 8, tile = "armoury" },
+        { x = 14, y = 8, tile = "jungle" },
+        { x = 2, y = 5, tile = "void" },
+        { x = 5, y = 5, tile = "passage1" },
+        { x = 8, y = 5, tile = "passage1" },
         { x = 11, y = 5, tile = "void" },
-        { x = 14, y = 5, tile = "void" },
-        { x = 2, y = 4, tile = "portal" },
-        { x = 5, y = 2, tile = "cavern" },
-        { x = 8, y = 2, tile = "corridor1" },
+        { x = 14, y = 5, tile = "passage1" },
+        { x = 2, y = 2, tile = "portal" },
+        { x = 5, y = 2, tile = "furnace" },
+        { x = 8, y = 2, tile = "cavern" },
         { x = 11, y = 2, tile = "corridor1" },
         { x = 14, y = 2, tile = "portal" },
     }
@@ -613,7 +613,7 @@ levels[4] = {
     levels[16].spawn_cell = 2
     levels[16].unit_loadouts = {
         sarge = {
-            starting_backpack_items = { "bomb" },
+            starting_backpack_items = { "bomb", "bomb" },
             starting_equipped_buffs = {
                 top = "buff_night_vision"
             }
@@ -634,6 +634,32 @@ levels[4] = {
         }
     }
 
+
+    levels[17] = {
+        { x = 8, y = 14, tile = "coms" },
+        { x = 4, y = 11, tile = "coms" },
+        { x = 7, y = 11, tile = "medbay" },
+        { x = 10, y = 11, tile = "canteen" },
+        { x = 2, y = 8, tile = "rescue_entry" },
+        { x = 5, y = 8, tile = "showers" },
+        { x = 8, y = 8, tile = "bunkroom" },
+        { x = 11, y = 8, tile = "exterior2" },
+        { x = 2, y = 5, tile = "void" },
+        { x = 5, y = 5, tile = "passage1" },
+        { x = 8, y = 5, tile = "void" },
+        { x = 11, y = 5, tile = "passage1" },
+        { x = 14, y = 5, tile = "void" },
+        { x = 2, y = 2, tile = "portal" },
+        { x = 5, y = 2, tile = "cavern" },
+        { x = 8, y = 2, tile = "lab" },
+        { x = 11, y = 2, tile = "cavern" },
+        { x = 14, y = 2, tile = "portal" },
+    }
+    levels[17].mission_type = "dna_sample"
+    levels[17].spawn_tile = "rescue_entry"
+    levels[17].spawn_cell = 2
+    levels[17].unit_loadouts = levels[1].unit_loadouts
+    
     return levels
 end
 

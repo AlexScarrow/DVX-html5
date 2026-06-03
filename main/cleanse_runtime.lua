@@ -15,9 +15,9 @@ function M.extend(runtime, ctx)
     local WEED_NEAR_HUMAN_REFRESH_S = 0.2
     local WEED_SPAWN_GROW_S = 5.0
     local WEED_SPAWN_START_SCALE = 0.86
-    local WEED_ROCK_MAX_RAD = 0.014
+    local WEED_ROCK_MAX_RAD = 0.0
     local WEED_ROCK_SPEED = 2.4
-    local WEED_VISUAL_TICK_S = 0.05
+    local WEED_VISUAL_TICK_S = 0.10
     local WEED_DYING_FADE_S = 5.0
     local WEED_DYING_PULSE_SPEED_MUL = 4.0
     local WEED_DYING_PULSE_AMPLITUDE_MUL = 2.0
@@ -25,6 +25,9 @@ function M.extend(runtime, ctx)
     local FLAME_CELL_TURNS = 2
     local FLAMER_MAX_SHOTS = 10
     local FLAME_MARKER_Z = 0.74
+    local FLAME_MARKER_SCALE_MUL = 0.88
+    local FLAME_MARKER_OFFSET_X = -15
+    local FLAME_MARKER_OFFSET_Y = 10
 
     local function is_cleanse_mission(self)
         if not (ctx and ctx.get_current_mission_type) then
@@ -438,10 +441,10 @@ function M.extend(runtime, ctx)
                 local cell = self.world_grid and self.world_grid[cell_id] or nil
                 if cell then
                     local wx, wy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
-                    local marker_id = factory.create("/ui_alpha_factory#ui_alpha_factory", vmath.vector3(wx, wy, FLAME_MARKER_Z))
+                    local marker_id = factory.create("/ui_alpha_factory#ui_alpha_factory", vmath.vector3(wx + FLAME_MARKER_OFFSET_X, wy + FLAME_MARKER_OFFSET_Y, FLAME_MARKER_Z))
                     if marker_id then
-                        local sx = (tonumber(ctx.CELL_WIDTH or 250) or 250) * 0.88
-                        local sy = (tonumber(ctx.CELL_HEIGHT or 150) or 150) * 0.88
+                        local sx = (tonumber(ctx.CELL_WIDTH or 250) or 250) * FLAME_MARKER_SCALE_MUL
+                        local sy = (tonumber(ctx.CELL_HEIGHT or 150) or 150) * FLAME_MARKER_SCALE_MUL
                         go.set_scale(vmath.vector3(sx, sy, 1), marker_id)
                         go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1.0, 0.12, 0.12, 0.65))
                         state.flame_marker_objects[cell_id] = marker_id
@@ -459,8 +462,19 @@ function M.extend(runtime, ctx)
         state.flame_marker_phase = (tonumber(state.flame_marker_phase or 0) or 0) + ((tonumber(dt or 0) or 0) * 9.0)
         local pulse = 0.5 + (0.5 * math.sin(state.flame_marker_phase))
         local alpha = 0.35 + (0.4 * pulse)
-        for _, marker_id in pairs(state.flame_marker_objects or {}) do
+        for cell_id, marker_id in pairs(state.flame_marker_objects or {}) do
             if marker_id then
+                local cell = self.world_grid and self.world_grid[cell_id] or nil
+                if cell then
+                    local wx, wy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
+                    -- Snap to whole pixels to avoid slight sub-pixel drift illusion.
+                    local px = math.floor((wx + FLAME_MARKER_OFFSET_X) + 0.5)
+                    local py = math.floor((wy + FLAME_MARKER_OFFSET_Y) + 0.5)
+                    go.set_position(vmath.vector3(px, py, FLAME_MARKER_Z), marker_id)
+                    local sx = (tonumber(ctx.CELL_WIDTH or 250) or 250) * FLAME_MARKER_SCALE_MUL
+                    local sy = (tonumber(ctx.CELL_HEIGHT or 150) or 150) * FLAME_MARKER_SCALE_MUL
+                    go.set_scale(vmath.vector3(sx, sy, 1), marker_id)
+                end
                 go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1.0, 0.12, 0.12, alpha))
             end
         end

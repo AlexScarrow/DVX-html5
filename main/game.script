@@ -6025,6 +6025,9 @@ local function update_alien_movement(self, dt)
                     else
                         trigger_unit_tile_bump_sfx(self, "alien")
                     end
+                    if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_on_alien_enter_cell then
+                        CLEANSE_RUNTIME.cleanse_on_alien_enter_cell(self, target_cell_id)
+                    end
                     local continue_after_step = true
                     furnace_resolve_cell_entry(self, target_cell_id, "alien_move_step")
                     if alien.is_dead == true then
@@ -7532,6 +7535,9 @@ end
 
 update_cleanse_runtime = function(self)
     if not (CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status) then
+        return
+    end
+    if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
         return
     end
     if CLEANSE_RUNTIME.cleanse_is_active_mission and CLEANSE_RUNTIME.cleanse_is_active_mission(self) ~= true then
@@ -10074,6 +10080,9 @@ furnace_process_start_of_turn = function(self)
     furnace_sync_fire_fx(self)
     for cell_key, _ in pairs(active_cells) do
         furnace_kill_units_on_cell(self, tonumber(cell_key))
+        if CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_on_furnace_cell_pulse then
+            CLEANSE_RUNTIME.cleanse_on_furnace_cell_pulse(self, tonumber(cell_key))
+        end
     end
 end
 

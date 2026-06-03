@@ -15,6 +15,10 @@ function M.extend(runtime, ctx)
     local WEED_BURST_CYCLES = 3
     local WEED_BURST_COOLDOWN_S = 2.5
     local WEED_BURST_RESELECT_S = 0.45
+    local WEED_BURST_DECAY_START = 1.0
+    local WEED_BURST_DECAY_END = 0.35
+    local WEED_TRIGGER_BURST_DURATION_S = 0.6
+    local WEED_TRIGGER_FIRST_CYCLE_BOOST = 1.45
     local WEED_SPAWN_GROW_S = 5.0
     local WEED_SPAWN_START_SCALE = 0.86
     local WEED_ROCK_MAX_RAD = 0.0
@@ -120,6 +124,7 @@ function M.extend(runtime, ctx)
             weed_burst_cells = {},
             weed_burst_prev_active = {},
             weed_burst_cooldown_cells = {},
+            weed_trigger_cells = {},
             total_valid_cells = 0,
             flame_cells = {},
             flamer_shots_by_unit_id = {},
@@ -245,6 +250,31 @@ function M.extend(runtime, ctx)
         return amp_mul, speed_mul, phase_offset
     end
 
+    local function get_weed_burst_decay_mul(state, cell_id, clock_s, speed_mul)
+        local end_s = tonumber(state and state.weed_burst_cells and state.weed_burst_cells[cell_id] or 0) or 0
+        if end_s <= clock_s then
+            return 1.0
+        end
+        local speed = math.max(0.001, WEED_PULSE_SPEED * (tonumber(speed_mul or 1.0) or 1.0))
+        local cycle_s = (math.pi * 2.0) / speed
+        local total_s = math.max(0.001, cycle_s * WEED_BURST_CYCLES)
+        local start_s = end_s - total_s
+        local progress = math.max(0, math.min(1, (clock_s - start_s) / total_s))
+        return WEED_BURST_DECAY_START + ((WEED_BURST_DECAY_END - WEED_BURST_DECAY_START) * progress)
+    end
+
+    local function get_weed_trigger_boost_mul(state, cell_id, clock_s, speed_mul)
+        local end_s = tonumber(state and state.weed_trigger_cells and state.weed_trigger_cells[cell_id] or 0) or 0
+        if end_s <= clock_s then
+            return 1.0
+        end
+        local speed = math.max(0.001, WEED_PULSE_SPEED * (tonumber(speed_mul or 1.0) or 1.0))
+        local cycle_s = (math.pi * 2.0) / speed
+        local start_s = end_s - WEED_TRIGGER_BURST_DURATION_S
+        local cycle_progress = math.max(0, math.min(1, (clock_s - start_s) / cycle_s))
+        return WEED_TRIGGER_FIRST_CYCLE_BOOST + ((1.0 - WEED_TRIGGER_FIRST_CYCLE_BOOST) * cycle_progress)
+    end
+
     local function choose_weed_variant_idx(self, state, cell_id)
         local used_by_neighbors = {}
         for _, dir in ipairs(WEED_NEIGHBOR_DIRS) do
@@ -346,6 +376,9 @@ function M.extend(runtime, ctx)
             end
             if state.weed_cells[cell_id] ~= true and state.weed_burst_prev_active then
                 state.weed_burst_prev_active[cell_id] = nil
+            end
+            if state.weed_cells[cell_id] ~= true and state.weed_trigger_cells then
+                state.weed_trigger_cells[cell_id] = nil
             end
             if state.weed_cells[cell_id] ~= true and state.weed_variant_by_cell then
                 state.weed_variant_by_cell[cell_id] = nil
@@ -556,18 +589,24 @@ function M.extend(runtime, ctx)
         local clock_s = tonumber(state.fx_clock_s or 0) or 0
         state.weed_burst_cells = state.weed_burst_cells or {}
         state.weed_burst_prev_active = state.weed_burst_prev_active or {}
+        state.weed_trigger_cells = state.weed_trigger_cells or {}
         for cell_id, weed_go in pairs(state.weed_visuals or {}) do
             if weed_go then
                 local amp_mul, speed_mul, phase_offset = get_weed_pulse_style(cell_id)
-                local phase = (clock_s * WEED_PULSE_SPEED * speed_mul) + phase_offset
+                local trigger_active = (tonumber(state.weed_trigger_cells[cell_id] or 0) or 0) > clock_s
+                local speed_mul_eff = speed_mul
+                local phase = (clock_s * WEED_PULSE_SPEED * speed_mul_eff) + phase_offset
                 local s = math.sin(phase)
                 local spawn_s = tonumber(state.weed_spawn_s_by_cell and state.weed_spawn_s_by_cell[cell_id] or 0) or 0
                 local spawn_progress = math.max(0, math.min(1, (clock_s - spawn_s) / WEED_SPAWN_GROW_S))
                 local spawn_scale = WEED_SPAWN_START_SCALE + ((1.0 - WEED_SPAWN_START_SCALE) * spawn_progress)
-                local animate_this = (tonumber(state.weed_burst_cells[cell_id] or 0) or 0) > clock_s
+                local burst_active = (tonumber(state.weed_burst_cells[cell_id] or 0) or 0) > clock_s
+                local animate_this = trigger_active or burst_active
                 local flame_active = (tonumber(state.flame_cells and state.flame_cells[cell_id] or 0) or 0) > 0
                 if animate_this then
-                    local amp = WEED_PULSE_AMPLITUDE * amp_mul * spawn_progress
+                    local decay_mul = trigger_active and 1.0 or get_weed_burst_decay_mul(state, cell_id, clock_s, speed_mul)
+                    local trigger_boost_mul = trigger_active and get_weed_trigger_boost_mul(state, cell_id, clock_s, speed_mul) or 1.0
+                    local amp = WEED_PULSE_AMPLITUDE * amp_mul * spawn_progress * decay_mul * trigger_boost_mul
                     local sx = spawn_scale + (amp * s)
                     local sy = spawn_scale - ((amp * WEED_PULSE_SQUASH_RATIO) * s)
                     go.set_scale(vmath.vector3(sx, sy, 1), weed_go)
@@ -658,11 +697,32 @@ function M.extend(runtime, ctx)
     end
 
     runtime.cleanse_blocks_alien_entry = function(self, alien_type, to_cell_id)
-        if not runtime.cleanse_cell_has_weed(self, to_cell_id) then
+        return false
+    end
+
+    runtime.cleanse_on_alien_enter_cell = function(self, cell_id)
+        if not is_cleanse_mission(self) then
             return false
         end
-        return alien_type ~= "cannon_fodder"
-            and alien_type ~= "speedy"
+        local state = self.cleanse_state or nil
+        if not (state and state.weed_cells and state.weed_cells[cell_id] == true) then
+            return false
+        end
+        state.weed_trigger_cells = state.weed_trigger_cells or {}
+        local now_s = tonumber(state.fx_clock_s or 0) or 0
+        state.weed_trigger_cells[cell_id] = now_s + WEED_TRIGGER_BURST_DURATION_S
+        return true
+    end
+
+    runtime.cleanse_on_furnace_cell_pulse = function(self, cell_id)
+        if not is_cleanse_mission(self) then
+            return false
+        end
+        local state = self.cleanse_state or nil
+        if not (state and state.weed_cells and state.weed_cells[cell_id] == true) then
+            return false
+        end
+        return remove_weed_cell(self, cell_id, true)
     end
 
     runtime.cleanse_initialize_for_level = function(self)
@@ -764,6 +824,12 @@ function M.extend(runtime, ctx)
         local grew = runtime.cleanse_try_grow_one_cell(self)
         if grew then
             print("CLEANSE | weed grew by one cell.")
+        end
+        for cell_key, _ in pairs(self.furnace_active_cells or {}) do
+            local cell_id = tonumber(cell_key)
+            if cell_id then
+                remove_weed_cell(self, cell_id, true)
+            end
         end
         for cell_id, _ in pairs(self.cleanse_state.flame_cells or {}) do
             apply_flame_kill_on_cell(self, cell_id)

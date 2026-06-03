@@ -39,6 +39,9 @@ max_component_count = 128
 [collection]
 max_instances = 4096
 
+[particle_fx]
+max_count = 512
+
 [html5]
 htmlfile = /web/index.html
 

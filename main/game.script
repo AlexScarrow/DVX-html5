@@ -413,11 +413,19 @@ OBJECTIVE_REMINDER_Y = SCREEN_HEIGHT * 0.5
 OBJECTIVE_REMINDER_Z = SCORE_HUD_Z
 PURGE_TIMER_HUD_Z = SCORE_HUD_Z
 PURGE_TIMER_HUD_CENTER_X = SCORE_HUD_CENTER_X
-PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 24
+PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 64
 PURGE_TIMER_HUD_DIGIT_SPACING_PX = 16
 PURGE_TIMER_HUD_DIGIT_DRAW_W = SCORE_HUD_DIGIT_DRAW_W
 PURGE_TIMER_HUD_DIGIT_DRAW_H = SCORE_HUD_DIGIT_DRAW_H
 PURGE_TIMER_HUD_DIGIT_COUNT = 4
+PURGE_TIMER_HUD_SCALE = 4.0
+PURGE_TIMER_HUD_PULSE_AMPLITUDE = 0.12
+PURGE_TIMER_HUD_PULSE_SPEED = 6.0
+PURGE_TIMER_HUD_RING_REPEAT_S = 3.0
+PURGE_TIMER_HUD_RING_DURATION_S = 0.7
+PURGE_TIMER_HUD_RING_SCALE = 6.0
+PURGE_TIMER_HUD_RING_START_SCALE = 0.48
+PURGE_TIMER_HUD_RING_TINT = vmath.vector4(1.0, 0.2, 0.2, 1.0)
 REALTIME_MP_SNAPSHOT_INTERVAL_S = 0.2
 REALTIME_MP_SNAPSHOT_HEARTBEAT_S = 0.9
 REALTIME_MP_DECOUPLE_MOVEMENT_FROM_HOST = true
@@ -559,6 +567,7 @@ SFX_BRUTE_DIES_URL = "main:/sfx_brute_dies#sound"
 SFX_SPITTER_DIES_URL = "main:/sfx_spitter_dies#sound"
 SFX_SPITTER_FIRES_URL = "main:/sfx_spitter_fires#sound"
 SFX_FLAMER_URL = "main:/sfx_flamer#sound"
+SFX_KLAXXON_URL = "main:/sfx_klaxxon#sound"
 SFX_FURNACE_FIRE_URL = "main:/sfx_furnace_fire#sound"
 SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
@@ -1346,7 +1355,7 @@ apply_runtime_hud_layout = function(self)
     ZOOM_SLIDER_TRACK_BOTTOM_Y = ZOOM_SLIDER_TRACK_TOP_Y - ZOOM_SLIDER_TRACK_H
     ZOOM_SLIDER_TRACK_CENTER_Y = ZOOM_SLIDER_TRACK_TOP_Y - (ZOOM_SLIDER_TRACK_H * 0.5)
     PURGE_TIMER_HUD_CENTER_X = SCORE_HUD_CENTER_X
-    PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 24
+    PURGE_TIMER_HUD_Y = SCORE_HUD_Y - 64
     MP_LAG_SIM_BUTTON_X = (EXIT_BUTTON_X + SCORE_HUD_CENTER_X) * 0.5
     MP_LAG_SIM_BUTTON_Y = EXIT_BUTTON_Y
     if LOOT_RUNTIME and LOOT_RUNTIME.set_ui_screen_offset then
@@ -7090,7 +7099,8 @@ local function get_dna_mission_status(self)
 end
 
 local function purge_is_active_mission(self)
-    return tostring(get_current_mission_type(self) or "") == MISSION_TYPE_PURGE
+    local mission_type = tostring(get_current_mission_type(self) or "")
+    return mission_type == MISSION_TYPE_PURGE or mission_type == MISSION_TYPE_CLEANSE
 end
 
 get_spawn_pressure_tier = function(self)
@@ -7463,12 +7473,22 @@ local function purge_tick_turn_countdown_if_needed(self)
     local state = ensure_score_state(self)
     SCORE_RUNTIME.record_mission_failed(state)
     self.game_won = false
-    print(string.format(
-        "PURGE | FAILURE at turn timeout. launch=%s extract=%s",
-        launch_ready and "yes" or "no",
-        extract_ready and "yes" or "no"
-    ))
-    enter_mission_outro(self, "lose", "purge_timeout")
+    local mission_type = tostring(get_current_mission_type(self) or "")
+    if mission_type == MISSION_TYPE_CLEANSE then
+        print(string.format(
+            "CLEANSE | FAILURE at turn timeout. launch=%s extract=%s",
+            launch_ready and "yes" or "no",
+            extract_ready and "yes" or "no"
+        ))
+        enter_mission_outro(self, "lose", "cleanse_timeout")
+    else
+        print(string.format(
+            "PURGE | FAILURE at turn timeout. launch=%s extract=%s",
+            launch_ready and "yes" or "no",
+            extract_ready and "yes" or "no"
+        ))
+        enter_mission_outro(self, "lose", "purge_timeout")
+    end
 end
 
 local function update_all_humans_dead_loss(self)
@@ -11782,6 +11802,7 @@ local function initialize_unit_ui(self)
         objective_button = nil,
         objective_reminder = nil,
         purge_timer_digit_icons = {},
+        purge_timer_ring = nil,
         new_turn_button = nil,
         launch_button = nil,
         launch_button_art = nil,
@@ -11956,8 +11977,10 @@ local function initialize_unit_ui(self)
         self.ui.purge_timer_digit_icons[i] = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, PURGE_TIMER_HUD_Z))
         if self.ui.purge_timer_digit_icons[i] then
             msg.post(msg.url(nil, self.ui.purge_timer_digit_icons[i], "sprite"), "play_animation", { id = hash("score_0") })
+            pcall(go.set, msg.url(nil, self.ui.purge_timer_digit_icons[i], "sprite"), "blend_mode", hash("add"))
         end
     end
+    self.ui.purge_timer_ring = create_ui_marker_sprite(hash("impactRing"), PURGE_TIMER_HUD_Z - 0.001)
     self.ui.new_turn_button = create_ui_square_alpha(0, 0, NEW_TURN_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.25, 0.95), NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     if self.ui.new_turn_button then
         update_multiplayer_new_turn_button_visual(self)
@@ -12350,6 +12373,7 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, PURGE_TIMER_HUD_Z, hidden, PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021, PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021)
         end
     end
+    set_ui_square_transform(self, self.ui.purge_timer_ring, -9999, -9999, PURGE_TIMER_HUD_Z - 0.001, hidden, PURGE_TIMER_HUD_RING_SCALE, PURGE_TIMER_HUD_RING_SCALE)
     set_ui_square_transform(self, self.ui.new_turn_button, -9999, -9999, NEW_TURN_BUTTON_Z, hidden, NEW_TURN_BUTTON_W, NEW_TURN_BUTTON_H)
     if self.ui.ready_buttons then
         for _, btn in ipairs(self.ui.ready_buttons) do
@@ -13113,6 +13137,13 @@ local function get_purge_timer_display_text(self)
     return string.format("%04d", turns_remaining)
 end
 
+local function get_purge_timer_clock_s()
+    if socket and socket.gettime then
+        return tonumber(socket.gettime()) or 0
+    end
+    return tonumber(os.clock()) or 0
+end
+
 local function update_purge_timer_hud(self, visible)
     if not self.ui or not self.ui.purge_timer_digit_icons then
         return
@@ -13120,6 +13151,8 @@ local function update_purge_timer_hud(self, visible)
     local hidden = vmath.vector4(0, 0, 0, 0)
     local status = get_purge_mission_status(self)
     if visible ~= true or not purge_is_active_mission(self) or status.timer_started ~= true then
+        self.purge_timer_hud_next_ring_s = nil
+        self.purge_timer_hud_ring_end_s = nil
         for _, digit_id in ipairs(self.ui.purge_timer_digit_icons) do
             set_ui_square_transform(
                 self,
@@ -13128,23 +13161,59 @@ local function update_purge_timer_hud(self, visible)
                 -9999,
                 PURGE_TIMER_HUD_Z,
                 hidden,
-                PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021,
-                PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021
+                PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021 * PURGE_TIMER_HUD_SCALE,
+                PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021 * PURGE_TIMER_HUD_SCALE
             )
         end
+        set_ui_square_transform(self, self.ui.purge_timer_ring, -9999, -9999, PURGE_TIMER_HUD_Z - 0.001, hidden, PURGE_TIMER_HUD_RING_SCALE, PURGE_TIMER_HUD_RING_SCALE)
         return
+    end
+    local now_s = get_purge_timer_clock_s()
+    local pulse = 1.0 + (PURGE_TIMER_HUD_PULSE_AMPLITUDE * math.sin(now_s * PURGE_TIMER_HUD_PULSE_SPEED))
+    local draw_scale_x = PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021 * PURGE_TIMER_HUD_SCALE * pulse
+    local draw_scale_y = PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021 * PURGE_TIMER_HUD_SCALE * pulse
+    if not self.purge_timer_hud_next_ring_s then
+        self.purge_timer_hud_next_ring_s = now_s
+    end
+    if now_s >= self.purge_timer_hud_next_ring_s then
+        self.purge_timer_hud_ring_end_s = now_s + PURGE_TIMER_HUD_RING_DURATION_S
+        if self.ui.purge_timer_ring then
+            msg.post(msg.url(nil, self.ui.purge_timer_ring, "sprite"), "play_animation", { id = hash("impactRing") })
+        end
+        play_sfx_one_shot(self, "klaxxon")
+        self.purge_timer_hud_next_ring_s = now_s + PURGE_TIMER_HUD_RING_REPEAT_S
+    end
+    if self.ui.purge_timer_ring then
+        local ring_end_s = tonumber(self.purge_timer_hud_ring_end_s or 0) or 0
+        if ring_end_s > now_s then
+            local p = 1.0 - ((ring_end_s - now_s) / PURGE_TIMER_HUD_RING_DURATION_S)
+            p = math.max(0, math.min(1, p))
+            local ring_scale = PURGE_TIMER_HUD_RING_START_SCALE + ((PURGE_TIMER_HUD_RING_SCALE - PURGE_TIMER_HUD_RING_START_SCALE) * p)
+            local ring_alpha = 1.0 - p
+            set_ui_square_transform(
+                self,
+                self.ui.purge_timer_ring,
+                PURGE_TIMER_HUD_CENTER_X,
+                PURGE_TIMER_HUD_Y,
+                PURGE_TIMER_HUD_Z - 0.001,
+                vmath.vector4(PURGE_TIMER_HUD_RING_TINT.x, PURGE_TIMER_HUD_RING_TINT.y, PURGE_TIMER_HUD_RING_TINT.z, ring_alpha),
+                ring_scale,
+                ring_scale
+            )
+        else
+            set_ui_square_transform(self, self.ui.purge_timer_ring, -9999, -9999, PURGE_TIMER_HUD_Z - 0.001, hidden, PURGE_TIMER_HUD_RING_SCALE, PURGE_TIMER_HUD_RING_SCALE)
+        end
     end
     local text = get_purge_timer_display_text(self)
     local count = #text
-    local start_x = PURGE_TIMER_HUD_CENTER_X - ((count - 1) * PURGE_TIMER_HUD_DIGIT_SPACING_PX * 0.5)
-    local tint = vmath.vector4(1, 1, 1, 1)
-    if status.remaining_turns <= 1 then
-        tint = vmath.vector4(1, 0.5, 0.4, 1)
-    end
+    local spacing = PURGE_TIMER_HUD_DIGIT_SPACING_PX * PURGE_TIMER_HUD_SCALE
+    local start_x = PURGE_TIMER_HUD_CENTER_X - ((count - 1) * spacing * 0.5)
+    local tint = vmath.vector4(1.0, 0.25, 0.25, 1)
     for i, digit_id in ipairs(self.ui.purge_timer_digit_icons) do
         local ch = string.sub(text, i, i)
         msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
-        local dx = start_x + ((i - 1) * PURGE_TIMER_HUD_DIGIT_SPACING_PX)
+        pcall(go.set, msg.url(nil, digit_id, "sprite"), "blend_mode", hash("add"))
+        local dx = start_x + ((i - 1) * spacing)
         set_ui_square_transform(
             self,
             digit_id,
@@ -13152,8 +13221,8 @@ local function update_purge_timer_hud(self, visible)
             PURGE_TIMER_HUD_Y,
             PURGE_TIMER_HUD_Z,
             tint,
-            PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021,
-            PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021
+            draw_scale_x,
+            draw_scale_y
         )
     end
 end
@@ -18990,6 +19059,8 @@ finish_level_load_after_clear = function(self, level_index)
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
     self.purge_turns_remaining = 0
+    self.purge_timer_hud_next_ring_s = nil
+    self.purge_timer_hud_ring_end_s = nil
     self.cleanse_state = {}
     self.end_result = ""
     self.end_mission_type = ""
@@ -31120,6 +31191,8 @@ function init(self)
     self.purge_result_locked = false
     self.purge_deadline_epoch_ms = 0
     self.purge_turns_remaining = 0
+    self.purge_timer_hud_next_ring_s = nil
+    self.purge_timer_hud_ring_end_s = nil
     self.end_result = ""
     self.end_mission_type = ""
     self.end_outro_sequence_id = ""
@@ -31168,6 +31241,7 @@ function init(self)
             spitter_dies = true,
             spitter_fires = true,
             flamer = true,
+            klaxxon = true,
             furnace_fire = true,
             brute_damage = true,
             melee_hit_alien = true,
@@ -31222,6 +31296,7 @@ function init(self)
         spitter_dies = { url = msg.url(SFX_SPITTER_DIES_URL), playing = false },
         spitter_fires = { url = msg.url(SFX_SPITTER_FIRES_URL), playing = false },
         flamer = { url = msg.url(SFX_FLAMER_URL), playing = false },
+        klaxxon = { url = msg.url(SFX_KLAXXON_URL), playing = false },
         furnace_fire = { url = msg.url(SFX_FURNACE_FIRE_URL), playing = false },
         brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },

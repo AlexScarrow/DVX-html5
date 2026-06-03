@@ -847,7 +847,6 @@ function M.extend(runtime, ctx)
         return tostring(ctx.get_current_mission_type(self) or "") == "purge"
     end
 
-
     local function get_rescue_victory_cell_ids(self, local_cell_override)
         local out = {}
         if not (self and self.level_library and ctx and ctx.coords_to_id) then
@@ -1120,7 +1119,11 @@ function M.extend(runtime, ctx)
             end
         end
         local purge_status = (ctx and ctx.get_purge_mission_status and ctx.get_purge_mission_status(self)) or nil
-        if purge_status and purge_status.bomb_planted == true and self.world_grid then
+        if purge_status
+            and purge_status.bomb_planted == true
+            and self.world_grid
+            and (is_purge_mission(self) or ((ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse"))
+        then
             for _, cell in ipairs(self.world_grid) do
                 if cell and cell.tileID ~= hash("empty") then
                     local items = runtime.get_world_items_on_cell(self, cell.idNumber)
@@ -3677,6 +3680,12 @@ function M.extend(runtime, ctx)
             local purge_status = (ctx and ctx.get_purge_mission_status and ctx.get_purge_mission_status(self)) or {}
             state.cleanse_weed_count = tonumber(cleanse_status.weed_count or 0) or 0
             state.cleanse_portal_destroyed = (cleanse_status.portal_destroyed == true) or (purge_status.bomb_planted == true)
+            state.purge_bomb_planted = purge_status.bomb_planted == true
+            state.purge_timer_started = purge_status.timer_started == true
+            state.purge_launch_pressed = purge_status.launch_pressed == true
+            state.purge_extract_ready = purge_status.extract_ready == true
+            state.purge_time_remaining_s = tonumber(purge_status.remaining_s or 0) or 0
+            state.purge_time_expired = purge_status.expired == true
             state.seated_humans = count_alive_humans_on_rescue_local_cell(self, PURGE_RESCUE_RETURN_LOCAL_CELL)
             return state
         end
@@ -3793,10 +3802,18 @@ function M.extend(runtime, ctx)
             return {
                 can_launch = (tonumber(state.cleanse_weed_count or 0) or 0) <= 0
                     and state.cleanse_portal_destroyed == true
-                    and (tonumber(state.seated_humans or 0) or 0) >= 1,
+                    and (tonumber(state.seated_humans or 0) or 0) >= 1
+                    and state.purge_timer_started == true
+                    and state.purge_time_expired ~= true,
                 seated_humans = state.seated_humans or 0,
                 cleanse_weed_count = tonumber(state.cleanse_weed_count or 0) or 0,
                 cleanse_portal_destroyed = state.cleanse_portal_destroyed == true,
+                purge_bomb_planted = state.purge_bomb_planted == true,
+                purge_timer_started = state.purge_timer_started == true,
+                purge_launch_pressed = state.purge_launch_pressed == true,
+                purge_extract_ready = state.purge_extract_ready == true,
+                purge_time_remaining_s = tonumber(state.purge_time_remaining_s or 0) or 0,
+                purge_time_expired = state.purge_time_expired == true,
                 power_loaded = 0,
                 nav_ready = true,
                 supplies_ready = true,
@@ -3841,10 +3858,12 @@ function M.extend(runtime, ctx)
                 ))
             elseif (ctx and ctx.get_current_mission_type) and tostring(ctx.get_current_mission_type(self) or "") == "cleanse" then
                 print(string.format(
-                    "Launch blocked | cleanse_weeds=%d portal_destroyed=%s seated=%d",
+                    "Launch blocked | cleanse_weeds=%d portal_destroyed=%s seated=%d timer_started=%s expired=%s",
                     tonumber(status.cleanse_weed_count or 0) or 0,
                     status.cleanse_portal_destroyed and "yes" or "no",
-                    tonumber(status.seated_humans or 0) or 0
+                    tonumber(status.seated_humans or 0) or 0,
+                    status.purge_timer_started and "yes" or "no",
+                    status.purge_time_expired and "yes" or "no"
                 ))
             else
                 print(string.format(

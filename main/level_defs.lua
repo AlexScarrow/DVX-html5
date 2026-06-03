@@ -568,7 +568,7 @@ levels[4] = {
         sarge = {
             starting_backpack_items = { "bomb" },
             starting_equipped_buffs = {
-                top = "buff_night_vision"
+                top = "buff_night_vision", right = "buff_flamer"
             }
         },
         techie = {
@@ -615,7 +615,7 @@ levels[4] = {
         sarge = {
             starting_backpack_items = { "bomb", "bomb" },
             starting_equipped_buffs = {
-                top = "buff_night_vision"
+                top = "buff_night_vision", right = "buff_flamer"
             }
         },
         techie = {

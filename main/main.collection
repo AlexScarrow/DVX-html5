@@ -171,6 +171,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_klaxxon"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/klaxxon.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_furnace_fire"
   data: "components {\n"
   "  id: \"sound\"\n"

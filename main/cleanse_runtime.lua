@@ -11,13 +11,15 @@ function M.extend(runtime, ctx)
     local WEED_PULSE_SPEED_MIN_MUL = 0.9
     local WEED_PULSE_SPEED_MAX_MUL = 1.12
     local WEED_ANIM_ENABLED = true -- TEMP PERF TEST toggle
-    local WEED_NEAR_HUMAN_ANIM_ONLY = true -- PERF: animate active weeds only near humans
-    local WEED_NEAR_HUMAN_REFRESH_S = 0.2
+    local WEED_BURST_ACTIVE_COUNT = 2
+    local WEED_BURST_CYCLES = 3
+    local WEED_BURST_COOLDOWN_S = 2.5
+    local WEED_BURST_RESELECT_S = 0.45
     local WEED_SPAWN_GROW_S = 5.0
     local WEED_SPAWN_START_SCALE = 0.86
     local WEED_ROCK_MAX_RAD = 0.0
     local WEED_ROCK_SPEED = 2.4
-    local WEED_VISUAL_TICK_S = 0.10
+    local WEED_VISUAL_TICK_S = 0.05
     local WEED_DYING_FADE_S = 5.0
     local WEED_DYING_PULSE_SPEED_MUL = 4.0
     local WEED_DYING_PULSE_AMPLITUDE_MUL = 2.0
@@ -114,8 +116,10 @@ function M.extend(runtime, ctx)
             weed_variant_by_cell = {},
             weed_spawn_s_by_cell = {},
             weed_tick_accum_s = 0,
-            weed_anim_refresh_accum_s = 0,
-            weed_anim_cells = {},
+            weed_burst_accum_s = 0,
+            weed_burst_cells = {},
+            weed_burst_prev_active = {},
+            weed_burst_cooldown_cells = {},
             total_valid_cells = 0,
             flame_cells = {},
             flamer_shots_by_unit_id = {},
@@ -334,6 +338,15 @@ function M.extend(runtime, ctx)
                 pcall(go.delete, go_id)
                 state.weed_visuals[cell_id] = nil
             end
+            if state.weed_cells[cell_id] ~= true and state.weed_burst_cells then
+                state.weed_burst_cells[cell_id] = nil
+            end
+            if state.weed_cells[cell_id] ~= true and state.weed_burst_cooldown_cells then
+                state.weed_burst_cooldown_cells[cell_id] = nil
+            end
+            if state.weed_cells[cell_id] ~= true and state.weed_burst_prev_active then
+                state.weed_burst_prev_active[cell_id] = nil
+            end
             if state.weed_cells[cell_id] ~= true and state.weed_variant_by_cell then
                 state.weed_variant_by_cell[cell_id] = nil
             end
@@ -480,23 +493,59 @@ function M.extend(runtime, ctx)
         end
     end
 
-    local function refresh_weed_anim_cells_near_humans(self, state)
+    local function refresh_weed_burst_selection(state)
         if not state then
             return
         end
-        local out = {}
-        for _, unit in pairs(self.squad_units or {}) do
-            if unit and unit.cell_id and (tonumber(unit.current_health or 0) or 0) > 0 then
-                out[unit.cell_id] = true
-                for _, dir in ipairs(WEED_NEIGHBOR_DIRS) do
-                    local adj = ctx.get_adjacent_cell and ctx.get_adjacent_cell(unit.cell_id, dir) or nil
-                    if adj then
-                        out[adj] = true
-                    end
-                end
+        local clock_s = tonumber(state.fx_clock_s or 0) or 0
+        state.weed_burst_cells = state.weed_burst_cells or {}
+        state.weed_burst_cooldown_cells = state.weed_burst_cooldown_cells or {}
+        for cell_id, end_s in pairs(state.weed_burst_cells) do
+            if state.weed_visuals[cell_id] == nil then
+                state.weed_burst_cells[cell_id] = nil
+            elseif (tonumber(end_s or 0) or 0) <= clock_s then
+                state.weed_burst_cells[cell_id] = nil
+                state.weed_burst_cooldown_cells[cell_id] = clock_s + WEED_BURST_COOLDOWN_S
             end
         end
-        state.weed_anim_cells = out
+        for cell_id, end_s in pairs(state.weed_burst_cooldown_cells) do
+            if state.weed_visuals[cell_id] == nil or (tonumber(end_s or 0) or 0) <= clock_s then
+                state.weed_burst_cooldown_cells[cell_id] = nil
+            end
+        end
+        local active_count = 0
+        for _, _ in pairs(state.weed_burst_cells) do
+            active_count = active_count + 1
+        end
+        local slots_to_fill = math.max(0, WEED_BURST_ACTIVE_COUNT - active_count)
+        if slots_to_fill <= 0 then
+            return
+        end
+        local candidates = {}
+        for cell_id, go_id in pairs(state.weed_visuals or {}) do
+            if go_id
+                and state.weed_cells
+                and state.weed_cells[cell_id] == true
+                and state.weed_burst_cells[cell_id] == nil
+                and (tonumber(state.weed_burst_cooldown_cells[cell_id] or 0) or 0) <= clock_s
+            then
+                candidates[#candidates + 1] = cell_id
+            end
+        end
+        for _ = 1, slots_to_fill do
+            if #candidates <= 0 then
+                break
+            end
+            local pick_i = math.random(1, #candidates)
+            local picked_cell = candidates[pick_i]
+            candidates[pick_i] = candidates[#candidates]
+            candidates[#candidates] = nil
+            local _, speed_mul = get_weed_pulse_style(picked_cell)
+            local speed = math.max(0.001, WEED_PULSE_SPEED * (tonumber(speed_mul or 1.0) or 1.0))
+            local cycle_s = (math.pi * 2.0) / speed
+            local duration_s = cycle_s * WEED_BURST_CYCLES
+            state.weed_burst_cells[picked_cell] = clock_s + duration_s
+        end
     end
 
     local function tick_weed_pulse(self)
@@ -505,6 +554,8 @@ function M.extend(runtime, ctx)
             return
         end
         local clock_s = tonumber(state.fx_clock_s or 0) or 0
+        state.weed_burst_cells = state.weed_burst_cells or {}
+        state.weed_burst_prev_active = state.weed_burst_prev_active or {}
         for cell_id, weed_go in pairs(state.weed_visuals or {}) do
             if weed_go then
                 local amp_mul, speed_mul, phase_offset = get_weed_pulse_style(cell_id)
@@ -513,10 +564,8 @@ function M.extend(runtime, ctx)
                 local spawn_s = tonumber(state.weed_spawn_s_by_cell and state.weed_spawn_s_by_cell[cell_id] or 0) or 0
                 local spawn_progress = math.max(0, math.min(1, (clock_s - spawn_s) / WEED_SPAWN_GROW_S))
                 local spawn_scale = WEED_SPAWN_START_SCALE + ((1.0 - WEED_SPAWN_START_SCALE) * spawn_progress)
-                local animate_this = true
-                if WEED_NEAR_HUMAN_ANIM_ONLY == true then
-                    animate_this = state.weed_anim_cells and state.weed_anim_cells[cell_id] == true
-                end
+                local animate_this = (tonumber(state.weed_burst_cells[cell_id] or 0) or 0) > clock_s
+                local flame_active = (tonumber(state.flame_cells and state.flame_cells[cell_id] or 0) or 0) > 0
                 if animate_this then
                     local amp = WEED_PULSE_AMPLITUDE * amp_mul * spawn_progress
                     local sx = spawn_scale + (amp * s)
@@ -525,11 +574,13 @@ function M.extend(runtime, ctx)
                     local rock_phase = (clock_s * WEED_ROCK_SPEED) + phase_offset
                     local rock_angle = WEED_ROCK_MAX_RAD * math.sin(rock_phase)
                     go.set_rotation(vmath.quat_rotation_z(rock_angle), weed_go)
-                else
+                    go.set(msg.url(nil, weed_go, "sprite"), "tint", get_weed_tint_for_cell(self, state, cell_id, spawn_progress))
+                elseif spawn_progress < 1.0 or flame_active then
                     go.set_scale(vmath.vector3(spawn_scale, spawn_scale, 1), weed_go)
                     go.set_rotation(vmath.quat_rotation_z(0), weed_go)
+                    go.set(msg.url(nil, weed_go, "sprite"), "tint", get_weed_tint_for_cell(self, state, cell_id, spawn_progress))
                 end
-                go.set(msg.url(nil, weed_go, "sprite"), "tint", get_weed_tint_for_cell(self, state, cell_id, spawn_progress))
+                state.weed_burst_prev_active[cell_id] = animate_this
             end
         end
         for cell_id, entry in pairs(state.dying_weed_visuals or {}) do
@@ -1067,10 +1118,10 @@ function M.extend(runtime, ctx)
             refresh_flame_markers(self)
             state.cleanse_visuals_dirty = false
         end
-        state.weed_anim_refresh_accum_s = (tonumber(state.weed_anim_refresh_accum_s or 0) or 0) + step_dt
-        if state.weed_anim_refresh_accum_s >= WEED_NEAR_HUMAN_REFRESH_S then
-            refresh_weed_anim_cells_near_humans(self, state)
-            state.weed_anim_refresh_accum_s = state.weed_anim_refresh_accum_s % WEED_NEAR_HUMAN_REFRESH_S
+        state.weed_burst_accum_s = (tonumber(state.weed_burst_accum_s or 0) or 0) + step_dt
+        if state.weed_burst_accum_s >= WEED_BURST_RESELECT_S then
+            refresh_weed_burst_selection(state)
+            state.weed_burst_accum_s = state.weed_burst_accum_s % WEED_BURST_RESELECT_S
         end
         if WEED_ANIM_ENABLED == true then
             state.weed_tick_accum_s = (tonumber(state.weed_tick_accum_s or 0) or 0) + step_dt

@@ -458,7 +458,13 @@ images {
   image: "/assets/images/mp_btn_mission_purge.png"
 }
 images {
+  image: "/assets/images/mp_btn_mission_cleanse.png"
+}
+images {
   image: "/assets/images/mp_btn_mission_dna.png"
+}
+images {
+  image: "/assets/images/mp_btn_mission_holdout.png"
 }
 images {
   image: "/assets/images/mp_btn_count_active_ring.png"

@@ -201,6 +201,7 @@ HUMAN_PORTRAIT_HITBOX_DEBUG_Z = HUMAN_PORTRAIT_Z + 0.003
 CAMERA_FOLLOW_SELECTED_WHILE_MOVING = true
 TILE_ALPHA_PARALLAX_MAX_OFFSET_PX = 20
 FLOW_BUTTON_HITBOX_DEBUG_VISIBLE = false
+MP_SETUP_MISSION_HITBOX_DEBUG_VISIBLE = true
 INPUT_MAP_CURSOR_DEBUG_VISIBLE = false
 INPUT_MAP_CURSOR_DEBUG_Z = 1.49
 INPUT_MAP_CURSOR_DEBUG_DIGIT_COUNT = 20
@@ -688,15 +689,17 @@ MP_SETUP_PANEL_W = 1180
 MP_SETUP_PANEL_H = 640
 MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z + 0.005
 MP_SETUP_UI_Z = FLOW_UI_BUTTON_Z
-MP_SETUP_MISSION_BTN_X = { 169, 266, 363, 460, 557 }
-MP_SETUP_MISSION_BTN_Y = 528
+MP_SETUP_MISSION_BTN_X = { 169, 297, 425, 169, 297, 425 }
+MP_SETUP_MISSION_BTN_Y = { 572, 572, 572, 510, 510, 510 }
 MP_SETUP_MISSION_BTN_W = 48
-MP_SETUP_MISSION_BTN_H = 40
-MP_SETUP_MISSION_TYPES = { "escape", "rescue", "purge", "cleanse", "dna_sample" }
+MP_SETUP_MISSION_BTN_H = 24
+MP_SETUP_MISSION_BTN_SCALE_X = 1.25
+MP_SETUP_MISSION_BTN_SCALE_Y = 1.25
+MP_SETUP_MISSION_TYPES = { "escape", "rescue", "purge", "cleanse", "dna_sample", "holdout" }
 MP_SETUP_BTN_2P_X = 820
 MP_SETUP_BTN_3P_X = 980
 MP_SETUP_BTN_4P_X = 1130
-MP_SETUP_COUNT_BTN_Y = 528
+MP_SETUP_COUNT_BTN_Y = 548
 MP_SETUP_COUNT_BTN_W = 120
 MP_SETUP_COUNT_BTN_H = 64
 MP_SETUP_COUNT_ACTIVE_RING_W = 138
@@ -929,6 +932,7 @@ MISSION_TYPE_RESCUE = "rescue"
 MISSION_TYPE_PURGE = "purge"
 MISSION_TYPE_DNA_SAMPLE = "dna_sample"
 MISSION_TYPE_CLEANSE = "cleanse"
+MISSION_TYPE_HOLDOUT = "holdout"
 MISSION_TYPE_TUTORIAL = "tutorial"
 CLEANSE_WEED_BLOCKED = {}
 RESCUE_ENTRY_TILE_NAME = "rescue_entry"
@@ -11209,6 +11213,11 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
         go_id == self.ui.flow_title_tutorial_button
         or go_id == self.ui.flow_title_solo_button
         or go_id == self.ui.flow_title_multiplayer_button
+        or (self.ui.flow_mp_count_buttons and (
+            go_id == self.ui.flow_mp_count_buttons[1]
+            or go_id == self.ui.flow_mp_count_buttons[2]
+            or go_id == self.ui.flow_mp_count_buttons[3]
+        ))
         or go_id == self.ui.flow_mp_back_button
         or go_id == self.ui.launch_button
         or go_id == self.ui.realtime_toggle_button
@@ -11351,6 +11360,7 @@ multiplayer_normalize_mission_type = function(mission_type)
         or value == MISSION_TYPE_PURGE
         or value == MISSION_TYPE_CLEANSE
         or value == MISSION_TYPE_DNA_SAMPLE
+        or value == MISSION_TYPE_HOLDOUT
         or value == MISSION_TYPE_TUTORIAL
     then
         return value
@@ -11365,9 +11375,11 @@ multiplayer_get_mission_anim_id = function(mission_type)
     elseif m == MISSION_TYPE_PURGE then
         return hash("mp_btn_mission_purge")
     elseif m == MISSION_TYPE_CLEANSE then
-        return hash("mp_btn_mission_purge")
+        return hash("mp_btn_mission_cleanse")
     elseif m == MISSION_TYPE_DNA_SAMPLE then
         return hash("mp_btn_mission_dna")
+    elseif m == MISSION_TYPE_HOLDOUT then
+        return hash("mp_btn_mission_holdout")
     end
     return hash("mp_btn_mission_escape")
 end
@@ -11828,6 +11840,7 @@ local function initialize_unit_ui(self)
         flow_solo_mission_select = nil,
         flow_mp_setup_panel = nil,
         flow_mp_mission_buttons = {},
+        flow_debug_mp_mission_hitboxes = {},
         flow_mp_count_buttons = {},
         flow_mp_count_active_ring = nil,
         flow_mp_back_button = nil,
@@ -12154,6 +12167,7 @@ local function initialize_unit_ui(self)
     self.ui.flow_mp_setup_panel = create_ui_marker_sprite(hash("mp_setup_panel"), MP_SETUP_PANEL_Z)
     for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
         self.ui.flow_mp_mission_buttons[i] = create_ui_marker_sprite(multiplayer_get_mission_anim_id(mission_type), MP_SETUP_UI_Z)
+        self.ui.flow_debug_mp_mission_hitboxes[i] = create_ui_square_alpha(0, 0, MP_SETUP_UI_Z + 0.02, vmath.vector4(0, 0, 0, 0), MP_SETUP_MISSION_BTN_W, MP_SETUP_MISSION_BTN_H)
     end
     self.ui.flow_mp_count_active_ring = create_ui_marker_sprite(hash("mp_btn_count_active_ring"), MP_SETUP_UI_Z)
     self.ui.flow_mp_count_buttons[1] = create_ui_marker_sprite(hash("mp_btn_2p"), MP_SETUP_UI_Z)
@@ -12431,7 +12445,12 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_SCALE_X, MP_SETUP_PANEL_SCALE_Y)
     if self.ui.flow_mp_mission_buttons then
         for _, btn in ipairs(self.ui.flow_mp_mission_buttons) do
-            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_W * 0.021, MP_SETUP_MISSION_BTN_H * 0.021)
+            set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_MISSION_BTN_SCALE_X, MP_SETUP_MISSION_BTN_SCALE_Y)
+        end
+    end
+    if self.ui.flow_debug_mp_mission_hitboxes then
+        for _, hitbox_id in ipairs(self.ui.flow_debug_mp_mission_hitboxes) do
+            set_ui_square_transform(self, hitbox_id, -9999, -9999, MP_SETUP_UI_Z + 0.02, hidden, MP_SETUP_MISSION_BTN_W, MP_SETUP_MISSION_BTN_H)
         end
     end
     if self.ui.flow_mp_count_buttons then
@@ -18197,24 +18216,33 @@ function update_flow_ui(self, dt)
             for i, btn in ipairs(self.ui.flow_mp_mission_buttons) do
                 local mission_type = MP_SETUP_MISSION_TYPES[i] or MISSION_TYPE_ESCAPE
                 local is_active = (mission_type == selected_mission)
-                local tint = is_active and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.72, 0.72, 0.72, 1)
+                local tint = is_active and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.45, 0.45, 0.45, 1)
+                local mission_x = MP_SETUP_MISSION_BTN_X[i] or MP_SETUP_MISSION_BTN_X[1] or 169
+                local mission_y = MP_SETUP_MISSION_BTN_Y[i] or MP_SETUP_MISSION_BTN_Y[1] or 552
                 set_ui_square_transform(
                     self,
                     btn,
-                    MP_SETUP_MISSION_BTN_X[i] + 3,
-                    MP_SETUP_MISSION_BTN_Y,
+                    mission_x + 3,
+                    mission_y,
                     MP_SETUP_UI_Z,
                     tint,
-                    MP_SETUP_MISSION_BTN_W * 0.021,
-                    MP_SETUP_MISSION_BTN_H * 0.021
+                    MP_SETUP_MISSION_BTN_SCALE_X,
+                    MP_SETUP_MISSION_BTN_SCALE_Y
                 )
+            end
+        end
+        if self.ui.flow_debug_mp_mission_hitboxes then
+            for i, hitbox_id in ipairs(self.ui.flow_debug_mp_mission_hitboxes) do
+                local mission_x = MP_SETUP_MISSION_BTN_X[i] or MP_SETUP_MISSION_BTN_X[1] or 169
+                local mission_y = MP_SETUP_MISSION_BTN_Y[i] or MP_SETUP_MISSION_BTN_Y[1] or 552
+                local hitbox_tint = MP_SETUP_MISSION_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.1, 0.9, 1, 0.28) or hidden
+                set_ui_square_transform(self, hitbox_id, mission_x + 3, mission_y, MP_SETUP_UI_Z + 0.02, hitbox_tint, MP_SETUP_MISSION_BTN_W, MP_SETUP_MISSION_BTN_H)
             end
         end
         local count_x = { MP_SETUP_BTN_2P_X + 11, MP_SETUP_BTN_3P_X + 1, MP_SETUP_BTN_4P_X + 1 }
         if self.ui.flow_mp_count_buttons then
             for i, btn in ipairs(self.ui.flow_mp_count_buttons) do
-                local is_active = (i + 1) == (self.mp_setup and self.mp_setup.player_count or 2)
-                local tint = is_active and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.65, 0.65, 0.65, 1)
+                local tint = vmath.vector4(1, 1, 1, 0)
                 set_ui_square_transform(self, btn, count_x[i], MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, tint, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
             end
         end
@@ -18472,14 +18500,20 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         return true
     end
     for i, mission_type in ipairs(MP_SETUP_MISSION_TYPES) do
+        local mission_x = (MP_SETUP_MISSION_BTN_X[i] or MP_SETUP_MISSION_BTN_X[1] or 169) + 3
+        local mission_y = MP_SETUP_MISSION_BTN_Y[i] or MP_SETUP_MISSION_BTN_Y[1] or 552
         if is_point_in_screen_rect(
             input_x,
             input_y,
-            MP_SETUP_MISSION_BTN_X[i] + 3,
-            MP_SETUP_MISSION_BTN_Y,
+            mission_x,
+            mission_y,
             MP_SETUP_MISSION_BTN_W,
             MP_SETUP_MISSION_BTN_H
         ) then
+            if mission_type == MISSION_TYPE_HOLDOUT then
+                print("MP SETUP | holdout mission setup is not wired yet.")
+                return true
+            end
             self.mp_setup.mission_type = multiplayer_normalize_mission_type(mission_type)
             multiplayer_setup_push_state(self)
             return true

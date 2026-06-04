@@ -259,6 +259,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_add_ammo"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/add_ammo.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_civ_rescued"
   data: "components {\n"
   "  id: \"sound\"\n"

@@ -578,6 +578,7 @@ SFX_CIV_GAS_DAMAGE_URL = "main:/sfx_civ_gas_damage#sound"
 SFX_CIV_NEED_O2_URL = "main:/sfx_civ_need_o2#sound"
 SFX_CIV_DIES_URL = "main:/sfx_civ_dies#sound"
 SFX_SARGE_GIVE_AP_URL = "main:/sfx_sarge_give_ap#sound"
+SFX_ADD_AMMO_URL = "main:/sfx_add_ammo#sound"
 SFX_CIV_RESCUED_URL = "main:/sfx_civ_rescued#sound"
 SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
 SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
@@ -14692,6 +14693,23 @@ play_sarge_give_ap_sfx = function(self, world_x, world_y)
     play_sfx_one_shot(self, "sarge_give_ap")
 end
 
+play_add_ammo_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "add_ammo",
+            world_x,
+            world_y,
+            tonumber(HUMAN_ITEM_RECIEVE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(HUMAN_ITEM_RECIEVE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "add_ammo")
+end
+
 is_directional_move_sfx_allowed = function(self)
     return self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER
 end
@@ -27726,6 +27744,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_sarge_give_ap_sfx = function(self_ref, world_x, world_y)
         play_sarge_give_ap_sfx(self_ref, world_x, world_y)
     end,
+    play_add_ammo_sfx = function(self_ref, world_x, world_y)
+        play_add_ammo_sfx(self_ref, world_x, world_y)
+    end,
     play_factory_produce_sfx = function(self_ref, world_x, world_y)
         play_factory_produce_sfx(self_ref, world_x, world_y)
     end,
@@ -31554,6 +31575,7 @@ function init(self)
             civ_need_o2 = true,
             civ_dies = true,
             sarge_give_ap = true,
+            add_ammo = true,
             civ_melee_hit = true,
             civ_rescued = true,
             sarge_alien_alert = true,
@@ -31614,6 +31636,7 @@ function init(self)
         civ_need_o2 = { url = msg.url(SFX_CIV_NEED_O2_URL), playing = false },
         civ_dies = { url = msg.url(SFX_CIV_DIES_URL), playing = false },
         sarge_give_ap = { url = msg.url(SFX_SARGE_GIVE_AP_URL), playing = false },
+        add_ammo = { url = msg.url(SFX_ADD_AMMO_URL), playing = false },
         civ_melee_hit = { url = msg.url(SFX_CIV_MELEE_HIT_URL), playing = false },
         civ_rescued = { url = msg.url(SFX_CIV_RESCUED_URL), playing = false },
         sarge_alien_alert = { url = msg.url(SFX_SARGE_ALIEN_ALERT_URL), playing = false },

@@ -4471,7 +4471,7 @@ function M.extend(runtime, ctx)
         return nil
     end
 
-    runtime.try_apply_to_own_bar = function(unit, item_type, bar_target)
+    runtime.try_apply_to_own_bar = function(self, unit, item_type, bar_target)
         if not unit or not bar_target then
             return false
         end
@@ -4485,6 +4485,10 @@ function M.extend(runtime, ctx)
                 return false
             end
             unit.current_ammo = math.min(unit.max_ammo, unit.current_ammo + 10)
+            if ctx and ctx.play_add_ammo_sfx then
+                local pos = unit.go_path and go.get_position(unit.go_path) or nil
+                ctx.play_add_ammo_sfx(self, pos and pos.x or nil, pos and pos.y or nil)
+            end
             return true
         end
 
@@ -5650,7 +5654,7 @@ function M.extend(runtime, ctx)
             end
             local bar_target = runtime.get_bar_drop_target(screen_x, screen_y)
             if bar_target then
-                consumed = runtime.try_apply_to_own_bar(source_unit, source_item, bar_target)
+                consumed = runtime.try_apply_to_own_bar(self, source_unit, source_item, bar_target)
                 if consumed then
                     if not try_consume_current_drag_ap(nil) then
                         consumed = false
@@ -5919,6 +5923,9 @@ function M.extend(runtime, ctx)
                                     end
                                     table.insert(source_unit.backpack_items, produced_item)
                                     source_unit.backpack_used = #source_unit.backpack_items
+                                    if produced_item == "ammo" and ctx and ctx.play_add_ammo_sfx then
+                                        ctx.play_add_ammo_sfx(self, vx, vy + 18)
+                                    end
                                     runtime.spawn_loot_pickup_blip(
                                         self,
                                         source_unit.cell_id,

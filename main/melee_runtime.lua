@@ -594,7 +594,11 @@ function M.create(ctx)
 
         if roll <= hit_chance then
             if target.target_kind == "civilian" then
-                if ctx and ctx.play_civ_melee_hit_sfx then
+                if ctx and ctx.play_civ_damage_sfx then
+                    local civ_go_id = get_target_go_id(self, target)
+                    local civ_pos = civ_go_id and go.get_position(civ_go_id) or nil
+                    ctx.play_civ_damage_sfx(self, civ_pos and civ_pos.x or nil, civ_pos and civ_pos.y or nil)
+                elseif ctx and ctx.play_civ_melee_hit_sfx then
                     local civ_go_id = get_target_go_id(self, target)
                     local civ_pos = civ_go_id and go.get_position(civ_go_id) or nil
                     ctx.play_civ_melee_hit_sfx(self, civ_pos and civ_pos.x or nil, civ_pos and civ_pos.y or nil)
@@ -617,6 +621,11 @@ function M.create(ctx)
             ))
             if target.current_health <= 0 then
                 if target.target_kind == "civilian" then
+                    if ctx and ctx.play_civ_dies_sfx then
+                        local civ_go_id = get_target_go_id(self, target)
+                        local civ_death_pos = civ_go_id and go.get_position(civ_go_id) or nil
+                        ctx.play_civ_dies_sfx(self, civ_death_pos and civ_death_pos.x or nil, civ_death_pos and civ_death_pos.y or nil)
+                    end
                     target.is_dead = true
                     target.current_ap = 0
                     target.is_awake = false

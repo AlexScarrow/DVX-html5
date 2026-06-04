@@ -219,6 +219,38 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_civ_damage"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/civ_damage.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_civ_gas_damage"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/civ_gas_damage.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_civ_need_o2"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/civ_need_o2.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
+  id: "sfx_civ_dies"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/civ_dies.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_civ_rescued"
   data: "components {\n"
   "  id: \"sound\"\n"

@@ -122,10 +122,10 @@ M.AP_COSTS = {
     move_step_vertical = 2,
 
     -- Interactions
-    door_toggle = 1,
-    fix_object = 1,
-    pickup_turret = 1,
-    deploy_turret = 1,
+    door_toggle = 0,
+    fix_object = 0,
+    pickup_turret = 0,
+    deploy_turret = 0,
     barricade_build = 0,
     barricade_reinforce = 0,
     nav_computer_interact = 0,

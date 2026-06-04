@@ -1,7 +1,7 @@
 local M = {}
 
 -- Toggle Steam demo ring-fence behavior.
-M.DEMO_BUILD = false
+M.DEMO_BUILD = true
 
 -- Allow tutorial entry from demo mission select.
 M.DEMO_ALLOW_TUTORIAL = true
@@ -10,7 +10,7 @@ M.DEMO_ALLOW_TUTORIAL = true
 -- Slot 1 => "Level 1" button, slot 2 => "Level 2", slot 3 => "Level 3".
 M.DEMO_LEVEL_SLOT_TO_LEVEL_INDEX = {
     [1] = 6,
-    [2] = 7,
+    [2] = 2,
     [3] = 8
 }
 

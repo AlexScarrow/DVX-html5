@@ -573,6 +573,10 @@ SFX_BRUTE_DAMAGE_URL = "main:/sfx_brute_damage#sound"
 SFX_MELEE_HIT_ALIEN_URL = "main:/sfx_melee_hit_alien#sound"
 SFX_MELEE_HIT_HUMAN_URL = "main:/sfx_melee_hit_human#sound"
 SFX_CIV_MELEE_HIT_URL = "main:/sfx_civ_melee_hit#sound"
+SFX_CIV_DAMAGE_URL = "main:/sfx_civ_damage#sound"
+SFX_CIV_GAS_DAMAGE_URL = "main:/sfx_civ_gas_damage#sound"
+SFX_CIV_NEED_O2_URL = "main:/sfx_civ_need_o2#sound"
+SFX_CIV_DIES_URL = "main:/sfx_civ_dies#sound"
 SFX_CIV_RESCUED_URL = "main:/sfx_civ_rescued#sound"
 SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
 SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
@@ -5597,6 +5601,9 @@ local function update_spitter_attack_phase(self, dt)
             trigger_human_portrait_hit_feedback(self, target, 1)
             local human_hit_pos = target.go_path and go.get_position(target.go_path) or nil
             play_melee_hit_human_sfx(self, human_hit_pos and human_hit_pos.x or nil, human_hit_pos and human_hit_pos.y or nil)
+        else
+            local civ_hit_pos = get_civilian_world_pos_from_entity(self, target)
+            play_civ_damage_sfx(self, civ_hit_pos and civ_hit_pos.x or nil, civ_hit_pos and civ_hit_pos.y or nil)
         end
         if MELEE_RUNTIME and MELEE_RUNTIME.spawn_human_blood_splatter_fx then
             MELEE_RUNTIME.spawn_human_blood_splatter_fx(self, target)
@@ -5607,6 +5614,8 @@ local function update_spitter_attack_phase(self, dt)
         ))
         if target.current_health <= 0 then
             if target.target_kind == "civilian" then
+                local civ_death_pos = get_civilian_world_pos_from_entity(self, target)
+                play_civ_dies_sfx(self, civ_death_pos and civ_death_pos.x or nil, civ_death_pos and civ_death_pos.y or nil)
                 target.is_dead = true
                 target.current_ap = 0
                 target.is_awake = false
@@ -8084,6 +8093,26 @@ get_civilian_world_pos_in_cell = function(self, civilian, cell_id, preferred_slo
     return x, base_y, slot_index
 end
 
+get_civilian_world_pos_from_entity = function(self, civilian)
+    if not civilian then
+        return nil
+    end
+    local go_id = self and self.civilian_visuals and civilian.id and self.civilian_visuals[civilian.id] or nil
+    if go_id then
+        local ok_pos, pos = pcall(go.get_position, go_id)
+        if ok_pos and pos then
+            return pos
+        end
+    end
+    if self and civilian.cell_id then
+        local x, y = get_civilian_world_pos_in_cell(self, civilian, civilian.cell_id, civilian.entry_slot_index)
+        if x and y then
+            return vmath.vector3(x, y, CIVILIAN_VISUAL_Z)
+        end
+    end
+    return nil
+end
+
 local function spawn_civilians_for_current_mission(self)
     self.civilians = {}
     self.next_civilian_id = 0
@@ -8371,6 +8400,8 @@ local function process_civilian_turn(self)
                 tonumber(civilian.current_health or civilian.max_health) or civilian.max_health
             )
             if civilian.current_health <= 0 then
+                local civ_zero_hp_pos = get_civilian_world_pos_from_entity(self, civilian)
+                play_civ_dies_sfx(self, civ_zero_hp_pos and civ_zero_hp_pos.x or nil, civ_zero_hp_pos and civ_zero_hp_pos.y or nil)
                 civilian.current_ap = 0
                 civilian.is_dead = true
             else
@@ -8455,6 +8486,10 @@ local function update_civilian_movement(self, dt)
         if step_hazard_damage <= 0 then
             return
         end
+        if gas_applies then
+            local civ_hazard_pos = get_civilian_world_pos_from_entity(self, civilian)
+            play_civ_gas_damage_sfx(self, civ_hazard_pos and civ_hazard_pos.x or nil, civ_hazard_pos and civ_hazard_pos.y or nil)
+        end
         civilian.current_health = math.max(0, (civilian.current_health or 0) - step_hazard_damage)
         civilian.hazard_flash_tint = has_fire and vmath.vector4(1.0, 0.78, 0.25, 1)
             or vmath.vector4(0.58, 1.0, 0.66, 1)
@@ -8487,6 +8522,8 @@ local function update_civilian_movement(self, dt)
             civilian.current_health or 0
         ))
         if civilian.current_health <= 0 then
+            local civ_move_death_pos = get_civilian_world_pos_from_entity(self, civilian)
+            play_civ_dies_sfx(self, civ_move_death_pos and civ_move_death_pos.x or nil, civ_move_death_pos and civ_move_death_pos.y or nil)
             civilian.is_dead = true
             civilian.is_awake = false
             print(string.format("%s died from movement hazard", civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0))))
@@ -9472,6 +9509,13 @@ local function apply_start_of_turn_environment_damage(self)
                 damage = damage + 1
             end
             if damage > 0 then
+                local human_hazard_pos = unit.go_path and go.get_position(unit.go_path) or nil
+                if has_gas and (not has_hazmat) then
+                    play_civ_gas_damage_sfx(self, human_hazard_pos and human_hazard_pos.x or nil, human_hazard_pos and human_hazard_pos.y or nil)
+                end
+                if has_outside and (not has_oxygen_mask) then
+                    play_civ_need_o2_sfx(self, human_hazard_pos and human_hazard_pos.x or nil, human_hazard_pos and human_hazard_pos.y or nil)
+                end
                 unit.current_health = math.max(0, (unit.current_health or 0) - damage)
                 trigger_human_portrait_hit_feedback(self, unit, damage)
                 local hazard_feedback_event_type = nil
@@ -9549,6 +9593,14 @@ local function apply_start_of_turn_environment_damage(self)
                 damage = damage + gas_damage
             end
             if damage > 0 then
+                if gas_applies then
+                    local civ_turn_hazard_pos = get_civilian_world_pos_from_entity(self, civilian)
+                    play_civ_gas_damage_sfx(self, civ_turn_hazard_pos and civ_turn_hazard_pos.x or nil, civ_turn_hazard_pos and civ_turn_hazard_pos.y or nil)
+                end
+                if has_outside then
+                    local civ_turn_o2_pos = get_civilian_world_pos_from_entity(self, civilian)
+                    play_civ_need_o2_sfx(self, civ_turn_o2_pos and civ_turn_o2_pos.x or nil, civ_turn_o2_pos and civ_turn_o2_pos.y or nil)
+                end
                 civilian.current_health = math.max(0, (civilian.current_health or 0) - damage)
                 civilian.hazard_flash_tint = has_fire and vmath.vector4(1.0, 0.78, 0.25, 1)
                     or (gas_applies and vmath.vector4(0.58, 1.0, 0.66, 1) or vmath.vector4(0.62, 0.82, 1.0, 1))
@@ -9582,6 +9634,8 @@ local function apply_start_of_turn_environment_damage(self)
                     civilian.is_rescued == true and "y" or "n"
                 ))
                 if civilian.current_health <= 0 then
+                    local civ_hazard_death_pos = get_civilian_world_pos_from_entity(self, civilian)
+                    play_civ_dies_sfx(self, civ_hazard_death_pos and civ_hazard_death_pos.x or nil, civ_hazard_death_pos and civ_hazard_death_pos.y or nil)
                     civilian.is_dead = true
                     civilian.is_awake = false
                     print(string.format("%s died from environment hazard", civilian.display_name or ("Civilian #" .. tostring(civilian.id or 0))))
@@ -14122,6 +14176,86 @@ play_civ_melee_hit_sfx = function(self, world_x, world_y)
         end
     end
     play_sfx_one_shot(self, "civ_melee_hit")
+end
+
+play_civ_damage_sfx = function(self, world_x, world_y)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "civ_damage",
+            world_x,
+            world_y,
+            tonumber(CIV_MELEE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(CIV_MELEE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "civ_damage")
+end
+
+play_civ_gas_damage_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "civ_gas_damage",
+            world_x,
+            world_y,
+            tonumber(CIV_MELEE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(CIV_MELEE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "civ_gas_damage")
+end
+
+play_civ_need_o2_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "civ_need_o2",
+            world_x,
+            world_y,
+            tonumber(CIV_MELEE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(CIV_MELEE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "civ_need_o2")
+end
+
+play_civ_dies_sfx = function(self, world_x, world_y)
+    if self and self.sfx_state then
+        self.sfx_state.music_combat_hold_s = math.max(
+            tonumber(self.sfx_state.music_combat_hold_s or 0) or 0,
+            tonumber(ADAPTIVE_MUSIC_COMBAT_HOLD_S or 1.5) or 1.5
+        )
+    end
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "civ_dies",
+            world_x,
+            world_y,
+            tonumber(CIV_MELEE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(CIV_MELEE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "civ_dies")
 end
 
 play_civ_rescued_sfx = function(self, world_x, world_y)
@@ -27541,6 +27675,12 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     play_melee_hit_human_sfx = function(self_ref, world_x, world_y)
         play_melee_hit_human_sfx(self_ref, world_x, world_y)
     end,
+    play_civ_damage_sfx = function(self_ref, world_x, world_y)
+        play_civ_damage_sfx(self_ref, world_x, world_y)
+    end,
+    play_civ_dies_sfx = function(self_ref, world_x, world_y)
+        play_civ_dies_sfx(self_ref, world_x, world_y)
+    end,
     play_civ_melee_hit_sfx = function(self_ref, world_x, world_y)
         play_civ_melee_hit_sfx(self_ref, world_x, world_y)
     end,
@@ -31282,6 +31422,10 @@ function init(self)
             brute_damage = true,
             melee_hit_alien = true,
             melee_hit_human = true,
+            civ_damage = true,
+            civ_gas_damage = true,
+            civ_need_o2 = true,
+            civ_dies = true,
             civ_melee_hit = true,
             civ_rescued = true,
             sarge_alien_alert = true,
@@ -31337,6 +31481,10 @@ function init(self)
         brute_damage = { url = msg.url(SFX_BRUTE_DAMAGE_URL), playing = false },
         melee_hit_alien = { url = msg.url(SFX_MELEE_HIT_ALIEN_URL), playing = false },
         melee_hit_human = { url = msg.url(SFX_MELEE_HIT_HUMAN_URL), playing = false },
+        civ_damage = { url = msg.url(SFX_CIV_DAMAGE_URL), playing = false },
+        civ_gas_damage = { url = msg.url(SFX_CIV_GAS_DAMAGE_URL), playing = false },
+        civ_need_o2 = { url = msg.url(SFX_CIV_NEED_O2_URL), playing = false },
+        civ_dies = { url = msg.url(SFX_CIV_DIES_URL), playing = false },
         civ_melee_hit = { url = msg.url(SFX_CIV_MELEE_HIT_URL), playing = false },
         civ_rescued = { url = msg.url(SFX_CIV_RESCUED_URL), playing = false },
         sarge_alien_alert = { url = msg.url(SFX_SARGE_ALIEN_ALERT_URL), playing = false },

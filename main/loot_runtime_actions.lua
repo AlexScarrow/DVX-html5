@@ -5535,6 +5535,9 @@ function M.extend(runtime, ctx)
                             if pos then
                                 spawn_impact_ring(self, pos.x, pos.y + 18, vmath.vector4(1.0, 0.92, 0.2, 1), 0.7)
                             end
+                            if ctx and ctx.play_sarge_give_ap_sfx then
+                                ctx.play_sarge_give_ap_sfx(self, pos and pos.x or nil, pos and pos.y or nil)
+                            end
                         end
                         consumed = true
                         print(string.format("%s granted +1 AP to %s.", source_unit.display_name, target_unit.display_name))

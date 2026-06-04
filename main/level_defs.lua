@@ -71,6 +71,7 @@ function M.create_level_library()
     levels[2].mission_type = "rescue"
     levels[2].spawn_tile = "rescue_entry"
     levels[2].spawn_cell = 2
+levels[2].spawn_pressure_fixed_tier = 0
     levels[2].unit_loadouts = {
         sarge = {
             starting_backpack_items = {},

@@ -251,6 +251,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_sarge_give_ap"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/sarge_give_ap.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "sfx_civ_rescued"
   data: "components {\n"
   "  id: \"sound\"\n"

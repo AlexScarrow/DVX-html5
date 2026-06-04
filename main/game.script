@@ -577,6 +577,7 @@ SFX_CIV_DAMAGE_URL = "main:/sfx_civ_damage#sound"
 SFX_CIV_GAS_DAMAGE_URL = "main:/sfx_civ_gas_damage#sound"
 SFX_CIV_NEED_O2_URL = "main:/sfx_civ_need_o2#sound"
 SFX_CIV_DIES_URL = "main:/sfx_civ_dies#sound"
+SFX_SARGE_GIVE_AP_URL = "main:/sfx_sarge_give_ap#sound"
 SFX_CIV_RESCUED_URL = "main:/sfx_civ_rescued#sound"
 SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
 SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
@@ -7118,6 +7119,16 @@ end
 get_spawn_pressure_tier = function(self)
     if not self then
         return 0
+    end
+    local level_def = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if type(level_def) == "table" then
+        if level_def.spawn_pressure_enabled == false then
+            return 0
+        end
+        local fixed_tier = tonumber(level_def.spawn_pressure_fixed_tier)
+        if fixed_tier ~= nil then
+            return math.max(0, math.min(3, math.floor(fixed_tier + 0.5)))
+        end
     end
     local mission_type = tostring(get_current_mission_type(self) or "")
     if mission_type == MISSION_TYPE_ESCAPE then
@@ -14662,6 +14673,23 @@ play_human_item_recieve_sfx = function(self, unit)
         end
     end
     play_sfx_one_shot(self, sfx_key)
+end
+
+play_sarge_give_ap_sfx = function(self, world_x, world_y)
+    if world_x ~= nil and world_y ~= nil then
+        local played = play_sfx_one_shot_spatial(
+            self,
+            "sarge_give_ap",
+            world_x,
+            world_y,
+            tonumber(HUMAN_ITEM_RECIEVE_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.8)) or (CELL_WIDTH * 0.8),
+            tonumber(HUMAN_ITEM_RECIEVE_SPATIAL_MAX_DIST or (CELL_WIDTH * 4.8)) or (CELL_WIDTH * 4.8)
+        )
+        if played then
+            return
+        end
+    end
+    play_sfx_one_shot(self, "sarge_give_ap")
 end
 
 is_directional_move_sfx_allowed = function(self)
@@ -27695,6 +27723,9 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     play_human_item_recieve_sfx = function(self_ref, unit)
         play_human_item_recieve_sfx(self_ref, unit)
     end,
+    play_sarge_give_ap_sfx = function(self_ref, world_x, world_y)
+        play_sarge_give_ap_sfx(self_ref, world_x, world_y)
+    end,
     play_factory_produce_sfx = function(self_ref, world_x, world_y)
         play_factory_produce_sfx(self_ref, world_x, world_y)
     end,
@@ -31522,6 +31553,7 @@ function init(self)
             civ_gas_damage = true,
             civ_need_o2 = true,
             civ_dies = true,
+            sarge_give_ap = true,
             civ_melee_hit = true,
             civ_rescued = true,
             sarge_alien_alert = true,
@@ -31581,6 +31613,7 @@ function init(self)
         civ_gas_damage = { url = msg.url(SFX_CIV_GAS_DAMAGE_URL), playing = false },
         civ_need_o2 = { url = msg.url(SFX_CIV_NEED_O2_URL), playing = false },
         civ_dies = { url = msg.url(SFX_CIV_DIES_URL), playing = false },
+        sarge_give_ap = { url = msg.url(SFX_SARGE_GIVE_AP_URL), playing = false },
         civ_melee_hit = { url = msg.url(SFX_CIV_MELEE_HIT_URL), playing = false },
         civ_rescued = { url = msg.url(SFX_CIV_RESCUED_URL), playing = false },
         sarge_alien_alert = { url = msg.url(SFX_SARGE_ALIEN_ALERT_URL), playing = false },

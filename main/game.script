@@ -15072,6 +15072,54 @@ update_spatial_move_loop_gains = function(self)
                 end
             end
         end
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian and civilian.is_dead ~= true and civilian.is_moving == true then
+                local sampled = false
+                local path = civilian.move_path
+                local idx = tonumber(civilian.move_path_index or 0) or 0
+                local prev_id = path and path[idx - 1] or nil
+                local next_id = path and path[idx] or nil
+                if prev_id and next_id then
+                    local fx, fy = id_to_coords(prev_id)
+                    local tx, ty = id_to_coords(next_id)
+                    if fx == tx and fy ~= ty then
+                        local ux, uy = coords_to_world_pos(fx, fy)
+                        local gain_here = get_spatial_gain_for_world(
+                            self,
+                            ux,
+                            uy,
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0),
+                            "loop"
+                        )
+                        if gain_here > best_vertical then
+                            best_vertical = gain_here
+                        end
+                        sampled = true
+                    end
+                end
+                if not sampled and civilian.micro_target_x and civilian.micro_target_y then
+                    local civ_pos = get_civilian_world_pos_from_entity(self, civilian)
+                    if civ_pos then
+                        local dx = civilian.micro_target_x - civ_pos.x
+                        local dy = civilian.micro_target_y - civ_pos.y
+                        if math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.01 then
+                            local gain_here = get_spatial_gain_for_world(
+                                self,
+                                civ_pos.x,
+                                civ_pos.y,
+                                tonumber(HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+                                tonumber(HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0),
+                                "loop"
+                            )
+                            if gain_here > best_vertical then
+                                best_vertical = gain_here
+                            end
+                        end
+                    end
+                end
+            end
+        end
         vertical_gain = best_vertical
     end
     if (self.sfx_state.horizontal_active_count or 0) > 0 then
@@ -15097,6 +15145,54 @@ update_spatial_move_loop_gains = function(self)
                         )
                         if gain_here > best_horizontal then
                             best_horizontal = gain_here
+                        end
+                    end
+                end
+            end
+        end
+        for _, civilian in ipairs(self.civilians or {}) do
+            if civilian and civilian.is_dead ~= true and civilian.is_moving == true then
+                local sampled = false
+                local path = civilian.move_path
+                local idx = tonumber(civilian.move_path_index or 0) or 0
+                local prev_id = path and path[idx - 1] or nil
+                local next_id = path and path[idx] or nil
+                if prev_id and next_id then
+                    local fx, fy = id_to_coords(prev_id)
+                    local tx, ty = id_to_coords(next_id)
+                    if fx ~= tx then
+                        local ux, uy = coords_to_world_pos(fx, fy)
+                        local gain_here = get_spatial_gain_for_world(
+                            self,
+                            ux,
+                            uy,
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+                            tonumber(HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0),
+                            "loop"
+                        )
+                        if gain_here > best_horizontal then
+                            best_horizontal = gain_here
+                        end
+                        sampled = true
+                    end
+                end
+                if not sampled and civilian.micro_target_x and civilian.micro_target_y then
+                    local civ_pos = get_civilian_world_pos_from_entity(self, civilian)
+                    if civ_pos then
+                        local dx = civilian.micro_target_x - civ_pos.x
+                        local dy = civilian.micro_target_y - civ_pos.y
+                        if math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.01 then
+                            local gain_here = get_spatial_gain_for_world(
+                                self,
+                                civ_pos.x,
+                                civ_pos.y,
+                                tonumber(HUMAN_MOVE_LOOP_SPATIAL_MIN_DIST or (CELL_WIDTH * 0.7)) or (CELL_WIDTH * 0.7),
+                                tonumber(HUMAN_MOVE_LOOP_SPATIAL_MAX_DIST or (CELL_WIDTH * 5.0)) or (CELL_WIDTH * 5.0),
+                                "loop"
+                            )
+                            if gain_here > best_horizontal then
+                                best_horizontal = gain_here
+                            end
                         end
                     end
                 end

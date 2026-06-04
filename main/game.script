@@ -9372,34 +9372,52 @@ local function get_nightvision_reveal_context(self, dt_step)
         end
     end
 
-    if self.nightvision_reveal_unit_id ~= target_unit_id
-        or (tonumber(self.nightvision_reveal_tile_id or 0) or 0) ~= target_tile_id
-    then
+    local reveal_tile_id = tonumber(self.nightvision_reveal_tile_id or 0) or 0
+    local alpha = tonumber(self.nightvision_reveal_alpha or 0) or 0
+    local hold = tonumber(self.nightvision_reveal_hold_timer or 0) or 0
+    local switched_target = (self.nightvision_reveal_unit_id ~= target_unit_id)
+        or (reveal_tile_id ~= target_tile_id)
+
+    if can_reveal and switched_target then
         self.nightvision_reveal_unit_id = target_unit_id
         self.nightvision_reveal_tile_id = target_tile_id
         self.nightvision_reveal_hold_timer = 0
-        self.nightvision_reveal_alpha = 0
+        hold = 0
+        alpha = 0
+        reveal_tile_id = target_tile_id
     end
 
-    local alpha = tonumber(self.nightvision_reveal_alpha or 0) or 0
     if can_reveal and dt_step and dt_step > 0 then
-        local hold = tonumber(self.nightvision_reveal_hold_timer or 0) or 0
         if hold < NIGHTVISION_REVEAL_DELAY_S then
             hold = math.min(NIGHTVISION_REVEAL_DELAY_S, hold + dt_step)
-            self.nightvision_reveal_hold_timer = hold
             alpha = 0
         else
             local fade_s = math.max(0.001, NIGHTVISION_REVEAL_FADE_S)
             alpha = math.min(1, alpha + (dt_step / fade_s))
         end
+        self.nightvision_reveal_unit_id = target_unit_id
+        self.nightvision_reveal_tile_id = target_tile_id
+        self.nightvision_reveal_hold_timer = hold
+        reveal_tile_id = target_tile_id
     elseif not can_reveal then
-        self.nightvision_reveal_hold_timer = 0
-        alpha = 0
+        -- Reverse-fade out instead of snapping back to unpowered art.
+        if alpha > 0 and dt_step and dt_step > 0 then
+            local fade_s = math.max(0.001, NIGHTVISION_REVEAL_FADE_S)
+            alpha = math.max(0, alpha - (dt_step / fade_s))
+        else
+            alpha = math.max(0, alpha)
+        end
+        if alpha <= 0 then
+            self.nightvision_reveal_unit_id = nil
+            self.nightvision_reveal_tile_id = 0
+            self.nightvision_reveal_hold_timer = 0
+            reveal_tile_id = 0
+        end
     end
+
     self.nightvision_reveal_alpha = alpha
-    local hold_now = tonumber(self.nightvision_reveal_hold_timer or 0) or 0
-    local reveal_active = can_reveal and hold_now >= NIGHTVISION_REVEAL_DELAY_S
-    return reveal_active, target_tile_id, alpha
+    local reveal_active = reveal_tile_id > 0 and alpha > 0
+    return reveal_active, reveal_tile_id, alpha
 end
 
 get_cell_hazard_flags = function(cell)

@@ -15589,7 +15589,7 @@ solo_progress_ui_ensure_nodes = function(self)
             self.ui.solo_progress_row_fill[i] = create_ui_square(0, 0, SOLO_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), SOLO_SETUP_FILL_BAR_W, SOLO_SETUP_FILL_BAR_H)
         end
         if not self.ui.solo_progress_row_lock[i] then
-            self.ui.solo_progress_row_lock[i] = create_ui_square(0, 0, SOLO_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), SOLO_SETUP_LOCK_ICON_W, SOLO_SETUP_LOCK_ICON_H)
+            self.ui.solo_progress_row_lock[i] = create_ui_marker_sprite(hash("solo_screen_unlock"), SOLO_SETUP_UI_Z + 0.003)
         end
         self.ui.solo_progress_row_total_digits[i] = self.ui.solo_progress_row_total_digits[i] or {}
         for ci = 1, SOLO_SETUP_ROW_TOTAL_MAX_CHARS do
@@ -15634,7 +15634,7 @@ solo_progress_ui_hide_nodes = function(self, hidden_tint)
     end
     if self.ui.solo_progress_row_lock then
         for i = 1, #self.ui.solo_progress_row_lock do
-            set_ui_square_transform(self, self.ui.solo_progress_row_lock[i], -9999, -9999, SOLO_SETUP_UI_Z + 0.003, hidden_tint, SOLO_SETUP_LOCK_ICON_W, SOLO_SETUP_LOCK_ICON_H)
+            set_ui_square_transform(self, self.ui.solo_progress_row_lock[i], -9999, -9999, SOLO_SETUP_UI_Z + 0.003, hidden_tint, 1, 1)
         end
     end
     if self.ui.solo_progress_locked_masks then
@@ -18239,7 +18239,15 @@ function update_flow_ui(self, dt)
                     false
                 )
             end
-            set_ui_square_transform(self, self.ui.solo_progress_row_lock[row], -9999, -9999, SOLO_SETUP_UI_Z + 0.003, hidden, SOLO_SETUP_LOCK_ICON_W, SOLO_SETUP_LOCK_ICON_H)
+            local next_row_unlocked = (row + 1) <= SOLO_SETUP_MISSION_ROWS and solo_progress_is_row_unlocked(self, row + 1)
+            if next_row_unlocked then
+                local lock_x = SOLO_SETUP_LOCK_ICON_X + 25
+                local lock_top_y = SOLO_SETUP_LOCK_ICON_Y[row] or SOLO_SETUP_LOCK_ICON_Y[1]
+                local lock_y = SCREEN_HEIGHT - (lock_top_y + (SOLO_SETUP_LOCK_ICON_H * 0.5))
+                set_ui_square_transform(self, self.ui.solo_progress_row_lock[row], lock_x, lock_y, SOLO_SETUP_UI_Z + 0.003, vmath.vector4(1, 1, 1, 1), 1, 1)
+            else
+                set_ui_square_transform(self, self.ui.solo_progress_row_lock[row], -9999, -9999, SOLO_SETUP_UI_Z + 0.003, hidden, 1, 1)
+            end
         end
         set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
         if self.ui.flow_mp_mission_buttons then

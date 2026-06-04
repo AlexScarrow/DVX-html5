@@ -5293,7 +5293,7 @@ handle_human_death_loot_drop = function(self, unit, source_tag)
     if type(unit.equipment) == "table" then
         for _, slot_name in ipairs(BUFF_SLOT_ORDER) do
             local equipped_item_type = unit.equipment[slot_name]
-            if equipped_item_type == "buff_flamer" then
+            if equipped_item_type then
                 LOOT_RUNTIME.create_world_item_instance(self, equipped_item_type, death_cell_id, unit.id, {
                     dropped_from_death = true
                 })
@@ -11260,6 +11260,7 @@ local function set_ui_square_transform(self, go_id, screen_x, screen_y, z, color
         go_id == self.ui.flow_title_tutorial_button
         or go_id == self.ui.flow_title_solo_button
         or go_id == self.ui.flow_title_multiplayer_button
+        or go_id == self.ui.flow_outro_skip_button
         or (self.ui.flow_mp_count_buttons and (
             go_id == self.ui.flow_mp_count_buttons[1]
             or go_id == self.ui.flow_mp_count_buttons[2]
@@ -17936,7 +17937,7 @@ function update_flow_ui(self, dt)
             set_ui_square_transform(self, self.ui.flow_title_demo_button_art, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, DEMO_TITLE_BUTTON_ART_Z, vmath.vector4(1, 1, 1, 1), 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_explainer_art, DEMO_EXPLAINER_X, DEMO_EXPLAINER_Y, FLOW_UI_BUTTON_Z + 0.001, vmath.vector4(1, 1, 1, 1), DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
             set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
-            set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.35), DEMO_BUTTON_W, DEMO_BUTTON_H)
+            set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
             set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
             set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -17968,9 +17969,9 @@ function update_flow_ui(self, dt)
             title_button_art_pulse,
             title_button_art_pulse
         )
-        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0.35), 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0.35), 280, 70)
-        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0.35), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), 280, 70)
+        set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)

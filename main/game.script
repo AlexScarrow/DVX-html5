@@ -575,6 +575,7 @@ SFX_MELEE_HIT_HUMAN_URL = "main:/sfx_melee_hit_human#sound"
 SFX_CIV_MELEE_HIT_URL = "main:/sfx_civ_melee_hit#sound"
 SFX_CIV_DAMAGE_URL = "main:/sfx_civ_damage#sound"
 SFX_CIV_GAS_DAMAGE_URL = "main:/sfx_civ_gas_damage#sound"
+SFX_CIV_GAS_DAMAGE_COOLDOWN_S = 5.0
 SFX_CIV_NEED_O2_URL = "main:/sfx_civ_need_o2#sound"
 SFX_CIV_DIES_URL = "main:/sfx_civ_dies#sound"
 SFX_SARGE_GIVE_AP_URL = "main:/sfx_sarge_give_ap#sound"
@@ -7751,6 +7752,7 @@ get_clicked_captured_civilian_in_cell = function(self, clicked_cell_id, world_x,
 end
 
 local refresh_civilian_visuals
+local update_human_visual_state
 set_civilian_awake_from_release = function(self, civilian, unit_id)
     if not (self and civilian) then
         return false
@@ -10720,7 +10722,7 @@ schedule_counter_shadow_proxy_clear = function(entity, delay_s)
     end)
 end
 
-local function update_human_visual_state(self)
+update_human_visual_state = function(self)
     if not self.squad_units then
         return
     end
@@ -14221,6 +14223,14 @@ play_civ_damage_sfx = function(self, world_x, world_y)
 end
 
 play_civ_gas_damage_sfx = function(self, world_x, world_y)
+    local now_s = tonumber(get_purge_timer_clock_s and get_purge_timer_clock_s() or 0) or 0
+    local next_allowed_s = tonumber(self and self.civ_gas_damage_sfx_next_allowed_s or 0) or 0
+    if now_s > 0 and now_s < next_allowed_s then
+        return
+    end
+    if self then
+        self.civ_gas_damage_sfx_next_allowed_s = now_s + (tonumber(SFX_CIV_GAS_DAMAGE_COOLDOWN_S or 5.0) or 5.0)
+    end
     if world_x ~= nil and world_y ~= nil then
         local played = play_sfx_one_shot_spatial(
             self,

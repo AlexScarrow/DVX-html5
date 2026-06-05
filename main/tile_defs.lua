@@ -694,6 +694,11 @@ library["canteen"] = canteen
         name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 202,
         offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
     }
+    armoury.cells[2].object3 = {
+        name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
+        offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+        stackCount = 1, obstacleCount = 1
+    }
     -- armoury.cells[2].object3 = {
     --     name = hash("blip_spawn"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 203,
     --     offsetX = 0, offsetY = 0, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 16, hitH = 16, requiredComponent = nil
@@ -701,6 +706,11 @@ library["canteen"] = canteen
     armoury.cells[3].object1 = {
         name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 301,
         offsetX = 90, offsetY = 10, fxOffsetX = 20, fxOffsetY = -20, fxRotation = 90, hitW = 64, hitH = 124, requiredComponent = nil
+    }
+    armoury.cells[3].object2 = {
+        name = hash("obstacle"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+        offsetX = -90, offsetY = -27, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 36, hitH = 36, requiredComponent = nil,
+        stackCount = 1, obstacleCount = 1
     }
     armoury.cells[4].object1 = {
         name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,

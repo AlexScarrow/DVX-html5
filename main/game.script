@@ -4095,9 +4095,14 @@ local function refresh_alien_visual(self, alien)
         if cfg and cfg.marker_tint then
             flash_alpha = cfg.marker_tint.w
         end
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            flash_alpha = 1
+        end
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 0.2, 0.2, flash_alpha))
     elseif alien.type == ALIEN_TYPE_BLIP and alien.uses_blip_sprite then
-        if alien.hidden_reveal_type == ALIEN_TYPE_BRUTE then
+        if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+            go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+        elseif alien.hidden_reveal_type == ALIEN_TYPE_BRUTE then
             go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1.0, 0.55, 0.15, 1.0))
         else
             go.set(msg.url(nil, alien.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
@@ -4105,7 +4110,7 @@ local function refresh_alien_visual(self, alien)
     elseif (not alien.uses_blip_sprite) and cfg and cfg.marker_tint then
         local sprite_tint = apply_alien_cell_light_tint(cfg.marker_tint)
         if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
-            sprite_tint = vmath.vector4(1, 1, 1, cfg.marker_tint.w or 1)
+            sprite_tint = vmath.vector4(1, 1, 1, 1)
         end
         go.set(msg.url(nil, alien.go_id, "sprite"), "tint", sprite_tint)
         if alien.type == ALIEN_TYPE_SPITTER and alien.spitter_bottom_go_id then
@@ -5978,7 +5983,9 @@ local function update_alien_movement(self, dt)
                     go.set_scale(vmath.vector3(sx, sy, 1), alien.go_id)
                 end
                 if (not is_vent_jump) and (alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON) then
-                    if math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.1 then
+                    if self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME then
+                        go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
+                    elseif math.abs(dy) > math.abs(dx) and math.abs(dy) > 0.1 then
                         if dy > 0 then
                             go.set_rotation(vmath.quat_rotation_z(math.rad(-90)), alien.go_id)
                         else

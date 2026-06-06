@@ -582,7 +582,9 @@ SFX_CIV_DIES_URL = "main:/sfx_civ_dies#sound"
 SFX_SARGE_GIVE_AP_URL = "main:/sfx_sarge_give_ap#sound"
 SFX_ADD_AMMO_URL = "main:/sfx_add_ammo#sound"
 SFX_DEMO_WIN_MUSIC_URL = "main:/sfx_demo_win_music#sound"
+SFX_DEMO_LOSE_MUSIC_URL = "main:/sfx_demo_lose_music#sound"
 DEMO_WIN_MUSIC_FADE_OUT_S = 5.0
+DEMO_LOSE_MUSIC_FADE_OUT_S = 5.0
 SFX_CIV_RESCUED_URL = "main:/sfx_civ_rescued#sound"
 SFX_SARGE_ALIEN_ALERT_URL = "main:/sfx_sarge_alien_alert#sound"
 SFX_TECHIE_ALIEN_ALERT_URL = "main:/sfx_techie_alien_alert#sound"
@@ -13838,6 +13840,50 @@ update_demo_win_music_loop_sfx = function(self, dt)
     self.sfx_state.demo_win_music_state = state
 end
 
+update_demo_lose_music_loop_sfx = function(self, dt)
+    if not (self and self.sfx_state and self.sfx_state.loops == true) then
+        return
+    end
+    local entry = self.sfx_state.demo_lose_music
+    if not (entry and entry.url) then
+        return
+    end
+    local active = (self.game_flow_state == FLOW_STATE_DEMO_RESULT) and (tostring(self.demo_result or "") == "lose")
+    local state = self.sfx_state.demo_lose_music_state or { gain = 0, target = 0 }
+    local target = active and 1 or 0
+    if target > 0 and entry.playing ~= true then
+        entry.playing = true
+        pcall(msg.post, entry.url, "play_sound")
+        if sound and sound.play then
+            pcall(sound.play, entry.url)
+        end
+        state.gain = 0
+        if sound and sound.set_gain then
+            pcall(sound.set_gain, entry.url, 0)
+        end
+    end
+    local now_gain = tonumber(state.gain or 0) or 0
+    if target >= now_gain then
+        now_gain = math.min(target, now_gain + ((tonumber(dt or 0) or 0) * 5))
+    else
+        local fade_out_s = math.max(0.05, tonumber(DEMO_LOSE_MUSIC_FADE_OUT_S or 5.0) or 5.0)
+        now_gain = math.max(target, now_gain - ((tonumber(dt or 0) or 0) * (1 / fade_out_s)))
+    end
+    state.gain = now_gain
+    state.target = target
+    if entry.playing == true and sound and sound.set_gain then
+        pcall(sound.set_gain, entry.url, now_gain)
+    end
+    if target <= 0 and entry.playing == true and now_gain <= 0.001 then
+        entry.playing = false
+        pcall(msg.post, entry.url, "stop_sound")
+        if sound and sound.stop then
+            pcall(sound.stop, entry.url)
+        end
+    end
+    self.sfx_state.demo_lose_music_state = state
+end
+
 play_sfx_one_shot = function(self, key)
     if not self or not self.sfx_state then
         return
@@ -14829,8 +14875,9 @@ refresh_ambient_sfx_state = function(self)
         or (state == FLOW_STATE_SCORE_MP)
         or is_title_outro
     set_sound_loop_state(self, "planet", in_gameplay and (not adaptive_music_allowed))
-    local demo_win_result_active = (state == FLOW_STATE_DEMO_RESULT) and (tostring(self.demo_result or "") == "win")
-    set_sound_loop_state(self, "title", in_title_like and (not demo_win_result_active))
+    local demo_result_active = (state == FLOW_STATE_DEMO_RESULT)
+        and ((tostring(self.demo_result or "") == "win") or (tostring(self.demo_result or "") == "lose"))
+    set_sound_loop_state(self, "title", in_title_like and (not demo_result_active))
     if (not in_gameplay) or (not directional_move_sfx_allowed) then
         self.sfx_state.vertical_active_by_unit = {}
         self.sfx_state.vertical_active_count = 0
@@ -19551,6 +19598,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
         set_sound_loop_state(self, "human_horizontal", false)
         set_sound_loop_state(self, "furnace_fire", false)
         set_sound_loop_state(self, "demo_win_music", false)
+        set_sound_loop_state(self, "demo_lose_music", false)
         stop_speedy_move_sfx(self)
     end
     if self.mp_state and self.mp_state.enabled then
@@ -31646,6 +31694,7 @@ function init(self)
             sarge_give_ap = true,
             add_ammo = true,
             demo_win_music = true,
+            demo_lose_music = true,
             civ_melee_hit = true,
             civ_rescued = true,
             sarge_alien_alert = true,
@@ -31708,6 +31757,7 @@ function init(self)
         sarge_give_ap = { url = msg.url(SFX_SARGE_GIVE_AP_URL), playing = false },
         add_ammo = { url = msg.url(SFX_ADD_AMMO_URL), playing = false },
         demo_win_music = { url = msg.url(SFX_DEMO_WIN_MUSIC_URL), playing = false },
+        demo_lose_music = { url = msg.url(SFX_DEMO_LOSE_MUSIC_URL), playing = false },
         civ_melee_hit = { url = msg.url(SFX_CIV_MELEE_HIT_URL), playing = false },
         civ_rescued = { url = msg.url(SFX_CIV_RESCUED_URL), playing = false },
         sarge_alien_alert = { url = msg.url(SFX_SARGE_ALIEN_ALERT_URL), playing = false },
@@ -31969,6 +32019,7 @@ function update(self, dt)
     update_sparking_wire_ambient_sfx(self, dt)
     update_furnace_fire_loop_sfx(self, dt)
     update_demo_win_music_loop_sfx(self, dt)
+    update_demo_lose_music_loop_sfx(self, dt)
     update_spatial_move_loop_gains(self)
     tick_human_portrait_hit_feedback(self, dt)
     furnace_update_debug_markers(self, dt)

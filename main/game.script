@@ -182,22 +182,31 @@ UI_COLOR_SLOT = vmath.vector4(0.28, 0.28, 0.32, 0.95)
 UI_COLOR_SLOT_ACTIVE = vmath.vector4(0.5, 0.5, 0.55, 1)
 HUMAN_PORTRAIT_IDS = { "sarge", "techie", "medic", "gunner" }
 HUMAN_PORTRAIT_ANIM_BY_UNIT_ID = {
-    sarge = hash("sarge_portrait"),
-    techie = hash("techie_portrait"),
-    medic = hash("medic_portrait"),
-    gunner = hash("gunner_portrait")
+    sarge = hash("portrait_sarge"),
+    techie = hash("portrait_techie"),
+    medic = hash("portrait_medic"),
+    gunner = hash("portrait_gunner")
 }
+HUMAN_PORTRAIT_OVERLAY_ANIM = hash("portrait_overlay")
 HUMAN_PORTRAIT_DRAW_W = 42.5
 HUMAN_PORTRAIT_DRAW_H = 42.5
 HUMAN_PORTRAIT_START_X = SCREEN_WIDTH - 56
-HUMAN_PORTRAIT_START_Y = 386
-HUMAN_PORTRAIT_GAP_Y = 32
+HUMAN_PORTRAIT_START_Y = 406
+HUMAN_PORTRAIT_GAP_Y = 45
+HUMAN_PORTRAIT_WINDOWED_X_OFFSET = -50
 HUMAN_PORTRAIT_Z = 0.846
 HUMAN_PORTRAIT_SELECTED_Z = HUMAN_PORTRAIT_Z + 0.001
-HUMAN_PORTRAIT_HIT_W = 68
-HUMAN_PORTRAIT_HIT_H = 60
+HUMAN_PORTRAIT_HIT_W = 200
+HUMAN_PORTRAIT_HIT_H = 85
 HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE = false
 HUMAN_PORTRAIT_HITBOX_DEBUG_Z = HUMAN_PORTRAIT_Z + 0.003
+HUMAN_PORTRAIT_BAR_BLIP_COUNT = 10
+HUMAN_PORTRAIT_BAR_BLIP_W = 9
+HUMAN_PORTRAIT_BAR_BLIP_H = 5
+HUMAN_PORTRAIT_BAR_AP_Y_OFFSET = -4
+HUMAN_PORTRAIT_BAR_HP_Y_OFFSET = -16
+HUMAN_PORTRAIT_BAR_START_X_OFFSET = -8
+HUMAN_PORTRAIT_BAR_OFF_ALPHA = 0.18
 CAMERA_FOLLOW_SELECTED_WHILE_MOVING = true
 TILE_ALPHA_PARALLAX_MAX_OFFSET_PX = 20
 FLOW_BUTTON_HITBOX_DEBUG_VISIBLE = false
@@ -224,6 +233,7 @@ HUMAN_PORTRAIT_HIT_FLASH_DURATION = 0.38
 HUMAN_PORTRAIT_HIT_RED_BLEND_MAX = 1.0
 HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX = 0.14
 HUMAN_PORTRAIT_HIT_FLICKER_HZ = 12
+HUMAN_PORTRAIT_DAMAGE_RING_X_OFFSET = -50
 HUMAN_SELECTION_GREEN_FLASH_DURATION = 1.0
 HUMAN_SELECTION_GREEN_FLASH_COLOR = vmath.vector4(0.25, 1.45, 0.25, 1)
 COMMS_PANEL_W = 300
@@ -1133,7 +1143,9 @@ ZOOM_OUT_BUTTON_Z = 0.845
 ZOOM_SLIDER_TRACK_W = 20
 ZOOM_SLIDER_TRACK_H = 160
 ZOOM_SLIDER_TRACK_X = HUMAN_PORTRAIT_START_X
+ZOOM_SLIDER_TRACK_X_OFFSET = 50
 ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN = 120
+ZOOM_SLIDER_TRACK_TOP_Y_OFFSET = 30
 ZOOM_SLIDER_TRACK_TOP_Y = SCREEN_HEIGHT - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
 ZOOM_SLIDER_TRACK_BOTTOM_Y = ZOOM_SLIDER_TRACK_TOP_Y - ZOOM_SLIDER_TRACK_H
 ZOOM_SLIDER_TRACK_CENTER_Y = ZOOM_SLIDER_TRACK_TOP_Y - (ZOOM_SLIDER_TRACK_H * 0.5)
@@ -1273,7 +1285,7 @@ apply_runtime_hud_layout = function(self)
     else
         UI_PANEL_X = HUD_LAYOUT_BASE_UI_PANEL_X
         UI_PANEL_Y = HUD_LAYOUT_BASE_UI_PANEL_Y
-        HUMAN_PORTRAIT_START_X = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_X
+        HUMAN_PORTRAIT_START_X = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_X + (tonumber(HUMAN_PORTRAIT_WINDOWED_X_OFFSET or -50) or -50)
         HUMAN_PORTRAIT_START_Y = HUD_LAYOUT_BASE_HUMAN_PORTRAIT_START_Y
         NEW_TURN_BUTTON_X = HUD_LAYOUT_BASE_NEW_TURN_BUTTON_X
         NEW_TURN_BUTTON_Y = HUD_LAYOUT_BASE_NEW_TURN_BUTTON_Y
@@ -1358,11 +1370,11 @@ apply_runtime_hud_layout = function(self)
     AESTHETIC_BUTTON_X = NEW_TURN_BUTTON_X + NEW_TURN_BUTTON_W + 64
     AESTHETIC_BUTTON_Y = NEW_TURN_BUTTON_Y
     MULTIPLAYER_READY_BUTTON_Y = NEW_TURN_BUTTON_Y
-    ZOOM_SLIDER_TRACK_X = HUMAN_PORTRAIT_START_X
+    ZOOM_SLIDER_TRACK_X = HUMAN_PORTRAIT_START_X + (tonumber(ZOOM_SLIDER_TRACK_X_OFFSET or 0) or 0)
     if expanded then
-        ZOOM_SLIDER_TRACK_TOP_Y = (SCREEN_HEIGHT + gutter_y) - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
+        ZOOM_SLIDER_TRACK_TOP_Y = (SCREEN_HEIGHT + gutter_y) - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN + (tonumber(ZOOM_SLIDER_TRACK_TOP_Y_OFFSET or 0) or 0)
     else
-        ZOOM_SLIDER_TRACK_TOP_Y = SCREEN_HEIGHT - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN
+        ZOOM_SLIDER_TRACK_TOP_Y = SCREEN_HEIGHT - ZOOM_SLIDER_TRACK_TOP_SAFE_MARGIN + (tonumber(ZOOM_SLIDER_TRACK_TOP_Y_OFFSET or 0) or 0)
     end
     ZOOM_SLIDER_TRACK_BOTTOM_Y = ZOOM_SLIDER_TRACK_TOP_Y - ZOOM_SLIDER_TRACK_H
     ZOOM_SLIDER_TRACK_CENTER_Y = ZOOM_SLIDER_TRACK_TOP_Y - (ZOOM_SLIDER_TRACK_H * 0.5)
@@ -12007,6 +12019,8 @@ local function initialize_unit_ui(self)
         mp_debug_player_buttons = {},
         human_portrait_icons = {},
         human_portrait_selected_overlays = {},
+        human_portrait_ap_blips = {},
+        human_portrait_hp_blips = {},
         human_portrait_hitbox_debug = {},
         input_map_debug_digits = {}
     }
@@ -12119,7 +12133,27 @@ local function initialize_unit_ui(self)
         end
         self.ui.human_portrait_selected_overlays[i] = create_ui_square_alpha(0, 0, HUMAN_PORTRAIT_SELECTED_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
         if self.ui.human_portrait_selected_overlays[i] then
-            msg.post(msg.url(nil, self.ui.human_portrait_selected_overlays[i], "sprite"), "play_animation", { id = hash("selected_portrait") })
+            msg.post(msg.url(nil, self.ui.human_portrait_selected_overlays[i], "sprite"), "play_animation", { id = HUMAN_PORTRAIT_OVERLAY_ANIM })
+        end
+        self.ui.human_portrait_ap_blips[i] = {}
+        self.ui.human_portrait_hp_blips[i] = {}
+        for pip_idx = 1, HUMAN_PORTRAIT_BAR_BLIP_COUNT do
+            self.ui.human_portrait_ap_blips[i][pip_idx] = create_ui_square(
+                0,
+                0,
+                HUMAN_PORTRAIT_SELECTED_Z + 0.001,
+                vmath.vector4(UI_COLOR_AP.x, UI_COLOR_AP.y, UI_COLOR_AP.z, 0),
+                HUMAN_PORTRAIT_BAR_BLIP_W,
+                HUMAN_PORTRAIT_BAR_BLIP_H
+            )
+            self.ui.human_portrait_hp_blips[i][pip_idx] = create_ui_square(
+                0,
+                0,
+                HUMAN_PORTRAIT_SELECTED_Z + 0.001,
+                vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 0),
+                HUMAN_PORTRAIT_BAR_BLIP_W,
+                HUMAN_PORTRAIT_BAR_BLIP_H
+            )
         end
         self.ui.human_portrait_hitbox_debug[i] = create_ui_square_alpha(0, 0, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, vmath.vector4(0, 0, 0, 0), HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
     end
@@ -12501,6 +12535,24 @@ local function set_ui_hidden(self)
     if self.ui.human_portrait_selected_overlays then
         for _, overlay in ipairs(self.ui.human_portrait_selected_overlays) do
             set_ui_square_transform(self, overlay, -9999, -9999, HUMAN_PORTRAIT_SELECTED_Z, hidden, HUMAN_PORTRAIT_DRAW_W * 0.021, HUMAN_PORTRAIT_DRAW_H * 0.021)
+        end
+    end
+    if self.ui.human_portrait_ap_blips then
+        for _, slot_blips in ipairs(self.ui.human_portrait_ap_blips) do
+            if slot_blips then
+                for _, pip in ipairs(slot_blips) do
+                    set_ui_square_transform(self, pip, -9999, -9999, HUMAN_PORTRAIT_SELECTED_Z + 0.001, hidden, HUMAN_PORTRAIT_BAR_BLIP_W, HUMAN_PORTRAIT_BAR_BLIP_H)
+                end
+            end
+        end
+    end
+    if self.ui.human_portrait_hp_blips then
+        for _, slot_blips in ipairs(self.ui.human_portrait_hp_blips) do
+            if slot_blips then
+                for _, pip in ipairs(slot_blips) do
+                    set_ui_square_transform(self, pip, -9999, -9999, HUMAN_PORTRAIT_SELECTED_Z + 0.001, hidden, HUMAN_PORTRAIT_BAR_BLIP_W, HUMAN_PORTRAIT_BAR_BLIP_H)
+                end
+            end
         end
     end
     if self.ui.human_portrait_hitbox_debug then
@@ -21431,29 +21483,12 @@ update_human_portrait_ui = function(self)
             local alive = unit and (unit.current_health or 0) > 0
             local selected = unit and unit.is_selected and (self.controlled_unit_id == unit_id)
             local owned = (not (self.mp_state and self.mp_state.enabled)) or multiplayer_can_control_unit(self, unit_id)
-            local tint = selected and vmath.vector4(1, 1, 1, 1) or vmath.vector4(0.85, 0.85, 0.85, 1)
+            local tint = vmath.vector4(0.85, 0.85, 0.85, 1)
             if not owned then
                 tint = vmath.vector4(0.35, 0.35, 0.35, 0.75)
             end
             if not alive then
                 tint = vmath.vector4(0.4, 0.4, 0.4, 0.7)
-            end
-            local portrait_scale = 1
-            if alive and unit and (tonumber(unit.portrait_hit_flash_timer or 0) or 0) > 0 then
-                local duration = math.max(0.001, tonumber(unit.portrait_hit_flash_duration or HUMAN_PORTRAIT_HIT_FLASH_DURATION) or HUMAN_PORTRAIT_HIT_FLASH_DURATION)
-                local remaining = math.max(0, tonumber(unit.portrait_hit_flash_timer or 0) or 0)
-                local progress = 1 - math.max(0, math.min(1, remaining / duration))
-                local fade = math.max(0, math.min(1, remaining / duration))
-                local flicker_phase = tonumber(unit.portrait_hit_flash_phase or 0) or 0
-                local flicker = 0.5 + (0.5 * math.sin(flicker_phase))
-                local red_blend = HUMAN_PORTRAIT_HIT_RED_BLEND_MAX * fade * (0.45 + (0.55 * flicker))
-                tint = vmath.vector4(
-                    tint.x + ((1 - tint.x) * red_blend),
-                    tint.y * (1 - red_blend),
-                    tint.z * (1 - red_blend),
-                    tint.w
-                )
-                portrait_scale = 1 + (HUMAN_PORTRAIT_HIT_SCALE_PULSE_MAX * math.sin(progress * math.pi))
             end
             set_ui_square_transform(
                 self,
@@ -21462,11 +21497,19 @@ update_human_portrait_ui = function(self)
                 sy,
                 HUMAN_PORTRAIT_Z,
                 tint,
-                (HUMAN_PORTRAIT_DRAW_W * 0.021) * portrait_scale,
-                (HUMAN_PORTRAIT_DRAW_H * 0.021) * portrait_scale
+                HUMAN_PORTRAIT_DRAW_W * 0.021,
+                HUMAN_PORTRAIT_DRAW_H * 0.021
             )
             if self.ui.human_portrait_selected_overlays and self.ui.human_portrait_selected_overlays[i] then
-                local overlay_tint = selected and vmath.vector4(1, 1, 1, 1) or hidden
+                local overlay_tint = hidden
+                local hit_timer = alive and math.max(0, tonumber(unit and unit.portrait_hit_flash_timer or 0) or 0) or 0
+                if hit_timer > 0 then
+                    local duration = math.max(0.001, tonumber(unit.portrait_hit_flash_duration or HUMAN_PORTRAIT_HIT_FLASH_DURATION) or HUMAN_PORTRAIT_HIT_FLASH_DURATION)
+                    local alpha = math.max(0, math.min(1, hit_timer / duration))
+                    overlay_tint = vmath.vector4(1.0, 0.1, 0.1, alpha)
+                elseif selected then
+                    overlay_tint = vmath.vector4(0.25, 1.45, 0.25, 1)
+                end
                 set_ui_square_transform(
                     self,
                     self.ui.human_portrait_selected_overlays[i],
@@ -21474,9 +21517,46 @@ update_human_portrait_ui = function(self)
                     sy,
                     HUMAN_PORTRAIT_SELECTED_Z,
                     overlay_tint,
-                    (HUMAN_PORTRAIT_DRAW_W * 0.021) * portrait_scale,
-                    (HUMAN_PORTRAIT_DRAW_H * 0.021) * portrait_scale
+                    HUMAN_PORTRAIT_DRAW_W * 0.021,
+                    HUMAN_PORTRAIT_DRAW_H * 0.021
                 )
+            end
+            local ap_blips = self.ui.human_portrait_ap_blips and self.ui.human_portrait_ap_blips[i] or nil
+            local hp_blips = self.ui.human_portrait_hp_blips and self.ui.human_portrait_hp_blips[i] or nil
+            local ap_count = math.max(0, math.min(HUMAN_PORTRAIT_BAR_BLIP_COUNT, math.floor((unit and unit.current_ap or 0) + 0.5)))
+            local hp_count = math.max(0, math.min(HUMAN_PORTRAIT_BAR_BLIP_COUNT, math.floor((unit and unit.current_health or 0) + 0.5)))
+            local ap_on = vmath.vector4(UI_COLOR_AP.x, UI_COLOR_AP.y, UI_COLOR_AP.z, 1)
+            local ap_off = vmath.vector4(UI_COLOR_AP.x, UI_COLOR_AP.y, UI_COLOR_AP.z, HUMAN_PORTRAIT_BAR_OFF_ALPHA)
+            local hp_on = vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, 1)
+            local hp_off = vmath.vector4(UI_COLOR_HP.x, UI_COLOR_HP.y, UI_COLOR_HP.z, HUMAN_PORTRAIT_BAR_OFF_ALPHA)
+            for pip_idx = 1, HUMAN_PORTRAIT_BAR_BLIP_COUNT do
+                local pip_x = sx + HUMAN_PORTRAIT_BAR_START_X_OFFSET + ((pip_idx - 1) * HUMAN_PORTRAIT_BAR_BLIP_W)
+                if ap_blips and ap_blips[pip_idx] then
+                    local ap_tint = (pip_idx <= ap_count) and ap_on or ap_off
+                    set_ui_square_transform(
+                        self,
+                        ap_blips[pip_idx],
+                        pip_x,
+                        sy + HUMAN_PORTRAIT_BAR_AP_Y_OFFSET,
+                        HUMAN_PORTRAIT_SELECTED_Z + 0.001,
+                        ap_tint,
+                        HUMAN_PORTRAIT_BAR_BLIP_W,
+                        HUMAN_PORTRAIT_BAR_BLIP_H
+                    )
+                end
+                if hp_blips and hp_blips[pip_idx] then
+                    local hp_tint = (pip_idx <= hp_count) and hp_on or hp_off
+                    set_ui_square_transform(
+                        self,
+                        hp_blips[pip_idx],
+                        pip_x,
+                        sy + HUMAN_PORTRAIT_BAR_HP_Y_OFFSET,
+                        HUMAN_PORTRAIT_SELECTED_Z + 0.001,
+                        hp_tint,
+                        HUMAN_PORTRAIT_BAR_BLIP_W,
+                        HUMAN_PORTRAIT_BAR_BLIP_H
+                    )
+                end
             end
             if self.ui.human_portrait_hitbox_debug then
                 local hx, hy = get_human_portrait_screen_pos(i)
@@ -21508,6 +21588,34 @@ update_human_portrait_ui = function(self)
                     HUMAN_PORTRAIT_DRAW_H * 0.021
                 )
             end
+            local ap_blips = self.ui.human_portrait_ap_blips and self.ui.human_portrait_ap_blips[i] or nil
+            local hp_blips = self.ui.human_portrait_hp_blips and self.ui.human_portrait_hp_blips[i] or nil
+            for pip_idx = 1, HUMAN_PORTRAIT_BAR_BLIP_COUNT do
+                if ap_blips and ap_blips[pip_idx] then
+                    set_ui_square_transform(
+                        self,
+                        ap_blips[pip_idx],
+                        -9999,
+                        -9999,
+                        HUMAN_PORTRAIT_SELECTED_Z + 0.001,
+                        hidden,
+                        HUMAN_PORTRAIT_BAR_BLIP_W,
+                        HUMAN_PORTRAIT_BAR_BLIP_H
+                    )
+                end
+                if hp_blips and hp_blips[pip_idx] then
+                    set_ui_square_transform(
+                        self,
+                        hp_blips[pip_idx],
+                        -9999,
+                        -9999,
+                        HUMAN_PORTRAIT_SELECTED_Z + 0.001,
+                        hidden,
+                        HUMAN_PORTRAIT_BAR_BLIP_W,
+                        HUMAN_PORTRAIT_BAR_BLIP_H
+                    )
+                end
+            end
             if self.ui.human_portrait_hitbox_debug then
                 set_ui_square_transform(self, self.ui.human_portrait_hitbox_debug[i], -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
             end
@@ -21536,6 +21644,7 @@ trigger_human_portrait_hit_feedback = function(self, unit, damage_amount, suppre
         end
         if portrait_slot then
             local px, py = get_human_portrait_screen_pos(portrait_slot)
+            px = (tonumber(px or 0) or 0) + (tonumber(HUMAN_PORTRAIT_DAMAGE_RING_X_OFFSET or 0) or 0)
             local wx, wy = screen_to_world(px, py, self.camera_pos, self.camera_zoom)
             if wx and wy then
                 LOOT_RUNTIME.spawn_impact_ring_at_world(self, wx, wy, vmath.vector4(1.0, 0.16, 0.16, 1), 0.6)

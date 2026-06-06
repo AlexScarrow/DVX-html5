@@ -44,19 +44,19 @@ images {
   image: "/assets/images/ready_not_button.png"
 }
 images {
-  image: "/assets/images/sarge_portrait.png"
+  image: "/assets/images/portrait_sarge.png"
 }
 images {
-  image: "/assets/images/techie_portrait.png"
+  image: "/assets/images/portrait_techie.png"
 }
 images {
-  image: "/assets/images/medic_portrait.png"
+  image: "/assets/images/portrait_medic.png"
 }
 images {
-  image: "/assets/images/gunner_portrait.png"
+  image: "/assets/images/portrait_gunner.png"
 }
 images {
-  image: "/assets/images/selected_portrait.png"
+  image: "/assets/images/portrait_overlay.png"
 }
 images {
   image: "/assets/images/button_computerGame_mode.png"

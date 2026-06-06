@@ -531,6 +531,14 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "sfx_demo_win_music"
+  data: "components {\n"
+  "  id: \"sound\"\n"
+  "  component: \"/assets/SFX/demo_win_music.sound\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "human"
   data: "embedded_components {\n"
   "  id: \"sprite\"\n"

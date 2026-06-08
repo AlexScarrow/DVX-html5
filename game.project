@@ -45,6 +45,9 @@ max_count = 512
 [html5]
 htmlfile = /web/index.html
 
+[windows]
+app_icon = /assets/icons/DVX_icon.ico
+
 [multiplayer]
 sync_trace = 0
 

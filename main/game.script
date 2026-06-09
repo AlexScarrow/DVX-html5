@@ -287,6 +287,11 @@ NET_PROTOCOL_VERSION = tostring((sys.get_config and sys.get_config("dvx.net_prot
 MULTIPLAYER_TRANSPORT_MODE = tostring((sys.get_config and sys.get_config("dvx.transport_mode")) or "websocket") -- "loopback" or "websocket"
 MULTIPLAYER_TRANSPORT_WS_URL = tostring((sys.get_config and sys.get_config("dvx.transport_ws_url")) or "ws://127.0.0.1:8080/ws")
 MULTIPLAYER_TRANSPORT_ROOM_ID = tostring((sys.get_config and sys.get_config("dvx.transport_room_id")) or "dvx_local_room")
+STEAM_LOBBY_DEFAULT_MAX_PLAYERS = math.max(2, math.min(4, tonumber((sys.get_config and sys.get_config("dvx.steam_lobby_max_players")) or "4") or 4))
+STEAM_LOBBY_DEFAULT_VISIBILITY = tostring((sys.get_config and sys.get_config("dvx.steam_lobby_visibility")) or "private")
+STEAM_INVITE_POLICY = tostring((sys.get_config and sys.get_config("dvx.steam_invite_policy")) or "host_only")
+MP_DEBUG_FILE_ENABLED = tostring((sys.get_config and sys.get_config("dvx.mp_debug_file_enabled")) or "1") == "1"
+MP_DEBUG_FILE_NAME = tostring((sys.get_config and sys.get_config("dvx.mp_debug_file_name")) or "dvx_mp_debug.txt")
 WINDOW_LOCK_TO_DESIGN_SIZE = tostring((sys.get_config and sys.get_config("dvx.lock_fixed_window")) or "0") == "1"
 START_MAXIMIZED_ON_LAUNCH = tostring((sys.get_config and sys.get_config("dvx.start_maximized")) or "0") == "1"
 MP_LAG_SIM_UI_ENABLED = false
@@ -1476,6 +1481,7 @@ SCORE_RUNTIME = require("main.score_runtime")
 MP_TRANSPORT = require("main.multiplayer_transport")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
 STEAM_RUNTIME = require("main.steam_runtime")
+STEAM_LOBBY_BRIDGE = require("main.steam_lobby_bridge")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
 LEVEL_EDITOR = require("main.level_editor")
@@ -7369,6 +7375,45 @@ local function get_wall_clock_ms()
         return math.floor((socket.gettime() * 1000) + 0.5)
     end
     return (os.time() or 0) * 1000
+end
+
+get_mp_debug_file_path = function()
+    if sys and sys.get_save_file then
+        return sys.get_save_file("dvx", MP_DEBUG_FILE_NAME)
+    end
+    return MP_DEBUG_FILE_NAME
+end
+
+multiplayer_debug_file_append = function(self, line)
+    if MP_DEBUG_FILE_ENABLED ~= true then
+        return
+    end
+    if not (io and io.open) then
+        return
+    end
+    local file_path = get_mp_debug_file_path()
+    if not (self and self.mp_debug_file_initialized == true) then
+        local reset_file = io.open(file_path, "w")
+        if reset_file then
+            reset_file:write(string.format("DVX MP DEBUG START | path=%s\n", tostring(file_path)))
+            reset_file:close()
+        end
+        if self then
+            self.mp_debug_file_initialized = true
+            self.mp_debug_file_path = file_path
+        end
+    end
+    local handle = io.open(file_path, "a")
+    if not handle then
+        return
+    end
+    handle:write(string.format("[%d] %s\n", tonumber(get_wall_clock_ms() or 0) or 0, tostring(line or "")))
+    handle:close()
+end
+
+multiplayer_debug_log = function(self, line)
+    print(tostring(line or ""))
+    multiplayer_debug_file_append(self, line)
 end
 
 local function get_alive_human_count_on_lookup(self, lookup)
@@ -16934,8 +16979,20 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
     end
     local now_ms = get_wall_clock_ms()
     session.updated_at_ms = now_ms
+    multiplayer_debug_log(self, string.format(
+        "MP LOBBY DBG | offer_upsert_emit | id=%s target=%s players=%s/%s steam_lobby_id=%s",
+        tostring(session.id or ""),
+        tostring(target_player_id or "all"),
+        tostring(session.players or 0),
+        tostring(session.max_players or 0),
+        tostring(session.steam_lobby_id or "")
+    ))
+    if (not target_player_id) or target_player_id == "" then
+        multiplayer_lobby_steam_bridge_publish_offer(self, session)
+    end
     local offer_payload = {
         id = tostring(session.id or ""),
+        steam_lobby_id = tostring(session.steam_lobby_id or ""),
         owner_player_id = tostring(session.owner_player_id or self.mp_state.local_player_id or "p1"),
         host_name = tostring(session.host_name or "Host"),
         status = tostring(session.status or "published_open"),
@@ -16981,11 +17038,13 @@ multiplayer_lobby_emit_offer_remove = function(self, offer_id)
         owner_player_id = tostring(self.mp_state.local_player_id or "p1"),
         removed_at_ms = now_ms
     }, self.mp_state.local_player_id)
+    multiplayer_lobby_steam_bridge_remove_offer(self, offer_id)
 end
 
 multiplayer_lobby_tick_offer_presence = function(self, dt)
     multiplayer_lobby_ensure_runtime(self)
     local lobby = self.mp_lobby
+    multiplayer_lobby_steam_bridge_tick(self, dt)
     lobby.offer_prune_timer = (tonumber(lobby.offer_prune_timer or 0) or 0) - (tonumber(dt or 0) or 0)
     if lobby.offer_prune_timer <= 0 then
         lobby.offer_prune_timer = 1
@@ -17021,6 +17080,7 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
     end
     self.mp_lobby.offers_by_id[offer_id] = {
         id = offer_id,
+        steam_lobby_id = tostring(offer.steam_lobby_id or ""),
         owner_player_id = owner_player_id,
         host_name = tostring(offer.host_name or "Host"),
         status = tostring(offer.status or "published_open"),
@@ -17035,7 +17095,7 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         updated_at_ms = tonumber(offer.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms(),
         last_seen_local_ms = get_wall_clock_ms()
     }
-    print(string.format("LOBBY_COMMAND | offer_upsert_apply | offer=%s owner=%s", offer_id, owner_player_id))
+    multiplayer_debug_log(self, string.format("LOBBY_COMMAND | offer_upsert_apply | offer=%s owner=%s", offer_id, owner_player_id))
     multiplayer_lobby_sync_sessions_from_offers(self)
 end
 
@@ -17062,6 +17122,7 @@ multiplayer_lobby_build_state_payload = function(self)
         if session then
             sessions[#sessions + 1] = {
                 id = tostring(session.id or ""),
+                steam_lobby_id = tostring(session.steam_lobby_id or ""),
                 owner_player_id = tostring(session.owner_player_id or self.mp_state and self.mp_state.local_player_id or "p1"),
                 host_name = tostring(session.host_name or "Host"),
                 status = tostring(session.status or "published_open"),
@@ -17111,6 +17172,7 @@ multiplayer_lobby_apply_state_payload = function(self, payload)
     for _, session in ipairs(payload.sessions or {}) do
         local normalized = {
             id = tostring(session.id or ""),
+            steam_lobby_id = tostring(session.steam_lobby_id or ""),
             owner_player_id = tostring(session.owner_player_id or "p1"),
             host_name = tostring(session.host_name or "Host"),
             status = tostring(session.status or "published_open"),
@@ -17223,6 +17285,7 @@ multiplayer_lobby_enter_mp_setup_from_session = function(self, session)
     if multiplayer_lobby_is_local_offer_owner(self, session) then
         multiplayer_setup_push_state(self)
     elseif self.mp_state and self.mp_state.enabled then
+        multiplayer_transport_ensure_active(self)
         multiplayer_transport_send_command(self, "request_setup_state", {}, self.mp_state.local_player_id)
     end
     return true
@@ -17378,6 +17441,10 @@ multiplayer_lobby_submit_pin_entry = function(self)
     if lobby.pin_mode == "join_locked" then
         local target_session_id = tostring(lobby.pin_target_session_id or "")
         if target_session_id ~= "" and #lobby.pin_buffer == MP_LOBBY_MAX_PIN_LEN then
+            local target_session = multiplayer_lobby_get_session_by_id(self, target_session_id)
+            if target_session then
+                multiplayer_lobby_steam_bridge_join_for_session(self, target_session)
+            end
             multiplayer_transport_send_command(self, "lobby_join_session", {
                 session_id = target_session_id,
                 pin = lobby.pin_buffer,
@@ -19179,6 +19246,7 @@ end
 
 multiplayer_lobby_handle_touch = function(self, input_x, input_y)
     multiplayer_lobby_ensure_runtime(self)
+    multiplayer_transport_ensure_active(self)
     local lobby = self.mp_lobby
     local page_count = multiplayer_lobby_page_count(self)
     lobby.page_index = math.max(1, math.min(page_count, tonumber(lobby.page_index or 1) or 1))
@@ -19262,6 +19330,13 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
                     lobby.pin_feedback_timer = 0
                     return true
                 end
+                multiplayer_lobby_steam_bridge_join_for_session(self, session)
+                multiplayer_debug_log(self, string.format(
+                    "MP LOBBY DBG | join_click | session=%s owner=%s steam_lobby_id=%s",
+                    tostring(session.id or ""),
+                    tostring(session.owner_player_id or ""),
+                    tostring(session.steam_lobby_id or "")
+                ))
                 multiplayer_transport_send_command(self, "lobby_join_session", {
                     session_id = tostring(session.id or ""),
                     protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
@@ -19300,6 +19375,13 @@ function handle_flow_touch(self, input_x, input_y)
                 self.mp_state.enabled = true
                 self.mp_state.debug_active_player_id = self.mp_state.local_player_id
             end
+            multiplayer_transport_ensure_active(self)
+            multiplayer_debug_log(self, string.format(
+                "MP LOBBY DBG | title_enter_multiplayer | local=%s host=%s enabled=%s",
+                tostring(self.mp_state and self.mp_state.local_player_id or ""),
+                tostring(self.mp_state and self.mp_state.host_player_id or ""),
+                tostring(self.mp_state and self.mp_state.enabled == true)
+            ))
             multiplayer_lobby_ensure_runtime(self)
             enter_flow_state(self, FLOW_STATE_MP_LOBBY)
             if self.mp_state and self.mp_state.enabled then
@@ -23453,6 +23535,7 @@ multiplayer_transport_handle_command = function(self, command)
                 target_player_id = target_player_id,
                 offer = {
                     id = tostring(session.id or ""),
+                    steam_lobby_id = tostring(session.steam_lobby_id or ""),
                     owner_player_id = tostring(session.owner_player_id or "p1"),
                     host_name = tostring(session.host_name or "Host"),
                     status = tostring(session.status or "published_open"),
@@ -26962,6 +27045,18 @@ multiplayer_transport_send_command = function(self, cmd_type, payload, sender_pl
         type = cmd_type,
         payload = payload or {}
     }
+    if cmd_type == "lobby_request_offer_reannounce"
+        or cmd_type == "lobby_join_session"
+        or cmd_type == "lobby_offer_upsert"
+        or cmd_type == "lobby_offer_remove"
+    then
+        multiplayer_debug_log(self, string.format(
+            "MP NET DBG | send_command | type=%s sender=%s session=%s",
+            tostring(cmd_type),
+            tostring(sender),
+            tostring(command_packet.session_id or "")
+        ))
+    end
     if multiplayer_lag_sim_queue_outbound(self, "command", command_packet) ~= true then
         self.mp_transport.send_command(command_packet)
     end
@@ -26993,6 +27088,13 @@ end
 
 multiplayer_transport_init = function(self)
     multiplayer_lag_sim_ensure_state(self)
+    multiplayer_debug_log(self, string.format(
+        "MP NET DBG | transport_init | mode=%s ws_url=%s room=%s local=%s",
+        tostring(MULTIPLAYER_TRANSPORT_MODE),
+        tostring(MULTIPLAYER_TRANSPORT_WS_URL),
+        tostring(MULTIPLAYER_TRANSPORT_ROOM_ID),
+        tostring(self.mp_state and self.mp_state.local_player_id or "")
+    ))
     self.mp_transport = MP_TRANSPORT.create({
         mode = MULTIPLAYER_TRANSPORT_MODE,
         ws_url = MULTIPLAYER_TRANSPORT_WS_URL,
@@ -27011,12 +27113,33 @@ multiplayer_transport_init = function(self)
                 self.mp_state.transport_status = status
                 self.mp_state.transport_status_detail = detail or {}
             end
-            print(string.format("MP NET | transport_status=%s", tostring(status)))
+            multiplayer_debug_log(self, string.format("MP NET | transport_status=%s", tostring(status)))
         end
     })
     if self.mp_transport and self.mp_transport.connect then
         self.mp_transport.connect()
     end
+end
+
+multiplayer_transport_ensure_active = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        multiplayer_debug_log(self, "MP NET DBG | ensure_active | skipped_not_enabled")
+        return false
+    end
+    if not self.mp_transport then
+        multiplayer_debug_log(self, "MP NET DBG | ensure_active | init_missing_transport")
+        multiplayer_transport_init(self)
+        return self.mp_transport ~= nil
+    end
+    if self.mp_transport.set_local_player_id then
+        self.mp_transport.set_local_player_id(tostring(self.mp_state.local_player_id or "p1"))
+    end
+    local status = tostring(self.mp_state.transport_status or "")
+    if (status == "idle" or status == "disconnected" or status == "error") and self.mp_transport.connect then
+        multiplayer_debug_log(self, string.format("MP NET DBG | ensure_active | reconnect status=%s", status))
+        self.mp_transport.connect()
+    end
+    return true
 end
 
 multiplayer_reset_ready_gate = function(self)
@@ -27102,6 +27225,107 @@ multiplayer_init_steam_runtime = function(self)
             tostring(steam_state.display_name or ""),
             tostring(steam_state.system_name or "")
         ))
+    end
+end
+
+multiplayer_lobby_steam_bridge_ensure = function(self)
+    multiplayer_lobby_ensure_runtime(self)
+    local lobby = self.mp_lobby or {}
+    if lobby.steam_bridge then
+        return lobby.steam_bridge
+    end
+    local steam_state = self.mp_state and self.mp_state.steam or nil
+    local bridge_enabled = steam_state and steam_state.enabled == true and steam_state.initialized == true
+    lobby.steam_bridge = STEAM_LOBBY_BRIDGE.create({
+        enabled = bridge_enabled == true,
+        config = {
+            max_players = STEAM_LOBBY_DEFAULT_MAX_PLAYERS,
+            visibility = STEAM_LOBBY_DEFAULT_VISIBILITY,
+            invite_policy = STEAM_INVITE_POLICY
+        }
+    })
+    if bridge_enabled then
+        multiplayer_debug_log(self, string.format(
+            "MP STEAM LOBBY | bridge_init | max_players=%d visibility=%s invite_policy=%s",
+            STEAM_LOBBY_DEFAULT_MAX_PLAYERS,
+            tostring(STEAM_LOBBY_DEFAULT_VISIBILITY),
+            tostring(STEAM_INVITE_POLICY)
+        ))
+    else
+        multiplayer_debug_log(self, "MP STEAM LOBBY | bridge_disabled")
+    end
+    return lobby.steam_bridge
+end
+
+multiplayer_lobby_steam_bridge_publish_offer = function(self, session)
+    local bridge = multiplayer_lobby_steam_bridge_ensure(self)
+    if not (bridge and bridge.is_available and bridge.is_available()) then
+        return false
+    end
+    local published = bridge.publish_offer and bridge.publish_offer(session)
+    if published and bridge.get_local_lobby_id then
+        local lobby_id = tostring(bridge.get_local_lobby_id() or "")
+        if lobby_id ~= "" then
+            session.steam_lobby_id = lobby_id
+        end
+    end
+    return published == true
+end
+
+multiplayer_lobby_steam_bridge_remove_offer = function(self, offer_id)
+    local bridge = multiplayer_lobby_steam_bridge_ensure(self)
+    if not (bridge and bridge.is_available and bridge.is_available()) then
+        return false
+    end
+    local removed = bridge.remove_offer and bridge.remove_offer(tostring(offer_id or ""))
+    if removed == true then
+        print(string.format("MP STEAM LOBBY | unpublish | session=%s", tostring(offer_id or "")))
+    end
+    return removed == true
+end
+
+multiplayer_lobby_steam_bridge_join_for_session = function(self, session)
+    if type(session) ~= "table" then
+        return false
+    end
+    local steam_lobby_id = tostring(session.steam_lobby_id or "")
+    if steam_lobby_id == "" then
+        return false
+    end
+    local bridge = multiplayer_lobby_steam_bridge_ensure(self)
+    if not (bridge and bridge.is_available and bridge.is_available()) then
+        return false
+    end
+    local joined = bridge.join_lobby and bridge.join_lobby(steam_lobby_id)
+    if joined == true then
+        print(string.format("MP STEAM LOBBY | join_requested | steam_lobby_id=%s session=%s", steam_lobby_id, tostring(session.id or "")))
+    end
+    return joined == true
+end
+
+multiplayer_lobby_steam_bridge_tick = function(self, dt)
+    local bridge = multiplayer_lobby_steam_bridge_ensure(self)
+    if not (bridge and bridge.is_available and bridge.is_available() and bridge.tick) then
+        return
+    end
+    local offers = bridge.tick(dt)
+    if type(offers) ~= "table" then
+        return
+    end
+    if #offers > 0 then
+        multiplayer_debug_log(self, string.format("MP STEAM LOBBY | bridge_tick_offers=%d", #offers))
+    end
+    for _, offer in ipairs(offers) do
+        if type(offer) == "table" and tostring(offer.id or "") ~= "" then
+            local existing = multiplayer_lobby_get_session_by_id(self, offer.id)
+            local local_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+            if tostring(offer.id or "") ~= local_offer_id then
+                offer.updated_at_ms = tonumber(offer.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
+                if not existing or tostring(existing.updated_at_ms or "0") ~= tostring(offer.updated_at_ms or "0") then
+                    multiplayer_lobby_apply_offer_upsert(self, offer)
+                end
+            end
+        end
     end
 end
 

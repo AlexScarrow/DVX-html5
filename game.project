@@ -63,6 +63,10 @@ transport_mode = websocket
 transport_ws_url = ws://90.192.116.103:8080/ws
 transport_room_id = dvx_remote_friend_20260509
 disable_multiplayer = 1
+steam_enabled = 1
+steam_appid = 4803710
+steam_windows_only = 1
+steam_log_verbose = 0
 lock_fixed_window = 0
 start_maximized = 1
 

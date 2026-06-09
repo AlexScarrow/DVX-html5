@@ -1475,6 +1475,7 @@ end)()
 SCORE_RUNTIME = require("main.score_runtime")
 MP_TRANSPORT = require("main.multiplayer_transport")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
+STEAM_RUNTIME = require("main.steam_runtime")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
 LEVEL_EDITOR = require("main.level_editor")
@@ -27052,6 +27053,58 @@ multiplayer_get_runtime_local_player_id = function()
     return configured
 end
 
+multiplayer_refresh_runtime_identity = function(self)
+    if not (self and self.mp_state) then
+        return
+    end
+    local identity = self.mp_state.identity or {}
+    local provider = "local"
+    local external_id = tostring(self.mp_state.local_player_id or "p1")
+    local display_name = external_id
+    local steam_state = self.mp_state.steam
+    if steam_state and steam_state.initialized == true and tostring(steam_state.steam_id or "") ~= "" then
+        provider = "steam"
+        external_id = tostring(steam_state.steam_id or external_id)
+        if tostring(steam_state.display_name or "") ~= "" then
+            display_name = tostring(steam_state.display_name)
+        end
+    end
+    identity.provider = provider
+    identity.external_id = external_id
+    identity.display_name = display_name
+    self.mp_state.identity = identity
+end
+
+multiplayer_init_steam_runtime = function(self)
+    if not (self and self.mp_state) then
+        return
+    end
+    local steam_state = STEAM_RUNTIME.init()
+    self.mp_state.steam = steam_state
+    multiplayer_refresh_runtime_identity(self)
+    local reason = tostring(steam_state.init_error or "")
+    if reason == "" then
+        reason = "ok"
+    end
+    print(string.format(
+        "MP STEAM | enabled=%s available=%s initialized=%s reason=%s appid=%s",
+        tostring(steam_state.enabled == true),
+        tostring(steam_state.available == true),
+        tostring(steam_state.initialized == true),
+        reason,
+        tostring(steam_state.appid or "")
+    ))
+    if steam_state.log_verbose == true then
+        print(string.format(
+            "MP STEAM | backend=%s steam_id=%s display_name=%s system=%s",
+            tostring(steam_state.backend_name or ""),
+            tostring(steam_state.steam_id or ""),
+            tostring(steam_state.display_name or ""),
+            tostring(steam_state.system_name or "")
+        ))
+    end
+end
+
 multiplayer_get_active_player_id_for_commands = function(self)
     if not (self.mp_state and self.mp_state.enabled) then
         return "p1"
@@ -27214,7 +27267,24 @@ init_multiplayer_runtime = function(self)
         post_turn_snapshot_delay_s = 0,
         event_seq = 0,
         seen_command_ids = {},
-        seen_event_ids = {}
+        seen_event_ids = {},
+        identity = {
+            provider = "local",
+            external_id = "",
+            display_name = ""
+        },
+        steam = {
+            enabled = false,
+            available = false,
+            initialized = false,
+            init_error = "not_initialized",
+            appid = "",
+            system_name = "",
+            backend_name = "",
+            steam_id = "",
+            display_name = "",
+            log_verbose = false
+        }
     }
     self.mp_telemetry = {
         enabled = MP_TELEMETRY_ENABLED == true,
@@ -27240,14 +27310,17 @@ init_multiplayer_runtime = function(self)
         dt_spike_count = 0
     }
     self.mp_state.debug_active_player_id = self.mp_state.local_player_id
+    multiplayer_init_steam_runtime(self)
     if self.mp_state.enabled ~= true then
         self.mp_state.transport_status = "disabled"
         self.mp_state.transport_status_detail = { reason = "disabled_by_config_or_mode" }
     end
     print(string.format(
-        "MP NET | identity | local=%s host=%s",
+        "MP NET | identity | local=%s host=%s provider=%s external_id=%s",
         tostring(self.mp_state.local_player_id),
-        tostring(self.mp_state.host_player_id)
+        tostring(self.mp_state.host_player_id),
+        tostring(self.mp_state.identity and self.mp_state.identity.provider or "local"),
+        tostring(self.mp_state.identity and self.mp_state.identity.external_id or "")
     ))
     print(string.format(
         "MP NET | build_version=%s build_digits=%s role=%s",

@@ -274,7 +274,11 @@ NEW_TURN_BUTTON_W = 180
 NEW_TURN_BUTTON_H = 64
 NEW_TURN_BUTTON_Z = 0.845
 NEW_TURN_BUTTON_VISUAL_SCALE = 1.0
-MULTIPLAYER_ENABLED = true
+MULTIPLAYER_DISABLED_BY_CONFIG = (function()
+    local cfg = tostring((sys.get_config and sys.get_config("dvx.disable_multiplayer")) or "0")
+    return cfg == "1" or cfg == "true" or cfg == "on"
+end)()
+MULTIPLAYER_ENABLED = not MULTIPLAYER_DISABLED_BY_CONFIG
 MULTIPLAYER_HOST_PLAYER_ID = "p1"
 MULTIPLAYER_LOCAL_PLAYER_ID = "p1"
 ENV_NAME = tostring((sys.get_config and sys.get_config("dvx.env_name")) or "LOCAL")
@@ -27236,6 +27240,10 @@ init_multiplayer_runtime = function(self)
         dt_spike_count = 0
     }
     self.mp_state.debug_active_player_id = self.mp_state.local_player_id
+    if self.mp_state.enabled ~= true then
+        self.mp_state.transport_status = "disabled"
+        self.mp_state.transport_status_detail = { reason = "disabled_by_config_or_mode" }
+    end
     print(string.format(
         "MP NET | identity | local=%s host=%s",
         tostring(self.mp_state.local_player_id),
@@ -27248,7 +27256,11 @@ init_multiplayer_runtime = function(self)
         (self.mp_state.local_player_id == self.mp_state.host_player_id) and "host" or "client"
     ))
     multiplayer_reset_ready_gate(self)
-    multiplayer_transport_init(self)
+    if self.mp_state.enabled == true then
+        multiplayer_transport_init(self)
+    else
+        print("MP NET | transport_disabled_by_config_or_mode")
+    end
 end
 
 workshop_state_signature = function(workshop_state)

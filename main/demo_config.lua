@@ -1,7 +1,7 @@
 local M = {}
 
 -- Toggle Steam demo ring-fence behavior.
-M.DEMO_BUILD = false
+M.DEMO_BUILD = true
 
 -- Allow tutorial entry from demo mission select.
 M.DEMO_ALLOW_TUTORIAL = true

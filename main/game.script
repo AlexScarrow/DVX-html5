@@ -16998,6 +16998,7 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
         status = tostring(session.status or "published_open"),
         env_name = tostring(session.env_name or ENV_NAME or "LOCAL"),
         game_version = tostring(session.game_version or GAME_VERSION_LABEL or "0"),
+        build_version = tostring(session.build_version or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
         protocol_version = tostring(session.protocol_version or NET_PROTOCOL_VERSION or "1"),
         players = math.max(1, tonumber(session.players or 1) or 1),
         max_players = math.max(2, tonumber(session.max_players or 2) or 2),
@@ -17086,6 +17087,7 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         status = tostring(offer.status or "published_open"),
         env_name = tostring(offer.env_name or ENV_NAME or "LOCAL"),
         game_version = tostring(offer.game_version or GAME_VERSION_LABEL or "0"),
+        build_version = tostring(offer.build_version or offer.game_version or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
         protocol_version = tostring(offer.protocol_version or NET_PROTOCOL_VERSION or "1"),
         players = math.max(1, tonumber(offer.players or 1) or 1),
         max_players = math.max(2, tonumber(offer.max_players or 2) or 2),
@@ -17128,6 +17130,7 @@ multiplayer_lobby_build_state_payload = function(self)
                 status = tostring(session.status or "published_open"),
                 env_name = tostring(session.env_name or ENV_NAME or "LOCAL"),
                 game_version = tostring(session.game_version or GAME_VERSION_LABEL or "0"),
+                build_version = tostring(session.build_version or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
                 protocol_version = tostring(session.protocol_version or NET_PROTOCOL_VERSION or "1"),
                 players = math.max(1, tonumber(session.players or 1) or 1),
                 max_players = math.max(2, tonumber(session.max_players or 4) or 4),
@@ -17178,6 +17181,7 @@ multiplayer_lobby_apply_state_payload = function(self, payload)
             status = tostring(session.status or "published_open"),
             env_name = tostring(session.env_name or ENV_NAME or "LOCAL"),
             game_version = tostring(session.game_version or GAME_VERSION_LABEL or "0"),
+            build_version = tostring(session.build_version or session.game_version or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
             protocol_version = tostring(session.protocol_version or NET_PROTOCOL_VERSION or "1"),
             players = math.max(1, tonumber(session.players or 1) or 1),
             max_players = math.max(2, tonumber(session.max_players or 4) or 4),
@@ -17267,6 +17271,23 @@ multiplayer_lobby_count_compatible_published_sessions = function(self)
     return published_total, compatible_total
 end
 
+multiplayer_build_lobby_join_payload = function(self, session_id, pin)
+    local payload = {
+        session_id = tostring(session_id or ""),
+        protocol_version = tostring(NET_PROTOCOL_VERSION or "1"),
+        build_version = tostring(MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
+        identity = {
+            provider = tostring(self.mp_state and self.mp_state.identity and self.mp_state.identity.provider or "local"),
+            external_id = tostring(self.mp_state and self.mp_state.identity and self.mp_state.identity.external_id or self.mp_state and self.mp_state.local_player_id or "p1"),
+            display_name = tostring(self.mp_state and self.mp_state.identity and self.mp_state.identity.display_name or self.mp_lobby and self.mp_lobby.local_username or "Player")
+        }
+    }
+    if pin and pin ~= "" then
+        payload.pin = tostring(pin)
+    end
+    return payload
+end
+
 multiplayer_lobby_enter_mp_setup_from_session = function(self, session)
     if not session then
         return false
@@ -17312,6 +17333,7 @@ multiplayer_lobby_create_host_draft = function(self)
         status = "draft",
         env_name = tostring(ENV_NAME or "LOCAL"),
         game_version = tostring(GAME_VERSION_LABEL or "0"),
+        build_version = tostring(MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
         protocol_version = tostring(NET_PROTOCOL_VERSION or "1"),
         players = 1,
         max_players = 4,
@@ -17445,11 +17467,12 @@ multiplayer_lobby_submit_pin_entry = function(self)
             if target_session then
                 multiplayer_lobby_steam_bridge_join_for_session(self, target_session)
             end
-            multiplayer_transport_send_command(self, "lobby_join_session", {
-                session_id = target_session_id,
-                pin = lobby.pin_buffer,
-                protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
-            }, self.mp_state and self.mp_state.local_player_id or "p1")
+            multiplayer_transport_send_command(
+                self,
+                "lobby_join_session",
+                multiplayer_build_lobby_join_payload(self, target_session_id, lobby.pin_buffer),
+                self.mp_state and self.mp_state.local_player_id or "p1"
+            )
             lobby.pending_join_session_id = target_session_id
             lobby.pin_mode = ""
             lobby.pin_feedback = ""
@@ -19337,10 +19360,12 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
                     tostring(session.owner_player_id or ""),
                     tostring(session.steam_lobby_id or "")
                 ))
-                multiplayer_transport_send_command(self, "lobby_join_session", {
-                    session_id = tostring(session.id or ""),
-                    protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
-                }, self.mp_state and self.mp_state.local_player_id or "p1")
+                multiplayer_transport_send_command(
+                    self,
+                    "lobby_join_session",
+                    multiplayer_build_lobby_join_payload(self, tostring(session.id or ""), nil),
+                    self.mp_state and self.mp_state.local_player_id or "p1"
+                )
                 lobby.pending_join_session_id = tostring(session.id or "")
                 return true
             end
@@ -23541,6 +23566,7 @@ multiplayer_transport_handle_command = function(self, command)
                     status = tostring(session.status or "published_open"),
                     env_name = tostring(session.env_name or ENV_NAME or "LOCAL"),
                     game_version = tostring(session.game_version or GAME_VERSION_LABEL or "0"),
+                    build_version = tostring(session.build_version or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
                     protocol_version = tostring(session.protocol_version or NET_PROTOCOL_VERSION or "1"),
                     players = math.max(1, tonumber(session.players or 1) or 1),
                     max_players = math.max(2, tonumber(session.max_players or 2) or 2),
@@ -23557,6 +23583,7 @@ multiplayer_transport_handle_command = function(self, command)
         multiplayer_lobby_ensure_runtime(self)
         local session_id = tostring(payload.session_id or "")
         local requested_protocol_version = tostring(payload.protocol_version or "")
+        local requested_build_version = tostring(payload.build_version or "")
         local session = multiplayer_lobby_get_session_by_id(self, session_id)
         local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
         local owner_player_id = tostring(session and session.owner_player_id or "")
@@ -23565,6 +23592,7 @@ multiplayer_transport_handle_command = function(self, command)
             return events
         end
         local expected_protocol_version = tostring(session and session.protocol_version or NET_PROTOCOL_VERSION or "1")
+        local expected_build_version = tostring(session and (session.build_version or session.game_version) or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0")
         if requested_protocol_version == "" then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_join_session",
@@ -23574,12 +23602,30 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
+        if requested_build_version == "" then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "build_version_missing",
+                expected_build_version = expected_build_version,
+                received_build_version = ""
+            }))
+            return events
+        end
         if requested_protocol_version ~= expected_protocol_version then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_join_session",
                 reason = "protocol_mismatch",
                 expected_protocol_version = expected_protocol_version,
                 received_protocol_version = tostring(requested_protocol_version)
+            }))
+            return events
+        end
+        if requested_build_version ~= expected_build_version then
+            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                command_type = "lobby_join_session",
+                reason = "build_mismatch",
+                expected_build_version = expected_build_version,
+                received_build_version = tostring(requested_build_version)
             }))
             return events
         end
@@ -23629,6 +23675,15 @@ multiplayer_transport_handle_command = function(self, command)
         if not already_joined then
             session.joined_player_ids[#session.joined_player_ids + 1] = requester_player_id
         end
+        session.joined_player_identities = session.joined_player_identities or {}
+        local requester_identity = payload.identity
+        if type(requester_identity) == "table" then
+            session.joined_player_identities[requester_player_id] = {
+                provider = tostring(requester_identity.provider or "local"),
+                external_id = tostring(requester_identity.external_id or requester_player_id),
+                display_name = tostring(requester_identity.display_name or requester_player_id)
+            }
+        end
         local session_max_players = math.max(2, math.min(4, tonumber(session.max_players or 4) or 4))
         session.players = math.min(session_max_players, tonumber(#session.joined_player_ids) or 1)
         session.updated_at_ms = get_wall_clock_ms()
@@ -23642,6 +23697,7 @@ multiplayer_transport_handle_command = function(self, command)
                 status = tostring(session.status or "published_open"),
                 env_name = tostring(session.env_name or ENV_NAME or "LOCAL"),
                 game_version = tostring(session.game_version or GAME_VERSION_LABEL or "0"),
+                build_version = tostring(session.build_version or MP_BUILD_VERSION_NUMBER or GAME_VERSION_LABEL or "0"),
                 protocol_version = tostring(session.protocol_version or NET_PROTOCOL_VERSION or "1"),
                 players = math.max(1, tonumber(session.players or 1) or 1),
                 max_players = session_max_players,
@@ -26723,7 +26779,11 @@ multiplayer_transport_on_event = function(self, event)
             self.mp_lobby.pin_mode = ""
             self.mp_lobby.pin_feedback = "bad"
             self.mp_lobby.pin_feedback_timer = 0.45
-            if reason == "protocol_mismatch" or reason == "protocol_version_missing" then
+            if reason == "protocol_mismatch"
+                or reason == "protocol_version_missing"
+                or reason == "build_mismatch"
+                or reason == "build_version_missing"
+            then
                 show_advisory(self, ADVISORY_MSG_PROTOCOL_MISMATCH, 1.8)
                 self.mp_lobby.pin_feedback_timer = 0.75
             end

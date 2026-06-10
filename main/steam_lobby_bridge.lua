@@ -23,10 +23,6 @@ local function pick_backend(runtime_steam)
     if type(global_steam) == "table" then
         return global_steam
     end
-    local ok_steamworks, steamworks = pcall(require, "steamworks")
-    if ok_steamworks and type(steamworks) == "table" then
-        return steamworks
-    end
     local ok_steam, steam_mod = pcall(require, "steam")
     if ok_steam and type(steam_mod) == "table" then
         return steam_mod
@@ -67,6 +63,53 @@ local function to_offer(metadata)
     }
 end
 
+local function to_lobby_type(backend, visibility)
+    local value = tostring(visibility or "private")
+    if value == "public" then
+        return tonumber(backend and backend.ELobbyTypePublic or 2) or 2
+    end
+    if value == "friends_only" then
+        return tonumber(backend and backend.ELobbyTypeFriendsOnly or 1) or 1
+    end
+    return tonumber(backend and backend.ELobbyTypePrivate or 0) or 0
+end
+
+local function extract_lobby_id(data)
+    if type(data) ~= "table" then
+        return ""
+    end
+    local preferred = {
+        "m_ulSteamIDLobby",
+        "steam_lobby_id",
+        "lobby_id",
+        "steam_id_lobby",
+        "m_steamIDLobby"
+    }
+    for _, key in ipairs(preferred) do
+        local value = tostring(data[key] or "")
+        if value ~= "" and value ~= "0" then
+            return value
+        end
+    end
+    for key, value in pairs(data) do
+        local k = tostring(key or "")
+        if string.find(string.lower(k), "lobby", 1, true) then
+            local id = tostring(value or "")
+            if id ~= "" and id ~= "0" then
+                return id
+            end
+        end
+    end
+    return ""
+end
+
+local function extract_lobby_match_count(data)
+    if type(data) ~= "table" then
+        return 0
+    end
+    return tonumber(data.m_nLobbiesMatching or data.lobbies_matching or data.count or 0) or 0
+end
+
 function M.create(opts)
     local cfg = opts and opts.config or {}
     local state = {
@@ -76,6 +119,10 @@ function M.create(opts)
         remote_by_session_id = {},
         poll_interval_s = 3.0,
         poll_timer_s = 0,
+        list_dirty = false,
+        lobby_match_count = 0,
+        pending_create = false,
+        local_offer = nil,
         max_players = math.max(2, math.min(4, tonumber(cfg.max_players or 4) or 4)),
         visibility = cfg_visibility(cfg.visibility)
     }
@@ -93,18 +140,20 @@ function M.create(opts)
         if not bridge.is_available() or type(offer) ~= "table" then
             return false
         end
+        state.local_offer = offer
         local lobby_id = tostring(state.local_lobby_id or "")
         if lobby_id == "" then
-            local created = safe_call(state.backend, "create_lobby", state.max_players, state.visibility)
-                or safe_call(state.backend, "createLobby", state.max_players, state.visibility)
-            if created == nil then
+            if state.pending_create == true then
+                return true
+            end
+            state.pending_create = true
+            local lobby_type = to_lobby_type(state.backend, state.visibility)
+            local callback_id = safe_call(state.backend, "matchmaking_create_lobby", lobby_type, state.max_players)
+            if callback_id == nil then
+                state.pending_create = false
                 return false
             end
-            lobby_id = tostring(created or "")
-            state.local_lobby_id = lobby_id
-        end
-        if lobby_id == "" then
-            return false
+            return true
         end
         local metadata = {
             session_id = tostring(offer.id or ""),
@@ -121,8 +170,7 @@ function M.create(opts)
             updated_at_ms = tostring(tonumber(offer.updated_at_ms or now_ms()) or now_ms())
         }
         for key, value in pairs(metadata) do
-            safe_call(state.backend, "set_lobby_data", lobby_id, key, tostring(value))
-            safe_call(state.backend, "setLobbyData", lobby_id, key, tostring(value))
+            safe_call(state.backend, "matchmaking_set_lobby_data", lobby_id, key, tostring(value))
         end
         return true
     end
@@ -135,9 +183,10 @@ function M.create(opts)
         if lobby_id == "" then
             return false
         end
-        safe_call(state.backend, "leave_lobby", lobby_id)
-        safe_call(state.backend, "leaveLobby", lobby_id)
+        safe_call(state.backend, "matchmaking_leave_lobby", lobby_id)
         state.local_lobby_id = ""
+        state.pending_create = false
+        state.local_offer = nil
         return true
     end
 
@@ -149,9 +198,71 @@ function M.create(opts)
         if lobby_id == "" then
             return false
         end
-        local joined = safe_call(state.backend, "join_lobby", lobby_id)
-            or safe_call(state.backend, "joinLobby", lobby_id)
+        local joined = safe_call(state.backend, "matchmaking_join_lobby", lobby_id)
         return joined ~= nil
+    end
+
+    local function refresh_remote_offers()
+        state.remote_by_session_id = {}
+        local count = tonumber(state.lobby_match_count or 0) or 0
+        if count <= 0 then
+            count = 64
+        end
+        for i = 0, math.max(0, count - 1) do
+            local lid = tostring(safe_call(state.backend, "matchmaking_get_lobby_by_index", i) or "")
+            if lid ~= "" and lid ~= tostring(state.local_lobby_id or "") then
+                local metadata = {
+                    session_id = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "session_id"),
+                    steam_lobby_id = lid,
+                    owner_player_id = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "owner_player_id"),
+                    host_name = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "host_name"),
+                    status = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "status"),
+                    env_name = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "env_name"),
+                    game_version = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "game_version"),
+                    protocol_version = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "protocol_version"),
+                    players = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "players"),
+                    max_players = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "max_players"),
+                    is_locked = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "is_locked"),
+                    updated_at_ms = safe_call(state.backend, "matchmaking_get_lobby_data", lid, "updated_at_ms")
+                }
+                local offer = to_offer(metadata)
+                if offer then
+                    state.remote_by_session_id[offer.id] = offer
+                end
+            end
+        end
+    end
+
+    function bridge.on_event(event_name, event_data)
+        local event = tostring(event_name or "")
+        if event == "" then
+            return
+        end
+        if string.find(event, "LobbyMatchList", 1, true) then
+            state.lobby_match_count = extract_lobby_match_count(event_data)
+            state.list_dirty = true
+            return
+        end
+        if string.find(event, "LobbyCreated", 1, true) then
+            -- LobbyCreated event does not always include id in all wrappers;
+            -- LobbyEnter will follow and is used as authoritative lobby id.
+            return
+        end
+        if string.find(event, "LobbyEnter", 1, true) then
+            local lobby_id = extract_lobby_id(event_data)
+            if state.pending_create == true and lobby_id ~= "" then
+                state.local_lobby_id = lobby_id
+                state.pending_create = false
+                if type(state.local_offer) == "table" then
+                    bridge.publish_offer(state.local_offer)
+                end
+            end
+            return
+        end
+        if string.find(event, "LobbyDataUpdate", 1, true) then
+            state.list_dirty = true
+            return
+        end
     end
 
     function bridge.tick(dt)
@@ -159,56 +270,13 @@ function M.create(opts)
             return {}
         end
         state.poll_timer_s = (tonumber(state.poll_timer_s or 0) or 0) - (tonumber(dt or 0) or 0)
-        if state.poll_timer_s > 0 then
-            local out = {}
-            for _, offer in pairs(state.remote_by_session_id) do
-                out[#out + 1] = offer
-            end
-            return out
+        if state.poll_timer_s <= 0 then
+            state.poll_timer_s = state.poll_interval_s
+            safe_call(state.backend, "matchmaking_request_lobby_list")
         end
-        state.poll_timer_s = state.poll_interval_s
-        safe_call(state.backend, "request_lobby_list")
-        safe_call(state.backend, "requestLobbyList")
-        local lobbies = safe_call(state.backend, "get_lobby_list")
-            or safe_call(state.backend, "getLobbyList")
-            or {}
-        if type(lobbies) ~= "table" then
-            return {}
-        end
-        state.remote_by_session_id = {}
-        for _, lobby_id in ipairs(lobbies) do
-            local lid = tostring(lobby_id or "")
-            if lid ~= "" and lid ~= tostring(state.local_lobby_id or "") then
-                local metadata = {
-                    session_id = safe_call(state.backend, "get_lobby_data", lid, "session_id")
-                        or safe_call(state.backend, "getLobbyData", lid, "session_id"),
-                    steam_lobby_id = lid,
-                    owner_player_id = safe_call(state.backend, "get_lobby_data", lid, "owner_player_id")
-                        or safe_call(state.backend, "getLobbyData", lid, "owner_player_id"),
-                    host_name = safe_call(state.backend, "get_lobby_data", lid, "host_name")
-                        or safe_call(state.backend, "getLobbyData", lid, "host_name"),
-                    status = safe_call(state.backend, "get_lobby_data", lid, "status")
-                        or safe_call(state.backend, "getLobbyData", lid, "status"),
-                    env_name = safe_call(state.backend, "get_lobby_data", lid, "env_name")
-                        or safe_call(state.backend, "getLobbyData", lid, "env_name"),
-                    game_version = safe_call(state.backend, "get_lobby_data", lid, "game_version")
-                        or safe_call(state.backend, "getLobbyData", lid, "game_version"),
-                    protocol_version = safe_call(state.backend, "get_lobby_data", lid, "protocol_version")
-                        or safe_call(state.backend, "getLobbyData", lid, "protocol_version"),
-                    players = safe_call(state.backend, "get_lobby_data", lid, "players")
-                        or safe_call(state.backend, "getLobbyData", lid, "players"),
-                    max_players = safe_call(state.backend, "get_lobby_data", lid, "max_players")
-                        or safe_call(state.backend, "getLobbyData", lid, "max_players"),
-                    is_locked = safe_call(state.backend, "get_lobby_data", lid, "is_locked")
-                        or safe_call(state.backend, "getLobbyData", lid, "is_locked"),
-                    updated_at_ms = safe_call(state.backend, "get_lobby_data", lid, "updated_at_ms")
-                        or safe_call(state.backend, "getLobbyData", lid, "updated_at_ms")
-                }
-                local offer = to_offer(metadata)
-                if offer then
-                    state.remote_by_session_id[offer.id] = offer
-                end
-            end
+        if state.list_dirty == true then
+            state.list_dirty = false
+            refresh_remote_offers()
         end
         local out = {}
         for _, offer in pairs(state.remote_by_session_id) do

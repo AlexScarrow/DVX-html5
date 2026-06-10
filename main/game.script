@@ -27204,11 +27204,17 @@ multiplayer_init_steam_runtime = function(self)
     end
     local steam_state = STEAM_RUNTIME.init()
     self.mp_state.steam = steam_state
+    self.steam_state = steam_state
     multiplayer_refresh_runtime_identity(self)
     local reason = tostring(steam_state.init_error or "")
     if reason == "" then
         reason = "ok"
     end
+    multiplayer_debug_log(self, string.format(
+        "MP STEAM CHECK | module_present=%s backend=%s",
+        tostring(steam_state.module_present == true),
+        tostring(steam_state.backend_name or "")
+    ))
     print(string.format(
         "MP STEAM | enabled=%s available=%s initialized=%s reason=%s appid=%s",
         tostring(steam_state.enabled == true),
@@ -27225,6 +27231,30 @@ multiplayer_init_steam_runtime = function(self)
             tostring(steam_state.display_name or ""),
             tostring(steam_state.system_name or "")
         ))
+    end
+end
+
+multiplayer_handle_steam_events = function(self)
+    if not (self and self.mp_state and self.mp_state.steam and self.mp_state.steam.initialized == true) then
+        return
+    end
+    local events = STEAM_RUNTIME.consume_events and STEAM_RUNTIME.consume_events() or {}
+    if type(events) ~= "table" or #events <= 0 then
+        return
+    end
+    local bridge = multiplayer_lobby_steam_bridge_ensure(self)
+    for _, evt in ipairs(events) do
+        local event_name = tostring(evt and evt.event or "")
+        local event_data = evt and evt.data or {}
+        if event_name ~= "" and bridge and bridge.on_event then
+            bridge.on_event(event_name, event_data)
+        end
+        if event_name == "GameLobbyJoinRequested_t" then
+            local lobby_id = tostring(event_data and (event_data.m_steamIDLobby or event_data.m_ulSteamIDLobby or event_data.lobby_id) or "")
+            if lobby_id ~= "" and bridge and bridge.join_lobby then
+                bridge.join_lobby(lobby_id)
+            end
+        end
     end
 end
 
@@ -32399,6 +32429,10 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    if STEAM_RUNTIME and STEAM_RUNTIME.update then
+        STEAM_RUNTIME.update()
+        multiplayer_handle_steam_events(self)
+    end
     apply_runtime_hud_layout(self)
     if self.pending_level_load and self.pending_level_load.level_index then
         local remaining = tonumber(self.pending_level_load.frames_until_spawn or 0) or 0
@@ -33848,6 +33882,9 @@ function on_message(self, message_id, message, sender)
 end
 
 function final(self)
+    if STEAM_RUNTIME and STEAM_RUNTIME.finalize then
+        STEAM_RUNTIME.finalize()
+    end
     if LEVEL_EDITOR and LEVEL_EDITOR.final then
         LEVEL_EDITOR.final(self)
     end

@@ -287,6 +287,8 @@ NET_PROTOCOL_VERSION = tostring((sys.get_config and sys.get_config("dvx.net_prot
 MULTIPLAYER_TRANSPORT_MODE = tostring((sys.get_config and sys.get_config("dvx.transport_mode")) or "websocket") -- "loopback" or "websocket"
 MULTIPLAYER_TRANSPORT_WS_URL = tostring((sys.get_config and sys.get_config("dvx.transport_ws_url")) or "ws://127.0.0.1:8080/ws")
 MULTIPLAYER_TRANSPORT_ROOM_ID = tostring((sys.get_config and sys.get_config("dvx.transport_room_id")) or "dvx_local_room")
+MULTIPLAYER_DEBUG_FILE_ENABLED = tostring((sys.get_config and sys.get_config("dvx.mp_debug_file")) or "1") ~= "0"
+MULTIPLAYER_DEBUG_FILE_NAME = tostring((sys.get_config and sys.get_config("dvx.mp_debug_filename")) or "dvx_mp_debug.txt")
 WINDOW_LOCK_TO_DESIGN_SIZE = tostring((sys.get_config and sys.get_config("dvx.lock_fixed_window")) or "0") == "1"
 START_MAXIMIZED_ON_LAUNCH = tostring((sys.get_config and sys.get_config("dvx.start_maximized")) or "0") == "1"
 MP_LAG_SIM_UI_ENABLED = false
@@ -1483,6 +1485,71 @@ local TUTORIAL_STEP_DEFS = require("main.tutorial_step_defs").STEPS
 LOOT_RUNTIME = {}
 CLEANSE_RUNTIME = {}
 MELEE_RUNTIME = {}
+
+multiplayer_get_debug_file_path = function()
+    local override_path = tostring((sys.get_config and sys.get_config("dvx.mp_debug_path")) or "")
+    if override_path ~= "" then
+        return override_path
+    end
+    if sys.get_save_file then
+        return tostring(sys.get_save_file("DVX", MULTIPLAYER_DEBUG_FILE_NAME or "dvx_mp_debug.txt") or "")
+    end
+    return tostring(MULTIPLAYER_DEBUG_FILE_NAME or "dvx_mp_debug.txt")
+end
+
+multiplayer_debug_file_reset = function(self)
+    if MULTIPLAYER_DEBUG_FILE_ENABLED ~= true then
+        return
+    end
+    local path = multiplayer_get_debug_file_path()
+    if self then
+        self.mp_debug_file_path = path
+    end
+    if path == "" then
+        print("MP DEBUG | file path unavailable.")
+        return
+    end
+    local ok_reset, err_reset = pcall(function()
+        local handle = io.open(path, "w")
+        if handle then
+            handle:write("DVX MP DEBUG LOG\n")
+            handle:write("================\n")
+            handle:close()
+        end
+    end)
+    if not ok_reset then
+        print("MP DEBUG | file reset failed: " .. tostring(err_reset))
+        return
+    end
+    print("MP DEBUG | file reset: " .. tostring(path))
+end
+
+multiplayer_debug_log = function(self, message)
+    local line = string.format(
+        "%s | %s",
+        tostring(os.date and os.date("%Y-%m-%d %H:%M:%S") or "time_unknown"),
+        tostring(message or "")
+    )
+    print(line)
+    if MULTIPLAYER_DEBUG_FILE_ENABLED ~= true then
+        return
+    end
+    local path = tostring(self and self.mp_debug_file_path or multiplayer_get_debug_file_path() or "")
+    if path == "" then
+        return
+    end
+    local ok_append, err_append = pcall(function()
+        local handle = io.open(path, "a")
+        if handle then
+            handle:write(line .. "\n")
+            handle:close()
+        end
+    end)
+    if not ok_append then
+        print("MP DEBUG | file append failed: " .. tostring(err_append))
+    end
+end
+
 HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
 HUMAN_TINT_TECHIE = vmath.vector4(1, 1, 1, 1)
 HUMAN_TINT_MEDIC = vmath.vector4(1, 1, 1, 1)
@@ -19299,6 +19366,15 @@ function handle_flow_touch(self, input_x, input_y)
                 self.mp_state.enabled = true
                 self.mp_state.debug_active_player_id = self.mp_state.local_player_id
             end
+            multiplayer_debug_log(self, string.format(
+                "MP FLOW | title_multiplayer_clicked enabled=%s has_transport=%s",
+                tostring(self and self.mp_state and self.mp_state.enabled == true),
+                tostring(self and self.mp_transport ~= nil)
+            ))
+            if self.mp_state and self.mp_state.enabled and not self.mp_transport then
+                multiplayer_debug_log(self, "MP FLOW | title_multiplayer_clicked init_transport")
+                multiplayer_transport_init(self)
+            end
             multiplayer_lobby_ensure_runtime(self)
             enter_flow_state(self, FLOW_STATE_MP_LOBBY)
             if self.mp_state and self.mp_state.enabled then
@@ -26937,6 +27013,12 @@ end
 
 multiplayer_transport_send_command = function(self, cmd_type, payload, sender_player_id)
     if not (self.mp_state and self.mp_state.enabled and self.mp_transport) then
+        multiplayer_debug_log(self, string.format(
+            "MP NET | send_command_skipped type=%s enabled=%s has_transport=%s",
+            tostring(cmd_type or ""),
+            tostring(self and self.mp_state and self.mp_state.enabled == true),
+            tostring(self and self.mp_transport ~= nil)
+        ))
         return
     end
     local sender = sender_player_id
@@ -26968,6 +27050,12 @@ end
 
 multiplayer_transport_broadcast_events = function(self, events)
     if not (self.mp_state and self.mp_state.enabled and self.mp_transport and type(events) == "table" and #events > 0) then
+        multiplayer_debug_log(self, string.format(
+            "MP NET | broadcast_events_skipped enabled=%s has_transport=%s event_count=%s",
+            tostring(self and self.mp_state and self.mp_state.enabled == true),
+            tostring(self and self.mp_transport ~= nil),
+            tostring(type(events) == "table" and #events or 0)
+        ))
         return
     end
     if self.mp_telemetry and self.mp_telemetry.enabled then
@@ -26992,6 +27080,14 @@ end
 
 multiplayer_transport_init = function(self)
     multiplayer_lag_sim_ensure_state(self)
+    multiplayer_debug_log(self, string.format(
+        "MP NET | transport_init mode=%s ws_url=%s room=%s local=%s host=%s",
+        tostring(MULTIPLAYER_TRANSPORT_MODE),
+        tostring(MULTIPLAYER_TRANSPORT_WS_URL),
+        tostring(MULTIPLAYER_TRANSPORT_ROOM_ID),
+        tostring(self.mp_state and self.mp_state.local_player_id or ""),
+        tostring(self.mp_state and self.mp_state.host_player_id or "")
+    ))
     self.mp_transport = MP_TRANSPORT.create({
         mode = MULTIPLAYER_TRANSPORT_MODE,
         ws_url = MULTIPLAYER_TRANSPORT_WS_URL,
@@ -27010,7 +27106,7 @@ multiplayer_transport_init = function(self)
                 self.mp_state.transport_status = status
                 self.mp_state.transport_status_detail = detail or {}
             end
-            print(string.format("MP NET | transport_status=%s", tostring(status)))
+            multiplayer_debug_log(self, string.format("MP NET | transport_status=%s detail=%s", tostring(status), tostring(detail and detail.reason or detail and detail.mode or "")))
         end
     })
     if self.mp_transport and self.mp_transport.connect then
@@ -31618,6 +31714,13 @@ end
 function init(self)
     print("=== DERPLES VS XENOS - Initializing ===")
     print("Chat GPT is here")
+    multiplayer_debug_file_reset(self)
+    multiplayer_debug_log(self, string.format(
+        "MP DEBUG | init transport_mode=%s ws_url=%s room=%s",
+        tostring(MULTIPLAYER_TRANSPORT_MODE),
+        tostring(MULTIPLAYER_TRANSPORT_WS_URL),
+        tostring(MULTIPLAYER_TRANSPORT_ROOM_ID)
+    ))
 
    
 

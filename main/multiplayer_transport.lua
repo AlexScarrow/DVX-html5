@@ -77,6 +77,7 @@ function M.create(opts)
         on_command = opts and opts.on_command or nil,
         on_event = opts and opts.on_event or nil,
         on_status = opts and opts.on_status or nil,
+        on_discovery_offer = opts and opts.on_discovery_offer or nil,
         message_seq = 0,
         ws_url = opts and opts.ws_url or "",
         ws_room_id = opts and opts.ws_room_id or "default_room",
@@ -576,6 +577,27 @@ function M.create(opts)
         state.ws_player_id = next_id
     end
 
+    function transport.steam_publish_session(session)
+        if state.steam_gateb and state.steam_gateb.publish_session then
+            return state.steam_gateb.publish_session(session) == true
+        end
+        return false
+    end
+
+    function transport.steam_clear_session()
+        if state.steam_gateb and state.steam_gateb.clear_session then
+            return state.steam_gateb.clear_session() == true
+        end
+        return false
+    end
+
+    function transport.steam_is_host()
+        if state.steam_gateb and state.steam_gateb.is_host then
+            return state.steam_gateb.is_host() == true
+        end
+        return false
+    end
+
     function transport.update(dt)
         if state.mode == "steam" then
             if state.steam_gateb and state.steam_gateb.update then
@@ -626,6 +648,7 @@ function M.create(opts)
                 state.steam_gateb = STEAM_GATEB.create({
                     on_log = state.steam_log,
                     on_wire_recv = handle_steam_wire_packet,
+                    on_discovery_offer = state.on_discovery_offer,
                     net_protocol_version = state.net_protocol_version,
                     on_status = function(status, detail)
                         dispatch_status(status, detail or {})

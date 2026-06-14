@@ -17079,6 +17079,14 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
         target_player_id = target_player_id,
         offer = offer_payload
     }, self.mp_state.local_player_id)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+        local status = tostring(session.status or "")
+        if status == "published_open" or status == "published_private" then
+            if self.mp_transport and self.mp_transport.steam_publish_session then
+                self.mp_transport.steam_publish_session(session)
+            end
+        end
+    end
 end
 
 multiplayer_lobby_reannounce_active_offer = function(self, target_player_id)
@@ -17107,6 +17115,12 @@ multiplayer_lobby_emit_offer_remove = function(self, offer_id)
         owner_player_id = tostring(self.mp_state.local_player_id or "p1"),
         removed_at_ms = now_ms
     }, self.mp_state.local_player_id)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+        if self.mp_transport and self.mp_transport.steam_is_host and self.mp_transport.steam_is_host()
+            and self.mp_transport.steam_clear_session then
+            self.mp_transport.steam_clear_session()
+        end
+    end
 end
 
 multiplayer_lobby_tick_offer_presence = function(self, dt)
@@ -27155,6 +27169,7 @@ multiplayer_transport_init = function(self)
         multiplayer_debug_log(self, "MP STEAM GATEA | init_probe_only=true")
         multiplayer_debug_log(self, "MP STEAM GATEB | bootstrap enabled=true")
         multiplayer_debug_log(self, "MP STEAM GATEC | bootstrap enabled=true")
+        multiplayer_debug_log(self, "MP STEAM GATED | bootstrap enabled=true")
     end
     multiplayer_debug_log(self, string.format(
         "MP NET | transport_init mode=%s ws_url=%s room=%s local=%s host=%s steam_available=%s",
@@ -27182,6 +27197,31 @@ multiplayer_transport_init = function(self)
         end,
         on_event = function(event)
             multiplayer_transport_on_event(self, event)
+        end,
+        on_discovery_offer = function(offer, steam_lobby_id)
+            if type(offer) ~= "table" then
+                return
+            end
+            if tonumber(offer.updated_at_ms or 0) <= 0 then
+                offer.updated_at_ms = get_wall_clock_ms()
+            end
+            offer.steam_lobby_id = tostring(steam_lobby_id or offer.steam_lobby_id or "")
+            multiplayer_lobby_ensure_runtime(self)
+            local offer_id = tostring(offer.id or "")
+            local existing = offer_id ~= "" and self.mp_lobby.offers_by_id[offer_id] or nil
+            local changed = not existing
+                or tostring(existing.status or "") ~= tostring(offer.status or "")
+                or tonumber(existing.updated_at_ms or 0) ~= tonumber(offer.updated_at_ms or 0)
+                or tostring(existing.host_name or "") ~= tostring(offer.host_name or "")
+            if changed then
+                multiplayer_debug_log(self, string.format(
+                    "MP STEAM GATED | discovery_apply id=%s host=%s lobby=%s",
+                    offer_id,
+                    tostring(offer.host_name or ""),
+                    tostring(offer.steam_lobby_id or "")
+                ))
+            end
+            multiplayer_lobby_apply_offer_upsert(self, offer)
         end,
         on_status = function(status, detail)
             if self.mp_state then

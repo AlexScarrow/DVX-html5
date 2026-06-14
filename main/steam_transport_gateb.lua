@@ -61,7 +61,93 @@ local steam_listener_installed = false
         return { gate = gate, type = packet_type, seq = seq }
     end
 
+    local OFFER_KEY = "dvx_offer"
 
+    local function encode_discovery_offer(session)
+        if type(session) ~= "table" then
+            return nil
+        end
+        return gate_encode_json({
+            id = tostring(session.id or ""),
+            owner = tostring(session.owner_player_id or "p1"),
+            host = tostring(session.host_name or "Host"),
+            status = tostring(session.status or ""),
+            env = tostring(session.env_name or ""),
+            gv = tostring(session.game_version or ""),
+            pv = tostring(session.protocol_version or "1"),
+            pl = tonumber(session.players or 1) or 1,
+            mx = tonumber(session.max_players or 4) or 4,
+            lk = (session.is_locked == true) and 1 or 0
+        })
+    end
+
+    local function decode_discovery_offer(raw)
+        local decoded = gate_decode_json(raw)
+        if type(decoded) ~= "table" or tostring(decoded.id or "") == "" then
+            return nil
+        end
+        local status = tostring(decoded.status or "")
+        if status == "draft" or status == "" then
+            return nil
+        end
+        return {
+            id = tostring(decoded.id or ""),
+            owner_player_id = tostring(decoded.owner or "p1"),
+            host_name = tostring(decoded.host or "Host"),
+            status = status,
+            env_name = tostring(decoded.env or ""),
+            game_version = tostring(decoded.gv or ""),
+            protocol_version = tostring(decoded.pv or "1"),
+            players = math.max(1, tonumber(decoded.pl or 1) or 1),
+            max_players = math.max(2, tonumber(decoded.mx or 4) or 4),
+            is_locked = (tonumber(decoded.lk or 0) or 0) == 1,
+            pin = "",
+            joined_player_ids = {},
+            updated_at_ms = 0,
+            steam_discovery = true
+        }
+    end
+
+    local function emit_discovery_offer(state, lobby_id)
+        if type(state.on_discovery_offer) ~= "function" or not is_valid_steam_id(lobby_id) then
+            return
+        end
+        local ok_raw, raw = pcall(state.backend.matchmaking_get_lobby_data, lobby_id, OFFER_KEY)
+        if not ok_raw then
+            return
+        end
+        local offer = decode_discovery_offer(tostring(raw or ""))
+        if not offer then
+            return
+        end
+        state.discovery_seen_ids = state.discovery_seen_ids or {}
+        local first_seen = state.discovery_seen_ids[offer.id] ~= true
+        state.discovery_seen_ids[offer.id] = true
+        if first_seen then
+            log(state, string.format(
+                "MP STEAM GATED | discovery_offer id=%s host=%s status=%s lobby=%s",
+                tostring(offer.id),
+                tostring(offer.host_name),
+                tostring(offer.status),
+                tostring(lobby_id)
+            ))
+        end
+        pcall(state.on_discovery_offer, offer, tostring(lobby_id))
+    end
+
+    local function emit_discovery_from_match_list(state, total)
+        total = tonumber(total or 0) or 0
+        log(state, string.format("MP STEAM GATED | discovery_list count=%d", total))
+        if total <= 0 or type(state.backend.matchmaking_get_lobby_by_index) ~= "function" then
+            return
+        end
+        for index = 0, total - 1 do
+            local ok_lobby, lobby_id = pcall(state.backend.matchmaking_get_lobby_by_index, index)
+            if ok_lobby and is_valid_steam_id(lobby_id) then
+                emit_discovery_offer(state, lobby_id)
+            end
+        end
+    end
 
 
 
@@ -167,6 +253,15 @@ local steam_listener_installed = false
         end
         lobby_distance_filter_worldwide(backend)
     end
+
+    local function refresh_discovery_list(state)
+        add_gate_lobby_list_filters(state)
+        if pcall(state.backend.matchmaking_request_lobby_list) then
+            state.discovery_refresh_only = true
+            log(state, "MP STEAM GATED | discovery_refresh_requested")
+        end
+    end
+
     local function request_lobby_list(state)
         local backend = state.backend
         add_gate_lobby_list_filters(state)
@@ -326,6 +421,11 @@ local steam_listener_installed = false
         state.lobby_search_pending = false
         local total = tonumber(data and data.m_nLobbiesMatching or 0) or 0
         log(state, string.format("MP STEAM GATEB | lobby_match_list count=%d", total))
+        emit_discovery_from_match_list(state, total)
+        if state.discovery_refresh_only == true then
+            state.discovery_refresh_only = false
+            return
+        end
         if state.phase == "passed" then
             return
         end
@@ -416,6 +516,14 @@ local steam_listener_installed = false
         end
         log(state, string.format("MP STEAM GATEB | lobby_enter id=%s host=%s", lobby_id, tostring(state.is_host == true)))
         state.phase = "in_lobby"
+        emit_discovery_offer(state, lobby_id)
+    end
+
+    local function on_lobby_data_update(state, data)
+        local lobby_id = tostring(data and data.m_ulSteamIDLobby or "")
+        if is_valid_steam_id(lobby_id) then
+            emit_discovery_offer(state, lobby_id)
+        end
     end
 
     local function on_session_request(state, data)
@@ -434,6 +542,8 @@ local steam_listener_installed = false
             on_lobby_created(state, data)
         elseif event_name == "LobbyEnter_t" then
             on_lobby_enter(state, data)
+        elseif event_name == "LobbyDataUpdate" or event_name == "LobbyDataUpdate_t" then
+            on_lobby_data_update(state, data)
         elseif event_name == "SteamNetworkingMessagesSessionRequest_t" then
             on_session_request(state, data)
         end
@@ -466,6 +576,7 @@ function M.create(opts)
             on_log = opts and opts.on_log or nil,
             on_status = opts and opts.on_status or nil,
             on_wire_recv = opts and opts.on_wire_recv or nil,
+            on_discovery_offer = opts and opts.on_discovery_offer or nil,
             net_protocol_version = tonumber(opts and opts.net_protocol_version) or 1,
             phase = "idle",
             local_steam_id = "",
@@ -483,7 +594,10 @@ function M.create(opts)
             tick_timer = 5.0,
             peer_resolve_logged = false,
             empty_search_count = 0,
-            create_pending = false
+            create_pending = false,
+            discovery_seen_ids = {},
+            discovery_refresh_only = false,
+            discovery_timer = 3.0
         }
         active_gateb_state = state
         local gateb = {}
@@ -503,9 +617,52 @@ function M.create(opts)
             state.empty_search_count = 0
             state.create_pending = false
             state.peer_resolve_logged = false
+            state.discovery_seen_ids = {}
+            state.discovery_refresh_only = false
+            state.discovery_timer = 3.0
             active_gateb_state = state
             log(state, "MP STEAM GATEB | restart")
             request_lobby_list(state)
+        end
+
+        function gateb.publish_session(session)
+            if state.is_host ~= true or not is_valid_steam_id(state.lobby_id) then
+                return false
+            end
+            local status = tostring(session and session.status or "")
+            if status ~= "published_open" and status ~= "published_private" then
+                return false
+            end
+            local raw = encode_discovery_offer(session)
+            if not raw then
+                return false
+            end
+            pcall(state.backend.matchmaking_set_lobby_data, state.lobby_id, OFFER_KEY, raw)
+            if type(state.backend.matchmaking_set_lobby_joinable) == "function" then
+                pcall(state.backend.matchmaking_set_lobby_joinable, state.lobby_id, true)
+            end
+            log(state, string.format(
+                "MP STEAM GATED | discovery_publish id=%s status=%s lobby=%s",
+                tostring(session.id or ""),
+                status,
+                tostring(state.lobby_id)
+            ))
+            if state.on_status then
+                pcall(state.on_status, "gated_publish", {
+                    session_id = tostring(session.id or ""),
+                    lobby_id = tostring(state.lobby_id or "")
+                })
+            end
+            return true
+        end
+
+        function gateb.clear_session()
+            if not is_valid_steam_id(state.lobby_id) then
+                return false
+            end
+            pcall(state.backend.matchmaking_set_lobby_data, state.lobby_id, OFFER_KEY, "")
+            log(state, string.format("MP STEAM GATED | discovery_clear lobby=%s", tostring(state.lobby_id)))
+            return true
         end
 
         function gateb.start()
@@ -578,6 +735,13 @@ function M.create(opts)
                     log(state, string.format("MP STEAM GATEB | peer_resolved id=%s host=%s", tostring(state.peer_steam_id), tostring(state.is_host == true)))
                 end
                 try_send_ping(state)
+            end
+            if state.phase == "passed" and state.is_host ~= true then
+                state.discovery_timer = (state.discovery_timer or 0) - (dt or 0)
+                if state.discovery_timer <= 0 then
+                    state.discovery_timer = 3.0
+                    refresh_discovery_list(state)
+                end
             end
             poll_messages(state)
         end

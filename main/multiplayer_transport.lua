@@ -62,6 +62,14 @@ local function decode_json(raw)
     return nil
 end
 
+local function steam_debug_log(state, message)
+    local line = tostring(message or "")
+    if state.steam_log then
+        pcall(state.steam_log, line)
+    end
+    print(line)
+end
+
 function M.create(opts)
     local state = {
         mode = (opts and opts.mode) or "loopback",
@@ -82,7 +90,10 @@ function M.create(opts)
         ws_reconnect_pending = false,
         ws_reconnect_base_seconds = 1.0,
         ws_reconnect_max_seconds = 8.0,
-        ws_status = "idle"
+        ws_status = "idle",
+        steam_probe = opts and opts.steam_probe or nil,
+        steam_log = opts and opts.steam_log or nil,
+        steam_connected = false
     }
 
     local transport = {}
@@ -292,6 +303,18 @@ function M.create(opts)
             return
         end
 
+        if state.mode == "steam" then
+            if state.steam_connected ~= true then
+                dispatch_status("error", {
+                    mode = "steam",
+                    reason = "steam_not_connected"
+                })
+                return
+            end
+            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=command reason=gate_a_probe_only")
+            return
+        end
+
         dispatch_loopback(envelope)
     end
 
@@ -322,6 +345,17 @@ function M.create(opts)
             end
             return
         end
+        if state.mode == "steam" then
+            if state.steam_connected ~= true then
+                dispatch_status("error", {
+                    mode = "steam",
+                    reason = "steam_not_connected"
+                })
+                return
+            end
+            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=events reason=gate_a_probe_only")
+            return
+        end
         dispatch_events(events)
     end
 
@@ -347,6 +381,9 @@ function M.create(opts)
     end
 
     function transport.update(dt)
+        if state.mode == "steam" then
+            return
+        end
         if state.mode ~= "websocket" then
             return
         end
@@ -366,7 +403,45 @@ function M.create(opts)
         end
     end
 
-    transport.connect = websocket_connect_if_needed
+    local function steam_connect_if_needed()
+        if state.mode ~= "steam" then
+            return
+        end
+        local probe = state.steam_probe or {}
+        local available = probe.available == true
+        local has_send = probe.has_send_message_to_user == true
+        local has_receive = probe.has_receive_messages_on_channel == true
+        local has_accept = probe.has_accept_session_with_user == true
+        if available and has_send and has_receive and has_accept then
+            state.steam_connected = true
+            steam_debug_log(state, string.format(
+                "MP STEAM GATEA | probe_connect_ok backend=%s",
+                tostring(probe.backend_source or "unknown")
+            ))
+            dispatch_status("connected", {
+                mode = "steam",
+                backend = tostring(probe.backend_source or "unknown")
+            })
+            return
+        end
+        state.steam_connected = false
+        dispatch_status("error", {
+            mode = "steam",
+            reason = "steam_probe_failed",
+            available = available,
+            has_send_message_to_user = has_send,
+            has_receive_messages_on_channel = has_receive,
+            has_accept_session_with_user = has_accept
+        })
+    end
+
+    transport.connect = function()
+        if state.mode == "steam" then
+            steam_connect_if_needed()
+            return
+        end
+        websocket_connect_if_needed()
+    end
 
     return transport
 end

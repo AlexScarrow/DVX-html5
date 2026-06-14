@@ -3,6 +3,7 @@ title = Derples vs Xenos
 version = 1.1
 developer = Grrr Games
 dependencies#0 = https://github.com/defold/extension-websocket/archive/master.zip
+dependencies#1 = https://github.com/defold/extension-steam/archive/refs/tags/1.14.0.zip
 
 [bootstrap]
 main_collection = /main/main.collectionc
@@ -59,7 +60,7 @@ outro_preview_result = win
 [dvx]
 env_name = LOCAL
 net_protocol_version = 1
-transport_mode = websocket
+transport_mode = steam
 transport_ws_url = ws://90.199.227.250:8080/ws
 transport_room_id = dvx_remote_friend_20260509
 disable_multiplayer = 0

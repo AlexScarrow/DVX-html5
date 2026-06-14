@@ -284,7 +284,8 @@ MULTIPLAYER_LOCAL_PLAYER_ID = "p1"
 ENV_NAME = tostring((sys.get_config and sys.get_config("dvx.env_name")) or "LOCAL")
 GAME_VERSION_LABEL = tostring((sys.get_config and sys.get_config("project.version")) or "0")
 NET_PROTOCOL_VERSION = tostring((sys.get_config and sys.get_config("dvx.net_protocol_version")) or "1")
-MULTIPLAYER_TRANSPORT_MODE = tostring((sys.get_config and sys.get_config("dvx.transport_mode")) or "websocket") -- "loopback" or "websocket"
+MULTIPLAYER_TRANSPORT_MODE = tostring((sys.get_config and sys.get_config("dvx.transport_mode")) or "websocket") -- "loopback", "websocket", or "steam"
+STEAM_RUNTIME = rawget(_G, "STEAM_RUNTIME")
 MULTIPLAYER_TRANSPORT_WS_URL = tostring((sys.get_config and sys.get_config("dvx.transport_ws_url")) or "ws://127.0.0.1:8080/ws")
 MULTIPLAYER_TRANSPORT_ROOM_ID = tostring((sys.get_config and sys.get_config("dvx.transport_room_id")) or "dvx_local_room")
 MULTIPLAYER_DEBUG_FILE_ENABLED = tostring((sys.get_config and sys.get_config("dvx.mp_debug_file")) or "1") ~= "0"
@@ -1548,6 +1549,61 @@ multiplayer_debug_log = function(self, message)
     if not ok_append then
         print("MP DEBUG | file append failed: " .. tostring(err_append))
     end
+end
+
+multiplayer_probe_steam_runtime = function(self)
+    local probe = {
+        available = false,
+        backend_source = "none",
+        has_send_message_to_user = false,
+        has_receive_messages_on_channel = false,
+        has_accept_session_with_user = false,
+        has_matchmaking_create_lobby = false,
+        has_matchmaking_request_lobby_list = false,
+        has_callback_pump = false
+    }
+    local backend = nil
+    if STEAM_RUNTIME and type(STEAM_RUNTIME.get_backend) == "function" then
+        local ok_backend, backend_or_err = pcall(STEAM_RUNTIME.get_backend)
+        if ok_backend and type(backend_or_err) == "table" then
+            backend = backend_or_err
+            probe.backend_source = "steam_runtime"
+        else
+            multiplayer_debug_log(self, "MP STEAM PROBE | runtime_get_backend_failed=" .. tostring(backend_or_err))
+        end
+    end
+    if type(backend) ~= "table" then
+        local steam_global = rawget(_G, "steam")
+        if type(steam_global) == "table" then
+            backend = steam_global
+            probe.backend_source = "steam_global"
+        end
+    end
+    if type(backend) == "table" then
+        probe.available = true
+        probe.has_send_message_to_user = type(backend.networking_send_message_to_user) == "function"
+        probe.has_receive_messages_on_channel = type(backend.networking_receive_messages_on_channel) == "function"
+        probe.has_accept_session_with_user = type(backend.networking_accept_session_with_user) == "function"
+        probe.has_matchmaking_create_lobby = type(backend.matchmaking_create_lobby) == "function"
+        probe.has_matchmaking_request_lobby_list = type(backend.matchmaking_request_lobby_list) == "function"
+    end
+    local steam_global = rawget(_G, "steam")
+    probe.has_callback_pump =
+        (STEAM_RUNTIME and type(STEAM_RUNTIME.update) == "function")
+        or (type(steam_global) == "table" and (type(steam_global.update) == "function" or type(steam_global.run_callbacks) == "function"))
+        or false
+    multiplayer_debug_log(self, string.format(
+        "MP STEAM PROBE | source=%s available=%s send=%s recv=%s accept=%s mm_create=%s mm_list=%s callbacks=%s",
+        tostring(probe.backend_source),
+        tostring(probe.available),
+        tostring(probe.has_send_message_to_user),
+        tostring(probe.has_receive_messages_on_channel),
+        tostring(probe.has_accept_session_with_user),
+        tostring(probe.has_matchmaking_create_lobby),
+        tostring(probe.has_matchmaking_request_lobby_list),
+        tostring(probe.has_callback_pump)
+    ))
+    return probe
 end
 
 HUMAN_TINT_SARGE = vmath.vector4(1, 1, 1, 1)
@@ -27080,13 +27136,19 @@ end
 
 multiplayer_transport_init = function(self)
     multiplayer_lag_sim_ensure_state(self)
+    local steam_probe = nil
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+        steam_probe = multiplayer_probe_steam_runtime(self)
+        multiplayer_debug_log(self, "MP STEAM GATEA | init_probe_only=true")
+    end
     multiplayer_debug_log(self, string.format(
-        "MP NET | transport_init mode=%s ws_url=%s room=%s local=%s host=%s",
+        "MP NET | transport_init mode=%s ws_url=%s room=%s local=%s host=%s steam_available=%s",
         tostring(MULTIPLAYER_TRANSPORT_MODE),
         tostring(MULTIPLAYER_TRANSPORT_WS_URL),
         tostring(MULTIPLAYER_TRANSPORT_ROOM_ID),
         tostring(self.mp_state and self.mp_state.local_player_id or ""),
-        tostring(self.mp_state and self.mp_state.host_player_id or "")
+        tostring(self.mp_state and self.mp_state.host_player_id or ""),
+        tostring(steam_probe and steam_probe.available == true or false)
     ))
     self.mp_transport = MP_TRANSPORT.create({
         mode = MULTIPLAYER_TRANSPORT_MODE,
@@ -27095,6 +27157,10 @@ multiplayer_transport_init = function(self)
         ws_player_id = (self.mp_state and self.mp_state.local_player_id) or "p1",
         ws_host_player_id = (self.mp_state and self.mp_state.host_player_id) or "p1",
         ws_adapter = MP_WS_ADAPTER,
+        steam_probe = steam_probe,
+        steam_log = function(message)
+            multiplayer_debug_log(self, message)
+        end,
         on_command = function(command)
             return multiplayer_transport_handle_command(self, command)
         end,
@@ -32205,6 +32271,20 @@ end
 -- =============================================================================
 
 function update(self, dt)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+        if STEAM_RUNTIME and type(STEAM_RUNTIME.update) == "function" then
+            pcall(STEAM_RUNTIME.update)
+        else
+            local steam_global = rawget(_G, "steam")
+            if type(steam_global) == "table" then
+                if type(steam_global.update) == "function" then
+                    pcall(steam_global.update)
+                elseif type(steam_global.run_callbacks) == "function" then
+                    pcall(steam_global.run_callbacks)
+                end
+            end
+        end
+    end
     apply_runtime_hud_layout(self)
     if self.pending_level_load and self.pending_level_load.level_index then
         local remaining = tonumber(self.pending_level_load.frames_until_spawn or 0) or 0

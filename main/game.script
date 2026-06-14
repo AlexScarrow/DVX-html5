@@ -16595,6 +16595,40 @@ multiplayer_setup_apply_session_config = function(self, session_config)
     end
 end
 
+multiplayer_host_start_match_from_setup = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return false
+    end
+    if not multiplayer_lobby_is_local_offer_owner(self) then
+        multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=not_offer_owner")
+        return false
+    end
+    if not multiplayer_setup_is_valid(self) then
+        multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=invalid_setup")
+        return false
+    end
+    local config = multiplayer_setup_build_session_config(self)
+    config.level_index = select_level_index_for_mission(self, config.mission_type or MISSION_TYPE_ESCAPE)
+    multiplayer_lobby_ensure_runtime(self)
+    local active_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+    if active_offer_id ~= "" then
+        multiplayer_lobby_note_offer_removed(self, active_offer_id, get_wall_clock_ms())
+        multiplayer_lobby_apply_offer_remove(self, active_offer_id)
+        multiplayer_transport_broadcast_event(self, "lobby_offer_remove", {
+            offer_id = active_offer_id,
+            owner_player_id = tostring(self.mp_state.host_player_id or self.mp_state.local_player_id or "p1"),
+            removed_at_ms = get_wall_clock_ms()
+        })
+    end
+    local match_evt = multiplayer_transport_emit_event(self, "match_started", {
+        session_config = config
+    })
+    multiplayer_transport_on_event(self, match_evt)
+    multiplayer_transport_broadcast_events(self, { match_evt })
+    multiplayer_debug_log(self, "MP STEAM GATEF | start_match host_local")
+    return true
+end
+
 multiplayer_setup_push_state = function(self)
     if not (self.mp_state and self.mp_state.enabled) then
         return
@@ -19251,9 +19285,13 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
     end
     if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
         if multiplayer_lobby_is_local_offer_owner(self) and multiplayer_setup_is_valid(self) then
-            multiplayer_transport_send_command(self, "start_match_request", {
-                session_config = multiplayer_setup_build_session_config(self)
-            }, self.mp_state and self.mp_state.local_player_id or "p1")
+            if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+                multiplayer_host_start_match_from_setup(self)
+            else
+                multiplayer_transport_send_command(self, "start_match_request", {
+                    session_config = multiplayer_setup_build_session_config(self)
+                }, self.mp_state and self.mp_state.local_player_id or "p1")
+            end
         elseif multiplayer_lobby_is_local_offer_owner(self) then
             print("MP SETUP | invalid assignment: each active seat must be filled, unique units, and Sarge must stay on p1.")
         end

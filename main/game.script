@@ -27157,6 +27157,61 @@ multiplayer_lag_sim_flush_outbound = function(self)
     self.mp_lag_sim.outbound_queue = kept
 end
 
+multiplayer_steam_is_offer_plane_command = function(cmd_type)
+    return cmd_type == "lobby_offer_upsert"
+        or cmd_type == "lobby_offer_remove"
+        or cmd_type == "lobby_offer_heartbeat"
+        or cmd_type == "lobby_offer_join_response"
+        or cmd_type == "lobby_request_offer_reannounce"
+end
+
+multiplayer_steam_should_host_dispatch_local = function(self, cmd_type)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
+        return false
+    end
+    if multiplayer_steam_is_offer_plane_command(cmd_type) then
+        return false
+    end
+    if cmd_type == "lobby_join_session" or cmd_type == "request_setup_state" then
+        return false
+    end
+    if tostring(self.mp_state.local_player_id or "") ~= tostring(self.mp_state.host_player_id or "") then
+        return false
+    end
+    if not (self.mp_transport and self.mp_transport.steam_is_host and self.mp_transport.steam_is_host() == true) then
+        return false
+    end
+    return true
+end
+
+multiplayer_steam_host_dispatch_command_local = function(self, command_packet)
+    if type(command_packet) ~= "table" then
+        return false
+    end
+    self.mp_state.command_seq = (tonumber(self.mp_state.command_seq or 0) or 0) + 1
+    if tostring(command_packet.message_id or "") == "" then
+        command_packet.message_id = "cmd_" .. tostring(self.mp_state.command_seq)
+    end
+    local events = multiplayer_transport_handle_command(self, command_packet)
+    if type(events) ~= "table" or #events <= 0 then
+        multiplayer_debug_log(self, string.format(
+            "MP STEAM GATEG | host_local_command type=%s event_count=0",
+            tostring(command_packet.type or "")
+        ))
+        return true
+    end
+    for i = 1, #events do
+        multiplayer_transport_on_event(self, events[i])
+    end
+    multiplayer_transport_broadcast_events(self, events)
+    multiplayer_debug_log(self, string.format(
+        "MP STEAM GATEG | host_local_command type=%s event_count=%d",
+        tostring(command_packet.type or ""),
+        #events
+    ))
+    return true
+end
+
 multiplayer_transport_send_command = function(self, cmd_type, payload, sender_player_id)
     if not (self.mp_state and self.mp_state.enabled and self.mp_transport) then
         multiplayer_debug_log(self, string.format(
@@ -27190,7 +27245,11 @@ multiplayer_transport_send_command = function(self, cmd_type, payload, sender_pl
         payload = payload or {}
     }
     if multiplayer_lag_sim_queue_outbound(self, "command", command_packet) ~= true then
-        self.mp_transport.send_command(command_packet)
+        if multiplayer_steam_should_host_dispatch_local(self, cmd_type) then
+            multiplayer_steam_host_dispatch_command_local(self, command_packet)
+        else
+            self.mp_transport.send_command(command_packet)
+        end
     end
 end
 

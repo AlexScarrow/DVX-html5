@@ -212,6 +212,12 @@ function M.create(opts)
                 end
             end
             if type(events) == "table" and #events > 0 then
+                dispatch_events(events)
+                steam_debug_log(state, string.format(
+                    "MP STEAM GATEG | command_apply_local type=%s event_count=%d",
+                    cmd_type,
+                    #events
+                ))
                 local events_wire = encode_json({
                     version = 1,
                     type = "events",

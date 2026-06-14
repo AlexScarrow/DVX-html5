@@ -430,6 +430,7 @@ local steam_listener_installed = false
             return
         end
         local foreign_lobby_id = nil
+        local own_lobby_id = nil
         if total > 0 and type(state.backend.matchmaking_get_lobby_by_index) == "function" then
             for index = 0, total - 1 do
                 local ok_lobby, lobby_id = pcall(state.backend.matchmaking_get_lobby_by_index, index)
@@ -451,6 +452,8 @@ local steam_listener_installed = false
                     if owner_id ~= state.local_steam_id then
                         foreign_lobby_id = tostring(lobby_id)
                         break
+                    elseif state.lobby_id == nil then
+                        own_lobby_id = tostring(lobby_id)
                     end
                 end
             end
@@ -458,6 +461,13 @@ local steam_listener_installed = false
         if foreign_lobby_id ~= nil then
             state.empty_search_count = 0
             join_gate_lobby(state, foreign_lobby_id)
+            return
+        end
+        if own_lobby_id ~= nil and state.lobby_id == nil
+            and state.phase ~= "creating" and state.phase ~= "joining" then
+            state.empty_search_count = 0
+            log(state, string.format("MP STEAM GATEB | lobby_rejoin_own id=%s", own_lobby_id))
+            join_gate_lobby(state, own_lobby_id)
             return
         end
         if total <= 0 then

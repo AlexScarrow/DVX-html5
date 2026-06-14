@@ -16914,6 +16914,33 @@ multiplayer_leave_in_progress_match_to_lobby = function(self, reason)
     return true
 end
 
+multiplayer_apply_steam_transport_seat_ids = function(self)
+    if not (self and self.mp_state and self.mp_transport) then
+        return
+    end
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
+        return
+    end
+    local is_steam_host = self.mp_transport.steam_is_host and self.mp_transport.steam_is_host() == true
+    if is_steam_host then
+        self.mp_state.local_player_id = "p1"
+        self.mp_state.host_player_id = "p1"
+    else
+        self.mp_state.local_player_id = "p2"
+        self.mp_state.host_player_id = "p1"
+    end
+    if self.mp_transport.set_local_player_id then
+        self.mp_transport.set_local_player_id(self.mp_state.local_player_id)
+    end
+    self.mp_state.debug_active_player_id = self.mp_state.local_player_id
+    multiplayer_debug_log(self, string.format(
+        "MP STEAM GATEE | seat_assign local=%s host=%s steam_host=%s",
+        tostring(self.mp_state.local_player_id or ""),
+        tostring(self.mp_state.host_player_id or ""),
+        tostring(is_steam_host)
+    ))
+end
+
 multiplayer_lobby_ensure_runtime = function(self)
     self.mp_lobby = self.mp_lobby or {}
     local lobby = self.mp_lobby
@@ -17172,6 +17199,7 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         is_locked = offer.is_locked == true,
         joined_player_ids = multiplayer_clone_simple_table(offer.joined_player_ids or {}),
         pin = self.mp_lobby.offers_by_id[offer_id] and self.mp_lobby.offers_by_id[offer_id].pin or "",
+        steam_lobby_id = tostring(offer.steam_lobby_id or (self.mp_lobby.offers_by_id[offer_id] and self.mp_lobby.offers_by_id[offer_id].steam_lobby_id) or ""),
         updated_at_ms = tonumber(offer.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms(),
         last_seen_local_ms = get_wall_clock_ms()
     }
@@ -27227,6 +27255,9 @@ multiplayer_transport_init = function(self)
             if self.mp_state then
                 self.mp_state.transport_status = status
                 self.mp_state.transport_status_detail = detail or {}
+            end
+            if status == "gateb_ok" then
+                multiplayer_apply_steam_transport_seat_ids(self)
             end
             multiplayer_debug_log(self, string.format("MP NET | transport_status=%s detail=%s", tostring(status), tostring(detail and detail.reason or detail and detail.mode or "")))
         end

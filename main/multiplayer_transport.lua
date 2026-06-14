@@ -96,12 +96,152 @@ function M.create(opts)
         steam_log = opts and opts.steam_log or nil,
         steam_connected = false,
         steam_gateb = nil,
+        steam_wire_queue = {},
+        steam_gatec = {
+            command_sent = false,
+            command_recv = false,
+            events_sent = false,
+            events_recv = false,
+            wire_ok = false
+        },
         net_protocol_version = tonumber(opts and opts.net_protocol_version) or 1
     }
 
     local transport = {}
 
-    local function dispatch_status(status, detail)
+    local dispatch_status
+    local dispatch_events
+
+    local function maybe_mark_gatec_ok()
+        local gatec = state.steam_gatec or {}
+        local host_ready = gatec.command_recv == true and gatec.events_sent == true
+        local guest_ready = gatec.command_sent == true and gatec.events_recv == true
+        local ready = false
+        if state.steam_gateb and state.steam_gateb.is_host and state.steam_gateb.is_host() then
+            ready = host_ready
+        else
+            ready = guest_ready
+        end
+        if ready and gatec.wire_ok ~= true then
+            gatec.wire_ok = true
+            local role = (state.steam_gateb and state.steam_gateb.is_host and state.steam_gateb.is_host()) and "host" or "guest"
+            steam_debug_log(state, string.format("MP STEAM GATEC | wire_ok role=%s", role))
+            dispatch_status("gatec_ok", { role = role })
+        end
+    end
+
+    local function log_gatec_once(flag_name, message)
+        local gatec = state.steam_gatec
+        if gatec[flag_name] == true then
+            return
+        end
+        gatec[flag_name] = true
+        steam_debug_log(state, message)
+        maybe_mark_gatec_ok()
+    end
+
+    local function steam_send_wire(raw_text)
+        if not (state.steam_gateb and state.steam_gateb.send_wire) then
+            return false
+        end
+        if state.steam_gateb.is_wire_ready() ~= true then
+            return false
+        end
+        local ok_send, send_result = state.steam_gateb.send_wire(raw_text)
+        return ok_send == true, send_result
+    end
+
+    local function steam_flush_wire_queue()
+        if state.steam_gateb and state.steam_gateb.is_wire_ready() ~= true then
+            return
+        end
+        local pending = state.steam_wire_queue or {}
+        state.steam_wire_queue = {}
+        for _, raw_text in ipairs(pending) do
+            local ok_send = steam_send_wire(raw_text)
+            if ok_send then
+                local packet = decode_json(raw_text)
+                if packet and packet.type == "command" and type(packet.payload) == "table" then
+                    local cmd_type = tostring(packet.payload.type or packet.payload.command_type or "")
+                    log_gatec_once("command_sent", string.format(
+                        "MP STEAM GATEC | command_sent type=%s peer=%s queued=true",
+                        cmd_type,
+                        tostring(state.steam_gateb and state.steam_gateb.get_peer_steam_id and state.steam_gateb.get_peer_steam_id() or "")
+                    ))
+                elseif packet and packet.type == "events" and type(packet.payload) == "table" then
+                    log_gatec_once("events_sent", string.format(
+                        "MP STEAM GATEC | events_sent count=%d peer=%s queued=true",
+                        #packet.payload,
+                        tostring(state.steam_gateb and state.steam_gateb.get_peer_steam_id and state.steam_gateb.get_peer_steam_id() or "")
+                    ))
+                end
+            end
+        end
+    end
+
+    local function handle_steam_wire_packet(raw_text, peer_id)
+        local packet = decode_json(raw_text)
+        if not packet then
+            steam_debug_log(state, "MP STEAM GATEC | wire_ignored reason=non_json")
+            return
+        end
+        if packet.type == "events" and type(packet.payload) == "table" then
+            log_gatec_once("events_recv", string.format(
+                "MP STEAM GATEC | events_recv count=%d from=%s",
+                #packet.payload,
+                tostring(peer_id or "")
+            ))
+            dispatch_events(packet.payload)
+            return
+        end
+        if packet.type == "command" and type(packet.payload) == "table" then
+            local cmd_type = tostring(packet.payload.type or packet.payload.command_type or "")
+            log_gatec_once("command_recv", string.format(
+                "MP STEAM GATEC | command_recv type=%s from=%s",
+                cmd_type,
+                tostring(peer_id or "")
+            ))
+            local events = nil
+            if state.on_command then
+                local ok_cmd, cmd_or_err = pcall(state.on_command, packet.payload)
+                if ok_cmd then
+                    events = cmd_or_err
+                else
+                    print("MP TRANSPORT | on_command callback failed (steam): " .. tostring(cmd_or_err))
+                end
+            end
+            if type(events) == "table" and #events > 0 then
+                local events_wire = encode_json({
+                    version = 1,
+                    type = "events",
+                    payload = events
+                })
+                if events_wire then
+                    local ok_send = steam_send_wire(events_wire)
+                    if ok_send then
+                        log_gatec_once("events_sent", string.format(
+                            "MP STEAM GATEC | events_sent count=%d peer=%s",
+                            #events,
+                            tostring(state.steam_gateb and state.steam_gateb.get_peer_steam_id and state.steam_gateb.get_peer_steam_id() or "")
+                        ))
+                    end
+                end
+            end
+            return
+        end
+        if packet.type == "hello"
+            or packet.type == "joined_room"
+            or packet.type == "player_joined"
+            or packet.type == "player_left"
+            or packet.type == "error"
+            or packet.type == "pong" then
+            dispatch_events({ packet })
+            return
+        end
+        steam_debug_log(state, string.format("MP STEAM GATEC | wire_ignored type=%s", tostring(packet.type or "")))
+    end
+
+    dispatch_status = function(status, detail)
         state.ws_status = status or state.ws_status
         if state.on_status then
             local ok_status, err_status = pcall(state.on_status, status, detail or {})
@@ -132,7 +272,7 @@ function M.create(opts)
         })
     end
 
-    local function dispatch_events(events)
+    dispatch_events = function(events)
         if state.on_event and type(events) == "table" then
             for _, event in ipairs(events) do
                 local ok_evt, err_evt = pcall(state.on_event, event)
@@ -314,7 +454,27 @@ function M.create(opts)
                 })
                 return
             end
-            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=command reason=gate_b_wire_not_ready")
+            local wire_packet = {
+                version = 1,
+                type = "command",
+                payload = envelope
+            }
+            local raw_text = encode_json(wire_packet)
+            if not raw_text then
+                steam_debug_log(state, "MP STEAM GATEC | command_dropped reason=json_unavailable")
+                return
+            end
+            local cmd_type = tostring(envelope.type or envelope.command_type or "")
+            local ok_send = steam_send_wire(raw_text)
+            if ok_send ~= true then
+                table.insert(state.steam_wire_queue, raw_text)
+            else
+                log_gatec_once("command_sent", string.format(
+                    "MP STEAM GATEC | command_sent type=%s peer=%s",
+                    cmd_type,
+                    tostring(state.steam_gateb and state.steam_gateb.get_peer_steam_id and state.steam_gateb.get_peer_steam_id() or "")
+                ))
+            end
             return
         end
 
@@ -356,7 +516,24 @@ function M.create(opts)
                 })
                 return
             end
-            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=events reason=gate_b_wire_not_ready")
+            local raw_text = encode_json({
+                version = 1,
+                type = "events",
+                payload = events
+            })
+            if not raw_text then
+                return
+            end
+            local ok_send = steam_send_wire(raw_text)
+            if ok_send ~= true then
+                table.insert(state.steam_wire_queue, raw_text)
+            else
+                log_gatec_once("events_sent", string.format(
+                    "MP STEAM GATEC | events_sent count=%d peer=%s",
+                    #events,
+                    tostring(state.steam_gateb and state.steam_gateb.get_peer_steam_id and state.steam_gateb.get_peer_steam_id() or "")
+                ))
+            end
             return
         end
         dispatch_events(events)
@@ -371,6 +548,14 @@ function M.create(opts)
         end
         state.steam_gateb = nil
         state.steam_connected = false
+        state.steam_wire_queue = {}
+        state.steam_gatec = {
+            command_sent = false,
+            command_recv = false,
+            events_sent = false,
+            events_recv = false,
+            wire_ok = false
+        }
         if state.ws_adapter and state.ws_client and state.ws_adapter.close then
             state.ws_adapter.close(state.ws_client)
         end
@@ -396,6 +581,7 @@ function M.create(opts)
             if state.steam_gateb and state.steam_gateb.update then
                 state.steam_gateb.update(dt)
             end
+            steam_flush_wire_queue()
             return
         end
         if state.mode ~= "websocket" then
@@ -439,9 +625,13 @@ function M.create(opts)
             if STEAM_GATEB and STEAM_GATEB.create then
                 state.steam_gateb = STEAM_GATEB.create({
                     on_log = state.steam_log,
+                    on_wire_recv = handle_steam_wire_packet,
                     net_protocol_version = state.net_protocol_version,
                     on_status = function(status, detail)
                         dispatch_status(status, detail or {})
+                        if status == "gateb_ok" then
+                            steam_flush_wire_queue()
+                        end
                     end
                 })
                 if state.steam_gateb and state.steam_gateb.start then

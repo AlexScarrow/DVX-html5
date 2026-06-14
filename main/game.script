@@ -11592,6 +11592,8 @@ get_multiplayer_transport_status_tint = function(self)
         return vmath.vector4(0.2, 0.95, 0.3, 0.95)
     elseif status == "gateb_ok" then
         return vmath.vector4(0.1, 0.85, 1, 0.95)
+    elseif status == "gatec_ok" then
+        return vmath.vector4(0.95, 0.45, 1, 0.95)
     elseif status == "connecting" then
         return vmath.vector4(0.95, 0.8, 0.2, 0.95)
     elseif status == "reconnecting" then
@@ -27152,6 +27154,7 @@ multiplayer_transport_init = function(self)
         steam_probe = multiplayer_probe_steam_runtime(self)
         multiplayer_debug_log(self, "MP STEAM GATEA | init_probe_only=true")
         multiplayer_debug_log(self, "MP STEAM GATEB | bootstrap enabled=true")
+        multiplayer_debug_log(self, "MP STEAM GATEC | bootstrap enabled=true")
     end
     multiplayer_debug_log(self, string.format(
         "MP NET | transport_init mode=%s ws_url=%s room=%s local=%s host=%s steam_available=%s",

@@ -269,7 +269,11 @@ local steam_listener_installed = false
         local peer_id = tostring(message.m_identityPeer or "")
         local raw = tostring(message.m_pData or "")
         if channel == WIRE_CHANNEL then
-            return false
+            accept_peer(state, peer_id)
+            if state.on_wire_recv then
+                pcall(state.on_wire_recv, raw, peer_id)
+            end
+            return true
         end
         if channel ~= CHANNEL then
             return false
@@ -307,7 +311,7 @@ local steam_listener_installed = false
         if type(state.backend.networking_receive_messages_on_channel) ~= "function" then
             return
         end
-        for _, channel in ipairs({ CHANNEL }) do
+        for _, channel in ipairs({ WIRE_CHANNEL, CHANNEL }) do
             while true do
                 local ok_msg, message = pcall(state.backend.networking_receive_messages_on_channel, channel)
                 if not ok_msg or type(message) ~= "table" then
@@ -461,6 +465,7 @@ function M.create(opts)
             backend = backend,
             on_log = opts and opts.on_log or nil,
             on_status = opts and opts.on_status or nil,
+            on_wire_recv = opts and opts.on_wire_recv or nil,
             net_protocol_version = tonumber(opts and opts.net_protocol_version) or 1,
             phase = "idle",
             local_steam_id = "",
@@ -587,6 +592,31 @@ function M.create(opts)
 
         function gateb.is_passed()
             return state.passed == true
+        end
+
+        function gateb.is_wire_ready()
+            return state.passed == true and is_valid_steam_id(state.peer_steam_id)
+        end
+
+        function gateb.send_wire(raw_text)
+            if gateb.is_wire_ready() ~= true then
+                return false, "wire_not_ready"
+            end
+            if type(raw_text) ~= "string" or raw_text == "" then
+                return false, "empty_payload"
+            end
+            accept_peer(state, state.peer_steam_id)
+            local ok_send, result = pcall(
+                state.backend.networking_send_message_to_user,
+                state.peer_steam_id,
+                raw_text,
+                send_flags_for(state.backend),
+                WIRE_CHANNEL
+            )
+            if not ok_send then
+                return false, tostring(result)
+            end
+            return true, tostring(result or "")
         end
 
         function gateb.shutdown()

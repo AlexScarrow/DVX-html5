@@ -11590,6 +11590,8 @@ get_multiplayer_transport_status_tint = function(self)
     local status = self.mp_state and self.mp_state.transport_status or "idle"
     if status == "connected" then
         return vmath.vector4(0.2, 0.95, 0.3, 0.95)
+    elseif status == "gateb_ok" then
+        return vmath.vector4(0.1, 0.85, 1, 0.95)
     elseif status == "connecting" then
         return vmath.vector4(0.95, 0.8, 0.2, 0.95)
     elseif status == "reconnecting" then
@@ -19340,8 +19342,14 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
         end
         if self.mp_state then
             self.mp_state.enabled = false
+            self.mp_state.transport_status = "idle"
+            self.mp_state.transport_status_detail = {}
         end
         self.multiplayer_mode_active = false
+        if self.mp_transport and self.mp_transport.shutdown then
+            pcall(self.mp_transport.shutdown)
+        end
+        self.mp_transport = nil
         enter_flow_state(self, FLOW_STATE_TITLE)
         return true
     end
@@ -27136,10 +27144,14 @@ end
 
 multiplayer_transport_init = function(self)
     multiplayer_lag_sim_ensure_state(self)
+    if self.mp_transport and self.mp_transport.shutdown then
+        pcall(self.mp_transport.shutdown)
+    end
     local steam_probe = nil
     if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
         steam_probe = multiplayer_probe_steam_runtime(self)
         multiplayer_debug_log(self, "MP STEAM GATEA | init_probe_only=true")
+        multiplayer_debug_log(self, "MP STEAM GATEB | bootstrap enabled=true")
     end
     multiplayer_debug_log(self, string.format(
         "MP NET | transport_init mode=%s ws_url=%s room=%s local=%s host=%s steam_available=%s",
@@ -27161,6 +27173,7 @@ multiplayer_transport_init = function(self)
         steam_log = function(message)
             multiplayer_debug_log(self, message)
         end,
+        net_protocol_version = tonumber(NET_PROTOCOL_VERSION or 1) or 1,
         on_command = function(command)
             return multiplayer_transport_handle_command(self, command)
         end,

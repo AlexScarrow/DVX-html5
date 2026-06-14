@@ -1,6 +1,7 @@
 local M = {}
 
 local ok_json, json = pcall(require, "json")
+local STEAM_GATEB = require("main.steam_transport_gateb")
 
 local function clone_table(t)
     if type(t) ~= "table" then
@@ -93,7 +94,9 @@ function M.create(opts)
         ws_status = "idle",
         steam_probe = opts and opts.steam_probe or nil,
         steam_log = opts and opts.steam_log or nil,
-        steam_connected = false
+        steam_connected = false,
+        steam_gateb = nil,
+        net_protocol_version = tonumber(opts and opts.net_protocol_version) or 1
     }
 
     local transport = {}
@@ -311,7 +314,7 @@ function M.create(opts)
                 })
                 return
             end
-            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=command reason=gate_a_probe_only")
+            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=command reason=gate_b_wire_not_ready")
             return
         end
 
@@ -353,13 +356,21 @@ function M.create(opts)
                 })
                 return
             end
-            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=events reason=gate_a_probe_only")
+            steam_debug_log(state, "MP STEAM GATEA | send_blocked kind=events reason=gate_b_wire_not_ready")
             return
         end
         dispatch_events(events)
     end
 
     function transport.shutdown()
+        if state.steam_gateb and state.steam_gateb.shutdown then
+            pcall(state.steam_gateb.shutdown)
+        end
+        if STEAM_GATEB and STEAM_GATEB.reset_listener_state then
+            STEAM_GATEB.reset_listener_state()
+        end
+        state.steam_gateb = nil
+        state.steam_connected = false
         if state.ws_adapter and state.ws_client and state.ws_adapter.close then
             state.ws_adapter.close(state.ws_client)
         end
@@ -382,6 +393,9 @@ function M.create(opts)
 
     function transport.update(dt)
         if state.mode == "steam" then
+            if state.steam_gateb and state.steam_gateb.update then
+                state.steam_gateb.update(dt)
+            end
             return
         end
         if state.mode ~= "websocket" then
@@ -422,6 +436,23 @@ function M.create(opts)
                 mode = "steam",
                 backend = tostring(probe.backend_source or "unknown")
             })
+            if STEAM_GATEB and STEAM_GATEB.create then
+                state.steam_gateb = STEAM_GATEB.create({
+                    on_log = state.steam_log,
+                    net_protocol_version = state.net_protocol_version,
+                    on_status = function(status, detail)
+                        dispatch_status(status, detail or {})
+                    end
+                })
+                if state.steam_gateb and state.steam_gateb.start then
+                    steam_debug_log(state, "MP STEAM GATEB | bootstrap start_called")
+                    state.steam_gateb.start()
+                else
+                    steam_debug_log(state, "MP STEAM GATEB | bootstrap start_missing")
+                end
+            else
+                steam_debug_log(state, "MP STEAM GATEB | bootstrap module_missing")
+            end
             return
         end
         state.steam_connected = false

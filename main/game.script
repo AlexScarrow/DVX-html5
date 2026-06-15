@@ -942,8 +942,8 @@ mp_setup_get_joined_slot_lookup = function(self)
         return joined_slots
     end
     local active_offer = nil
-    local active_session_id = tostring(self.mp_state.session_id or "")
-    if active_session_id ~= "" then
+    local active_session_id = multiplayer_lobby_get_lobby_ticket_id(self)
+    if active_session_id ~= "" and active_session_id ~= "local_session" and string.sub(active_session_id, 1, 14) ~= "local_session_" then
         multiplayer_lobby_ensure_runtime(self)
         active_offer = multiplayer_lobby_get_session_by_id(self, active_session_id)
     end
@@ -16348,6 +16348,7 @@ function start_multiplayer_game_flow(self, session_config)
         self.mp_state.enabled = true
         self.mp_state.match_end_dispatched = false
         self.mp_state.match_end_last_event_id = ""
+        self.mp_state.lobby_ticket_id = ""
         self.mp_state.session_id = "local_session_" .. tostring(os.time())
         self.mp_state.mission_type = self.selected_mission_type
         local session_player_count = session_config and session_config.player_count or self.mp_state.player_count or 4
@@ -16600,8 +16601,8 @@ multiplayer_host_start_match_from_setup = function(self)
     if not (self and self.mp_state and self.mp_state.enabled) then
         return false
     end
-    if not multiplayer_lobby_is_local_offer_owner(self) then
-        multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=not_offer_owner")
+    if not multiplayer_lobby_can_host_launch(self) then
+        multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=not_session_host")
         return false
     end
     if not multiplayer_setup_is_valid(self) then
@@ -16660,8 +16661,11 @@ multiplayer_lobby_is_host = function(self)
         return true
     end
     local local_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
-    local active_session_id = tostring(self.mp_state.session_id or "")
-    if local_offer_id ~= "" and active_session_id ~= "" and local_offer_id == active_session_id then
+    local active_ticket_id = multiplayer_lobby_get_lobby_ticket_id(self)
+    if local_offer_id ~= "" and active_ticket_id ~= "" and local_offer_id == active_ticket_id then
+        return true
+    end
+    if multiplayer_lobby_is_session_host(self) then
         return true
     end
     return self.mp_state.local_player_id == self.mp_state.host_player_id
@@ -16949,6 +16953,7 @@ multiplayer_leave_in_progress_match_to_lobby = function(self, reason)
     end
     multiplayer_lobby_ensure_runtime(self)
     multiplayer_lobby_purge_tombstoned_offers(self)
+    self.mp_state.lobby_ticket_id = ""
     self.mp_state.session_id = "local_session"
     self.mp_state.debug_active_player_id = self.mp_state.local_player_id or self.mp_state.host_player_id
     self.multiplayer_mode_active = true
@@ -17093,22 +17098,84 @@ multiplayer_lobby_remove_offers_by_owner = function(self, owner_player_id)
     return changed
 end
 
+multiplayer_lobby_get_lobby_ticket_id = function(self)
+    if not (self and self.mp_state) then
+        return ""
+    end
+    local ticket_id = tostring(self.mp_state.lobby_ticket_id or "")
+    if ticket_id ~= "" then
+        return ticket_id
+    end
+    return tostring(self.mp_state.session_id or "")
+end
+
 multiplayer_lobby_get_active_session = function(self)
     multiplayer_lobby_ensure_runtime(self)
-    local session_id = tostring(self.mp_state and self.mp_state.session_id or "")
-    if session_id == "" then
+    local session_id = multiplayer_lobby_get_lobby_ticket_id(self)
+    if session_id == "" or session_id == "local_session" or string.sub(session_id, 1, 14) == "local_session_" then
         return nil
     end
     return multiplayer_lobby_get_session_by_id(self, session_id)
 end
 
-multiplayer_lobby_is_local_offer_owner = function(self, session)
-    local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+multiplayer_lobby_session_host_wire_id = function(session)
+    if type(session) ~= "table" then
+        return ""
+    end
+    local host_wire_id = tostring(session.host_wire_player_id or "")
+    if host_wire_id ~= "" then
+        return host_wire_id
+    end
+    return tostring(session.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
+end
+
+multiplayer_lobby_sender_is_session_host = function(session, sender_wire_id)
+    local host_wire_id = multiplayer_lobby_session_host_wire_id(session)
+    local sender_id = tostring(sender_wire_id or "")
+    return host_wire_id ~= "" and sender_id ~= "" and sender_id == host_wire_id
+end
+
+multiplayer_lobby_is_session_host = function(self, session)
+    local target_session = session
+    if not target_session then
+        target_session = multiplayer_lobby_get_active_session(self)
+    end
+    if not target_session then
+        local local_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+        if local_offer_id ~= "" then
+            target_session = multiplayer_lobby_get_session_by_id(self, local_offer_id)
+        end
+    end
+    if not target_session then
+        return false
+    end
+    local local_steam_id = multiplayer_session_ticket_get_local_steam_id(self)
+    if local_steam_id ~= "" then
+        return MP_SESSION_TICKET.is_session_host(target_session, local_steam_id)
+    end
+    local local_wire_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+    local host_steam_id = tostring(target_session.host_steam_id or "")
+    if host_steam_id ~= "" and string.sub(host_steam_id, 1, 11) == "local_host_" then
+        return host_steam_id == ("local_host_" .. local_wire_id)
+    end
+    return multiplayer_lobby_session_host_wire_id(target_session) == local_wire_id
+end
+
+multiplayer_lobby_can_host_launch = function(self, session)
     local target_session = session or multiplayer_lobby_get_active_session(self)
     if not target_session then
         return false
     end
-    return tostring(target_session.owner_player_id or "") == local_player_id
+    local local_steam_id = multiplayer_session_ticket_get_local_steam_id(self)
+    if local_steam_id ~= "" then
+        return MP_SESSION_TICKET.can_host_launch(target_session, local_steam_id)
+    end
+    return multiplayer_lobby_is_session_host(self, target_session)
+        and MP_SESSION_TICKET.is_open_lobby_status(target_session.lobby_status or MP_SESSION_TICKET.LOBBY_STATUS_OPEN)
+end
+
+multiplayer_lobby_is_local_offer_owner = function(self, session)
+    return multiplayer_lobby_is_session_host(self, session)
 end
 
 multiplayer_session_ticket_get_local_steam_id = function(self)
@@ -17139,13 +17206,16 @@ multiplayer_session_ticket_mint_host_session = function(self, publish_status)
     local session_number
     session_number, lobby.host_session_allocator = MP_SESSION_TICKET.allocate_session_number(allocator)
     local host_steam_id = multiplayer_session_ticket_get_local_steam_id(self)
+    local host_wire_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
     if host_steam_id == "" then
-        host_steam_id = "local_host_" .. tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+        host_steam_id = "local_host_" .. host_wire_player_id
     end
     local session = MP_SESSION_TICKET.create_session_record({
         host_steam_id = host_steam_id,
+        host_wire_player_id = host_wire_player_id,
         session_number = session_number,
         host_display_name = tostring(lobby.local_username or "Host"),
+        joined_network_ids = { host_wire_player_id },
         publish_status = publish_status or MP_SESSION_TICKET.PUBLISH_DRAFT,
         lobby_status = MP_SESSION_TICKET.LOBBY_STATUS_OPEN,
         env_name = tostring(ENV_NAME or "LOCAL"),
@@ -17224,8 +17294,9 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
         session_key = tostring(session.session_key or session.id or ""),
         session_number = tonumber(session.session_number or 0) or 0,
         host_steam_id = tostring(session.host_steam_id or ""),
+        host_wire_player_id = tostring(session.host_wire_player_id or multiplayer_lobby_session_host_wire_id(session)),
         lobby_status = tostring(session.lobby_status or MP_SESSION_TICKET.LOBBY_STATUS_OPEN),
-        owner_player_id = tostring(session.owner_player_id or self.mp_state.local_player_id or "p1"),
+        owner_player_id = tostring(session.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID),
         host_name = tostring(session.host_name or session.host_display_name or "Host"),
         status = tostring(session.status or session.publish_status or "published_open"),
         publish_status = tostring(session.publish_status or session.status or "published_open"),
@@ -17277,6 +17348,7 @@ multiplayer_lobby_emit_offer_remove = function(self, offer_id)
     multiplayer_transport_send_command(self, "lobby_offer_remove", {
         offer_id = tostring(offer_id),
         owner_player_id = tostring(self.mp_state.local_player_id or "p1"),
+        host_wire_player_id = tostring(self.mp_state.local_player_id or "p1"),
         removed_at_ms = now_ms
     }, self.mp_state.local_player_id)
     multiplayer_lobby_clear_steam_discovery_if_host(self)
@@ -17355,6 +17427,7 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         session_key = tostring(offer.session_key or (existing_offer and existing_offer.session_key) or offer_id),
         session_number = tonumber(offer.session_number or (existing_offer and existing_offer.session_number) or 0) or 0,
         host_steam_id = tostring(offer.host_steam_id or (existing_offer and existing_offer.host_steam_id) or ""),
+        host_wire_player_id = tostring(offer.host_wire_player_id or (existing_offer and existing_offer.host_wire_player_id) or ""),
         lobby_status = lobby_status,
         publish_status = publish_status,
         owner_player_id = owner_player_id,
@@ -17552,9 +17625,11 @@ multiplayer_lobby_enter_mp_setup_from_session = function(self, session)
     if self.mp_state then
         self.mp_state.enabled = true
         self.mp_state.debug_active_player_id = self.mp_state.local_player_id
-        self.mp_state.session_id = tostring(session.id or self.mp_state.session_id or "local_session")
+        local ticket_id = tostring(session.id or session.session_key or "")
+        self.mp_state.lobby_ticket_id = ticket_id
+        self.mp_state.session_id = ticket_id ~= "" and ticket_id or tostring(self.mp_state.session_id or "local_session")
         self.mp_state.player_count = tonumber(session.max_players or self.mp_state.player_count or 2) or 2
-        local owner_player_id = tostring(session.owner_player_id or self.mp_state.host_player_id or self.mp_state.local_player_id or "p1")
+        local owner_player_id = tostring(session.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
         self.mp_state.host_player_id = owner_player_id
     end
     multiplayer_setup_init_runtime(self)
@@ -17616,6 +17691,20 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
     session.lobby_status = MP_SESSION_TICKET.LOBBY_STATUS_OPEN
     session.owner_player_id = tostring(MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
     session.host_network_id = MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID
+    session.host_wire_player_id = tostring(session.host_wire_player_id or self.mp_state and self.mp_state.local_player_id or "p1")
+    session.joined_player_ids = session.joined_player_ids or {}
+    local host_wire_id = tostring(session.host_wire_player_id or "")
+    local host_already_joined = false
+    for _, joined_id in ipairs(session.joined_player_ids) do
+        if tostring(joined_id or "") == host_wire_id then
+            host_already_joined = true
+            break
+        end
+    end
+    if host_wire_id ~= "" and not host_already_joined then
+        session.joined_player_ids[#session.joined_player_ids + 1] = host_wire_id
+    end
+    session.players = math.max(1, #session.joined_player_ids)
     lobby.offers_by_id[tostring(session.id or "")] = session
     lobby.pending_join_session_id = ""
     multiplayer_lobby_sync_sessions_from_offers(self)
@@ -17634,8 +17723,7 @@ multiplayer_lobby_cancel_session = function(self, session_id)
         return false
     end
     local target_session = multiplayer_lobby_get_session_by_id(self, sid)
-    local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
-    if target_session and tostring(target_session.owner_player_id or "") ~= "" and tostring(target_session.owner_player_id or "") ~= local_player_id then
+    if target_session and not multiplayer_lobby_is_session_host(self, target_session) then
         return false
     end
     local removed = false
@@ -17662,7 +17750,8 @@ multiplayer_lobby_cancel_session = function(self, session_id)
         lobby.local_active_offer_id = ""
     end
     lobby.offers_by_id[sid] = nil
-    if self.mp_state and tostring(self.mp_state.session_id or "") == sid then
+    if self.mp_state and multiplayer_lobby_get_lobby_ticket_id(self) == sid then
+        self.mp_state.lobby_ticket_id = ""
         self.mp_state.session_id = "local_session"
     end
     if self.mp_state and self.mp_state.enabled then
@@ -17680,8 +17769,7 @@ multiplayer_lobby_remove_player_from_session = function(self, session_id, player
     if not session then
         return false
     end
-    local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
-    if tostring(session.owner_player_id or "") ~= "" and tostring(session.owner_player_id or "") ~= local_player_id then
+    if not multiplayer_lobby_is_session_host(self, session) then
         return false
     end
     local pid = tostring(player_id or "")
@@ -19066,7 +19154,7 @@ function update_flow_ui(self, dt)
     end
     if state == FLOW_STATE_MP_SETUP then
         local valid = multiplayer_setup_is_valid(self)
-        local can_launch = multiplayer_lobby_is_local_offer_owner(self)
+        local can_launch = multiplayer_lobby_can_host_launch(self)
         update_flow_title_space_grid_background(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_planet, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
@@ -19363,16 +19451,17 @@ function update_flow_ui(self, dt)
 end
 
 multiplayer_setup_handle_touch = function(self, input_x, input_y)
-    local is_client_not_host = not multiplayer_lobby_is_local_offer_owner(self)
+    local is_client_not_host = not multiplayer_lobby_is_session_host(self)
     if is_point_in_screen_rect(input_x, input_y, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
-        if self.mp_state and self.mp_state.enabled and multiplayer_lobby_is_local_offer_owner(self) then
-            multiplayer_lobby_cancel_session(self, self.mp_state.session_id)
+        if self.mp_state and self.mp_state.enabled and multiplayer_lobby_is_session_host(self) then
+            multiplayer_lobby_cancel_session(self, multiplayer_lobby_get_lobby_ticket_id(self))
         elseif self.mp_state and self.mp_state.enabled then
             multiplayer_transport_send_command(self, "lobby_leave_session", {
-                session_id = tostring(self.mp_state.session_id or "")
+                session_id = multiplayer_lobby_get_lobby_ticket_id(self)
             }, self.mp_state.local_player_id)
         end
         if self.mp_state then
+            self.mp_state.lobby_ticket_id = ""
             self.mp_state.session_id = "local_session"
             self.mp_state.enabled = false
         end
@@ -19417,7 +19506,7 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         end
     end
     if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
-        if multiplayer_lobby_is_local_offer_owner(self) and multiplayer_setup_is_valid(self) then
+        if multiplayer_lobby_can_host_launch(self) and multiplayer_setup_is_valid(self) then
             if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
                 multiplayer_host_start_match_from_setup(self)
             else
@@ -19425,7 +19514,7 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
                     session_config = multiplayer_setup_build_session_config(self)
                 }, self.mp_state and self.mp_state.local_player_id or "p1")
             end
-        elseif multiplayer_lobby_is_local_offer_owner(self) then
+        elseif multiplayer_lobby_can_host_launch(self) then
             print("MP SETUP | invalid assignment: each active seat must be filled, unique units, and Sarge must stay on p1.")
         end
         return true
@@ -23834,10 +23923,8 @@ multiplayer_transport_handle_command = function(self, command)
         local session_id = tostring(payload.session_id or "")
         local requested_protocol_version = tostring(payload.protocol_version or "")
         local session = multiplayer_lobby_get_session_by_id(self, session_id)
-        local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
-        local owner_player_id = tostring(session and session.owner_player_id or "")
-        if owner_player_id ~= "" and owner_player_id ~= local_player_id then
-            -- Relay broadcasts commands to all peers; only the offer owner may authorize joins.
+        if not session or not multiplayer_lobby_is_session_host(self, session) then
+            -- Relay broadcasts commands to all peers; only the session host may authorize joins.
             return events
         end
         local expected_protocol_version = tostring(session and session.protocol_version or NET_PROTOCOL_VERSION or "1")
@@ -23969,9 +24056,9 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        local owner_player_id = tostring(session.owner_player_id or self.mp_state.host_player_id or "p1")
+        local owner_player_id = tostring(session.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
         local session_max_players = math.max(2, math.min(4, tonumber(session.max_players or 4) or 4))
-        if tostring(sender or "") ~= owner_player_id then
+        if not multiplayer_lobby_sender_is_session_host(session, sender) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_offer_join_response",
                 reason = "not_offer_owner"
@@ -24060,15 +24147,16 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        local owner_player_id = tostring(offer.owner_player_id or sender or "")
-        if owner_player_id == "" or tostring(sender or "") ~= owner_player_id then
+        local host_wire_player_id = multiplayer_lobby_session_host_wire_id(offer)
+        if host_wire_player_id == "" or not multiplayer_lobby_sender_is_session_host(offer, sender) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_offer_upsert",
-                reason = "owner_mismatch"
+                reason = "session_host_mismatch"
             }))
             return events
         end
-        offer.owner_player_id = owner_player_id
+        offer.owner_player_id = tostring(offer.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
+        offer.host_wire_player_id = host_wire_player_id
         if tonumber(offer.updated_at_ms or 0) == 0 then
             offer.updated_at_ms = get_wall_clock_ms()
         end
@@ -24083,16 +24171,7 @@ multiplayer_transport_handle_command = function(self, command)
     if cmd_type == "lobby_offer_remove" then
         multiplayer_lobby_ensure_runtime(self)
         local offer_id = tostring(payload.offer_id or "")
-        local owner_player_id = tostring(payload.owner_player_id or sender or "")
         local removed_at_ms = tonumber(payload.removed_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
-        if owner_player_id == "" or owner_player_id ~= tostring(sender or "") then
-            table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
-                command_type = "lobby_offer_remove",
-                reason = "owner_mismatch"
-            }))
-            return events
-        end
-        local session = multiplayer_lobby_get_session_by_id(self, offer_id)
         if offer_id == "" then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_offer_remove",
@@ -24100,19 +24179,22 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        if session and tostring(session.owner_player_id or "") ~= "" and tostring(session.owner_player_id or "") ~= owner_player_id then
+        local session = multiplayer_lobby_get_session_by_id(self, offer_id)
+        if not session or not multiplayer_lobby_sender_is_session_host(session, sender) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_offer_remove",
-                reason = "not_offer_owner"
+                reason = "session_host_mismatch"
             }))
             return events
         end
+        local host_wire_player_id = multiplayer_lobby_session_host_wire_id(session)
         multiplayer_lobby_note_offer_removed(self, offer_id, removed_at_ms)
-        print(string.format("LOBBY_COMMAND | offer_remove_recv_command | offer=%s owner=%s", offer_id, owner_player_id))
+        print(string.format("LOBBY_COMMAND | offer_remove_recv_command | offer=%s host_wire=%s", offer_id, host_wire_player_id))
         multiplayer_lobby_apply_offer_remove(self, offer_id)
         table.insert(events, multiplayer_transport_emit_event(self, "lobby_offer_remove", {
             offer_id = offer_id,
-            owner_player_id = owner_player_id,
+            owner_player_id = host_wire_player_id,
+            host_wire_player_id = host_wire_player_id,
             removed_at_ms = removed_at_ms
         }))
         return events
@@ -26137,7 +26219,7 @@ multiplayer_transport_on_event = function(self, event)
         local pin = tostring(event.payload and event.payload.pin or "")
         local session = multiplayer_lobby_get_session_by_id(self, offer_id)
         local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
-        if not session or requester_player_id == "" or tostring(session.owner_player_id or "") ~= local_player_id then
+        if not session or requester_player_id == "" or not multiplayer_lobby_is_session_host(self, session) then
             return
         end
         if tonumber(session.players or 0) >= tonumber(session.max_players or 4) then

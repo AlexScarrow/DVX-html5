@@ -121,14 +121,19 @@ function M.create_session_record(opts)
     end
     local publish_status = to_string(opts.publish_status or M.PUBLISH_DRAFT)
     local lobby_status = to_string(opts.lobby_status or M.LOBBY_STATUS_OPEN)
+    local host_wire_player_id = to_string(opts.host_wire_player_id)
+    if host_wire_player_id == "" then
+        host_wire_player_id = M.SESSION_HOST_NETWORK_ID
+    end
     local joined_network_ids = opts.joined_network_ids
     if type(joined_network_ids) ~= "table" or #joined_network_ids == 0 then
-        joined_network_ids = { M.SESSION_HOST_NETWORK_ID }
+        joined_network_ids = { host_wire_player_id }
     end
     return {
         session_key = session_key,
         session_number = session_number,
         host_steam_id = host_steam_id,
+        host_wire_player_id = host_wire_player_id,
         host_display_name = host_display_name,
         host_name = host_display_name,
         lobby_status = lobby_status,

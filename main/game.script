@@ -922,7 +922,6 @@ mp_network_id_for_slot = function(self, slot_player_id)
     local host_id = tostring(self.mp_state.host_player_id or "p1")
     if multiplayer_lobby_is_host and multiplayer_lobby_is_host(self) then
         host_id = tostring(self.mp_state.local_player_id or host_id)
-        self.mp_state.host_player_id = host_id
     end
     local ordered = {}
     ordered[1] = host_id
@@ -16367,6 +16366,7 @@ function start_multiplayer_game_flow(self, session_config)
         self.mp_state.turn_based_heartbeat_mismatch_streak = 0
         self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
         self.mp_state.civilian_seed = tonumber(session_config and session_config.civilian_seed or 0) or 0
+        multiplayer_apply_wire_dispatch_player_id(self, session_config)
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -16564,11 +16564,16 @@ multiplayer_setup_build_session_config = function(self)
             end
         end
     end
+    local wire_dispatch_player_id = multiplayer_resolve_wire_dispatch_player_id(self)
+    if wire_dispatch_player_id == "" then
+        wire_dispatch_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+    end
     return {
         player_count = count,
         seat_assignments = compact,
         mission_type = mission_type,
-        civilian_seed = math.random(1, 2147483646)
+        civilian_seed = math.random(1, 2147483646),
+        wire_dispatch_player_id = wire_dispatch_player_id
     }
 end
 
@@ -16583,6 +16588,9 @@ multiplayer_setup_apply_session_config = function(self, session_config)
         self.mp_setup.selected_unit_id = selected_unit_before
     end
     self.mp_setup.mission_type = multiplayer_normalize_mission_type(session_config.mission_type or self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
+    if session_config.wire_dispatch_player_id ~= nil then
+        multiplayer_apply_wire_dispatch_player_id(self, session_config)
+    end
     local assignments = multiplayer_clone_seat_assignments(session_config.seat_assignments or {}, player_count)
     for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
         local slot_count = multiplayer_get_slot_count_for_player(player_count, player_id)
@@ -16955,6 +16963,7 @@ multiplayer_leave_in_progress_match_to_lobby = function(self, reason)
     multiplayer_lobby_purge_tombstoned_offers(self)
     self.mp_state.lobby_ticket_id = ""
     self.mp_state.session_id = "local_session"
+    multiplayer_apply_steam_lobby_wire_defaults(self)
     self.mp_state.debug_active_player_id = self.mp_state.local_player_id or self.mp_state.host_player_id
     self.multiplayer_mode_active = true
     enter_flow_state(self, FLOW_STATE_MP_LOBBY)
@@ -16972,10 +16981,11 @@ multiplayer_apply_steam_transport_seat_ids = function(self)
     local is_steam_host = self.mp_transport.steam_is_host and self.mp_transport.steam_is_host() == true
     if is_steam_host then
         self.mp_state.local_player_id = "p1"
-        self.mp_state.host_player_id = "p1"
     else
         self.mp_state.local_player_id = "p2"
-        self.mp_state.host_player_id = "p1"
+    end
+    if tostring(self.mp_state.lobby_ticket_id or "") == "" then
+        multiplayer_apply_steam_lobby_wire_defaults(self)
     end
     if self.mp_transport.set_local_player_id then
         self.mp_transport.set_local_player_id(self.mp_state.local_player_id)
@@ -17133,6 +17143,80 @@ multiplayer_lobby_sender_is_session_host = function(session, sender_wire_id)
     local host_wire_id = multiplayer_lobby_session_host_wire_id(session)
     local sender_id = tostring(sender_wire_id or "")
     return host_wire_id ~= "" and sender_id ~= "" and sender_id == host_wire_id
+end
+
+multiplayer_resolve_wire_dispatch_player_id = function(self, session_or_config)
+    if type(session_or_config) == "table" then
+        local from_config = tostring(session_or_config.wire_dispatch_player_id or "")
+        if from_config ~= "" then
+            return from_config
+        end
+        local from_session = multiplayer_lobby_session_host_wire_id(session_or_config)
+        if from_session ~= "" then
+            return from_session
+        end
+    end
+    local ticket_id = multiplayer_lobby_get_lobby_ticket_id(self)
+    if ticket_id ~= "" then
+        local ticket = multiplayer_lobby_get_session_by_id(self, ticket_id)
+        if not ticket and self.mp_lobby and self.mp_lobby.offers_by_id then
+            ticket = self.mp_lobby.offers_by_id[ticket_id]
+        end
+        local from_ticket = multiplayer_lobby_session_host_wire_id(ticket)
+        if from_ticket ~= "" then
+            return from_ticket
+        end
+    end
+    local local_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
+    if local_offer_id ~= "" then
+        local local_offer = multiplayer_lobby_get_session_by_id(self, local_offer_id)
+        local from_local_offer = multiplayer_lobby_session_host_wire_id(local_offer)
+        if from_local_offer ~= "" then
+            return from_local_offer
+        end
+    end
+    if self.mp_transport and self.mp_transport.steam_is_host and self.mp_transport.steam_is_host() == true then
+        return tostring(self.mp_state and self.mp_state.local_player_id or "p1")
+    end
+    return tostring(self.mp_state and self.mp_state.local_player_id or "p2")
+end
+
+multiplayer_apply_wire_dispatch_player_id = function(self, session_or_config)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return ""
+    end
+    local wire_dispatch_id = mp_normalize_network_player_id(multiplayer_resolve_wire_dispatch_player_id(self, session_or_config))
+    if wire_dispatch_id == "" then
+        wire_dispatch_id = "p1"
+    end
+    self.mp_state.host_player_id = wire_dispatch_id
+    local local_id = tostring(self.mp_state.local_player_id or "")
+    if local_id == wire_dispatch_id then
+        self.mp_state.debug_active_player_id = wire_dispatch_id
+    end
+    multiplayer_debug_log(self, string.format(
+        "MP WIRE | dispatch_assign host=%s local=%s",
+        tostring(wire_dispatch_id),
+        tostring(local_id)
+    ))
+    return wire_dispatch_id
+end
+
+multiplayer_apply_steam_lobby_wire_defaults = function(self)
+    if not (self and self.mp_state) then
+        return
+    end
+    self.mp_state.host_player_id = "p1"
+    if tostring(self.mp_state.local_player_id or "") == "p1" then
+        self.mp_state.debug_active_player_id = "p1"
+    end
+end
+
+multiplayer_is_wire_dispatch_host = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return true
+    end
+    return tostring(self.mp_state.local_player_id or "") == tostring(self.mp_state.host_player_id or "")
 end
 
 multiplayer_lobby_is_session_host = function(self, session)
@@ -17629,8 +17713,7 @@ multiplayer_lobby_enter_mp_setup_from_session = function(self, session)
         self.mp_state.lobby_ticket_id = ticket_id
         self.mp_state.session_id = ticket_id ~= "" and ticket_id or tostring(self.mp_state.session_id or "local_session")
         self.mp_state.player_count = tonumber(session.max_players or self.mp_state.player_count or 2) or 2
-        local owner_player_id = tostring(session.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
-        self.mp_state.host_player_id = owner_player_id
+        multiplayer_apply_wire_dispatch_player_id(self, session)
     end
     multiplayer_setup_init_runtime(self)
     enter_flow_state(self, FLOW_STATE_MP_SETUP)
@@ -17753,6 +17836,7 @@ multiplayer_lobby_cancel_session = function(self, session_id)
     if self.mp_state and multiplayer_lobby_get_lobby_ticket_id(self) == sid then
         self.mp_state.lobby_ticket_id = ""
         self.mp_state.session_id = "local_session"
+        multiplayer_apply_steam_lobby_wire_defaults(self)
     end
     if self.mp_state and self.mp_state.enabled then
         multiplayer_transport_broadcast_event(self, "lobby_session_closed", {
@@ -19463,6 +19547,7 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         if self.mp_state then
             self.mp_state.lobby_ticket_id = ""
             self.mp_state.session_id = "local_session"
+            multiplayer_apply_steam_lobby_wire_defaults(self)
             self.mp_state.enabled = false
         end
         self.multiplayer_mode_active = false
@@ -23718,7 +23803,7 @@ multiplayer_transport_handle_command = function(self, command)
     local sender = command.sender_player_id
     local payload = command.payload or {}
     local cmd_message_id = command.message_id
-    local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+    local is_local_host = multiplayer_is_wire_dispatch_host(self)
     multiplayer_sync_trace(
         self,
         "recv_command",
@@ -26506,7 +26591,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local ok = true
         if should_apply_local then
@@ -26632,7 +26717,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26705,7 +26790,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26730,7 +26815,7 @@ multiplayer_transport_on_event = function(self, event)
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=pickup_turret_applied")
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26830,7 +26915,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26854,7 +26939,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26878,7 +26963,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26902,7 +26987,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -26926,7 +27011,7 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -27014,7 +27099,7 @@ multiplayer_transport_on_event = function(self, event)
         end
         multiplayer_sync_trace(self, "apply_event_begin", "type=scavenge_crate_applied")
         local payload = event.payload or {}
-        local is_local_host = (self.mp_state.local_player_id == self.mp_state.host_player_id)
+        local is_local_host = multiplayer_is_wire_dispatch_host(self)
         local should_apply_local = not (payload.host_applied == true and is_local_host)
         local applied_ok = true
         if should_apply_local then
@@ -27407,10 +27492,7 @@ multiplayer_steam_should_host_dispatch_local = function(self, cmd_type)
     if cmd_type == "lobby_join_session" or cmd_type == "request_setup_state" then
         return false
     end
-    if tostring(self.mp_state.local_player_id or "") ~= tostring(self.mp_state.host_player_id or "") then
-        return false
-    end
-    if not (self.mp_transport and self.mp_transport.steam_is_host and self.mp_transport.steam_is_host() == true) then
+    if not multiplayer_is_wire_dispatch_host(self) then
         return false
     end
     return true

@@ -108,13 +108,14 @@
 ---
 
 ## Session Start Protocol (for any new AI session)
-1. Read `docs/AI_HANDOFF.md`.
-2. Confirm path lock in first response.
-3. Run read-only sanity checks first:
+1. Read `Docs/AI_HANDOFF.md`.
+2. **If continuing multiplayer lobby / ticket / Steam hosting work**, read `Docs/MP_LOBBY_TICKET_HANDOVER.md` first (authoritative for current MP branch).
+3. Confirm path lock in first response.
+4. Run read-only sanity checks first:
    - `git status --short`
    - identify dirty files
-4. Ask for confirmation before risky cross-file refactors.
-5. Keep changes scoped, testable, and reversible.
+5. Ask for confirmation before risky cross-file refactors.
+6. Keep changes scoped, testable, and reversible.
 
 ---
 
@@ -124,6 +125,6 @@
 ---
 
 ## Immediate TODO (editable)
-- [ ] Continue/verify unified alien AP-budget implementation safely
+- [ ] See `Docs/MP_LOBBY_TICKET_HANDOVER.md` for current MP lobby/ticket work (branch `feature/lobby-supermarket-ticket-system`, banked `92bfad5`)
+- [ ] Deferred: remote `mp_internal` session browse / friend pairing
 - [ ] Keep `main/game.script` below local-variable compile pressure
-- [ ] Prepare and execute first genuine remote multiplayer test

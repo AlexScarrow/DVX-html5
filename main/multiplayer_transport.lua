@@ -604,6 +604,13 @@ function M.create(opts)
         return false
     end
 
+    function transport.steam_get_local_steam_id()
+        if state.steam_gateb and state.steam_gateb.get_local_steam_id then
+            return tostring(state.steam_gateb.get_local_steam_id() or "")
+        end
+        return ""
+    end
+
     function transport.update(dt)
         if state.mode == "steam" then
             if state.steam_gateb and state.steam_gateb.update then

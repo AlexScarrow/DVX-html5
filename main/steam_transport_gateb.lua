@@ -764,6 +764,10 @@ function M.create(opts)
             return tostring(state.peer_steam_id or "")
         end
 
+        function gateb.get_local_steam_id()
+            return tostring(state.local_steam_id or "")
+        end
+
         function gateb.is_passed()
             return state.passed == true
         end

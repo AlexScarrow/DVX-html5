@@ -821,12 +821,13 @@ MP_LOBBY_PAGE_LABEL_X = 640
 MP_LOBBY_PAGE_LABEL_Y = 46
 MP_LOBBY_PAGE_LABEL_W = 140
 MP_LOBBY_PAGE_LABEL_H = 40
-MP_LOBBY_HOST_OPEN_BTN_X = 520
+MP_LOBBY_HOST_OPEN_BTN_X = 500
 MP_LOBBY_HOST_OPEN_BTN_Y = 568
-MP_LOBBY_HOST_PRIVATE_BTN_X = 740
+MP_LOBBY_HOST_PRIVATE_BTN_X = 780
 MP_LOBBY_HOST_PRIVATE_BTN_Y = 568
 MP_LOBBY_HOST_ACTION_W = 280
 MP_LOBBY_HOST_ACTION_H = 70
+MP_LOBBY_HOST_ACTION_ART_Z = FLOW_UI_BUTTON_Z + 0.001
 MP_LOBBY_HOST_INFO_X = 640
 MP_LOBBY_HOST_INFO_Y = 624
 MP_LOBBY_HOST_INFO_W = 400
@@ -12543,8 +12544,8 @@ local function initialize_unit_ui(self)
         self.ui.flow_mp_lobby_status_strips[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.003, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W - 34, 56)
     end
     self.ui.flow_mp_lobby_backpanel = create_ui_marker_sprite(hash("lobby_backpanel"), FLOW_UI_PANEL_Z + 0.005)
-    self.ui.flow_mp_lobby_host_public_art = create_ui_marker_sprite(hash("mp_lobby_host_public"), MP_SETUP_UI_Z + 0.004)
-    self.ui.flow_mp_lobby_host_private_art = create_ui_marker_sprite(hash("mp_lobby_host_private"), MP_SETUP_UI_Z + 0.004)
+    self.ui.flow_mp_lobby_host_public_art = create_ui_marker_sprite(hash("mp_lobby_host_public"), MP_LOBBY_HOST_ACTION_ART_Z)
+    self.ui.flow_mp_lobby_host_private_art = create_ui_marker_sprite(hash("mp_lobby_host_private"), MP_LOBBY_HOST_ACTION_ART_Z)
     for _, lobby_host_art_id in ipairs({
         self.ui.flow_mp_lobby_host_public_art,
         self.ui.flow_mp_lobby_host_private_art,
@@ -12955,10 +12956,10 @@ local function set_ui_hidden(self)
         set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
     end
     if self.ui.flow_mp_lobby_host_public_art then
-        set_ui_square_transform(self, self.ui.flow_mp_lobby_host_public_art, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_host_public_art, -9999, -9999, MP_LOBBY_HOST_ACTION_ART_Z, hidden, 1, 1)
     end
     if self.ui.flow_mp_lobby_host_private_art then
-        set_ui_square_transform(self, self.ui.flow_mp_lobby_host_private_art, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_host_private_art, -9999, -9999, MP_LOBBY_HOST_ACTION_ART_Z, hidden, 1, 1)
     end
     if self.ui.flow_mp_lobby_back_button then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_back_button, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, MP_LOBBY_BACK_BTN_H * 0.021)
@@ -18944,6 +18945,9 @@ multiplayer_lobby_hide_non_lobby_ui = function(self, hidden)
     set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
     set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_W * 0.021, MP_SETUP_START_GLOW_H * 0.021)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_host_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_find_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
 end
 
 multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_tint, host_info_tint)
@@ -18981,7 +18985,6 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
     set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, mp_lobby_y(MP_LOBBY_PAGE_LABEL_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
     set_ui_square_transform(self, boxes[6], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), MP_SETUP_UI_Z, host_info_tint, MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
-    -- Temporary: full-alpha hitboxes to verify host publish button placement.
     local host_btn_hit_tint = vmath.vector4(0.12, 0.7, 0.34, 1)
     local host_private_hit_tint = vmath.vector4(0.72, 0.44, 0.16, 1)
     if find_intent then
@@ -19055,31 +19058,39 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
 end
 
 multiplayer_lobby_render_host_publish_buttons = function(self, host_open_tint, host_private_tint, hidden)
-    local offscreen = hidden or multiplayer_lobby_is_find_intent(self)
     local art_tint = vmath.vector4(1, 1, 1, 1)
-    if self.ui.flow_mp_lobby_host_public_art then
-        set_ui_square_transform(
-            self,
-            self.ui.flow_mp_lobby_host_public_art,
-            offscreen and -9999 or MP_LOBBY_HOST_OPEN_BTN_X,
-            offscreen and -9999 or mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y),
-            MP_SETUP_UI_Z + 0.004,
-            art_tint,
-            1,
-            1
-        )
-    end
-    if self.ui.flow_mp_lobby_host_private_art then
-        set_ui_square_transform(
-            self,
-            self.ui.flow_mp_lobby_host_private_art,
-            offscreen and -9999 or MP_LOBBY_HOST_PRIVATE_BTN_X,
-            offscreen and -9999 or mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y),
-            MP_SETUP_UI_Z + 0.004,
-            art_tint,
-            1,
-            1
-        )
+    if multiplayer_lobby_is_find_intent(self) then
+        if self.ui.flow_mp_lobby_host_public_art then
+            set_ui_square_transform(self, self.ui.flow_mp_lobby_host_public_art, -9999, -9999, MP_LOBBY_HOST_ACTION_ART_Z, hidden, 1, 1)
+        end
+        if self.ui.flow_mp_lobby_host_private_art then
+            set_ui_square_transform(self, self.ui.flow_mp_lobby_host_private_art, -9999, -9999, MP_LOBBY_HOST_ACTION_ART_Z, hidden, 1, 1)
+        end
+    else
+        if self.ui.flow_mp_lobby_host_public_art then
+            set_ui_square_transform(
+                self,
+                self.ui.flow_mp_lobby_host_public_art,
+                MP_LOBBY_HOST_OPEN_BTN_X,
+                mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y),
+                MP_LOBBY_HOST_ACTION_ART_Z,
+                art_tint,
+                1,
+                1
+            )
+        end
+        if self.ui.flow_mp_lobby_host_private_art then
+            set_ui_square_transform(
+                self,
+                self.ui.flow_mp_lobby_host_private_art,
+                MP_LOBBY_HOST_PRIVATE_BTN_X,
+                mp_lobby_y(MP_LOBBY_HOST_PRIVATE_BTN_Y),
+                MP_LOBBY_HOST_ACTION_ART_Z,
+                art_tint,
+                1,
+                1
+            )
+        end
     end
     if self.ui.flow_score_rows then
         for i = 1, #self.ui.flow_score_rows do

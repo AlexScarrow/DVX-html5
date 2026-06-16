@@ -18985,8 +18985,8 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
     set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, mp_lobby_y(MP_LOBBY_PAGE_LABEL_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
     set_ui_square_transform(self, boxes[6], MP_LOBBY_HOST_INFO_X, mp_lobby_y(MP_LOBBY_HOST_INFO_Y), MP_SETUP_UI_Z, host_info_tint, MP_LOBBY_HOST_INFO_W, MP_LOBBY_HOST_INFO_H)
-    local host_btn_hit_tint = vmath.vector4(0.12, 0.7, 0.34, 1)
-    local host_private_hit_tint = vmath.vector4(0.72, 0.44, 0.16, 1)
+    local host_btn_hit_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.12, 0.7, 0.34, 0.35) or vmath.vector4(0, 0, 0, 0)
+    local host_private_hit_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.72, 0.44, 0.16, 0.35) or vmath.vector4(0, 0, 0, 0)
     if find_intent then
         set_ui_square_transform(self, boxes[7], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)
         set_ui_square_transform(self, boxes[8], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), 1, 1)

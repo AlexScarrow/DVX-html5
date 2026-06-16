@@ -634,6 +634,7 @@ function M.create(opts)
             peer_steam_id = nil,
             lobby_id = nil,
             is_host = false,
+            lobby_alone_notified = false,
             accepted_peers = {},
             ping_sent = false,
             pass_seq = 1,
@@ -884,6 +885,15 @@ function M.create(opts)
                         state.pass_seq = 1
                         state.phase = "in_lobby"
                         log(state, "MP STEAM GATEB | handshake_reset reason=lobby_alone")
+                        if state.is_host == true and state.lobby_alone_notified ~= true and state.on_status then
+                            state.lobby_alone_notified = true
+                            pcall(state.on_status, "lobby_alone", {
+                                lobby_id = tostring(state.lobby_id or ""),
+                                member_count = member_count
+                            })
+                        end
+                    elseif member_count >= 2 then
+                        state.lobby_alone_notified = false
                     end
                 end
             end

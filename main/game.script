@@ -17298,12 +17298,60 @@ multiplayer_lobby_try_complete_pending_join_from_offer = function(self, offer)
     return true
 end
 
+multiplayer_lobby_prune_guest_sync_maps = function(self, session)
+    if not (self and self.mp_lobby) then
+        return
+    end
+    session = session or multiplayer_lobby_get_active_session(self)
+    if not session then
+        return
+    end
+    local joined_lookup = {}
+    for _, joined_id in ipairs(session.joined_player_ids or {}) do
+        local jid = tostring(joined_id or "")
+        if jid ~= "" then
+            joined_lookup[jid] = true
+        end
+    end
+    for pid, _ in pairs(self.mp_lobby.guest_join_resend_pending or {}) do
+        if not joined_lookup[tostring(pid or "")] then
+            self.mp_lobby.guest_join_resend_pending[pid] = nil
+        end
+    end
+    for pid, _ in pairs(self.mp_lobby.setup_sync_player_ids or {}) do
+        if not joined_lookup[tostring(pid or "")] then
+            self.mp_lobby.setup_sync_player_ids[pid] = nil
+        end
+    end
+end
+
+multiplayer_lobby_note_launch_block = function(self, guest_id, reason)
+    if not self.mp_lobby then
+        return
+    end
+    local key = tostring(guest_id or "") .. "|" .. tostring(reason or "")
+    if self.mp_lobby.last_launch_block_key == key then
+        return
+    end
+    self.mp_lobby.last_launch_block_key = key
+    if reason == "ok" then
+        multiplayer_debug_log(self, "MP LOBBY | launch_ready guests_synced=true")
+    else
+        multiplayer_debug_log(self, string.format(
+            "MP LOBBY | launch_blocked guest=%s reason=%s",
+            tostring(guest_id or ""),
+            tostring(reason or "")
+        ))
+    end
+end
+
 multiplayer_lobby_joined_guests_setup_synced = function(self, session)
     session = session or multiplayer_lobby_get_active_session(self)
     if not session then
         return true
     end
     multiplayer_lobby_ensure_runtime(self)
+    multiplayer_lobby_prune_guest_sync_maps(self, session)
     local sync = self.mp_lobby.setup_sync_player_ids or {}
     local pending_notify = self.mp_lobby.guest_join_resend_pending or {}
     local host_id = tostring(
@@ -17312,18 +17360,38 @@ multiplayer_lobby_joined_guests_setup_synced = function(self, session)
             or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID
             or "p1"
     )
+    local guest_count = 0
     for _, joined_id in ipairs(session.joined_player_ids or {}) do
         local jid = tostring(joined_id or "")
         if jid ~= "" and jid ~= host_id then
+            guest_count = guest_count + 1
             if pending_notify[jid] == true then
+                multiplayer_lobby_note_launch_block(self, jid, "pending_notify")
                 return false
             end
             if sync[jid] ~= true then
+                multiplayer_lobby_note_launch_block(self, jid, "not_synced")
                 return false
             end
         end
     end
+    local desired_players = math.max(2, tonumber(self.mp_setup and self.mp_setup.player_count or 2) or 2)
+    if guest_count == 0 and desired_players >= 2 then
+        multiplayer_lobby_note_launch_block(self, "", "no_guests")
+        return false
+    end
+    multiplayer_lobby_note_launch_block(self, "", "ok")
     return true
+end
+
+multiplayer_lobby_guest_bump_setup_sync_epoch = function(self)
+    if not (self and self.mp_lobby) then
+        return 0
+    end
+    local epoch = (tonumber(self.mp_lobby.guest_setup_sync_epoch or 0) or 0) + 1
+    self.mp_lobby.guest_setup_sync_epoch = epoch
+    self.mp_lobby.guest_setup_sync_last_requested_epoch = 0
+    return epoch
 end
 
 multiplayer_lobby_guest_request_setup_sync = function(self)
@@ -17333,7 +17401,59 @@ multiplayer_lobby_guest_request_setup_sync = function(self)
     if tostring(self.mp_state.local_player_id or "") == tostring(self.mp_state.host_player_id or "") then
         return false
     end
+    multiplayer_lobby_ensure_runtime(self)
+    local epoch = tonumber(self.mp_lobby.guest_setup_sync_epoch or 0) or 0
+    if epoch <= 0 then
+        return false
+    end
+    if tonumber(self.mp_lobby.guest_setup_sync_last_requested_epoch or 0) == epoch then
+        return false
+    end
+    self.mp_lobby.guest_setup_sync_last_requested_epoch = epoch
     multiplayer_transport_send_command(self, "request_setup_state", {}, self.mp_state.local_player_id)
+    return true
+end
+
+multiplayer_lobby_prune_guests_on_host_alone = function(self)
+    if not multiplayer_lobby_is_host(self) then
+        return false
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    local session = multiplayer_lobby_get_active_session(self)
+    if not session then
+        return false
+    end
+    local host_id = multiplayer_lobby_session_host_wire_id(session)
+    session.joined_player_ids = session.joined_player_ids or {}
+    local removed_ids = {}
+    for i = #session.joined_player_ids, 1, -1 do
+        local jid = tostring(session.joined_player_ids[i] or "")
+        if jid ~= "" and jid ~= host_id then
+            table.remove(session.joined_player_ids, i)
+            removed_ids[#removed_ids + 1] = jid
+        end
+    end
+    if #removed_ids == 0 then
+        return false
+    end
+    self.mp_lobby.guest_join_resend_pending = self.mp_lobby.guest_join_resend_pending or {}
+    for _, jid in ipairs(removed_ids) do
+        self.mp_lobby.guest_join_resend_pending[jid] = nil
+        if self.mp_lobby.setup_sync_player_ids then
+            self.mp_lobby.setup_sync_player_ids[jid] = nil
+        end
+    end
+    session.players = math.max(1, math.min(tonumber(session.max_players or 4) or 4, #session.joined_player_ids))
+    session.updated_at_ms = get_wall_clock_ms()
+    self.mp_lobby.offers_by_id[tostring(session.id or "")] = session
+    multiplayer_lobby_sync_sessions_from_offers(self)
+    multiplayer_lobby_prune_guest_sync_maps(self, session)
+    multiplayer_lobby_emit_offer_upsert(self, session)
+    multiplayer_debug_log(self, string.format(
+        "MP LOBBY | lobby_alone_prune session=%s removed=%s",
+        tostring(session.id or ""),
+        table.concat(removed_ids, ",")
+    ))
     return true
 end
 
@@ -17370,29 +17490,33 @@ multiplayer_lobby_deliver_pending_join_notifications = function(self)
             or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID
             or "p1"
     )
+    multiplayer_lobby_prune_guest_sync_maps(self, session)
+    local sync = self.mp_lobby.setup_sync_player_ids or {}
     local setup_config = multiplayer_setup_build_session_config(self)
     local events = {}
     for _, joined_id in ipairs(session.joined_player_ids or {}) do
         local jid = tostring(joined_id or "")
         if jid ~= "" and jid ~= host_id and pending_notify[jid] == true then
-            table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
-                target_player_id = jid,
-                session_id = tostring(session.id or ""),
-                session_max_players = math.max(2, tonumber(session.max_players or 2) or 2),
-                session_config = setup_config
-            }))
-            table.insert(events, multiplayer_transport_emit_event(self, "setup_state_updated", {
-                target_player_id = jid,
-                session_config = setup_config
-            }))
-            if self.mp_lobby.setup_sync_player_ids then
-                self.mp_lobby.setup_sync_player_ids[jid] = nil
+            if sync[jid] == true then
+                pending_notify[jid] = nil
+            else
+                table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
+                    target_player_id = jid,
+                    session_id = tostring(session.id or ""),
+                    session_max_players = math.max(2, tonumber(session.max_players or 2) or 2),
+                    session_config = setup_config
+                }))
+                table.insert(events, multiplayer_transport_emit_event(self, "setup_state_updated", {
+                    target_player_id = jid,
+                    session_config = setup_config
+                }))
+                pending_notify[jid] = nil
+                multiplayer_debug_log(self, string.format(
+                    "MP LOBBY | join_notify_resend guest=%s session=%s",
+                    jid,
+                    tostring(session.id or "")
+                ))
             end
-            multiplayer_debug_log(self, string.format(
-                "MP LOBBY | join_notify_resend guest=%s session=%s",
-                jid,
-                tostring(session.id or "")
-            ))
         end
     end
     if #events > 0 then
@@ -18615,6 +18739,8 @@ multiplayer_lobby_abort_guest_join = function(self)
     lobby.pending_steam_lobby_id = ""
     lobby.pending_join_wire_sent = false
     lobby.pending_join_wire_session_id = ""
+    lobby.guest_setup_sync_epoch = 0
+    lobby.guest_setup_sync_last_requested_epoch = 0
     multiplayer_lobby_clear_pin_join_state(self)
     multiplayer_reset_steam_wire_handshake(self)
     if self.mp_transport and self.mp_transport.steam_leave_lobby then
@@ -25191,6 +25317,7 @@ multiplayer_transport_handle_command = function(self, command)
             if self.mp_lobby.setup_sync_player_ids then
                 self.mp_lobby.setup_sync_player_ids[tostring(sender or "")] = nil
             end
+            multiplayer_lobby_prune_guest_sync_maps(self, multiplayer_lobby_get_session_by_id(self, session_id))
             multiplayer_reset_steam_wire_handshake(self)
             table.insert(events, multiplayer_transport_emit_event(self, "lobby_state_updated", {
                 lobby_state = multiplayer_lobby_build_state_payload(self)
@@ -27189,9 +27316,6 @@ multiplayer_transport_on_event = function(self, event)
                 self.mp_lobby.pending_steam_lobby_id = ""
                 self.mp_lobby.pending_join_wire_sent = false
                 self.mp_lobby.pending_join_wire_session_id = ""
-                if flow == FLOW_STATE_MP_LOBBY or flow == FLOW_STATE_MP_SETUP then
-                    multiplayer_lobby_guest_request_setup_sync(self)
-                end
                 if show_joined_advisory then
                     show_mp_lobby_advisory(self, 1.8, "joined")
                     print("MP LOBBY | Joined game -> setup")
@@ -27321,6 +27445,7 @@ multiplayer_transport_on_event = function(self, event)
         self.mp_lobby.pending_join_wire_sent = false
         self.mp_lobby.pending_join_wire_session_id = ""
         multiplayer_lobby_clear_pin_join_state(self)
+        multiplayer_lobby_guest_bump_setup_sync_epoch(self)
         multiplayer_lobby_guest_request_setup_sync(self)
         show_mp_lobby_advisory(self, 1.8, "joined")
         print("MP LOBBY | Joined game -> setup")
@@ -28631,6 +28756,8 @@ multiplayer_transport_init = function(self)
                 if self.mp_transport and self.mp_transport.flush_wire_queue then
                     self.mp_transport.flush_wire_queue()
                 end
+            elseif status == "lobby_alone" then
+                multiplayer_lobby_prune_guests_on_host_alone(self)
             end
             multiplayer_debug_log(self, string.format("MP NET | transport_status=%s detail=%s", tostring(status), tostring(detail and detail.reason or detail and detail.mode or "")))
         end

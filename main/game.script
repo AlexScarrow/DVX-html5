@@ -17281,17 +17281,9 @@ multiplayer_lobby_try_complete_pending_join_from_offer = function(self, offer)
             break
         end
     end
-    local host_id = tostring(self.mp_state and self.mp_state.host_player_id or "p1")
-    if not in_joined
-        and local_id ~= host_id
-        and tonumber(offer.players or 0) >= 2
-        and tonumber(offer.max_players or 2) >= 2
-    then
-        in_joined = true
-    end
     if not in_joined then
         multiplayer_debug_log(self, string.format(
-            "MP LOBBY | pending_join_incomplete session=%s local=%s players=%d joined=%d",
+            "MP LOBBY | pending_join_incomplete session=%s local=%s reason=not_in_roster players=%d joined=%d",
             offer_id,
             local_id,
             tonumber(offer.players or 0) or 0,

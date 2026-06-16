@@ -459,14 +459,18 @@ TITLE_SOLO_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_SOLO_BUTTON_Y = (SCREEN_HEIGHT * 0.52) + TITLE_BUTTON_Y_OFFSET
 TITLE_MULTIPLAYER_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_MULTIPLAYER_BUTTON_Y = (SCREEN_HEIGHT * 0.38) + TITLE_BUTTON_Y_OFFSET
-MP_CHOOSER_HOST_BTN_X = TITLE_MULTIPLAYER_BUTTON_X
-MP_CHOOSER_HOST_BTN_Y = TITLE_MULTIPLAYER_BUTTON_Y - 58
-MP_CHOOSER_FIND_BTN_X = TITLE_MULTIPLAYER_BUTTON_X
-MP_CHOOSER_FIND_BTN_Y = TITLE_MULTIPLAYER_BUTTON_Y + 58
-MP_CHOOSER_BACK_BTN_X = TITLE_TUTORIAL_BUTTON_X
-MP_CHOOSER_BACK_BTN_Y = TITLE_TUTORIAL_BUTTON_Y
-MP_CHOOSER_LABEL_SCALE = 0.28
-MP_CHOOSER_LABEL_SPACING = 9
+MP_CHOOSER_BTN_X = SCREEN_WIDTH * 0.5
+MP_CHOOSER_BTN_W = 280
+MP_CHOOSER_BTN_H = 70
+MP_CHOOSER_BTN_GAP = 16
+MP_CHOOSER_BTN_STEP = MP_CHOOSER_BTN_H + MP_CHOOSER_BTN_GAP
+MP_CHOOSER_STACK_CENTER_Y = SCREEN_HEIGHT * 0.5
+MP_CHOOSER_BACK_BTN_X = MP_CHOOSER_BTN_X
+MP_CHOOSER_BACK_BTN_Y = MP_CHOOSER_STACK_CENTER_Y - MP_CHOOSER_BTN_STEP
+MP_CHOOSER_FIND_BTN_X = MP_CHOOSER_BTN_X
+MP_CHOOSER_FIND_BTN_Y = MP_CHOOSER_STACK_CENTER_Y
+MP_CHOOSER_HOST_BTN_X = MP_CHOOSER_BTN_X
+MP_CHOOSER_HOST_BTN_Y = MP_CHOOSER_STACK_CENTER_Y + MP_CHOOSER_BTN_STEP
 TITLE_DEBUG_BUTTON_X = TITLE_TUTORIAL_BUTTON_X - 300
 TITLE_DEBUG_BUTTON_Y = TITLE_TUTORIAL_BUTTON_Y
 TITLE_DEBUG_BUTTON_W = 220
@@ -558,8 +562,10 @@ ADVISORY_ANIM_ONLY_SARGE_FAB = hash("advisory_onlySargeAuthorized")
 ADVISORY_ANIM_BACKPACK_FULL = hash("advisory_backpackFull")
 ADVISORY_ANIM_MOVE_UNIT_CLOSER = hash("advisory_moveUnitCloser")
 ADVISORY_ANIM_TRY_AGAIN = hash("advisory_tryAgain")
--- Reuses tryAgain art for MP lobby/setup status pings (joining, joined, browse, etc.).
-ADVISORY_ANIM_MP_LOBBY_STATUS = ADVISORY_ANIM_TRY_AGAIN
+ADVISORY_ANIM_MP_CREATING_SESSION = hash("advisory_mpCreatingSession")
+ADVISORY_ANIM_MP_FINDING_PLAYERS = hash("advisory_mpFindingPlayers")
+ADVISORY_ANIM_MP_JOINING_GAME = hash("advisory_mpJoiningGame")
+ADVISORY_ANIM_MP_JOINED_GAME = hash("advisory_mpJoinedGame")
 ADVISORY_ANIM_DEPLOY_POD_ITEMS_FIRST = hash("advisory_deployPodItems")
 ADVISORY_ANIM_NO_SPACE_GUN_TURRET = hash("advisory_noSpaceGunTurret")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
@@ -12108,6 +12114,9 @@ local function initialize_unit_ui(self)
         flow_title_tutorial_button = nil,
         flow_title_solo_button = nil,
         flow_title_multiplayer_button = nil,
+        flow_mp_chooser_back_art = nil,
+        flow_mp_chooser_host_art = nil,
+        flow_mp_chooser_find_art = nil,
         flow_title_demo_button_art = nil,
         flow_demo_explainer_art = nil,
         flow_demo_select_tutorial_art = nil,
@@ -12414,6 +12423,18 @@ local function initialize_unit_ui(self)
     self.ui.flow_title_solo_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_multiplayer_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 280, 70)
     self.ui.flow_title_debug_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
+    self.ui.flow_mp_chooser_back_art = create_ui_marker_sprite(hash("mp_chooser_back"), FLOW_UI_BUTTON_Z + 0.001)
+    self.ui.flow_mp_chooser_host_art = create_ui_marker_sprite(hash("mp_chooser_host"), FLOW_UI_BUTTON_Z + 0.001)
+    self.ui.flow_mp_chooser_find_art = create_ui_marker_sprite(hash("mp_chooser_find"), FLOW_UI_BUTTON_Z + 0.001)
+    for _, chooser_art_id in ipairs({
+        self.ui.flow_mp_chooser_back_art,
+        self.ui.flow_mp_chooser_host_art,
+        self.ui.flow_mp_chooser_find_art,
+    }) do
+        if chooser_art_id then
+            pcall(go.set, msg.url(nil, chooser_art_id, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        end
+    end
     self.ui.flow_title_demo_button_art = create_ui_marker_sprite(hash("demo_title_button"), DEMO_TITLE_BUTTON_ART_Z)
     self.ui.flow_demo_explainer_art = create_ui_marker_sprite(hash("demo_explainer"), FLOW_UI_BUTTON_Z + 0.001)
     self.ui.flow_demo_select_tutorial_art = create_ui_marker_sprite(hash("demo_select_tutorial_button"), FLOW_UI_BUTTON_Z + 0.001)
@@ -12753,6 +12774,9 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_solo_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
     set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_back_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_host_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_find_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
     set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
     set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -12955,11 +12979,27 @@ local function set_ui_hidden(self)
     end
 end
 
-show_mp_lobby_advisory = function(self, duration_s)
+multiplayer_is_mp_status_advisory = function(anim_id)
+    return anim_id == ADVISORY_ANIM_MP_CREATING_SESSION
+        or anim_id == ADVISORY_ANIM_MP_FINDING_PLAYERS
+        or anim_id == ADVISORY_ANIM_MP_JOINING_GAME
+        or anim_id == ADVISORY_ANIM_MP_JOINED_GAME
+end
+
+show_mp_lobby_advisory = function(self, duration_s, advisory_kind)
     if not self then
         return
     end
-    self.advisory_anim_id = ADVISORY_ANIM_MP_LOBBY_STATUS
+    local kind = tostring(advisory_kind or "host")
+    local anim_id = ADVISORY_ANIM_MP_CREATING_SESSION
+    if kind == "find" then
+        anim_id = ADVISORY_ANIM_MP_FINDING_PLAYERS
+    elseif kind == "joining" then
+        anim_id = ADVISORY_ANIM_MP_JOINING_GAME
+    elseif kind == "joined" then
+        anim_id = ADVISORY_ANIM_MP_JOINED_GAME
+    end
+    self.advisory_anim_id = anim_id
     self.advisory_timer_s = tonumber(duration_s or ADVISORY_DEFAULT_DURATION) or ADVISORY_DEFAULT_DURATION
 end
 
@@ -13015,21 +13055,28 @@ update_advisory_ui = function(self, dt)
         return
     end
     local hidden = vmath.vector4(0, 0, 0, 0)
-    self.advisory_timer_s = math.max(0, (tonumber(self.advisory_timer_s or 0) or 0) - (tonumber(dt or 0) or 0))
     local flow_state = (self.game_flow_state or FLOW_STATE_GAME)
-    local mp_lobby_status_advisory = self.advisory_anim_id == ADVISORY_ANIM_MP_LOBBY_STATUS
+    local pending_join = flow_state == FLOW_STATE_MP_LOBBY
+        and self.mp_lobby
+        and tostring(self.mp_lobby.pending_join_session_id or "") ~= ""
+    if pending_join then
+        self.advisory_anim_id = ADVISORY_ANIM_MP_JOINING_GAME
+    else
+        self.advisory_timer_s = math.max(0, (tonumber(self.advisory_timer_s or 0) or 0) - (tonumber(dt or 0) or 0))
+    end
+    local mp_status_advisory = multiplayer_is_mp_status_advisory(self.advisory_anim_id)
     local can_show_for_flow = (flow_state == FLOW_STATE_GAME)
         or (flow_state == FLOW_STATE_MP_LOBBY and (
             self.advisory_anim_id == ADVISORY_ANIM_PROTOCOL_MISMATCH
-            or mp_lobby_status_advisory
+            or mp_status_advisory
         ))
-        or (flow_state == FLOW_STATE_MP_SETUP and mp_lobby_status_advisory)
+        or (flow_state == FLOW_STATE_MP_SETUP and mp_status_advisory)
     local advisory_z = ADVISORY_TEXT_Z
-    if flow_state == FLOW_STATE_MP_LOBBY then
+    if flow_state == FLOW_STATE_MP_LOBBY or flow_state == FLOW_STATE_MP_SETUP then
         advisory_z = FLOW_UI_BUTTON_Z + 0.02
     end
     local should_show = can_show_for_flow
-        and self.advisory_timer_s > 0
+        and (pending_join or self.advisory_timer_s > 0)
         and self.advisory_anim_id ~= nil
     if not should_show then
         set_ui_square_transform(self, self.ui.advisory_sprite, -9999, -9999, advisory_z, hidden, ADVISORY_TEXT_SCALE, ADVISORY_TEXT_SCALE)
@@ -17004,9 +17051,25 @@ multiplayer_leave_in_progress_match_to_lobby = function(self, reason)
     self.mp_state.session_id = "local_session"
     multiplayer_apply_steam_lobby_wire_defaults(self)
     self.mp_state.debug_active_player_id = self.mp_state.local_player_id or self.mp_state.host_player_id
+    self.mp_state.transport_status = "idle"
+    self.mp_state.transport_status_detail = {}
+    self.mp_state.seen_command_ids = {}
+    self.mp_state.seen_event_ids = {}
+    if self.mp_lobby then
+        self.mp_lobby.pending_steam_lobby_id = ""
+        self.mp_lobby.pending_join_session_id = ""
+        self.mp_lobby.pending_join_wire_sent = false
+        self.mp_lobby.pending_join_wire_session_id = ""
+    end
+    if self.mp_transport and self.mp_transport.shutdown then
+        pcall(self.mp_transport.shutdown)
+    end
+    self.mp_transport = nil
+    self.advisory_anim_id = nil
+    self.advisory_timer_s = 0
     self.multiplayer_mode_active = true
-    enter_flow_state(self, FLOW_STATE_MP_LOBBY)
-    print(string.format("MP MATCH | return_to_lobby | reason=%s", tostring(reason or "unknown")))
+    enter_flow_state(self, FLOW_STATE_MP_CHOOSER)
+    print(string.format("MP MATCH | return_to_chooser | reason=%s", tostring(reason or "unknown")))
     return true
 end
 
@@ -17213,7 +17276,7 @@ multiplayer_lobby_try_complete_pending_join_from_offer = function(self, offer)
     self.mp_lobby.pending_steam_lobby_id = ""
     self.mp_lobby.pending_join_wire_sent = false
     self.mp_lobby.pending_join_wire_session_id = ""
-    show_mp_lobby_advisory(self, 1.8)
+    show_mp_lobby_advisory(self, 1.8, "joined")
     print("MP LOBBY | Joined game -> setup")
     print("MP LOBBY | pending join completed from offer upsert")
     return true
@@ -17375,9 +17438,9 @@ multiplayer_lobby_on_discovery_browse = function(self, detail)
     lobby.discovery_session_count = compatible_total
     if compatible_total ~= prev then
         if compatible_total > 0 then
-            show_mp_lobby_advisory(self, 2.2)
+            show_mp_lobby_advisory(self, 2.2, "find")
         elseif prev < 0 then
-            show_mp_lobby_advisory(self, 2.2)
+            show_mp_lobby_advisory(self, 2.2, "find")
         end
     end
 end
@@ -17450,7 +17513,7 @@ multiplayer_lobby_request_join_session = function(self, session)
                 lobby.pending_steam_lobby_id
             ))
             self.mp_transport.steam_join_lobby(lobby.pending_steam_lobby_id)
-            show_mp_lobby_advisory(self, 2.0)
+            show_mp_lobby_advisory(self, 2.0, "joining")
             print("MP LOBBY | Joining host...")
             return true
         end
@@ -17500,56 +17563,15 @@ multiplayer_lobby_enter_with_pairing_intent = function(self, intent)
     end
     enter_flow_state(self, FLOW_STATE_MP_LOBBY)
     if normalized == "find" then
-        show_mp_lobby_advisory(self, 2.5)
+        show_mp_lobby_advisory(self, 2.5, "find")
     else
-        show_mp_lobby_advisory(self, 2.5)
+        show_mp_lobby_advisory(self, 2.5, "host")
     end
     multiplayer_debug_log(self, string.format("MP FLOW | pairing_intent=%s", normalized))
 end
 
 multiplayer_lobby_switch_to_host_intent = function(self)
     multiplayer_lobby_enter_with_pairing_intent(self, "host")
-end
-
-multiplayer_chooser_render_label = function(self, text, center_x, center_y, z, scale, letter_pool, start_index)
-    local label = string.upper(tostring(text or ""))
-    local letters = letter_pool or {}
-    local cursor = math.max(1, tonumber(start_index or 1) or 1)
-    local hidden = vmath.vector4(0, 0, 0, 0)
-    local label_len = #label
-    if label_len <= 0 then
-        return cursor
-    end
-    local span = (label_len - 1) * MP_CHOOSER_LABEL_SPACING
-    local draw_x = center_x - (span * 0.5)
-    for ci = 1, label_len do
-        local glyph_id = letters[cursor]
-        if not glyph_id then
-            break
-        end
-        local ch = string.sub(label, ci, ci)
-        if ch == " " then
-            cursor = cursor + 1
-        else
-            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
-            set_ui_square_transform(
-                self,
-                glyph_id,
-                draw_x + ((ci - 1) * MP_CHOOSER_LABEL_SPACING),
-                center_y,
-                z,
-                vmath.vector4(1, 1, 1, 0.98),
-                scale,
-                scale
-            )
-            cursor = cursor + 1
-        end
-    end
-    while cursor <= #letters do
-        set_ui_square_transform(self, letters[cursor], -9999, -9999, z, hidden, scale, scale)
-        cursor = cursor + 1
-    end
-    return cursor
 end
 
 multiplayer_lobby_chooser_render_ui = function(self, dt, hidden)
@@ -17562,44 +17584,33 @@ multiplayer_lobby_chooser_render_ui = function(self, dt, hidden)
     set_ui_square_transform(self, self.ui.flow_solo_setup_panel, -9999, -9999, SOLO_SETUP_PANEL_Z, hidden, SOLO_SETUP_PANEL_SCALE, SOLO_SETUP_PANEL_SCALE)
     set_ui_square_transform(self, self.ui.flow_mp_setup_panel, -9999, -9999, MP_SETUP_PANEL_Z, hidden, MP_SETUP_PANEL_W * 0.021, MP_SETUP_PANEL_H * 0.021)
     if self.ui.flow_mp_lobby_backpanel then
-        set_ui_square_transform(
-            self,
-            self.ui.flow_mp_lobby_backpanel,
-            SCREEN_WIDTH * 0.5,
-            SCREEN_HEIGHT * 0.5 + 20,
-            FLOW_UI_PANEL_Z + 0.003,
-            vmath.vector4(1, 1, 1, 0.92),
-            0.82,
-            0.82
-        )
+        set_ui_square_transform(self, self.ui.flow_mp_lobby_backpanel, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
     end
-    local back_tint = vmath.vector4(0.95, 0.7, 0.2, 0.94)
-    local host_tint = vmath.vector4(0.12, 0.7, 0.34, 0.94)
-    local find_tint = vmath.vector4(0.1, 0.85, 1, 0.94)
-    set_ui_square_transform(self, self.ui.flow_title_tutorial_button, MP_CHOOSER_BACK_BTN_X, MP_CHOOSER_BACK_BTN_Y, FLOW_UI_BUTTON_Z, back_tint, 280, 70)
-    set_ui_square_transform(self, self.ui.flow_title_solo_button, MP_CHOOSER_HOST_BTN_X, MP_CHOOSER_HOST_BTN_Y, FLOW_UI_BUTTON_Z, host_tint, 280, 70)
-    set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, MP_CHOOSER_FIND_BTN_X, MP_CHOOSER_FIND_BTN_Y, FLOW_UI_BUTTON_Z, find_tint, 280, 70)
+    local hitbox_hidden = vmath.vector4(0, 0, 0, 0)
+    local art_tint = vmath.vector4(1, 1, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_title_tutorial_button, MP_CHOOSER_BACK_BTN_X, MP_CHOOSER_BACK_BTN_Y, FLOW_UI_BUTTON_Z, hitbox_hidden, MP_CHOOSER_BTN_W, MP_CHOOSER_BTN_H)
+    set_ui_square_transform(self, self.ui.flow_title_solo_button, MP_CHOOSER_HOST_BTN_X, MP_CHOOSER_HOST_BTN_Y, FLOW_UI_BUTTON_Z, hitbox_hidden, MP_CHOOSER_BTN_W, MP_CHOOSER_BTN_H)
+    set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, MP_CHOOSER_FIND_BTN_X, MP_CHOOSER_FIND_BTN_Y, FLOW_UI_BUTTON_Z, hitbox_hidden, MP_CHOOSER_BTN_W, MP_CHOOSER_BTN_H)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_back_art, MP_CHOOSER_BACK_BTN_X, MP_CHOOSER_BACK_BTN_Y, FLOW_UI_BUTTON_Z + 0.001, art_tint, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_host_art, MP_CHOOSER_HOST_BTN_X, MP_CHOOSER_HOST_BTN_Y, FLOW_UI_BUTTON_Z + 0.001, art_tint, 1, 1)
+    set_ui_square_transform(self, self.ui.flow_mp_chooser_find_art, MP_CHOOSER_FIND_BTN_X, MP_CHOOSER_FIND_BTN_Y, FLOW_UI_BUTTON_Z + 0.001, art_tint, 1, 1)
     if self.ui.flow_mp_lobby_back_button then
         set_ui_square_transform(self, self.ui.flow_mp_lobby_back_button, -9999, -9999, FLOW_UI_BUTTON_Z + 0.004, hidden, 1, 1)
     end
-    local letter_pool = self.ui.flow_mp_setup_name_letters or {}
-    local letter_cursor = 1
-    letter_cursor = multiplayer_chooser_render_label(
-        self, "ONLINE", SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5 + 118, FLOW_UI_BUTTON_Z + 0.006, MP_CHOOSER_LABEL_SCALE, letter_pool, letter_cursor
-    )
-    letter_cursor = multiplayer_chooser_render_label(
-        self, "BACK", MP_CHOOSER_BACK_BTN_X, MP_CHOOSER_BACK_BTN_Y + 4, FLOW_UI_BUTTON_Z + 0.006, MP_CHOOSER_LABEL_SCALE, letter_pool, letter_cursor
-    )
-    letter_cursor = multiplayer_chooser_render_label(
-        self, "HOST", MP_CHOOSER_HOST_BTN_X, MP_CHOOSER_HOST_BTN_Y + 4, FLOW_UI_BUTTON_Z + 0.006, MP_CHOOSER_LABEL_SCALE, letter_pool, letter_cursor
-    )
-    multiplayer_chooser_render_label(
-        self, "FIND", MP_CHOOSER_FIND_BTN_X, MP_CHOOSER_FIND_BTN_Y + 4, FLOW_UI_BUTTON_Z + 0.006, MP_CHOOSER_LABEL_SCALE, letter_pool, letter_cursor
-    )
+    if self.ui.flow_mp_setup_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_setup_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_mp_lobby_name_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_lobby_name_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
+    end
 end
 
 multiplayer_lobby_chooser_handle_touch = function(self, input_x, input_y)
-    if is_point_in_screen_rect(input_x, input_y, MP_CHOOSER_BACK_BTN_X, MP_CHOOSER_BACK_BTN_Y, 280, 70) then
+    if is_point_in_screen_rect(input_x, input_y, MP_CHOOSER_BACK_BTN_X, MP_CHOOSER_BACK_BTN_Y, MP_CHOOSER_BTN_W, MP_CHOOSER_BTN_H) then
         if self.mp_state then
             self.mp_state.enabled = false
         end
@@ -17607,11 +17618,11 @@ multiplayer_lobby_chooser_handle_touch = function(self, input_x, input_y)
         enter_flow_state(self, FLOW_STATE_TITLE)
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_CHOOSER_HOST_BTN_X, MP_CHOOSER_HOST_BTN_Y, 280, 70) then
+    if is_point_in_screen_rect(input_x, input_y, MP_CHOOSER_HOST_BTN_X, MP_CHOOSER_HOST_BTN_Y, MP_CHOOSER_BTN_W, MP_CHOOSER_BTN_H) then
         multiplayer_lobby_enter_with_pairing_intent(self, "host")
         return true
     end
-    if is_point_in_screen_rect(input_x, input_y, MP_CHOOSER_FIND_BTN_X, MP_CHOOSER_FIND_BTN_Y, 280, 70) then
+    if is_point_in_screen_rect(input_x, input_y, MP_CHOOSER_FIND_BTN_X, MP_CHOOSER_FIND_BTN_Y, MP_CHOOSER_BTN_W, MP_CHOOSER_BTN_H) then
         multiplayer_lobby_enter_with_pairing_intent(self, "find")
         return true
     end
@@ -26903,6 +26914,10 @@ multiplayer_transport_on_event = function(self, event)
             local is_guest = self.mp_state
                 and self.mp_state.enabled
                 and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+            local show_joined_advisory = is_guest and (
+                (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_MP_LOBBY
+                or tostring(self.mp_lobby and self.mp_lobby.pending_join_session_id or "") ~= ""
+            )
             if is_guest and self.game_flow_state == FLOW_STATE_MP_LOBBY then
                 multiplayer_lobby_ensure_runtime(self)
                 local pending_id = tostring(self.mp_lobby.pending_join_session_id or "")
@@ -26925,9 +26940,11 @@ multiplayer_transport_on_event = function(self, event)
                 self.mp_lobby.pending_steam_lobby_id = ""
                 self.mp_lobby.pending_join_wire_sent = false
                 self.mp_lobby.pending_join_wire_session_id = ""
-                show_mp_lobby_advisory(self, 1.8)
-                print("MP LOBBY | Joined game -> setup")
-                print("MP LOBBY | setup_state synced -> setup")
+                if show_joined_advisory then
+                    show_mp_lobby_advisory(self, 1.8, "joined")
+                    print("MP LOBBY | Joined game -> setup")
+                    print("MP LOBBY | setup_state synced -> setup")
+                end
             end
             print(string.format("MP SETUP | synced | player_count=%d", tonumber(config.player_count or 0) or 0))
         end
@@ -27052,7 +27069,7 @@ multiplayer_transport_on_event = function(self, event)
         self.mp_lobby.pending_steam_lobby_id = ""
         self.mp_lobby.pending_join_wire_sent = false
         self.mp_lobby.pending_join_wire_session_id = ""
-        show_mp_lobby_advisory(self, 1.8)
+        show_mp_lobby_advisory(self, 1.8, "joined")
         print("MP LOBBY | Joined game -> setup")
         print("MP LOBBY | join accepted -> setup")
         return

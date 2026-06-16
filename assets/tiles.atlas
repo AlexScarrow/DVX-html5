@@ -870,6 +870,27 @@ images {
   image: "/assets/images/advisory_noSpaceGunTurret.png"
 }
 images {
+  image: "/assets/images/advisory_mpCreatingSession.png"
+}
+images {
+  image: "/assets/images/advisory_mpFindingPlayers.png"
+}
+images {
+  image: "/assets/images/advisory_mpJoiningGame.png"
+}
+images {
+  image: "/assets/images/advisory_mpJoinedGame.png"
+}
+images {
+  image: "/assets/images/mp_chooser_back.png"
+}
+images {
+  image: "/assets/images/mp_chooser_host.png"
+}
+images {
+  image: "/assets/images/mp_chooser_find.png"
+}
+images {
   image: "/assets/images/tile_cavern_off.png"
 }
 images {

@@ -30,6 +30,19 @@ local steam_listener_installed = false
     local LOBBY_RETRY_SECONDS = 2.0
     local LOBBY_MAX_MEMBERS = 4
     local LOBBY_CREATE_EMPTY_THRESHOLD = 2
+    local FIND_DISCOVERY_REFRESH_SECONDS = 3.0
+
+    local function normalize_pairing_mode(mode)
+        local value = tostring(mode or "host")
+        if value == "find" then
+            return "find"
+        end
+        return "host"
+    end
+
+    local function is_find_pairing_mode(state)
+        return normalize_pairing_mode(state and state.pairing_mode) == "find"
+    end
 
     local function log(state, message)
         local line = tostring(message or "")
@@ -119,6 +132,13 @@ local steam_listener_installed = false
         local offer = decode_discovery_offer(tostring(raw or ""))
         if not offer then
             return
+        end
+        if tostring(offer.host_steam_id or "") == ""
+            and type(state.backend.matchmaking_get_lobby_owner) == "function" then
+            local ok_owner, owner = pcall(state.backend.matchmaking_get_lobby_owner, lobby_id)
+            if ok_owner and is_valid_steam_id(owner) then
+                offer.host_steam_id = tostring(owner)
+            end
         end
         state.discovery_seen_ids = state.discovery_seen_ids or {}
         local first_seen = state.discovery_seen_ids[offer.id] ~= true
@@ -265,11 +285,19 @@ local steam_listener_installed = false
     local function request_lobby_list(state)
         local backend = state.backend
         add_gate_lobby_list_filters(state)
+        if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+            state.discovery_refresh_only = true
+        end
         if pcall(backend.matchmaking_request_lobby_list) then
-            state.phase = "searching"
+            if not is_valid_steam_id(state.lobby_id) then
+                state.phase = "searching"
+            end
             state.lobby_search_pending = true
             state.lobby_search_wait = 8.0
-            log(state, "MP STEAM GATEB | lobby_search_requested")
+            log(state, string.format(
+                "MP STEAM GATEB | lobby_search_requested mode=%s",
+                tostring(state.pairing_mode or "host")
+            ))
         else
             log(state, "MP STEAM GATEB | lobby_search_failed")
         end
@@ -424,6 +452,19 @@ local steam_listener_installed = false
         emit_discovery_from_match_list(state, total)
         if state.discovery_refresh_only == true then
             state.discovery_refresh_only = false
+            if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+                state.phase = "searching"
+                if state.on_status then
+                    pcall(state.on_status, "discovery_browse", { match_count = total })
+                end
+            end
+            return
+        end
+        if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+            state.phase = "searching"
+            if state.on_status then
+                pcall(state.on_status, "discovery_browse", { match_count = total })
+            end
             return
         end
         if state.phase == "passed" then
@@ -458,28 +499,28 @@ local steam_listener_installed = false
                 end
             end
         end
-        if foreign_lobby_id ~= nil then
+        if foreign_lobby_id ~= nil and not is_find_pairing_mode(state) then
+            state.host_create_wait_count = 0
             state.empty_search_count = 0
-            join_gate_lobby(state, foreign_lobby_id)
-            return
+            log(state, string.format(
+                "MP STEAM GATEB | lobby_match_foreign_skipped id=%s mode=host",
+                tostring(foreign_lobby_id)
+            ))
         end
         if own_lobby_id ~= nil and state.lobby_id == nil
             and state.phase ~= "creating" and state.phase ~= "joining" then
-            state.empty_search_count = 0
+            state.host_create_wait_count = 0
             log(state, string.format("MP STEAM GATEB | lobby_rejoin_own id=%s", own_lobby_id))
             join_gate_lobby(state, own_lobby_id)
             return
         end
-        if total <= 0 then
-            state.empty_search_count = (tonumber(state.empty_search_count or 0) or 0) + 1
-        else
-            state.empty_search_count = 0
-        end
-        if state.lobby_id == nil and state.phase ~= "creating" and state.phase ~= "joining" then
-            if (tonumber(state.empty_search_count or 0) or 0) < LOBBY_CREATE_EMPTY_THRESHOLD then
+        if not is_find_pairing_mode(state) and state.lobby_id == nil
+            and state.phase ~= "creating" and state.phase ~= "joining" then
+            state.host_create_wait_count = (tonumber(state.host_create_wait_count or 0) or 0) + 1
+            if state.host_create_wait_count < LOBBY_CREATE_EMPTY_THRESHOLD then
                 log(state, string.format(
-                    "MP STEAM GATEB | lobby_create_wait empty=%d need=%d",
-                    tonumber(state.empty_search_count or 0) or 0,
+                    "MP STEAM GATEB | lobby_create_wait host=%d need=%d",
+                    tonumber(state.host_create_wait_count or 0) or 0,
                     LOBBY_CREATE_EMPTY_THRESHOLD
                 ))
             else
@@ -603,14 +644,43 @@ function M.create(opts)
             lobby_search_wait = 0,
             tick_timer = 5.0,
             peer_resolve_logged = false,
+            host_create_wait_count = 0,
             empty_search_count = 0,
             create_pending = false,
             discovery_seen_ids = {},
             discovery_refresh_only = false,
-            discovery_timer = 3.0
+            discovery_timer = FIND_DISCOVERY_REFRESH_SECONDS,
+            pairing_mode = normalize_pairing_mode(opts and opts.pairing_mode)
         }
         active_gateb_state = state
         local gateb = {}
+
+        function gateb.set_pairing_mode(mode)
+            state.pairing_mode = normalize_pairing_mode(mode)
+            log(state, string.format("MP STEAM GATEB | pairing_mode=%s", tostring(state.pairing_mode)))
+        end
+
+        function gateb.get_pairing_mode()
+            return normalize_pairing_mode(state.pairing_mode)
+        end
+
+        function gateb.get_lobby_id()
+            return tostring(state.lobby_id or "")
+        end
+
+        function gateb.join_lobby(lobby_id)
+            join_gate_lobby(state, lobby_id)
+            return is_valid_steam_id(lobby_id)
+        end
+
+        function gateb.request_create_lobby()
+            if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+                log(state, "MP STEAM GATEB | lobby_create_blocked find_mode")
+                return false
+            end
+            create_gate_lobby(state)
+            return true
+        end
 
         function gateb.restart()
             state.phase = "idle"
@@ -624,15 +694,20 @@ function M.create(opts)
             state.lobby_search_pending = false
             state.lobby_search_timer = 0
             state.lobby_search_wait = 0
+            state.host_create_wait_count = 0
             state.empty_search_count = 0
             state.create_pending = false
             state.peer_resolve_logged = false
             state.discovery_seen_ids = {}
             state.discovery_refresh_only = false
-            state.discovery_timer = 3.0
+            state.discovery_timer = FIND_DISCOVERY_REFRESH_SECONDS
             active_gateb_state = state
-            log(state, "MP STEAM GATEB | restart")
-            request_lobby_list(state)
+            log(state, string.format("MP STEAM GATEB | restart mode=%s", tostring(state.pairing_mode or "host")))
+            if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+                request_lobby_list(state)
+            elseif not is_find_pairing_mode(state) then
+                request_lobby_list(state)
+            end
         end
 
         function gateb.publish_session(session)
@@ -699,7 +774,11 @@ function M.create(opts)
             end
             install_steam_listener(state)
             state.local_steam_id = get_local_steam_id(backend)
-            log(state, string.format("MP STEAM GATEB | local_steam_id=%s", tostring(state.local_steam_id)))
+            log(state, string.format(
+                "MP STEAM GATEB | local_steam_id=%s mode=%s",
+                tostring(state.local_steam_id),
+                tostring(state.pairing_mode or "host")
+            ))
             request_lobby_list(state)
         end
 
@@ -727,7 +806,14 @@ function M.create(opts)
                     tostring(state.peer_steam_id or "")
                 ))
             end
-            if state.phase ~= "passed" and state.lobby_search_pending ~= true and (state.phase == "searching" or (state.phase == "in_lobby" and state.peer_steam_id == nil)) then
+            if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+                state.discovery_timer = (state.discovery_timer or 0) - (dt or 0)
+                if state.discovery_timer <= 0 and state.lobby_search_pending ~= true then
+                    state.discovery_timer = FIND_DISCOVERY_REFRESH_SECONDS
+                    refresh_discovery_list(state)
+                end
+            elseif state.phase ~= "passed" and state.lobby_search_pending ~= true
+                and (state.phase == "searching" or (state.phase == "in_lobby" and state.peer_steam_id == nil)) then
                 state.lobby_search_timer = (state.lobby_search_timer or 0) - (dt or 0)
                 if state.lobby_search_timer <= 0 then
                     state.lobby_search_timer = LOBBY_RETRY_SECONDS

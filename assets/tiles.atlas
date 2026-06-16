@@ -891,6 +891,12 @@ images {
   image: "/assets/images/mp_chooser_find.png"
 }
 images {
+  image: "/assets/images/mp_lobby_host_public.png"
+}
+images {
+  image: "/assets/images/mp_lobby_host_private.png"
+}
+images {
   image: "/assets/images/tile_cavern_off.png"
 }
 images {

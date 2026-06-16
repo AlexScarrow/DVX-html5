@@ -716,6 +716,40 @@ function M.create(opts)
         return false
     end
 
+    local function reset_steam_gatec()
+        state.steam_gatec = {
+            command_sent = false,
+            command_recv = false,
+            events_sent = false,
+            events_recv = false,
+            wire_ok = false
+        }
+    end
+
+    function transport.steam_leave_lobby()
+        reset_steam_gatec()
+        if state.steam_gateb and state.steam_gateb.leave_lobby then
+            return state.steam_gateb.leave_lobby() == true
+        end
+        return false
+    end
+
+    function transport.steam_rejoin_lobby(lobby_id)
+        reset_steam_gatec()
+        if state.steam_gateb and state.steam_gateb.rejoin_lobby then
+            return state.steam_gateb.rejoin_lobby(lobby_id) == true
+        end
+        return false
+    end
+
+    function transport.steam_reset_gateb_handshake()
+        reset_steam_gatec()
+        if state.steam_gateb and state.steam_gateb.reset_handshake then
+            return state.steam_gateb.reset_handshake() == true
+        end
+        return false
+    end
+
     function transport.flush_wire_queue()
         steam_flush_wire_queue()
     end

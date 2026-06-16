@@ -673,6 +673,58 @@ function M.create(opts)
             return is_valid_steam_id(lobby_id)
         end
 
+        function gateb.leave_lobby()
+            leave_gate_lobby(state)
+            state.passed = false
+            state.ping_sent = false
+            state.peer_steam_id = nil
+            state.peer_resolve_logged = false
+            state.pass_seq = 1
+            if state.phase == "passed" or state.phase == "in_lobby" then
+                state.phase = is_find_pairing_mode(state) and "searching" or "idle"
+            end
+            log(state, "MP STEAM GATEB | lobby_leave_done")
+            return true
+        end
+
+        function gateb.rejoin_lobby(lobby_id)
+            if not is_valid_steam_id(lobby_id) then
+                return false
+            end
+            if tostring(state.lobby_id or "") == tostring(lobby_id) then
+                leave_gate_lobby(state)
+            end
+            state.passed = false
+            state.ping_sent = false
+            state.peer_steam_id = nil
+            state.peer_resolve_logged = false
+            state.pass_seq = 1
+            join_gate_lobby(state, lobby_id)
+            log(state, string.format("MP STEAM GATEB | lobby_rejoin_requested id=%s", tostring(lobby_id)))
+            return true
+        end
+
+        function gateb.reset_handshake()
+            state.passed = false
+            state.ping_sent = false
+            state.peer_steam_id = nil
+            state.peer_resolve_logged = false
+            state.pass_seq = 1
+            if is_valid_steam_id(state.lobby_id) then
+                state.phase = "in_lobby"
+            elseif is_find_pairing_mode(state) then
+                state.phase = "searching"
+            else
+                state.phase = "idle"
+            end
+            log(state, string.format(
+                "MP STEAM GATEB | handshake_reset phase=%s lobby=%s",
+                tostring(state.phase or ""),
+                tostring(state.lobby_id or "")
+            ))
+            return true
+        end
+
         function gateb.request_create_lobby()
             if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
                 log(state, "MP STEAM GATEB | lobby_create_blocked find_mode")
@@ -818,6 +870,21 @@ function M.create(opts)
                 if state.lobby_search_timer <= 0 then
                     state.lobby_search_timer = LOBBY_RETRY_SECONDS
                     request_lobby_list(state)
+                end
+            end
+            if state.phase == "in_lobby" or state.phase == "passed" then
+                if is_valid_steam_id(state.lobby_id) and (state.passed == true or is_valid_steam_id(state.peer_steam_id)) then
+                    local ok_count, member_count = pcall(state.backend.matchmaking_get_num_lobby_members, state.lobby_id)
+                    member_count = tonumber(ok_count and member_count or 0) or 0
+                    if member_count < 2 then
+                        state.passed = false
+                        state.ping_sent = false
+                        state.peer_steam_id = nil
+                        state.peer_resolve_logged = false
+                        state.pass_seq = 1
+                        state.phase = "in_lobby"
+                        log(state, "MP STEAM GATEB | handshake_reset reason=lobby_alone")
+                    end
                 end
             end
             if state.phase == "in_lobby" then

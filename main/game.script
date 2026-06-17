@@ -17022,7 +17022,7 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
                         slot_connected = false
                     end
                 end
-                print(string.format(
+                multiplayer_debug_log(self, string.format(
                     "MP RECLAIM | slot=%s mapped=%s units=%d connected=%s age=%.2f",
                     tostring(slot_id),
                     tostring(mapped_network_id),
@@ -17045,7 +17045,11 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
                     end
                     self.mp_state.seat_assignments[slot_id] = {}
                     changed = true
-                    print(string.format("MP RECLAIM | moved_slot=%s -> host=%s", tostring(slot_id), tostring(host_slot_id)))
+                    multiplayer_debug_log(self, string.format(
+                        "MP RECLAIM | moved_slot=%s -> host=%s",
+                        tostring(slot_id),
+                        tostring(host_slot_id)
+                    ))
                 end
             end
         end
@@ -17054,7 +17058,7 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
         multiplayer_enforce_controlled_unit(self, true)
         update_human_visual_state(self)
         update_selected_unit_ui(self)
-        print("MP RECLAIM | applied")
+        multiplayer_debug_log(self, "MP RECLAIM | applied")
     end
     return changed
 end

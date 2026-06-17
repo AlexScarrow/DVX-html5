@@ -243,6 +243,11 @@ function M.create(opts)
             for i = 1, #guests do
                 add_peer(guests[i])
             end
+            if state.steam_peer_by_wire_id then
+                for _, steam_id in pairs(state.steam_peer_by_wire_id) do
+                    add_peer(steam_id)
+                end
+            end
             if #peer_ids > 0 then
                 return peer_ids
             end

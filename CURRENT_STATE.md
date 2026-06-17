@@ -217,11 +217,11 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 **Smoke test:** 3P — NEW TURN, one action per player, no silent guest.
 
-**Status:** Not started. **Depends on:** Phase 4.
+**Status:** **Done** (banked; 3P smoke test passed — NEW TURN, moves, no silent guest). **4P not yet smoke-tested** (code paths are N=2–4; treat as high-confidence untested).
 
 ---
 
-### Phase 6 — Docs + cleanup (after 3P green)
+### Phase 6 — Docs + cleanup ← **START HERE**
 
 - Update this file with phase completion status
 - Remove Phase 0 debug logs if noisy
@@ -355,4 +355,4 @@ Phase 1 (guest→host peer) → Phase 2 (multi-peer send) → Phase 3 (seat map)
 
 ## Current stage (one paragraph)
 
-**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 4 is banked (3P join/launch smoke passed); **Phase 5** (in-match sanity) is next. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).
+**Steam Host/Find remote 2P is working** and banked at `1701984`. **3/4P rewiring:** Phases 1–5 banked through 3P join/launch/in-match smoke; **4P not smoke-tested yet**. **Phase 6** (docs/cleanup) is next, then Update settings spec.

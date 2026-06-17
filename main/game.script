@@ -16460,6 +16460,9 @@ function start_multiplayer_game_flow(self, session_config)
         self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
         self.mp_state.civilian_seed = tonumber(session_config and session_config.civilian_seed or 0) or 0
         multiplayer_apply_wire_dispatch_player_id(self, session_config)
+        if self.mp_state.local_player_id == self.mp_state.host_player_id then
+            multiplayer_seed_match_connected_players(self)
+        end
     end
     multiplayer_reset_ready_gate(self)
     if self.mp_state then
@@ -16940,9 +16943,7 @@ multiplayer_apply_in_match_player_departure = function(self, departed_network_pl
         local slot_id = "p" .. tostring(i)
         if slot_id ~= host_slot_id then
             local mapped_network_id = tostring(mp_network_id_for_slot(self, slot_id) or "")
-            local slot_connected = mapped_network_id ~= ""
-                and self.mp_state.connected_players
-                and self.mp_state.connected_players[mapped_network_id] == true
+            local slot_connected = multiplayer_is_match_player_connected(self, slot_id)
             if (not force_reclaim_all_non_host) and (not slot_connected) then
                 local slot_units = self.mp_state.seat_assignments[slot_id] or {}
                 local moved_any = false
@@ -17013,10 +17014,7 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
             local slot_units = self.mp_state.seat_assignments[slot_id] or {}
             if #slot_units > 0 then
                 local mapped_network_id = mp_normalize_network_player_id(mp_network_id_for_slot(self, slot_id) or "")
-                local slot_connected = connected_lookup[slot_id] == true
-                if (not slot_connected) and mapped_network_id ~= "" then
-                    slot_connected = connected_lookup[mapped_network_id] == true
-                end
+                local slot_connected = multiplayer_is_match_player_connected(self, slot_id)
                 local last_seen_s = tonumber(last_seen_lookup[mapped_network_id] or 0) or 0
                 local age_s = (last_seen_s > 0) and (now_s - last_seen_s) or -1
                 if slot_connected and mapped_network_id ~= "" then
@@ -17277,6 +17275,68 @@ multiplayer_mark_remote_player_alive = function(self, network_player_id)
         self.mp_state.connected_players[slot_id] = true
     end
     self.mp_state.last_seen_by_network_id[network_id] = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
+end
+
+multiplayer_is_match_player_connected = function(self, player_slot_id)
+    if not (self and self.mp_state) then
+        return false
+    end
+    local lookup = self.mp_state.connected_players or {}
+    local slot_id = mp_normalize_network_player_id(player_slot_id or "")
+    if slot_id == "" then
+        return false
+    end
+    if lookup[slot_id] == true then
+        return true
+    end
+    local network_id = mp_normalize_network_player_id(mp_network_id_for_slot(self, slot_id) or "")
+    return network_id ~= "" and lookup[network_id] == true
+end
+
+multiplayer_seed_match_connected_players = function(self)
+    if not multiplayer_is_wire_dispatch_host(self) then
+        return
+    end
+    self.mp_state.connected_players = self.mp_state.connected_players or {}
+    self.mp_state.last_seen_by_network_id = self.mp_state.last_seen_by_network_id or {}
+    local host_network_id = mp_normalize_network_player_id(self.mp_state.host_player_id or "p1")
+    local host_slot_id = multiplayer_get_slot_player_id_for_network(self, host_network_id)
+    self.mp_state.connected_players[host_network_id] = true
+    if host_slot_id ~= "" then
+        self.mp_state.connected_players[host_slot_id] = true
+    end
+    local session = multiplayer_lobby_get_active_session(self)
+    if session and tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+        multiplayer_steam_sync_transport_peer_map(self, session)
+    end
+    local roster_ids = {}
+    if session and type(session.joined_player_ids) == "table" then
+        for _, joined_id in ipairs(session.joined_player_ids) do
+            local network_id = mp_normalize_network_player_id(joined_id)
+            if network_id ~= "" and network_id ~= host_network_id then
+                roster_ids[#roster_ids + 1] = network_id
+            end
+        end
+    end
+    if #roster_ids == 0 then
+        local player_count = math.max(2, math.min(4, tonumber(self.mp_state.player_count or 2) or 2))
+        for i = 1, player_count do
+            local slot_id = "p" .. tostring(i)
+            if slot_id ~= host_slot_id then
+                local network_id = mp_normalize_network_player_id(mp_network_id_for_slot(self, slot_id) or slot_id)
+                if network_id ~= "" and network_id ~= host_network_id then
+                    roster_ids[#roster_ids + 1] = network_id
+                end
+            end
+        end
+    end
+    for _, network_id in ipairs(roster_ids) do
+        multiplayer_mark_remote_player_alive(self, network_id)
+    end
+    multiplayer_debug_log(self, string.format(
+        "MP MATCH | connected_players_seeded roster=%d",
+        #roster_ids
+    ))
 end
 
 multiplayer_guest_sync_runtime_from_session_config = function(self, session_config)
@@ -21635,8 +21695,7 @@ function update_global_ui_buttons(self)
                 local player_id = self.mp_state.required_ready_player_ids[i]
                 if player_id then
                     local remote_connected = (player_id ~= self.mp_state.host_player_id)
-                        and self.mp_state.connected_players
-                        and self.mp_state.connected_players[player_id] == true
+                        and multiplayer_is_match_player_connected(self, player_id)
                     local active = self.mp_state.debug_active_player_id == player_id
                     local tint = nil
                     if remote_connected then
@@ -29573,8 +29632,7 @@ try_multiplayer_debug_player_buttons = function(self, screen_x, screen_y)
     end
     for i, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
         local remote_connected = (player_id ~= self.mp_state.host_player_id)
-            and self.mp_state.connected_players
-            and self.mp_state.connected_players[player_id] == true
+            and multiplayer_is_match_player_connected(self, player_id)
         local by = MULTIPLAYER_DEBUG_BUTTON_START_Y - ((i - 1) * MULTIPLAYER_DEBUG_BUTTON_Y_GAP)
         if is_point_in_screen_rect(
             screen_x,

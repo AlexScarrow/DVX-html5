@@ -17093,6 +17093,70 @@ multiplayer_leave_in_progress_match_to_lobby = function(self, reason)
     return true
 end
 
+multiplayer_steam_ensure_session_roster_maps = function(session)
+    if type(session) ~= "table" then
+        return
+    end
+    session.steam_id_by_wire_id = session.steam_id_by_wire_id or {}
+    session.wire_id_by_steam_id = session.wire_id_by_steam_id or {}
+end
+
+multiplayer_steam_assign_wire_id_for_guest = function(self, session, guest_steam_id)
+    guest_steam_id = tostring(guest_steam_id or "")
+    if guest_steam_id == "" or type(session) ~= "table" then
+        return ""
+    end
+    multiplayer_steam_ensure_session_roster_maps(session)
+    local existing = session.wire_id_by_steam_id[guest_steam_id]
+    if existing and tostring(existing) ~= "" then
+        return tostring(existing)
+    end
+    local max_players = math.max(2, math.min(4, tonumber(session.max_players or 4) or 4))
+    for slot = 2, max_players do
+        local wire_id = "p" .. tostring(slot)
+        local occupied = tostring(session.steam_id_by_wire_id[wire_id] or "")
+        if occupied == "" then
+            session.steam_id_by_wire_id[wire_id] = guest_steam_id
+            session.wire_id_by_steam_id[guest_steam_id] = wire_id
+            multiplayer_debug_log(self, string.format(
+                "MP STEAM GATEE | steam_seat_assign steam=%s wire=%s session=%s",
+                guest_steam_id,
+                wire_id,
+                tostring(session.id or "")
+            ))
+            return wire_id
+        end
+    end
+    return ""
+end
+
+multiplayer_steam_sync_transport_peer_map = function(self, session)
+    if not (self and self.mp_transport and self.mp_transport.steam_sync_peer_map) then
+        return
+    end
+    if type(session) ~= "table" then
+        return
+    end
+    multiplayer_steam_ensure_session_roster_maps(session)
+    self.mp_transport.steam_sync_peer_map(session.steam_id_by_wire_id)
+end
+
+multiplayer_steam_resolve_guest_wire_id = function(self, session, command)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
+        return mp_normalize_network_player_id(command and command.sender_player_id or "")
+    end
+    local guest_steam_id = tostring(command and command.guest_steam_id or "")
+    if guest_steam_id ~= "" and type(session) == "table" then
+        local wire_id = multiplayer_steam_assign_wire_id_for_guest(self, session, guest_steam_id)
+        if wire_id ~= "" then
+            multiplayer_steam_sync_transport_peer_map(self, session)
+            return wire_id
+        end
+        return ""
+    end
+    return mp_normalize_network_player_id(command and command.sender_player_id or "")
+end
+
 multiplayer_apply_steam_transport_seat_ids = function(self)
     if not (self and self.mp_state and self.mp_transport) then
         return
@@ -17105,7 +17169,29 @@ multiplayer_apply_steam_transport_seat_ids = function(self)
         self.mp_state.local_player_id = "p1"
         self.mp_state.host_player_id = "p1"
     else
-        self.mp_state.local_player_id = "p2"
+        local host_id = tostring(self.mp_state.host_player_id or "p1")
+        local adopted = ""
+        local local_steam = ""
+        if self.mp_transport.steam_get_local_steam_id then
+            local_steam = tostring(self.mp_transport.steam_get_local_steam_id() or "")
+        end
+        if local_steam ~= "" then
+            multiplayer_lobby_ensure_runtime(self)
+            local session_id = tostring(self.mp_lobby.pending_join_session_id or multiplayer_lobby_get_lobby_ticket_id(self) or "")
+            if session_id ~= "" and session_id ~= "local_session" then
+                local session = multiplayer_lobby_get_session_by_id(self, session_id)
+                if session and type(session.wire_id_by_steam_id) == "table" then
+                    adopted = tostring(session.wire_id_by_steam_id[local_steam] or "")
+                end
+            end
+        end
+        if adopted ~= "" and adopted ~= host_id then
+            self.mp_state.local_player_id = adopted
+        elseif tostring(self.mp_state.local_player_id or "") == ""
+            or tostring(self.mp_state.local_player_id or "") == host_id
+        then
+            self.mp_state.local_player_id = "p2"
+        end
     end
     if tostring(self.mp_state.lobby_ticket_id or "") == "" then
         multiplayer_apply_steam_lobby_wire_defaults(self)
@@ -18373,6 +18459,16 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         max_players = math.max(2, tonumber(offer.max_players or (existing_offer and existing_offer.max_players) or 2) or 2),
         is_locked = (offer.is_locked == true) or (existing_offer and existing_offer.is_locked == true),
         joined_player_ids = merged_joined,
+        steam_id_by_wire_id = multiplayer_clone_simple_table(
+            (type(offer.steam_id_by_wire_id) == "table" and offer.steam_id_by_wire_id)
+                or (existing_offer and existing_offer.steam_id_by_wire_id)
+                or {}
+        ),
+        wire_id_by_steam_id = multiplayer_clone_simple_table(
+            (type(offer.wire_id_by_steam_id) == "table" and offer.wire_id_by_steam_id)
+                or (existing_offer and existing_offer.wire_id_by_steam_id)
+                or {}
+        ),
         pin = multiplayer_lobby_merge_offer_pin(existing_offer, offer),
         steam_lobby_id = tostring(offer.steam_lobby_id or (existing_offer and existing_offer.steam_lobby_id) or ""),
         updated_at_ms = tonumber(offer.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms(),
@@ -18636,6 +18732,7 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
     session.host_wire_player_id = tostring(MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID or "p1")
     local host_wire_id = tostring(session.host_wire_player_id or "")
     session.joined_player_ids = { host_wire_id }
+    multiplayer_steam_ensure_session_roster_maps(session)
     session.players = 1
     lobby.offers_by_id[tostring(session.id or "")] = session
     lobby.pending_join_session_id = ""
@@ -24853,10 +24950,14 @@ multiplayer_transport_handle_command = function(self, command)
         self.mp_state.seen_command_ids = self.mp_state.seen_command_ids or {}
         local dedupe_key = string.format("%s|%s", tostring(sender or "unknown"), tostring(cmd_message_id))
         if cmd_type == "lobby_join_session" then
+            local join_identity = tostring(command.guest_steam_id or "")
+            if join_identity == "" then
+                join_identity = tostring(sender or "unknown")
+            end
             dedupe_key = string.format(
                 "%s|%s|%s",
                 tostring(payload.session_id or ""),
-                tostring(sender or "unknown"),
+                join_identity,
                 tostring(cmd_message_id)
             )
         end
@@ -25076,13 +25177,17 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        local requester_player_id = tostring(sender or "")
+        local requester_player_id = multiplayer_steam_resolve_guest_wire_id(self, session, command)
         if requester_player_id == "" then
+            local reject_reason = tostring(command.guest_steam_id or "") ~= "" and "session_full" or "requester_missing"
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_join_session",
-                reason = "requester_missing"
+                reason = reject_reason
             }))
             return events
+        end
+        if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+            multiplayer_steam_sync_transport_peer_map(self, session)
         end
         if session.is_locked == true then
             local expected_pin = tostring(session.pin or "")

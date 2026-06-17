@@ -262,6 +262,9 @@ function M.create(opts)
             return
         end
         state.steam_response_peer_id = steam_peer
+        if steam_is_host() then
+            return
+        end
         local sender = tostring(packet.payload.sender_player_id or "")
         if sender ~= "" then
             state.steam_peer_by_wire_id = state.steam_peer_by_wire_id or {}
@@ -436,7 +439,9 @@ function M.create(opts)
             return
         end
         if packet.type == "command" and type(packet.payload) == "table" then
-            local cmd_type = tostring(packet.payload.type or packet.payload.command_type or "")
+            local command = packet.payload
+            command.guest_steam_id = tostring(peer_id or "")
+            local cmd_type = tostring(command.type or command.command_type or "")
             steam_record_command_peer(packet, peer_id)
             log_gatec_once("command_recv", string.format(
                 "MP STEAM GATEC | command_recv type=%s from=%s",
@@ -864,6 +869,20 @@ function M.create(opts)
             return state.steam_gateb.is_wire_ready() == true
         end
         return false
+    end
+
+    function transport.steam_sync_peer_map(steam_id_by_wire_id)
+        if type(steam_id_by_wire_id) ~= "table" then
+            return
+        end
+        state.steam_peer_by_wire_id = {}
+        for wire_id, steam_id in pairs(steam_id_by_wire_id) do
+            local wire_key = tostring(wire_id or "")
+            local steam_key = tostring(steam_id or "")
+            if wire_key ~= "" and steam_key ~= "" then
+                state.steam_peer_by_wire_id[wire_key] = steam_key
+            end
+        end
     end
 
     local function reset_steam_gatec()

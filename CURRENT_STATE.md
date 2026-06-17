@@ -161,11 +161,11 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 **Smoke test:** 3P — P3 join command received on host; `lobby_join_accepted` / `setup_state_updated` sent to P3 Steam peer.
 
-**Status:** **Done** (pending 3P smoke test).
+**Status:** **Done** (banked `588c04f`; 3P wire routing smoke passed).
 
 ---
 
-### Phase 3 — Steam ID ↔ wire seat map (host roster)
+### Phase 3 — Steam ID ↔ wire seat map (host roster) ← **START HERE**
 
 **Problem:** Every guest is `p2`; join identity collides.
 
@@ -180,7 +180,7 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 **Smoke test:** 3P — Guest A = `p2`, Guest B = `p3`; both get `lobby_join_accepted` + `setup_state_updated`.
 
-**Status:** Not started. **Depends on:** Phase 2.
+**Status:** **Done** (pending 3P smoke test).
 
 ---
 
@@ -355,4 +355,4 @@ Phase 1 (guest→host peer) → Phase 2 (multi-peer send) → Phase 3 (seat map)
 
 ## Current stage (one paragraph)
 
-**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 2 is done (pending smoke test); **Phase 3** (seat map) is next. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).
+**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 3 is done (pending smoke test); **Phase 4** (committed player count + launch gate) is next. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).

@@ -129,24 +129,26 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 ---
 
-### Phase 1 — Guest always peers with host (Gate B fix) ← **START HERE**
+### Phase 1 — Guest always peers with host (Gate B fix) ✓
 
 **Problem:** Guests resolve wrong peer in 3+ member lobbies.
 
 | Slice | Work | Files |
 |-------|------|-------|
 | 1.1 | Guests: resolve peer = **lobby owner** (`matchmaking_get_lobby_owner`), not first other member | `steam_transport_gateb.lua` |
-| 1.2 | Host: keep current first-guest peer for 2P ping/pong (unchanged for now) | same |
+| 1.2 | Host: keep primary wire peer as first guest until Phase 2 multi-send | same |
+| 1.3 | Host: ping **each** lobby guest (`ping_sent_peers`); continue while `phase=passed` for late joiners | same |
+| 1.4 | Guests: ignore non-host pings; FIND clients always resolve host even if `is_host` drifts | same |
 
-**Smoke test:** 3 Steam clients in one lobby; Guest 2 and Guest 3 both reach `gateb_ok` with host (not with each other).
+**Smoke test:** 3 Steam clients — P2 joins first, P3 joins later; both guests reach `gateb_ok` and send `lobby_join_session`.
 
 **2P regression:** Host + 1 guest still passes Gate B.
 
-**Status:** Not started.
+**Status:** **Done** (slices 1.1–1.4 in `steam_transport_gateb.lua`).
 
 ---
 
-### Phase 2 — Host multi-peer wire send (Gate C)
+### Phase 2 — Host multi-peer wire send (Gate C) ← **START HERE**
 
 **Problem:** All outbound events/commands go to one `peer_steam_id`.
 
@@ -356,4 +358,4 @@ Phase 1 (guest→host peer) → Phase 2 (multi-peer send) → Phase 3 (seat map)
 
 ## Current stage (one paragraph)
 
-**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 1 (guest Gate B peers with host only) is the first implementation slice. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).
+**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 1 is done; **Phase 2** (host multi-peer wire send) is next. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).

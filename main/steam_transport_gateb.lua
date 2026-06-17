@@ -213,6 +213,50 @@ local steam_listener_installed = false
         return false
     end
 
+    local function resolve_lobby_owner_steam_id(state)
+        if not is_valid_steam_id(state.lobby_id) then
+            return nil
+        end
+        if type(state.backend.matchmaking_get_lobby_owner) ~= "function" then
+            return nil
+        end
+        local ok_owner, owner = pcall(state.backend.matchmaking_get_lobby_owner, state.lobby_id)
+        if ok_owner and is_valid_steam_id(owner) then
+            return tostring(owner)
+        end
+        return nil
+    end
+
+    local function should_resolve_peer_as_guest(state)
+        if state.is_host ~= true then
+            return true
+        end
+        -- FIND clients in a joined lobby are always guests for Gate B, even if is_host drifts.
+        if is_find_pairing_mode(state) and is_valid_steam_id(state.lobby_id) then
+            local host_id = resolve_lobby_owner_steam_id(state)
+            if is_valid_steam_id(host_id) and tostring(host_id) ~= state.local_steam_id then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function enumerate_lobby_guest_ids(state)
+        local guests = {}
+        if not is_valid_steam_id(state.lobby_id) then
+            return guests
+        end
+        local ok_count, member_count = pcall(state.backend.matchmaking_get_num_lobby_members, state.lobby_id)
+        member_count = tonumber(ok_count and member_count or 0) or 0
+        for index = 0, member_count - 1 do
+            local ok_member, member_id = pcall(state.backend.matchmaking_get_lobby_member_by_index, state.lobby_id, index)
+            if ok_member and is_valid_steam_id(member_id) and tostring(member_id) ~= state.local_steam_id then
+                guests[#guests + 1] = tostring(member_id)
+            end
+        end
+        return guests
+    end
+
     local function resolve_peer_from_lobby(state)
         if not is_valid_steam_id(state.lobby_id) then
             return nil
@@ -222,6 +266,15 @@ local steam_listener_installed = false
         if member_count < 2 then
             return nil
         end
+        -- Guests always peer with the lobby host (not another guest in 3/4P lobbies).
+        if should_resolve_peer_as_guest(state) then
+            local host_id = resolve_lobby_owner_steam_id(state)
+            if is_valid_steam_id(host_id) and tostring(host_id) ~= state.local_steam_id then
+                return tostring(host_id)
+            end
+            return nil
+        end
+        -- Host: first non-local member (primary wire peer until Phase 2 multi-send).
         for index = 0, member_count - 1 do
             local ok_member, member_id = pcall(state.backend.matchmaking_get_lobby_member_by_index, state.lobby_id, index)
             if ok_member and is_valid_steam_id(member_id) and tostring(member_id) ~= state.local_steam_id then
@@ -316,6 +369,7 @@ local steam_listener_installed = false
         state.lobby_id = nil
         state.is_host = false
         state.ping_sent = false
+        state.ping_sent_peers = {}
         state.peer_steam_id = nil
         state.peer_resolve_logged = false
     end
@@ -369,18 +423,37 @@ local steam_listener_installed = false
         log(state, string.format("MP STEAM GATEB | lobby_configured id=%s", tostring(lobby_id)))
     end
 
-    local function try_send_ping(state)
-        if state.ping_sent == true or state.is_host ~= true or not is_valid_steam_id(state.peer_steam_id) then
+    local function try_send_guest_pings(state)
+        if state.is_host ~= true or not is_valid_steam_id(state.lobby_id) then
             return
         end
-        accept_peer(state, state.peer_steam_id)
-        local ok_send, send_result = send_packet(state, state.peer_steam_id, "ping", 1)
-        if ok_send then
-            state.ping_sent = true
-            state.pass_seq = 1
-            log(state, string.format("MP STEAM GATEB | ping_sent seq=1 peer=%s result=%s", tostring(state.peer_steam_id), tostring(send_result)))
-        else
-            log(state, string.format("MP STEAM GATEB | ping_send_failed peer=%s err=%s", tostring(state.peer_steam_id), tostring(send_result)))
+        state.ping_sent_peers = state.ping_sent_peers or {}
+        local guests = enumerate_lobby_guest_ids(state)
+        for _, guest_id in ipairs(guests) do
+            if state.ping_sent_peers[guest_id] ~= true then
+                accept_peer(state, guest_id)
+                local ok_send, send_result = send_packet(state, guest_id, "ping", 1)
+                if ok_send then
+                    state.ping_sent_peers[guest_id] = true
+                    state.ping_sent = true
+                    state.pass_seq = 1
+                    if not is_valid_steam_id(state.peer_steam_id) then
+                        state.peer_steam_id = guest_id
+                    end
+                    log(state, string.format(
+                        "MP STEAM GATEB | ping_sent seq=1 peer=%s result=%s guests=%d",
+                        tostring(guest_id),
+                        tostring(send_result),
+                        #guests
+                    ))
+                else
+                    log(state, string.format(
+                        "MP STEAM GATEB | ping_send_failed peer=%s err=%s",
+                        tostring(guest_id),
+                        tostring(send_result)
+                    ))
+                end
+            end
         end
     end
 
@@ -407,8 +480,23 @@ local steam_listener_installed = false
         end
         accept_peer(state, peer_id)
         if packet.type == "ping" then
+            if state.is_host ~= true then
+                local host_id = resolve_lobby_owner_steam_id(state)
+                if is_valid_steam_id(host_id) then
+                    if tostring(peer_id) ~= tostring(host_id) then
+                        log(state, string.format(
+                            "MP STEAM GATEB | ping_ignored seq=%d from=%s expected_host=%s",
+                            packet.seq,
+                            peer_id,
+                            tostring(host_id)
+                        ))
+                        return
+                    end
+                    peer_id = tostring(host_id)
+                end
+            end
             log(state, string.format("MP STEAM GATEB | ping_recv seq=%d from=%s", packet.seq, peer_id))
-            state.peer_steam_id = state.peer_steam_id or peer_id
+            state.peer_steam_id = peer_id
             local ok_send, send_result = send_packet(state, peer_id, "pong", packet.seq)
             if ok_send then
                 log(state, string.format("MP STEAM GATEB | pong_sent seq=%d peer=%s result=%s", packet.seq, peer_id, tostring(send_result)))
@@ -423,7 +511,10 @@ local steam_listener_installed = false
         if packet.type == "pong" then
             log(state, string.format("MP STEAM GATEB | pong_recv seq=%d from=%s", packet.seq, peer_id))
             state.peer_steam_id = state.peer_steam_id or peer_id
-            if state.is_host == true and state.ping_sent == true and packet.seq == (state.pass_seq or 1) then
+            state.ping_sent_peers = state.ping_sent_peers or {}
+            if state.is_host == true
+                and state.ping_sent_peers[peer_id] == true
+                and packet.seq == (state.pass_seq or 1) then
                 mark_pass(state, "host_pong")
             end
         end
@@ -637,6 +728,7 @@ function M.create(opts)
             lobby_alone_notified = false,
             accepted_peers = {},
             ping_sent = false,
+            ping_sent_peers = {},
             pass_seq = 1,
             passed = false,
             started = false,
@@ -678,6 +770,7 @@ function M.create(opts)
             leave_gate_lobby(state)
             state.passed = false
             state.ping_sent = false
+            state.ping_sent_peers = {}
             state.peer_steam_id = nil
             state.peer_resolve_logged = false
             state.pass_seq = 1
@@ -697,6 +790,7 @@ function M.create(opts)
             end
             state.passed = false
             state.ping_sent = false
+            state.ping_sent_peers = {}
             state.peer_steam_id = nil
             state.peer_resolve_logged = false
             state.pass_seq = 1
@@ -708,6 +802,7 @@ function M.create(opts)
         function gateb.reset_handshake()
             state.passed = false
             state.ping_sent = false
+            state.ping_sent_peers = {}
             state.peer_steam_id = nil
             state.peer_resolve_logged = false
             state.pass_seq = 1
@@ -742,6 +837,7 @@ function M.create(opts)
             state.is_host = false
             state.accepted_peers = {}
             state.ping_sent = false
+            state.ping_sent_peers = {}
             state.pass_seq = 1
             state.passed = false
             state.lobby_search_pending = false
@@ -880,6 +976,7 @@ function M.create(opts)
                     if member_count < 2 then
                         state.passed = false
                         state.ping_sent = false
+                        state.ping_sent_peers = {}
                         state.peer_steam_id = nil
                         state.peer_resolve_logged = false
                         state.pass_seq = 1
@@ -907,7 +1004,11 @@ function M.create(opts)
                     state.peer_resolve_logged = true
                     log(state, string.format("MP STEAM GATEB | peer_resolved id=%s host=%s", tostring(state.peer_steam_id), tostring(state.is_host == true)))
                 end
-                try_send_ping(state)
+                if state.is_host == true then
+                    try_send_guest_pings(state)
+                end
+            elseif state.phase == "passed" and state.is_host == true then
+                try_send_guest_pings(state)
             end
             if state.phase == "passed" and state.is_host ~= true then
                 state.discovery_timer = (state.discovery_timer or 0) - (dt or 0)

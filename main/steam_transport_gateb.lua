@@ -1040,17 +1040,24 @@ function M.create(opts)
             return state.passed == true and is_valid_steam_id(state.peer_steam_id)
         end
 
-        function gateb.send_wire(raw_text)
-            if gateb.is_wire_ready() ~= true then
+        function gateb.get_lobby_guest_steam_ids()
+            return enumerate_lobby_guest_ids(state)
+        end
+
+        function gateb.send_wire_to_peer(peer_id, raw_text)
+            if gateb.is_passed() ~= true then
                 return false, "wire_not_ready"
             end
             if type(raw_text) ~= "string" or raw_text == "" then
                 return false, "empty_payload"
             end
-            accept_peer(state, state.peer_steam_id)
+            if not is_valid_steam_id(peer_id) then
+                return false, "invalid_peer"
+            end
+            accept_peer(state, peer_id)
             local ok_send, result = pcall(
                 state.backend.networking_send_message_to_user,
-                state.peer_steam_id,
+                peer_id,
                 raw_text,
                 send_flags_for(state.backend),
                 WIRE_CHANNEL
@@ -1059,6 +1066,13 @@ function M.create(opts)
                 return false, tostring(result)
             end
             return true, tostring(result or "")
+        end
+
+        function gateb.send_wire(raw_text)
+            if not is_valid_steam_id(state.peer_steam_id) then
+                return false, "wire_not_ready"
+            end
+            return gateb.send_wire_to_peer(state.peer_steam_id, raw_text)
         end
 
         function gateb.shutdown()

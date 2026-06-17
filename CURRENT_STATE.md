@@ -165,7 +165,7 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 ---
 
-### Phase 3 — Steam ID ↔ wire seat map (host roster) ← **START HERE**
+### Phase 3 — Steam ID ↔ wire seat map (host roster)
 
 **Problem:** Every guest is `p2`; join identity collides.
 
@@ -180,7 +180,7 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 **Smoke test:** 3P — Guest A = `p2`, Guest B = `p3`; both get `lobby_join_accepted` + `setup_state_updated`.
 
-**Status:** **Done** (pending 3P smoke test).
+**Status:** **Done** (banked `fb08b29`). Seats work; full setup roster sync was deferred to Phase 4.
 
 ---
 
@@ -193,7 +193,7 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 | 4.1 | Join accept: `player_count` = host **committed** setup count, not `min(mx, #joined)` | `game.script` (~25157) |
 | 4.2 | Launch gate: require `guest_count == committed_player_count - 1` and all synced | `game.script` (`multiplayer_lobby_joined_guests_setup_synced`) |
 | 4.3 | Join reject when `#guests >= committed_max - 1` | `game.script` (~25072) |
-| 4.4 | (Optional) Host Gate B wire ready when all rostered guests have passed | `steam_transport_gateb.lua` |
+| 4.4 | Fan-out `setup_state_updated` to rostered guests on join; flush wire queue on `gateb_ok` | `game.script`, transport |
 
 **Smoke test — 3P milestone:**
 1. Host selects 3P, publishes
@@ -203,11 +203,11 @@ Enable **Steam public browse discovery** for multiplayer so two remote friends c
 
 **4P:** Same with three guests → `p4`.
 
-**Status:** Not started. **Depends on:** Phase 3.
+**Status:** **Done** (banked; 3P smoke test passed — join, launch, all enter match).
 
 ---
 
-### Phase 5 — In-match sanity (minimal)
+### Phase 5 — In-match sanity (minimal) ← **START HERE**
 
 | Slice | Work | Files |
 |-------|------|-------|
@@ -355,4 +355,4 @@ Phase 1 (guest→host peer) → Phase 2 (multi-peer send) → Phase 3 (seat map)
 
 ## Current stage (one paragraph)
 
-**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 3 is done (pending smoke test); **Phase 4** (committed player count + launch gate) is next. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).
+**Steam Host/Find remote 2P is working** and banked at `1701984` (clean tree, synced with `origin/feature/lobby-discovery`). **Next work is 3/4P rewiring** before the agreed Update settings spec: Phase 4 is banked (3P join/launch smoke passed); **Phase 5** (in-match sanity) is next. Setup UI already supports 3/4P but transport/seat identity is 2P-shaped — see blockers and phase plan above. Abort→chooser UX and other polish are deferred until after 3/4P wiring (or when user asks).

@@ -238,16 +238,20 @@ function M.create(opts)
             add_peer(target_peer)
             return peer_ids
         end
-        add_peer(default_peer_id)
-        if #peer_ids > 0 then
-            return peer_ids
-        end
         if steam_is_host() then
             local guests = steam_guest_peer_ids()
             for i = 1, #guests do
                 add_peer(guests[i])
             end
-        else
+            if #peer_ids > 0 then
+                return peer_ids
+            end
+        end
+        add_peer(default_peer_id)
+        if #peer_ids > 0 then
+            return peer_ids
+        end
+        if not steam_is_host() then
             add_peer(state.steam_gateb and state.steam_gateb.get_peer_steam_id and state.steam_gateb.get_peer_steam_id() or "")
         end
         return peer_ids

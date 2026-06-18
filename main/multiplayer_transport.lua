@@ -879,6 +879,10 @@ function M.create(opts)
         return ""
     end
 
+    function transport.steam_get_lobby_guest_steam_ids()
+        return steam_guest_peer_ids()
+    end
+
     function transport.steam_join_lobby(lobby_id)
         if state.steam_gateb and state.steam_gateb.join_lobby then
             return state.steam_gateb.join_lobby(lobby_id) == true

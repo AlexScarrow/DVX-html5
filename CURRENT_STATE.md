@@ -1,11 +1,12 @@
 # DVX Multiplayer Discovery — Current State & AI Handover
 
-**Last updated:** 2026-06-17  
+**Last updated:** 2026-06-18  
 **Working path:** `/Users/alexscarrow/Desktop/DVX/DVX-html5`  
 **Branch:** `feature/lobby-discovery`  
 **Transport:** `transport_mode = steam` in `game.project`  
-**Last banked commit:** Phase 6 — handover doc refresh; `MP RECLAIM` → debug log.  
-**Status:** **2P remote Host/Find green.** **3/4P rewiring Phases 1–6 banked** (3P join → launch → in-match smoke passed). **4P not smoke-tested** (same N=2–4 code paths). **Next:** Implement **Update settings** (spec agreed, code not started).
+**Last banked commit:** `f8a0958` — *Bank lobby Update settings, cycle-2 sync fixes, and session-full reject UX*  
+**Dirty (uncommitted):** `main/game.script`, `main/multiplayer_transport.lua` — post-abort leave/re-join fixes (partial; see regressions below)  
+**Status:** 2P/3P join→launch→in-match **passed** in prior cycles. **2026-06-18 smoke failed** on post-abort re-join and lobby UX gaps. **4P not smoke-tested.**
 
 Also read:
 - `AGENTS.md` — global safety rules (small diffs, host-authoritative MP, no desync risk)
@@ -13,22 +14,147 @@ Also read:
 
 ---
 
-## What we are trying to achieve
+## START HERE ← next AI priority
 
-### Product goal
+1. **Fix discovery-merge regression** (blocks post-abort re-join) — see Issue B below  
+2. **Lobby card player count UI** — sprite digits, not fonts — see Issue A  
+3. **Dual-host browse visibility** — investigate with logs — see Issue C  
+4. Bank + retest matrix at bottom
 
-Enable **Steam public browse discovery** for multiplayer so remote friends can play without Mac relay or manual Steam invite gymnastics:
+---
 
-1. **Host path:** HOST → Steam lobby → Publish Open → setup → launch when guests ready.
-2. **Find path:** FIND → browse → tap session → Steam lobby join + wire → setup → host launches.
+## Open bugs (2026-06-18 smoke)
 
-**Success criteria (met for 2P; 3P join/launch/in-match met):**
-- All players reach setup and launch into the same match.
-- Each player controls their assigned units.
-- Control persists after host presses NEW TURN.
-- Repeatable across role swaps.
+### Issue A — No player count on lobby session cards
 
-### Architecture (three roles — intentionally split)
+**Symptom:** Finder lobby cards show host name + status strip only; no `N/M` occupancy.
+
+**Root cause:** Feature never wired. `multiplayer_lobby_render_session_cards` (~19650 in `main/game.script`) renders host label via **`letter_*` sprite glyphs** (same atlas pattern as setup/score names). There is **no digit rendering** and **no Defold font** on cards — so this is not a font-vs-atlas bug.
+
+**Proposed fix:**
+- Add a small digit sprite pool to lobby UI init (reuse `score_0`…`score_9` pattern from score HUD / `loot_marker_factory`).
+- In `multiplayer_lobby_render_session_cards`, render `players/max_players` (e.g. `2/3`) below or beside host name from `session.players` and `session.max_players`.
+- Do **not** use Defold fonts (known rendering problems elsewhere).
+
+**Touchpoints:** `multiplayer_lobby_render_session_cards`, lobby UI init (~12564), existing score digit helpers.
+
+---
+
+### Issue B — Post-abort re-join stuck on “joining” advisory (P2/P3)
+
+**Symptom:** After setup back/abort, P2 and P3 return to FIND, tap session again, see **joining** advisory indefinitely. Never reach setup.
+
+**Log evidence (2026-06-18 11:11, three-machine test):**
+
+| Client | Key lines |
+|--------|-----------|
+| **P1 host** | `leave_session_reject` ×2 (`player_not_in_session`) for P2 and P3; guests still heartbeating after abort |
+| **P2 finder** | First join OK (`join_session_wire`, `gateb_ok`, `gatec_ok`). Abort: `lobby_leave` 11:11:55. Re-join 11:11:59: Steam `lobby_enter` OK but **no `gateb_ok`**, **no `join_session_wire`**; `pending_join_incomplete … players=2 joined=0` for ~2+ min |
+| **P3 finder** | Same re-join pattern as P2 |
+
+**Failure chain (most likely):**
+
+1. **Host roster wiped by Steam discovery merge (regression from uncommitted fix)**  
+   `multiplayer_lobby_merge_incoming_offer_fields` returns `{}` for `joined_player_ids` on every `steam_discovery` upsert (~18897). Host applies own browse readback via `on_discovery_offer` → `discovery_apply` (~29646), which **clears wire roster** while Steam `players` count may still show guests in lobby.
+
+2. **Leave path fails**  
+   Guests send `lobby_leave_session` on setup back; host rejects with `player_not_in_session` because roster already empty. Steam lobby membership and wire roster diverge.
+
+3. **Re-join handshake never completes**  
+   Guest re-enters Steam lobby (`lobby_enter`, `peer_resolved`) but **Gate B ping/pong never finishes** → no `gateb_ok` → `multiplayer_lobby_complete_pending_steam_join` never sends `lobby_join_session` wire. User stuck on joining advisory (shown at join start ~18326; no stuck-state timeout).
+
+4. **`pending_join_incomplete` is misleading here**  
+   `multiplayer_lobby_try_complete_pending_join_from_offer` (~17769) blocks fast-path to setup when guest not yet in roster — expected during normal join. On re-join the real blocker is **missing wire join**, not this check alone.
+
+**Proposed fixes (in order):**
+
+| # | Change | Rationale |
+|---|--------|-----------|
+| B1 | **Discovery merge:** On `steam_discovery`, update `players`/`max_players` only; **preserve** existing `joined_player_ids`, `steam_id_by_wire_id`, `wire_id_by_steam_id` when incoming discovery has empty roster | Stops host self-wipe |
+| B2 | **Skip or guard host `discovery_apply`** for own `local_active_offer_id` (wire roster is authoritative on host) | Belt-and-suspenders |
+| B3 | **Leave path:** Ensure roster prune succeeds; on reject, host runs `multiplayer_lobby_prune_steam_disconnected_guests` / `lobby_alone_prune` from Steam guest enumeration | Recover when wire leave fails |
+| B4 | **Guest teardown:** Don’t fully shutdown transport until `lobby_leave_session` ack or explicit fallback | Avoid desynced Steam-in / wire-out |
+| B5 | **Re-join:** If in Steam lobby + wire ready but not in roster, allow/resend `lobby_join_session` (re-admit path); reset pending join state on abort return to FIND | Unstick re-join |
+| B6 | **UX:** Joining advisory timeout → clear pending + show join-failed advisory | User feedback |
+
+**Earlier related fix (still needed, refine per B1):** Stale `players` on finders — `math.max` merge prevented occupancy decreasing after guests left → `join_blocked_preflight session_full`. Uncommitted merge change fixed finder stale count but introduced host roster wipe.
+
+**Log grep hints:**
+- Host success: `leave_session_roster_prune`
+- Host failure: `leave_session_reject`
+- Finder stuck: `pending_join_incomplete`, absence of `join_session_wire` after re-tap
+- Merge regression: `discovery_apply` on host after guests joined, then roster-empty join accepts
+
+---
+
+### Issue C — Dual host: P3 only saw one session
+
+**Symptom:** P1 and P2 both launched/hosted; P3 browse showed **1 card** only. No debug logs for this run.
+
+**What we know from instrumented runs:** Steam browse consistently logs `discovery_list count=1` when only P1 is hosting. Dual-host case not yet logged.
+
+**Hypotheses (check in order):**
+
+| Hypothesis | Check |
+|------------|-------|
+| P2 never published Open (`discovery_publish`) | Grep P2 log for `discovery_publish` / `published_open` |
+| P2 still in draft / wrong `lobby_status` | Host flow before Open Game |
+| Same Steam account on two “hosts” | Compare `local_steam_id` on both |
+| Steam browse filter | `filter_slots_available(1)` in `steam_transport_gateb.lua` — both should pass if slots free |
+| Dedup in `multiplayer_lobby_apply_offer_upsert` | `same_host_steam` replaces prior offer — **one card per Steam host** (correct); different Steam IDs → two cards |
+| Timing | P3 browsed before P2 publish completed |
+| `multiplayer_lobby_session_is_browse_visible` | Filters non-published sessions |
+
+**Proposed investigation:** Re-run with debug on all three; on P3 grep `discovery_list count`, `discovery_offer`; on each host grep `discovery_publish` and distinct `host_steam_id` / session id (`76561198…:N`).
+
+---
+
+## What works (do not rebuild)
+
+- Steam Host/Find 2P remote (historical pass)
+- 3P join ritual → launch → in-match → NEW TURN (prior cycle)
+- Update settings (pending/committed split) — **implemented** in `f8a0958`; P1 log shows `update_settings_committed count=3`
+- Phases 1–6 rewiring (Gate B multi-guest, per-peer wire, steam↔wire seats, launch gate, in-match fan-out)
+
+---
+
+## Update settings — IMPLEMENTED (`f8a0958`)
+
+Previously spec-only; now banked. Core behavior:
+
+| State | Meaning |
+|-------|---------|
+| **Pending** | Host 2/3/4 toggle in setup UI |
+| **Committed** | Host **Update settings** → session + Steam + wire |
+
+- Dirty → **UPDATE SETTINGS** replaces Launch; launch blocked while dirty
+- `multiplayer_lobby_committed_player_count` reads stored committed count
+- Auto-commit on first publish
+
+**Remaining gap (ties to Issue A):** Browse cards still don’t **display** player count visually even though `mx` / `players` may be correct in data.
+
+---
+
+## Uncommitted dirty work (`game.script`, `multiplayer_transport.lua`)
+
+Not banked. Intended for post-abort leave + stale finder occupancy. **Treat as WIP — contains regression (Issue B).**
+
+| Symbol | Purpose |
+|--------|---------|
+| `multiplayer_steam_release_guest_wire_seat` | Clear Steam wire seat on guest leave |
+| `multiplayer_lobby_remove_player_from_session` | Normalized wire-id compare + steam seat release |
+| `multiplayer_lobby_prune_steam_disconnected_guests` | Drop roster guests not in Steam lobby |
+| `multiplayer_lobby_merge_incoming_offer_fields` | Steam discovery authoritative for `players` — **needs B1 fix** |
+| `lobby_leave_session` handler | `leave_session_roster_prune` / `leave_session_reject` logging |
+| `leave_match_request` / guest setup back | Also send `lobby_leave_session` |
+| `session_full` preflight | Tombstone only if offer not newer than reject |
+| `transport.steam_get_lobby_guest_steam_ids` | Guest enumeration (`multiplayer_transport.lua`) |
+
+**Recommendation for next AI:** Fix B1 on dirty branch, retest Issue B, then bank or revert selectively.
+
+---
+
+## Architecture (three roles)
 
 | Role | Responsibility |
 |------|----------------|
@@ -38,228 +164,68 @@ Enable **Steam public browse discovery** for multiplayer so remote friends can p
 
 ---
 
-## 3/4P rewiring — COMPLETE (Phases 1–6)
-
-**Goal:** Remote guests join a 3P/4P host, get distinct wire seats (`p2`/`p3`/`p4`), sync setup, launch, and play in-match. **Banked per phase.**
-
-| Phase | Commit | What shipped | Smoke |
-|-------|--------|--------------|-------|
-| **1** Gate B guest→host peer | `32b9f62` | Guests peer with lobby owner; host pings each guest | 3P Gate B |
-| **2** Per-peer wire send | `588c04f` | `send_wire_to_peer`, targeted events, host broadcast | 3P wire routing |
-| **3** Steam↔wire seat map | `fb08b29` | `steam_id_by_wire_id`, distinct `p2`/`p3`/`p4` on join | 3P seats |
-| **4** Lobby rules | `17c9a03` | Committed player count, launch gate, roster setup fan-out + ack | 3P join/launch |
-| **5** In-match sanity | `232bd26` | Match `connected_players` seed, multi-guest event fan-out | 3P NEW TURN + moves |
-| **6** Docs + cleanup | Phase 6 bank | Handover doc refresh; `MP RECLAIM` → debug log | Post-rewiring sanity |
-
-**4P:** Code paths are `N=2..4` throughout; **not smoke-tested yet** — treat as high-confidence untested.
-
-**Phase 0** (optional baseline debug) — **skipped**; `launch_blocked` / `multiplayer_debug_log` cover diagnostics.
-
-### Resolved blockers (were 2P-shaped)
-
-| Area | Fix (phase) |
-|------|-------------|
-| Gate B wrong peer in 3+ lobbies | Guests resolve lobby owner (1) |
-| Single `peer_steam_id` send | Per-peer send + host fan-out (2, 4, 5) |
-| All guests assigned `p2` | Host roster `steam_id_by_wire_id` (3) |
-| Join shrinks to 2P on first guest | Committed `player_count` on join (4) |
-| Launch without full roster | `guest_count == N-1` + setup sync (4) |
-| Guest stuck on setup at launch | `match_started` fan-out to all guests (4) |
-| Guest silent in-match | Roster peer map + `connected_players` seed (5) |
-
-### What already works (do not rebuild)
-
-- Setup UI: 2/3/4 toggles, seat layouts, `MP_SETUP_PLAYER_IDS`
-- Events carry `target_player_id`; guests filter by local seat
-- Host-authoritative join, setup sync, launch, and in-match command broadcast
-- Steam inbound: host receives wire from multiple peers
-
----
-
-## Next work ← **START HERE**
-
-### Update settings — agreed spec (NOT implemented)
-
-**User intent:** Host must be able to change advertised player count mid-lobby without aborting — e.g. advertised 4P with only one guest should be able to commit 2P and launch. Idle 2/3/4 toggling must not desync Steam browse from setup. **Lock-on-first-join was rejected** as too rigid.
-
-**Problem (three “truths” today):**
-
-| Layer | Source today | When it updates |
-|-------|----------------|-----------------|
-| Steam browse (`dvx_offer.mx`) | `session.max_players` | Only on `steam_publish_session` via `multiplayer_lobby_emit_offer_upsert` |
-| Host setup UI | `mp_setup.player_count` | Instant on 2/3/4 tap |
-| Wire to guests | `setup_state_updated` | Instant via `multiplayer_setup_push_state` on toggle |
-
-Tapping 2/3/4 today calls `multiplayer_setup_set_player_count` **and** `multiplayer_setup_push_state` (~20793) — guests see new count immediately; Steam offer does not update.
-
-**Additional gap:** `session.max_players` is minted as **4** default (`multiplayer_session_ticket_mint_host_session` does not pass `max_players`). Browse cards often show 4 max regardless of host UI. Phase 4 added `multiplayer_lobby_committed_player_count` but it returns `min(session.max_players, mp_setup.player_count)` — with `max_players` stuck at 4, **committed ≈ UI toggle**, not a real committed/pending split.
-
----
-
-#### Core design (locked)
-
-Treat **player count only** as pending vs committed. Mission, seat drag, and unit picks keep live wire sync (not in Steam blob).
-
-| State | Meaning |
-|-------|---------|
-| **Pending** | Host toggled 2/3/4 in setup UI (local) |
-| **Committed** | Host clicked **Update settings** → session + Steam + wire |
-
-**Only committed** drives: browse `mx`, join capacity (`session_full`), launch gate (`guest_count == committed_N - 1`).
-
-**Host UX:**
-- Not dirty → **LAUNCH** (same slot as today, ~20514)
-- Dirty (pending ≠ committed) → **UPDATE SETTINGS** replaces launch; launch hidden/disabled
-- Optional hint while dirty: *“Listing still shows N players until you update.”*
-
-**Update click (atomic on host):**
-1. Validate: `guest_count ≤ pending_N - 1` (else block + advisory)
-2. Commit pending → `session.max_players` + stored committed field
-3. `multiplayer_lobby_emit_offer_upsert` → `steam_publish_session` (refreshes `dvx_offer.mx`)
-4. Push `setup_state_updated` to rostered guests (consider roster fan-out + `require_setup_ack` like Phase 4 join)
-5. Guest advisory: *“Host set session to N players.”*
-6. Clear dirty → restore launch if rules pass
-
-**Launch rules:** blocked while dirty; requires committed N and `guest_count == N - 1` (via `multiplayer_lobby_joined_guests_setup_synced`).
-
----
-
-#### Edge cases (locked)
-
-| Case | Behavior |
-|------|----------|
-| Downgrade with too many guests | Block Update + advisory (*“Can’t reduce player count — players already joined.”*). **No kicking.** |
-| Launch while dirty | Blocked |
-| Guest joins during dirty window | Join uses **committed** capacity; browse still shows old `mx` |
-| Host Updates after guests joined | Validate roster; if OK all rostered guests keep seats; advisory + `setup_state_updated` |
-| Awkward but fair | Committed 4P, pending 2P (dirty), more guests join under 4P rules → Update to 2P blocked until leavers or commit 3P/4P |
-| Mid-join race | Host-authoritative: join checks committed at accept time; Update validates roster before commit |
-| Private/PIN | Same Update flow; republish refreshes Steam lobby metadata |
-
-**Out of scope unless user asks:** pause joins while dirty; kicking on downgrade; browse card “2/3 players” display.
-
----
-
-#### Implementation plan (suggested order)
-
-1. **State split:** `mp_setup.committed_player_count` (or on session) + `mp_setup.player_count_dirty`; initialize both on publish (see open pin below)
-2. **Count toggle:** set pending only; **remove** `multiplayer_setup_push_state` from count button handler (~20793)
-3. **Fix** `multiplayer_lobby_committed_player_count` to return stored committed, not UI toggle
-4. **New** `multiplayer_lobby_commit_player_count_settings(self)` — validation, commit, `emit_offer_upsert`, wire push, clear dirty
-5. **Setup UI** (~20438): if dirty → Update button; else Launch; `can_launch` requires `not dirty`
-6. **Match config:** `multiplayer_setup_build_session_config` / launch use committed count when launching
-7. **Smoke tests** (see below)
-
-Prefer **module-level helpers** in `game.script` (Lua local limit).
-
----
-
-#### Open pins (confirm with user before or during implementation)
-
-1. **Auto-commit on publish?** Recommended **yes** — first publish commits count selected before “Open Game” so browse matches setup from second zero; dirty only on later toggles.
-2. **Update button art?** New sprite (`update_settings_button`) or reuse `launch_button` / `disabled_button` sprite for v1?
-3. **Setup sync on Update:** plain `setup_push_state` vs roster fan-out with `require_setup_ack` (Phase 4 pattern — safer for layout changes).
-
----
-
-#### Key code touchpoints
-
-| Symbol / area | File | Notes |
-|---------------|------|-------|
-| Count toggle + immediate push | `game.script` ~20786–20796 | Remove push on toggle |
-| `multiplayer_setup_set_player_count` | `game.script` ~16508 | Pending UI + seat reshape |
-| `multiplayer_setup_push_state` | `game.script` ~16758 | Call on Update commit, not toggle |
-| `multiplayer_lobby_committed_player_count` | `game.script` ~17169 | Must read real committed |
-| Join accept capacity | `game.script` ~25294–25310 | Already uses committed helper |
-| Launch UI | `game.script` ~20438–20517 | Swap Launch ↔ Update |
-| `multiplayer_lobby_emit_offer_upsert` | `game.script` ~18407 | Republish on commit |
-| `encode_discovery_offer` (`mx`) | `steam_transport_gateb.lua` ~79 | Reads `session.max_players` |
-| Mint session (no max from UI) | `game.script` ~18323 | Set max on publish/commit |
-| Roster setup fan-out | `multiplayer_lobby_append_roster_setup_sync_events` | Optional on Update |
-
----
-
-#### Update settings smoke tests (after implementation)
-
-1. Host 4P → publish → browse shows 4 → toggle 2P (dirty) → guests still see committed layout; finder still sees 4 max
-2. Host 4P, 1 guest → toggle 2P → Update → launch OK
-3. Host 4P, 2 guests → toggle 2P → Update **blocked** with advisory
-4. Host 3P, 2 guests, launch OK (no dirty)
-5. 2P regression spot-check
-6. Private/PIN: same Update flow
-
----
-
-## Deferred polish (when user asks)
-
-| Item | Notes |
-|------|-------|
-| **4P smoke test** | Three guests; same ritual as 3P |
-| **Steam persona names** | Replace `playerone`/`playertwo` placeholders in lobby/setup (`Docs/steam-multiplayer-model-a-checklist.md`) |
-| **Abort → chooser UX** | Return to `FLOW_STATE_MP_CHOOSER` on `match_aborted_to_lobby` |
-| Pause guest `discovery_refresh` in join/setup/match | Reduce log noise |
-| 2P regression spot-check | After any MP change |
-| Kicking players on downgrade | Out of scope |
-| Non-Steam transport | Verify loopback/WS separately if needed |
-
-**Out of scope unless user asks:** Gate E/G gameplay sync rework; solo progression branch.
-
----
-
 ## Key files & functions
 
 | Area | Path / symbols |
 |------|----------------|
-| Gate B peer resolve | `resolve_peer_from_lobby`, `enumerate_lobby_guest_ids` — `steam_transport_gateb.lua` |
-| Gate B per-guest ping | `try_send_guest_pings` — `steam_transport_gateb.lua` |
-| Gate C multi-peer send | `steam_send_events_individually`, `steam_resolve_event_peer_ids` — `multiplayer_transport.lua` |
-| Steam seat assign | `multiplayer_steam_assign_wire_id_for_guest`, `steam_sync_peer_map` — `game.script` |
-| Join / launch gate | `lobby_join_session`, `multiplayer_lobby_joined_guests_setup_synced` — `game.script` |
-| Roster setup fan-out | `multiplayer_lobby_append_roster_setup_sync_events` — `game.script` |
-| Match start | `multiplayer_host_start_match_from_setup`, `multiplayer_seed_match_connected_players` — `game.script` |
-| Guest liveness | `multiplayer_mark_remote_player_alive`, `multiplayer_is_match_player_connected` — `game.script` |
-| Discovery offer | `encode_discovery_offer` (`mx`) — `steam_transport_gateb.lua` |
-| **Update settings (to build)** | `multiplayer_lobby_commit_player_count_settings`, dirty flag, Update UI — `game.script` |
-| Session ticket | `main/multiplayer_session_ticket.lua` |
-| Debug log file | `multiplayer_debug_log` → `dvx_mp_debug.txt` |
+| Session card render | `multiplayer_lobby_render_session_cards` — `game.script` ~19650 |
+| Discovery merge | `multiplayer_lobby_merge_incoming_offer_fields`, `multiplayer_lobby_apply_offer_upsert` — ~18895 |
+| Discovery apply callback | `on_discovery_offer` — ~29632 |
+| Pending join / wire | `multiplayer_lobby_complete_pending_steam_join`, `multiplayer_lobby_try_complete_pending_join_from_offer` — ~17740, ~18231 |
+| Leave session | `lobby_leave_session` handler — ~26094 |
+| Update settings | `multiplayer_lobby_commit_player_count_settings`, dirty helpers — ~17287+ |
+| Steam browse filters | `add_gate_lobby_list_filters` — `steam_transport_gateb.lua` ~319 |
+| Discovery encode | `encode_discovery_offer` (`pl`, `mx`) — `steam_transport_gateb.lua` |
+| Debug log | `multiplayer_debug_log` → `dvx_mp_debug.txt` |
+
+---
+
+## Retest matrix (after fixes)
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| 1 | 3P join ritual (baseline) | All reach setup; launch OK |
+| 2 | P2/P3 setup back → host roster 1/N | Host: `leave_session_roster_prune` (not reject) |
+| 3 | P2 re-join same session | `join_session_wire` + setup; no stuck joining |
+| 4 | Finder after abort | No `join_blocked_preflight session_full` on valid slot |
+| 5 | Lobby cards | Visible `N/M` player count on each card |
+| 6 | P1 + P2 simultaneous host | P3 `discovery_list count=2`, two cards |
+| 7 | Update settings regression | Dirty toggle → Update → launch with correct N |
+| 8 | 2P spot-check | Unaffected |
 
 ---
 
 ## Tester ritual (regression)
 
 ### 2P (baseline)
-1. **Host:** HOST → Publish Open → setup  
-2. **Finder:** FIND → tap card → setup  
-3. **Host:** Launch  
-4. **Play:** Move units, NEW TURN, guest retains control  
-5. **Abort** → swap roles, repeat ×2 each direction  
+1. Host: HOST → Publish Open → setup  
+2. Finder: FIND → tap card → setup  
+3. Host: Launch → play → NEW TURN → abort  
 
-### 3P (rewiring milestone — passed)
-1. Host selects **3P**, publishes  
-2. Two guests join via Find  
-3. Launch blocked with 1 guest; allowed with 2  
-4. All three enter match; each moves; host NEW TURN  
-5. Abort optional  
+### 3P
+1. Host 3P, publish  
+2. Two guests join via Find (order may vary)  
+3. Launch blocked with 1 guest; OK with 2  
+4. All three in match; abort optional  
+
+### Post-abort re-join (currently failing)
+1. 3P in setup  
+2. P2 and P3 back to FIND  
+3. P2 re-joins → must reach setup (not joining forever)  
+4. Repeat for P3  
 
 ### 4P (not yet run)
-Same as 3P with three guests → expect `p1`–`p4` distinct.
-
----
-
-## 2P remote — historical pass (2026-06-16)
-
-User test: 4 cycles per direction, no issues. Healthy log signals: `lobby_join_accepted`, `match_started` to guest, `match_started_guest`, `new_turn_request` → `turn_advanced`, `move_unit_applied`, clean abort.
-
-**Known log noise (not failures):** guest `discovery_refresh_requested` during join; `wire_not_ready` queue then flush succeeds.
+Same as 3P with three guests.
 
 ---
 
 ## Constraints for the next AI
 
-1. Small, reversible diffs; host-authoritative MP; no desync risk.
-2. Do not commit unless user explicitly requests.
-3. Lua chunk local limit in `main/game.script` — prefer module-level helpers.
-4. Do not rework Gate E/G without discussion.
+1. Small, reversible diffs; host-authoritative MP; no desync risk.  
+2. Do not commit unless user explicitly requests.  
+3. Lua chunk local limit in `main/game.script` — prefer module-level helpers.  
+4. Lobby digits: sprite atlas only, not Defold fonts.  
+5. Do not rework Gate E/G without discussion.
 
 ---
 
@@ -267,17 +233,15 @@ User test: 4 cycles per direction, no issues. Healthy log signals: `lobby_join_a
 
 | Commit | Notes |
 |--------|-------|
-| *(HEAD)* | Phase 6 docs + reclaim log cleanup |
+| `f8a0958` *(HEAD)* | Update settings, cycle-2 sync, session-full reject UX |
 | `232bd26` | Phase 5 in-match connected players + fan-out |
 | `17c9a03` | Phase 4 committed count, launch gate, roster sync |
 | `fb08b29` | Phase 3 steam↔wire seats |
 | `588c04f` | Phase 2 per-peer wire send |
 | `32b9f62` | Phase 1 Gate B multi-guest |
-| `1701984` | 2P remote loop banked; local MP save gitignore |
-| `feature/lobby-discovery` | Current branch — 7 commits ahead of origin at last bank |
 
 ---
 
 ## Current stage (one paragraph)
 
-**Steam Host/Find remote 2P and 3P rewiring are done** (Phases 1–6 banked). 3P join, launch, and in-match smoke-tested. **4P not smoke-tested.** **Next: implement Update settings** — spec fully agreed in design discussion (pending/committed split, Update button replaces Launch while dirty, no kicking on downgrade). Code not started; see section above. Deferred: Steam persona names, abort→chooser UX, 4P smoke.
+**Steam 2P/3P rewiring and Update settings are banked** (`f8a0958`). **2026-06-18 smoke exposed three gaps:** (A) lobby cards never render player count — implementation missing, use `score_N` sprites; (B) post-abort re-join fails — likely host roster wiped by `steam_discovery` merge plus failed `lobby_leave_session`, leaving guests in Steam lobby without wire handshake (`joining` advisory stuck); uncommitted leave/merge fixes need refinement before banking; (C) dual-host browse showing one session — needs logged repro. **Next AI:** fix discovery merge regression (B1), retest re-join, add card occupancy UI (A), investigate dual-host browse (C).

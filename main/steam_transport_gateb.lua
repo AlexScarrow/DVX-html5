@@ -31,6 +31,7 @@ local steam_listener_installed = false
     local LOBBY_MAX_MEMBERS = 4
     local LOBBY_CREATE_EMPTY_THRESHOLD = 2
     local FIND_DISCOVERY_REFRESH_SECONDS = 3.0
+    local DISCOVERY_CLEAR_MISS_THRESHOLD = 3
 
     local function normalize_pairing_mode(mode)
         local value = tostring(mode or "host")
@@ -76,14 +77,31 @@ local steam_listener_installed = false
 
     local OFFER_KEY = "dvx_offer"
 
+    local function host_steam_id_from_session_key(session_key)
+        local key = tostring(session_key or "")
+        if key == "" then
+            return ""
+        end
+        local host_id = string.match(key, "^(.+):(%d+)$")
+        if host_id and is_valid_steam_id(host_id) then
+            return tostring(host_id)
+        end
+        return ""
+    end
+
     local function encode_discovery_offer(session)
         if type(session) ~= "table" then
             return nil
         end
+        local host_steam_id = tostring(session.host_steam_id or "")
+        if host_steam_id == "" then
+            host_steam_id = host_steam_id_from_session_key(session.id or session.session_key or "")
+        end
         return gate_encode_json({
             id = tostring(session.id or ""),
             owner = tostring(session.owner_player_id or "p1"),
-            host = tostring(session.host_name or "Host"),
+            host = tostring(session.host_name or session.host_display_name or "Host"),
+            sid = host_steam_id,
             status = tostring(session.status or ""),
             env = tostring(session.env_name or ""),
             gv = tostring(session.game_version or ""),
@@ -94,20 +112,45 @@ local steam_listener_installed = false
         })
     end
 
-    local function decode_discovery_offer(raw)
-        local decoded = gate_decode_json(raw)
+    local function decode_discovery_offer(raw, decode_log_fn)
+        local raw_str = tostring(raw or "")
+        local decoded = gate_decode_json(raw_str)
         if type(decoded) ~= "table" or tostring(decoded.id or "") == "" then
+            if type(decode_log_fn) == "function" then
+                local reason = raw_str == "" and "empty_dvx_offer"
+                    or (type(decoded) ~= "table" and "json_decode_failed" or "missing_id")
+                decode_log_fn(reason, raw_str)
+            end
             return nil
         end
-        local status = tostring(decoded.status or "")
+        local status = tostring(decoded.status or decoded.st or "")
         if status == "draft" or status == "" then
+            if type(decode_log_fn) == "function" then
+                decode_log_fn("status_" .. (status == "" and "empty" or status), raw_str)
+            end
             return nil
+        end
+        local publish_status = status
+        if publish_status ~= "published_open" and publish_status ~= "published_private" then
+            if type(decode_log_fn) == "function" then
+                decode_log_fn("status_unpublished_" .. publish_status, raw_str)
+            end
+            return nil
+        end
+        local host_steam_id = tostring(decoded.sid or decoded.hs or "")
+        if host_steam_id == "" then
+            host_steam_id = host_steam_id_from_session_key(decoded.id)
         end
         return {
             id = tostring(decoded.id or ""),
+            session_key = tostring(decoded.id or ""),
+            host_steam_id = host_steam_id,
             owner_player_id = tostring(decoded.owner or "p1"),
             host_name = tostring(decoded.host or "Host"),
-            status = status,
+            host_display_name = tostring(decoded.host or "Host"),
+            status = publish_status,
+            publish_status = publish_status,
+            lobby_status = "open",
             env_name = tostring(decoded.env or ""),
             game_version = tostring(decoded.gv or ""),
             protocol_version = tostring(decoded.pv or "1"),
@@ -129,13 +172,36 @@ local steam_listener_installed = false
         if not ok_raw then
             return
         end
-        local offer = decode_discovery_offer(tostring(raw or ""))
+        local lobby_key = tostring(lobby_id)
+        local offer = decode_discovery_offer(tostring(raw or ""), function(reason, raw_str)
+            log(state, string.format(
+                "MP STEAM GATED | discovery_decode_fail lobby=%s reason=%s raw_len=%d",
+                lobby_key,
+                tostring(reason or "unknown"),
+                #tostring(raw_str or "")
+            ))
+        end)
         if not offer then
-            if type(state.on_discovery_offer_cleared) == "function" then
-                pcall(state.on_discovery_offer_cleared, tostring(lobby_id))
+            state.discovery_clear_miss_by_lobby = state.discovery_clear_miss_by_lobby or {}
+            local misses = (tonumber(state.discovery_clear_miss_by_lobby[lobby_key] or 0) or 0) + 1
+            state.discovery_clear_miss_by_lobby[lobby_key] = misses
+            if misses >= DISCOVERY_CLEAR_MISS_THRESHOLD then
+                state.discovery_clear_miss_by_lobby[lobby_key] = nil
+                if type(state.on_discovery_offer_cleared) == "function" then
+                    pcall(state.on_discovery_offer_cleared, lobby_key)
+                end
+            else
+                log(state, string.format(
+                    "MP STEAM GATED | discovery_offer_miss lobby=%s misses=%d/%d",
+                    lobby_key,
+                    misses,
+                    DISCOVERY_CLEAR_MISS_THRESHOLD
+                ))
             end
             return
         end
+        state.discovery_clear_miss_by_lobby = state.discovery_clear_miss_by_lobby or {}
+        state.discovery_clear_miss_by_lobby[tostring(lobby_id)] = nil
         if tostring(offer.host_steam_id or "") == ""
             and type(state.backend.matchmaking_get_lobby_owner) == "function" then
             local ok_owner, owner = pcall(state.backend.matchmaking_get_lobby_owner, lobby_id)
@@ -161,14 +227,32 @@ local steam_listener_installed = false
     local function emit_discovery_from_match_list(state, total)
         total = tonumber(total or 0) or 0
         log(state, string.format("MP STEAM GATED | discovery_list count=%d", total))
-        if total <= 0 or type(state.backend.matchmaking_get_lobby_by_index) ~= "function" then
-            return
-        end
-        for index = 0, total - 1 do
-            local ok_lobby, lobby_id = pcall(state.backend.matchmaking_get_lobby_by_index, index)
-            if ok_lobby and is_valid_steam_id(lobby_id) then
-                emit_discovery_offer(state, lobby_id)
+        local seen_lobby_ids = {}
+        if total > 0 and type(state.backend.matchmaking_get_lobby_by_index) == "function" then
+            for index = 0, total - 1 do
+                local ok_lobby, lobby_id = pcall(state.backend.matchmaking_get_lobby_by_index, index)
+                if ok_lobby and is_valid_steam_id(lobby_id) then
+                    local lobby_key = tostring(lobby_id)
+                    seen_lobby_ids[lobby_key] = true
+                    local owner_id = ""
+                    if type(state.backend.matchmaking_get_lobby_owner) == "function" then
+                        local ok_owner, owner = pcall(state.backend.matchmaking_get_lobby_owner, lobby_id)
+                        if ok_owner then
+                            owner_id = tostring(owner or "")
+                        end
+                    end
+                    log(state, string.format(
+                        "MP STEAM GATED | discovery_list_entry index=%d lobby=%s owner=%s",
+                        index,
+                        lobby_key,
+                        owner_id
+                    ))
+                    emit_discovery_offer(state, lobby_id)
+                end
             end
+        end
+        if type(state.on_discovery_refresh) == "function" then
+            pcall(state.on_discovery_refresh, seen_lobby_ids, total)
         end
     end
 
@@ -179,6 +263,32 @@ local steam_listener_installed = false
             local ok, steam_id = pcall(backend.user_get_steam_id)
             if ok and is_valid_steam_id(steam_id) then
                 return tostring(steam_id)
+            end
+        end
+        return ""
+    end
+
+    local function get_persona_name(backend, steam_id)
+        if type(backend) ~= "table" then
+            return ""
+        end
+        local target_id = tostring(steam_id or "")
+        if target_id ~= "" and type(backend.friends_get_persona_name) == "function" then
+            local ok, name = pcall(backend.friends_get_persona_name, target_id)
+            if ok and type(name) == "string" and name ~= "" then
+                return name
+            end
+        end
+        if type(backend.user_get_persona_name) == "function" then
+            local ok, name = pcall(backend.user_get_persona_name, target_id ~= "" and target_id or nil)
+            if ok and type(name) == "string" and name ~= "" then
+                return name
+            end
+        end
+        if target_id == "" and type(backend.user_get_name) == "function" then
+            local ok, name = pcall(backend.user_get_name)
+            if ok and type(name) == "string" and name ~= "" then
+                return name
             end
         end
         return ""
@@ -602,8 +712,6 @@ local steam_listener_installed = false
             end
         end
         if foreign_lobby_id ~= nil and not is_find_pairing_mode(state) then
-            state.host_create_wait_count = 0
-            state.empty_search_count = 0
             log(state, string.format(
                 "MP STEAM GATEB | lobby_match_foreign_skipped id=%s mode=host",
                 tostring(foreign_lobby_id)
@@ -651,6 +759,9 @@ local steam_listener_installed = false
         configure_gate_lobby(state, lobby_id)
         log(state, string.format("MP STEAM GATEB | lobby_created id=%s", lobby_id))
         state.phase = "in_lobby"
+        if state.on_status then
+            pcall(state.on_status, "host_lobby_created", { lobby_id = lobby_id })
+        end
     end
 
     local function on_lobby_enter(state, data)
@@ -737,6 +848,7 @@ function M.create(opts)
             on_wire_recv = opts and opts.on_wire_recv or nil,
             on_discovery_offer = opts and opts.on_discovery_offer or nil,
             on_discovery_offer_cleared = opts and opts.on_discovery_offer_cleared or nil,
+            on_discovery_refresh = opts and opts.on_discovery_refresh or nil,
             net_protocol_version = tonumber(opts and opts.net_protocol_version) or 1,
             phase = "idle",
             local_steam_id = "",
@@ -759,6 +871,7 @@ function M.create(opts)
             empty_search_count = 0,
             create_pending = false,
             discovery_seen_ids = {},
+            discovery_clear_miss_by_lobby = {},
             discovery_refresh_only = false,
             discovery_timer = FIND_DISCOVERY_REFRESH_SECONDS,
             pairing_mode = normalize_pairing_mode(opts and opts.pairing_mode)
@@ -881,6 +994,7 @@ function M.create(opts)
             state.create_pending = false
             state.peer_resolve_logged = false
             state.discovery_seen_ids = {}
+            state.discovery_clear_miss_by_lobby = {}
             state.discovery_refresh_only = false
             state.discovery_timer = FIND_DISCOVERY_REFRESH_SECONDS
             active_gateb_state = state
@@ -956,6 +1070,7 @@ function M.create(opts)
             end
             install_steam_listener(state)
             state.local_steam_id = get_local_steam_id(backend)
+            state.local_persona_name = get_persona_name(backend, "")
             log(state, string.format(
                 "MP STEAM GATEB | local_steam_id=%s mode=%s",
                 tostring(state.local_steam_id),
@@ -1063,6 +1178,17 @@ function M.create(opts)
 
         function gateb.get_local_steam_id()
             return tostring(state.local_steam_id or "")
+        end
+
+        function gateb.get_local_persona_name()
+            if state.local_persona_name and tostring(state.local_persona_name) ~= "" then
+                return tostring(state.local_persona_name)
+            end
+            local name = get_persona_name(backend, "")
+            if name ~= "" then
+                state.local_persona_name = name
+            end
+            return tostring(state.local_persona_name or "")
         end
 
         function gateb.is_passed()

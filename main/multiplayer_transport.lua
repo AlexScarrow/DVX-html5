@@ -79,6 +79,7 @@ function M.create(opts)
         on_status = opts and opts.on_status or nil,
         on_discovery_offer = opts and opts.on_discovery_offer or nil,
         on_discovery_offer_cleared = opts and opts.on_discovery_offer_cleared or nil,
+        on_discovery_refresh = opts and opts.on_discovery_refresh or nil,
         message_seq = 0,
         ws_url = opts and opts.ws_url or "",
         ws_room_id = opts and opts.ws_room_id or "default_room",
@@ -858,6 +859,13 @@ function M.create(opts)
         return ""
     end
 
+    function transport.steam_get_local_persona_name()
+        if state.steam_gateb and state.steam_gateb.get_local_persona_name then
+            return tostring(state.steam_gateb.get_local_persona_name() or "")
+        end
+        return ""
+    end
+
     function transport.set_steam_pairing_mode(mode)
         state.steam_pairing_mode = tostring(mode or "host")
         if state.steam_gateb and state.steam_gateb.set_pairing_mode then
@@ -1015,6 +1023,7 @@ function M.create(opts)
                     on_wire_recv = handle_steam_wire_packet,
                     on_discovery_offer = state.on_discovery_offer,
                     on_discovery_offer_cleared = state.on_discovery_offer_cleared,
+                    on_discovery_refresh = state.on_discovery_refresh,
                     net_protocol_version = state.net_protocol_version,
                     pairing_mode = state.steam_pairing_mode,
                     on_status = function(status, detail)

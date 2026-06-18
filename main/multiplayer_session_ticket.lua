@@ -179,6 +179,9 @@ function M.is_browse_visible(session)
         return false
     end
     local publish_status = to_string(session.publish_status)
+    if publish_status == "" then
+        publish_status = to_string(session.status)
+    end
     return publish_status == M.PUBLISH_OPEN or publish_status == M.PUBLISH_PRIVATE
 end
 

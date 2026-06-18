@@ -920,6 +920,123 @@ mp_alpha_label_from_network_id = function(network_id)
     return mp_lobby_sanitize_name(raw)
 end
 
+multiplayer_steam_refresh_local_username = function(self)
+    if not (self and self.mp_lobby) then
+        return false
+    end
+    local raw = ""
+    if self.mp_transport and self.mp_transport.steam_get_local_persona_name then
+        raw = tostring(self.mp_transport.steam_get_local_persona_name() or "")
+    end
+    if raw ~= "" then
+        self.mp_lobby.local_username = mp_lobby_sanitize_name(raw)
+        return true
+    end
+    return false
+end
+
+mp_display_name_for_wire_id = function(self, wire_id)
+    wire_id = mp_normalize_network_player_id(wire_id or "")
+    if wire_id == "" then
+        return mp_lobby_sanitize_name("player")
+    end
+    local session = multiplayer_lobby_get_active_session and multiplayer_lobby_get_active_session(self) or nil
+    if type(session) == "table" and type(session.display_name_by_wire_id) == "table" then
+        local stored = tostring(session.display_name_by_wire_id[wire_id] or "")
+        if stored ~= "" then
+            return mp_lobby_sanitize_name(stored)
+        end
+    end
+    local local_id = mp_normalize_network_player_id(self and self.mp_state and self.mp_state.local_player_id or "")
+    if wire_id == local_id and self and self.mp_lobby then
+        local local_name = tostring(self.mp_lobby.local_username or "")
+        if local_name ~= "" then
+            return mp_lobby_sanitize_name(local_name)
+        end
+    end
+    return mp_alpha_label_from_network_id(wire_id)
+end
+
+multiplayer_lobby_join_wire_payload = function(self, session_id, extra)
+    multiplayer_lobby_ensure_runtime(self)
+    multiplayer_steam_refresh_local_username(self)
+    local payload = {
+        session_id = tostring(session_id or ""),
+        protocol_version = tostring(NET_PROTOCOL_VERSION or "1"),
+        display_name = tostring(self.mp_lobby.local_username or mp_lobby_sanitize_name("guest"))
+    }
+    if type(extra) == "table" then
+        for key, value in pairs(extra) do
+            payload[key] = value
+        end
+    end
+    return payload
+end
+
+multiplayer_lobby_offer_map_key = function(offer)
+    if type(offer) ~= "table" then
+        return ""
+    end
+    if offer.steam_discovery == true then
+        local steam_lobby_id = tostring(offer.steam_lobby_id or "")
+        if steam_lobby_id ~= "" then
+            return "sl:" .. steam_lobby_id
+        end
+    end
+    return tostring(offer.id or offer.session_key or "")
+end
+
+multiplayer_lobby_sync_discovery_from_steam_list = function(self, seen_lobby_ids, match_count)
+    if not multiplayer_lobby_is_find_intent(self) then
+        return 0
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    seen_lobby_ids = type(seen_lobby_ids) == "table" and seen_lobby_ids or {}
+    match_count = tonumber(match_count or 0) or 0
+    local lobby = self.mp_lobby
+    lobby.discovery_list_miss_by_sl = lobby.discovery_list_miss_by_sl or {}
+    for seen_sl, _ in pairs(seen_lobby_ids) do
+        lobby.discovery_list_miss_by_sl[tostring(seen_sl or "")] = 0
+    end
+    local removed = 0
+    for map_key, offer in pairs(lobby.offers_by_id or {}) do
+        if type(offer) == "table" then
+            local is_discovery = offer.steam_discovery == true or string.sub(tostring(map_key or ""), 1, 3) == "sl:"
+            if is_discovery then
+                local steam_lobby_id = tostring(offer.steam_lobby_id or "")
+                if steam_lobby_id == "" and string.sub(tostring(map_key or ""), 1, 3) == "sl:" then
+                    steam_lobby_id = string.sub(tostring(map_key or ""), 4)
+                end
+                if steam_lobby_id == "" then
+                    -- Keep offers without a steam lobby id until stale prune removes them.
+                elseif seen_lobby_ids[steam_lobby_id] == true then
+                    lobby.discovery_list_miss_by_sl[steam_lobby_id] = 0
+                else
+                    local miss = (tonumber(lobby.discovery_list_miss_by_sl[steam_lobby_id] or 0) or 0) + 1
+                    lobby.discovery_list_miss_by_sl[steam_lobby_id] = miss
+                    if miss >= 2 then
+                        lobby.offers_by_id[map_key] = nil
+                        removed = removed + 1
+                        local ticket_id = tostring(offer.id or offer.session_key or "")
+                        if ticket_id ~= "" and lobby.offer_removed_at_ms_by_id then
+                            lobby.offer_removed_at_ms_by_id[ticket_id] = nil
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if removed > 0 then
+        multiplayer_debug_log(self, string.format(
+            "MP STEAM GATED | discovery_prune_not_in_list removed=%d match_count=%d",
+            removed,
+            match_count
+        ))
+        multiplayer_lobby_sync_sessions_from_offers(self)
+    end
+    return removed
+end
+
 mp_normalize_network_player_id = function(raw_id)
     local raw = string.lower(tostring(raw_id or ""))
     if raw == "playerone" then return "p1" end
@@ -11741,8 +11858,8 @@ end
 
 multiplayer_get_slot_count_for_player = function(player_count, player_id)
     if player_count == 1 then
-        if player_id == "p1" then
-            return 4
+        if player_id == "p1" or player_id == "p2" then
+            return 2
         end
         return 0
     elseif player_count == 2 then
@@ -11776,11 +11893,7 @@ end
 
 multiplayer_get_default_seat_assignments = function(player_count)
     local count = multiplayer_setup_clamp_player_count(player_count)
-    if count == 1 then
-        return {
-            p1 = { "sarge", "techie", "medic", "gunner" }
-        }
-    elseif count == 2 then
+    if count == 1 or count == 2 then
         return {
             p1 = { "sarge", "techie" },
             p2 = { "medic", "gunner" }
@@ -16747,11 +16860,7 @@ multiplayer_setup_is_valid = function(self)
     if multiplayer_get_player_for_unit(self.mp_setup.seat_slots, count, "sarge") ~= "p1" then
         return false
     end
-    if count == 1 then
-        if (assigned_per_player.p1 or 0) ~= 4 then
-            return false
-        end
-    elseif count == 2 then
+    if count == 1 or count == 2 then
         if assigned_per_player.p1 ~= 2 or assigned_per_player.p2 ~= 2 then
             return false
         end
@@ -18137,6 +18246,9 @@ multiplayer_lobby_ensure_runtime = function(self)
         end
         lobby.local_username = mp_alpha_label_from_network_id(local_slot_id)
     end
+    if self.mp_transport and self.mp_transport.steam_get_local_persona_name then
+        multiplayer_steam_refresh_local_username(self)
+    end
     lobby.pending_cancel_confirm = lobby.pending_cancel_confirm == true
     lobby.protocol_mismatch_hint_active = lobby.protocol_mismatch_hint_active == true
     if type(lobby.sessions) ~= "table" then
@@ -18436,13 +18548,11 @@ multiplayer_lobby_complete_pending_steam_join = function(self)
     if join_pin == "" and lobby.pin_mode == "join_locked" then
         join_pin = tostring(lobby.pin_buffer or "")
     end
-    local join_payload = {
-        session_id = pending_id,
-        protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
-    }
-    if join_pin ~= "" then
-        join_payload.pin = join_pin
-    end
+    local join_payload = multiplayer_lobby_join_wire_payload(
+        self,
+        pending_id,
+        join_pin ~= "" and { pin = join_pin } or nil
+    )
     multiplayer_transport_send_command(self, "lobby_join_session", join_payload, self.mp_state.local_player_id or "p1")
     lobby.pending_join_wire_sent = true
     lobby.pending_join_wire_session_id = pending_id
@@ -18515,10 +18625,12 @@ multiplayer_lobby_request_join_session = function(self, session)
             return true
         end
     end
-    multiplayer_transport_send_command(self, "lobby_join_session", {
-        session_id = session_id,
-        protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
-    }, self.mp_state.local_player_id or "p1")
+    multiplayer_transport_send_command(
+        self,
+        "lobby_join_session",
+        multiplayer_lobby_join_wire_payload(self, session_id),
+        self.mp_state.local_player_id or "p1"
+    )
     return true
 end
 
@@ -18562,6 +18674,7 @@ multiplayer_lobby_enter_with_pairing_intent = function(self, intent)
     enter_flow_state(self, FLOW_STATE_MP_LOBBY)
     if normalized == "find" then
         show_mp_lobby_advisory(self, 2.5, "find")
+        lobby.offer_removed_at_ms_by_id = {}
     else
         show_mp_lobby_advisory(self, 2.5, "host")
     end
@@ -18641,6 +18754,36 @@ multiplayer_lobby_note_offer_removed = function(self, offer_id, removed_at_ms)
     end
 end
 
+multiplayer_lobby_republish_steam_discovery_if_host = function(self)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
+        return false
+    end
+    if not multiplayer_lobby_is_host(self) then
+        return false
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    local lobby = self.mp_lobby
+    local offer_id = tostring(lobby.local_active_offer_id or "")
+    if offer_id == "" then
+        return false
+    end
+    local session = multiplayer_lobby_get_session_by_id(self, offer_id)
+    if not session then
+        return false
+    end
+    local status = tostring(session.status or session.publish_status or "")
+    if status ~= "published_open" and status ~= "published_private" then
+        return false
+    end
+    if self.mp_transport and self.mp_transport.steam_get_lobby_id then
+        session.steam_lobby_id = tostring(self.mp_transport.steam_get_lobby_id() or "")
+    end
+    if self.mp_transport and self.mp_transport.steam_publish_session then
+        return self.mp_transport.steam_publish_session(session) == true
+    end
+    return false
+end
+
 multiplayer_lobby_clear_steam_discovery_if_host = function(self)
     if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
         return
@@ -18673,21 +18816,25 @@ multiplayer_lobby_remove_offers_by_owner = function(self, owner_player_id)
     if owner_id == "" then
         return false
     end
-    local changed = false
-    for offer_id, offer in pairs(lobby.offers_by_id or {}) do
-        if tostring(offer and offer.owner_player_id or "") == owner_id then
-            lobby.offers_by_id[offer_id] = nil
-            multiplayer_lobby_note_offer_removed(self, offer_id, get_wall_clock_ms())
-            if tostring(lobby.local_active_offer_id or "") == tostring(offer_id or "") then
-                lobby.local_active_offer_id = ""
-            end
-            changed = true
-        end
+    local local_offer_id = tostring(lobby.local_active_offer_id or "")
+    if local_offer_id == "" then
+        return false
     end
-    if changed then
-        multiplayer_lobby_sync_sessions_from_offers(self)
+    local offer = lobby.offers_by_id[local_offer_id]
+    if type(offer) ~= "table" then
+        return false
     end
-    return changed
+    if tostring(offer.owner_player_id or "") ~= owner_id then
+        return false
+    end
+    if not multiplayer_lobby_is_local_offer_owner(self, offer) then
+        return false
+    end
+    lobby.offers_by_id[local_offer_id] = nil
+    multiplayer_lobby_note_offer_removed(self, local_offer_id, get_wall_clock_ms())
+    lobby.local_active_offer_id = ""
+    multiplayer_lobby_sync_sessions_from_offers(self)
+    return true
 end
 
 multiplayer_lobby_remove_offers_by_steam_lobby_id = function(self, steam_lobby_id)
@@ -18699,10 +18846,14 @@ multiplayer_lobby_remove_offers_by_steam_lobby_id = function(self, steam_lobby_i
     end
     local changed = false
     for offer_id, offer in pairs(lobby.offers_by_id or {}) do
-        if tostring(offer and offer.steam_lobby_id or "") == target_lobby_id then
-            multiplayer_lobby_apply_offer_remove(self, offer_id)
+        if tostring(offer and offer.steam_lobby_id or "") == target_lobby_id
+            or tostring(offer_id or "") == ("sl:" .. target_lobby_id) then
+            lobby.offers_by_id[offer_id] = nil
             changed = true
         end
+    end
+    if changed then
+        multiplayer_lobby_sync_sessions_from_offers(self)
     end
     return changed
 end
@@ -18908,6 +19059,7 @@ end
 multiplayer_session_ticket_mint_host_session = function(self, publish_status)
     multiplayer_lobby_ensure_runtime(self)
     local lobby = self.mp_lobby
+    multiplayer_steam_refresh_local_username(self)
     local allocator = multiplayer_session_ticket_ensure_host_allocator(self)
     local session_number
     session_number, lobby.host_session_allocator = MP_SESSION_TICKET.allocate_session_number(allocator)
@@ -18931,6 +19083,9 @@ multiplayer_session_ticket_mint_host_session = function(self, publish_status)
     })
     session.status = tostring(session.publish_status or MP_SESSION_TICKET.PUBLISH_DRAFT)
     session.last_seen_local_ms = get_wall_clock_ms()
+    session.display_name_by_wire_id = {
+        [host_wire_player_id] = mp_lobby_sanitize_name(lobby.local_username or "host")
+    }
     multiplayer_debug_log(self, string.format(
         "MP TICKET | mint key=%s number=%s host=%s",
         tostring(session.session_key or ""),
@@ -18956,6 +19111,7 @@ multiplayer_lobby_prune_stale_offers = function(self)
     local lobby = self.mp_lobby
     local now_ms = get_wall_clock_ms()
     local stale_after_ms = 90000
+    local discovery_stale_after_ms = 12000
     local changed = false
     for offer_id, offer in pairs(lobby.offers_by_id or {}) do
         local is_local_active = tostring(lobby.local_active_offer_id or "") == tostring(offer_id or "")
@@ -18964,7 +19120,14 @@ multiplayer_lobby_prune_stale_offers = function(self)
             if last_seen <= 0 then
                 last_seen = tonumber(offer and offer.updated_at_ms or 0) or 0
             end
-            if last_seen <= 0 or (now_ms - last_seen) > stale_after_ms then
+            local stale_limit = stale_after_ms
+            if offer and (offer.steam_discovery == true or string.sub(tostring(offer_id or ""), 1, 3) == "sl:") then
+                stale_limit = discovery_stale_after_ms
+                if last_seen <= 0 then
+                    last_seen = nil
+                end
+            end
+            if last_seen ~= nil and (last_seen <= 0 or (now_ms - last_seen) > stale_limit) then
                 lobby.offers_by_id[offer_id] = nil
                 changed = true
             end
@@ -19003,6 +19166,7 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
         host_wire_player_id = tostring(session.host_wire_player_id or multiplayer_lobby_session_host_wire_id(session)),
         lobby_status = tostring(session.lobby_status or MP_SESSION_TICKET.LOBBY_STATUS_OPEN),
         owner_player_id = tostring(session.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID),
+        host_display_name = tostring(session.host_display_name or session.host_name or "Host"),
         host_name = tostring(session.host_name or session.host_display_name or "Host"),
         status = tostring(session.status or session.publish_status or "published_open"),
         publish_status = tostring(session.publish_status or session.status or "published_open"),
@@ -19013,6 +19177,7 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
         max_players = math.max(2, tonumber(session.max_players or 2) or 2),
         is_locked = session.is_locked == true,
         joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
+        display_name_by_wire_id = multiplayer_clone_simple_table(session.display_name_by_wire_id or {}),
         updated_at_ms = now_ms
     }
     print(string.format("LOBBY_COMMAND | offer_upsert_send_command | offer=%s owner=%s", tostring(session.id or ""), tostring(session.owner_player_id or "")))
@@ -19023,6 +19188,9 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
     if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
         local status = tostring(session.status or "")
         if status == "published_open" or status == "published_private" then
+            if self.mp_transport and self.mp_transport.steam_get_lobby_id then
+                session.steam_lobby_id = tostring(self.mp_transport.steam_get_lobby_id() or "")
+            end
             if self.mp_transport and self.mp_transport.steam_publish_session then
                 self.mp_transport.steam_publish_session(session)
             end
@@ -19068,7 +19236,11 @@ multiplayer_lobby_tick_offer_presence = function(self, dt)
         lobby.offer_prune_timer = 1
         multiplayer_lobby_prune_stale_offers(self)
     end
-    -- Explicit upsert/remove commands are authoritative; no periodic offer heartbeat.
+    lobby.steam_discovery_republish_timer = (tonumber(lobby.steam_discovery_republish_timer or 0) or 0) - (tonumber(dt or 0) or 0)
+    if lobby.steam_discovery_republish_timer <= 0 then
+        lobby.steam_discovery_republish_timer = 3
+        multiplayer_lobby_republish_steam_discovery_if_host(self)
+    end
 end
 
 multiplayer_lobby_merge_incoming_offer_fields = function(existing_offer, offer)
@@ -19122,12 +19294,39 @@ multiplayer_lobby_merge_offer_pin = function(existing_offer, offer)
     return existing_pin
 end
 
+multiplayer_lobby_merge_display_name_maps = function(existing_map, incoming_map)
+    local merged = {}
+    if type(existing_map) == "table" then
+        for wire_id, name in pairs(existing_map) do
+            local key = mp_normalize_network_player_id(wire_id)
+            local val = mp_lobby_sanitize_name(name)
+            if key ~= "" and val ~= "" then
+                merged[key] = val
+            end
+        end
+    end
+    if type(incoming_map) == "table" then
+        for wire_id, name in pairs(incoming_map) do
+            local key = mp_normalize_network_player_id(wire_id)
+            local val = mp_lobby_sanitize_name(name)
+            if key ~= "" and val ~= "" then
+                merged[key] = val
+            end
+        end
+    end
+    return merged
+end
+
 multiplayer_lobby_apply_offer_upsert = function(self, offer)
     multiplayer_lobby_ensure_runtime(self)
     if type(offer) ~= "table" then
         return
     end
-    local offer_id = tostring(offer.id or offer.session_key or "")
+    local ticket_id = tostring(offer.id or offer.session_key or "")
+    local offer_id = multiplayer_lobby_offer_map_key(offer)
+    if offer_id == "" then
+        offer_id = ticket_id
+    end
     if offer_id == "" then
         return
     end
@@ -19136,27 +19335,70 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         print(string.format("LOBBY_COMMAND | offer_upsert_drop_terminal | offer=%s status=%s", offer_id, lobby_status))
         return
     end
+    local incoming_is_discovery = offer.steam_discovery == true
+    if incoming_is_discovery and self.mp_lobby.offer_removed_at_ms_by_id then
+        self.mp_lobby.offer_removed_at_ms_by_id[offer_id] = nil
+        if ticket_id ~= "" and ticket_id ~= offer_id then
+            self.mp_lobby.offer_removed_at_ms_by_id[ticket_id] = nil
+        end
+    end
     local tombstone_ms = tonumber(self.mp_lobby.offer_removed_at_ms_by_id and self.mp_lobby.offer_removed_at_ms_by_id[offer_id] or 0) or 0
+    if tombstone_ms <= 0 and ticket_id ~= "" and ticket_id ~= offer_id then
+        tombstone_ms = tonumber(self.mp_lobby.offer_removed_at_ms_by_id and self.mp_lobby.offer_removed_at_ms_by_id[ticket_id] or 0) or 0
+    end
     local offer_updated_ms = tonumber(offer.updated_at_ms or 0) or 0
-    if tombstone_ms > 0 then
-        local is_steam_discovery = offer.steam_discovery == true
-        if is_steam_discovery or offer_updated_ms <= 0 or offer_updated_ms <= tombstone_ms then
-            print(string.format("LOBBY_COMMAND | offer_upsert_drop_tombstoned | offer=%s discovery=%s", offer_id, tostring(is_steam_discovery)))
+    if tombstone_ms > 0 and not incoming_is_discovery then
+        if offer_updated_ms <= 0 or offer_updated_ms <= tombstone_ms then
+            print(string.format("LOBBY_COMMAND | offer_upsert_drop_tombstoned | offer=%s discovery=%s", offer_id, tostring(incoming_is_discovery)))
             return
         end
     end
     local owner_player_id = tostring(offer.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
     local publish_status = tostring(offer.publish_status or offer.status or MP_SESSION_TICKET.PUBLISH_OPEN)
-    local incoming_is_discovery = offer.steam_discovery == true
-    for existing_offer_id, existing_offer in pairs(self.mp_lobby.offers_by_id or {}) do
-        if tostring(existing_offer_id or "") ~= offer_id then
-            local same_host_steam = tostring(existing_offer and existing_offer.host_steam_id or "") ~= ""
-                and tostring(existing_offer.host_steam_id or "") == tostring(offer.host_steam_id or "")
-            local same_owner = tostring(existing_offer and existing_offer.owner_player_id or "") == owner_player_id
-            if same_host_steam or (tostring(offer.host_steam_id or "") == "" and same_owner) then
+    local incoming_session_key = tostring(offer.session_key or ticket_id or "")
+    local incoming_steam_lobby_id = tostring(offer.steam_lobby_id or "")
+    if incoming_is_discovery then
+        local local_offer_id = tostring(self.mp_lobby.local_active_offer_id or "")
+        local local_offer = local_offer_id ~= "" and self.mp_lobby.offers_by_id[local_offer_id] or nil
+        if type(local_offer) == "table" and multiplayer_lobby_is_local_offer_owner(self, local_offer) then
+            local local_session_key = tostring(local_offer.session_key or local_offer.id or local_offer_id or "")
+            local local_steam_lobby_id = tostring(local_offer.steam_lobby_id or "")
+            local same_local_session = local_session_key ~= "" and incoming_session_key ~= "" and local_session_key == incoming_session_key
+            local same_local_lobby = local_steam_lobby_id ~= "" and incoming_steam_lobby_id ~= "" and local_steam_lobby_id == incoming_steam_lobby_id
+            if same_local_session or same_local_lobby then
+                local_offer.last_seen_local_ms = get_wall_clock_ms()
+                if incoming_steam_lobby_id ~= "" then
+                    local_offer.steam_lobby_id = incoming_steam_lobby_id
+                end
+                return
+            end
+        end
+    end
+    if incoming_is_discovery and incoming_steam_lobby_id ~= "" then
+        for existing_offer_id, existing_offer in pairs(self.mp_lobby.offers_by_id or {}) do
+            if tostring(existing_offer_id or "") ~= offer_id
+                and tostring(existing_offer and existing_offer.steam_lobby_id or "") == incoming_steam_lobby_id then
                 self.mp_lobby.offers_by_id[existing_offer_id] = nil
-                multiplayer_lobby_note_offer_removed(self, existing_offer_id, get_wall_clock_ms())
-                print(string.format("LOBBY_COMMAND | offer_upsert_replaced_owner_offer | owner=%s old_offer=%s new_offer=%s", owner_player_id, tostring(existing_offer_id), offer_id))
+            end
+        end
+    end
+    if not incoming_is_discovery then
+        for existing_offer_id, existing_offer in pairs(self.mp_lobby.offers_by_id or {}) do
+            if tostring(existing_offer_id or "") ~= offer_id then
+                local existing_session_key = tostring(existing_offer and existing_offer.session_key or existing_offer_id or "")
+                local same_session_key = existing_session_key ~= ""
+                    and incoming_session_key ~= ""
+                    and existing_session_key == incoming_session_key
+                if same_session_key then
+                    self.mp_lobby.offers_by_id[existing_offer_id] = nil
+                    multiplayer_lobby_note_offer_removed(self, existing_offer_id, get_wall_clock_ms())
+                    print(string.format(
+                        "LOBBY_COMMAND | offer_upsert_replaced_session_key | old_offer=%s new_offer=%s session_key=%s discovery=false",
+                        tostring(existing_offer_id),
+                        offer_id,
+                        incoming_session_key
+                    ))
+                end
             end
         end
     end
@@ -19169,8 +19411,8 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
     local existing_updated_ms = tonumber(existing_offer and existing_offer.updated_at_ms or 0) or 0
     local merged_joined, merged_players = multiplayer_lobby_merge_incoming_offer_fields(existing_offer, offer)
     self.mp_lobby.offers_by_id[offer_id] = {
-        id = offer_id,
-        session_key = tostring(offer.session_key or (existing_offer and existing_offer.session_key) or offer_id),
+        id = ticket_id ~= "" and ticket_id or offer_id,
+        session_key = tostring(offer.session_key or (existing_offer and existing_offer.session_key) or ticket_id or offer_id),
         session_number = tonumber(offer.session_number or (existing_offer and existing_offer.session_number) or 0) or 0,
         host_steam_id = tostring(offer.host_steam_id or (existing_offer and existing_offer.host_steam_id) or ""),
         host_wire_player_id = tostring(offer.host_wire_player_id or (existing_offer and existing_offer.host_wire_player_id) or ""),
@@ -19198,6 +19440,10 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
                 or (existing_offer and existing_offer.wire_id_by_steam_id)
                 or {}
         ),
+        display_name_by_wire_id = multiplayer_lobby_merge_display_name_maps(
+            existing_offer and existing_offer.display_name_by_wire_id,
+            offer.display_name_by_wire_id
+        ),
         pin = multiplayer_lobby_merge_offer_pin(existing_offer, offer),
         steam_lobby_id = tostring(offer.steam_lobby_id or (existing_offer and existing_offer.steam_lobby_id) or ""),
         setup_roster_revision = math.max(
@@ -19208,7 +19454,8 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
             tonumber(offer.updated_at_ms or 0) or 0,
             tonumber(existing_offer and existing_offer.updated_at_ms or 0) or 0
         ),
-        last_seen_local_ms = get_wall_clock_ms()
+        last_seen_local_ms = get_wall_clock_ms(),
+        steam_discovery = incoming_is_discovery or (existing_offer and existing_offer.steam_discovery == true) or false
     }
     print(string.format("LOBBY_COMMAND | offer_upsert_apply | offer=%s owner=%s", offer_id, owner_player_id))
     multiplayer_lobby_sync_sessions_from_offers(self)
@@ -19350,6 +19597,11 @@ multiplayer_lobby_get_session_by_id = function(self, session_id)
     local from_offers = self.mp_lobby.offers_by_id and self.mp_lobby.offers_by_id[target_id] or nil
     if from_offers then
         return from_offers
+    end
+    for _, offer in pairs(self.mp_lobby.offers_by_id or {}) do
+        if offer and tostring(offer.id or "") == target_id then
+            return offer
+        end
     end
     for _, session in ipairs(self.mp_lobby.sessions or {}) do
         if session and tostring(session.id or "") == target_id then
@@ -19502,7 +19754,14 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
     session.owner_player_id = tostring(MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
     session.host_network_id = MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID
     session.host_wire_player_id = tostring(MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID or "p1")
+    multiplayer_steam_refresh_local_username(self)
+    session.host_display_name = mp_lobby_sanitize_name(lobby.local_username or "host")
+    session.host_name = session.host_display_name
     local host_wire_id = tostring(session.host_wire_player_id or "")
+    session.display_name_by_wire_id = multiplayer_lobby_merge_display_name_maps(
+        session.display_name_by_wire_id,
+        { [host_wire_id] = session.host_display_name }
+    )
     session.joined_player_ids = { host_wire_id }
     multiplayer_steam_ensure_session_roster_maps(session)
     multiplayer_lobby_reset_setup_sync_runtime(self, session)
@@ -19722,11 +19981,14 @@ multiplayer_lobby_submit_pin_entry = function(self)
                 end
                 return true
             end
-            multiplayer_transport_send_command(self, "lobby_join_session", {
-                session_id = target_session_id,
-                pin = lobby.pin_buffer,
-                protocol_version = tostring(NET_PROTOCOL_VERSION or "1")
-            }, self.mp_state and self.mp_state.local_player_id or "p1")
+            multiplayer_transport_send_command(
+                self,
+                "lobby_join_session",
+                multiplayer_lobby_join_wire_payload(self, target_session_id, {
+                    pin = lobby.pin_buffer
+                }),
+                self.mp_state and self.mp_state.local_player_id or "p1"
+            )
             return true
         end
         lobby.pin_feedback = "bad"
@@ -19908,7 +20170,7 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                     set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, tint, MP_LOBBY_CARD_W - 34, 56)
                 end
                 if session and self.ui.flow_mp_lobby_name_letters then
-                    local name_text = mp_alpha_label_from_network_id(session.host_name or "")
+                    local name_text = mp_lobby_sanitize_name(session.host_display_name or session.host_name or "host")
                     local name_len = #name_text
                     if name_len > 0 then
                         local span = (name_len - 1) * MP_LOBBY_NAME_LETTER_SPACING
@@ -21252,7 +21514,7 @@ function update_flow_ui(self, dt)
                 local player_count = self.mp_setup and self.mp_setup.player_count or 2
                 if seat_index <= player_count and joined_slot_lookup[player_id] == true then
                     local network_id = mp_network_id_for_slot(self, player_id)
-                    local label = mp_alpha_label_from_network_id(network_id)
+                    local label = mp_display_name_for_wire_id(self, network_id)
                     if #label > MP_SETUP_NAME_MAX_CHARS then
                         label = string.sub(label, 1, MP_SETUP_NAME_MAX_CHARS)
                     end
@@ -26063,6 +26325,10 @@ multiplayer_transport_handle_command = function(self, command)
             session.joined_player_ids[#session.joined_player_ids + 1] = requester_player_id
             multiplayer_mark_remote_player_alive(self, requester_player_id)
         end
+        session.display_name_by_wire_id = multiplayer_lobby_merge_display_name_maps(
+            session.display_name_by_wire_id,
+            { [requester_player_id] = payload.display_name or "" }
+        )
         self.mp_lobby.guest_join_resend_pending = self.mp_lobby.guest_join_resend_pending or {}
         self.mp_lobby.guest_join_resend_pending[requester_player_id] = true
         if self.mp_lobby.setup_sync_player_ids then
@@ -26091,6 +26357,7 @@ multiplayer_transport_handle_command = function(self, command)
                 max_players = session_max_players,
                 is_locked = session.is_locked == true,
                 joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
+                display_name_by_wire_id = multiplayer_clone_simple_table(session.display_name_by_wire_id or {}),
                 updated_at_ms = tonumber(session.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
             }
         }))
@@ -29556,7 +29823,7 @@ multiplayer_transport_on_event = function(self, event)
                 end
             end
             print(string.format("MP NET | player_left | player_id=%s", tostring(normalized_player_id)))
-            if self.game_flow_state == FLOW_STATE_MP_LOBBY then
+            if self.game_flow_state == FLOW_STATE_MP_LOBBY and not multiplayer_lobby_is_find_intent(self) then
                 multiplayer_lobby_remove_offers_by_owner(self, normalized_player_id)
             end
         end
@@ -29877,9 +30144,30 @@ multiplayer_transport_init = function(self)
                 ))
             end
             multiplayer_lobby_apply_offer_upsert(self, offer)
+            if multiplayer_lobby_is_find_intent(self) then
+                local offer_count = 0
+                local distinct_host_steam = 0
+                local seen_host_steam = {}
+                for _, stored in pairs(self.mp_lobby.offers_by_id or {}) do
+                    offer_count = offer_count + 1
+                    local host_steam = tostring(stored and stored.host_steam_id or "")
+                    if host_steam ~= "" and seen_host_steam[host_steam] ~= true then
+                        seen_host_steam[host_steam] = true
+                        distinct_host_steam = distinct_host_steam + 1
+                    end
+                end
+                multiplayer_debug_log(self, string.format(
+                    "MP STEAM GATED | discovery_merge offers=%d distinct_host_steam=%d",
+                    offer_count,
+                    distinct_host_steam
+                ))
+            end
         end,
         on_discovery_offer_cleared = function(steam_lobby_id)
             multiplayer_lobby_remove_offers_by_steam_lobby_id(self, steam_lobby_id)
+        end,
+        on_discovery_refresh = function(seen_lobby_ids, match_count)
+            multiplayer_lobby_sync_discovery_from_steam_list(self, seen_lobby_ids, match_count)
         end,
         on_status = function(status, detail)
             if self.mp_state then
@@ -29916,6 +30204,8 @@ multiplayer_transport_init = function(self)
                 end
             elseif status == "discovery_browse" then
                 multiplayer_lobby_on_discovery_browse(self, detail)
+            elseif status == "host_lobby_created" then
+                multiplayer_lobby_republish_steam_discovery_if_host(self)
             elseif status == "gatec_ok" then
                 multiplayer_lobby_on_wire_ready(self)
                 multiplayer_lobby_prune_steam_disconnected_guests(self)
@@ -35062,7 +35352,7 @@ function update(self, dt)
     if self.mp_transport and self.mp_transport.update then
         self.mp_transport.update(dt)
     end
-    if self.game_flow_state == FLOW_STATE_MP_LOBBY then
+    if self.game_flow_state == FLOW_STATE_MP_LOBBY or self.game_flow_state == FLOW_STATE_MP_SETUP then
         multiplayer_lobby_tick_offer_presence(self, dt)
     elseif self.game_flow_state ~= FLOW_STATE_MP_LOBBY and self.mp_lobby then
         self.mp_lobby.offer_prune_timer = (tonumber(self.mp_lobby.offer_prune_timer or 0) or 0) - (tonumber(dt or 0) or 0)

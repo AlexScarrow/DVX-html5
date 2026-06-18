@@ -131,6 +131,9 @@ local steam_listener_installed = false
         end
         local offer = decode_discovery_offer(tostring(raw or ""))
         if not offer then
+            if type(state.on_discovery_offer_cleared) == "function" then
+                pcall(state.on_discovery_offer_cleared, tostring(lobby_id))
+            end
             return
         end
         if tostring(offer.host_steam_id or "") == ""
@@ -719,6 +722,7 @@ function M.create(opts)
             on_status = opts and opts.on_status or nil,
             on_wire_recv = opts and opts.on_wire_recv or nil,
             on_discovery_offer = opts and opts.on_discovery_offer or nil,
+            on_discovery_offer_cleared = opts and opts.on_discovery_offer_cleared or nil,
             net_protocol_version = tonumber(opts and opts.net_protocol_version) or 1,
             phase = "idle",
             local_steam_id = "",

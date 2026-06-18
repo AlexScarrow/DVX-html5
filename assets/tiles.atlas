@@ -485,6 +485,9 @@ images {
   image: "/assets/images/mp_btn_start_enabled_glow.png"
 }
 images {
+  image: "/assets/images/mp_btn_updateSession.png"
+}
+images {
   image: "/assets/images/mp_unit_gunner.png"
 }
 images {
@@ -880,6 +883,15 @@ images {
 }
 images {
   image: "/assets/images/advisory_mpJoinedGame.png"
+}
+images {
+  image: "/assets/images/advisory_mpUpdateNotAllowed.png"
+}
+images {
+  image: "/assets/images/advisory_mpWaitingGuestSync.png"
+}
+images {
+  image: "/assets/images/advisory_mpSessionFull.png"
 }
 images {
   image: "/assets/images/mp_chooser_back.png"

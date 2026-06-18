@@ -78,6 +78,7 @@ function M.create(opts)
         on_event = opts and opts.on_event or nil,
         on_status = opts and opts.on_status or nil,
         on_discovery_offer = opts and opts.on_discovery_offer or nil,
+        on_discovery_offer_cleared = opts and opts.on_discovery_offer_cleared or nil,
         message_seq = 0,
         ws_url = opts and opts.ws_url or "",
         ws_room_id = opts and opts.ws_room_id or "default_room",
@@ -232,6 +233,14 @@ function M.create(opts)
             end
             seen[peer_id] = true
             peer_ids[#peer_ids + 1] = peer_id
+        end
+        default_peer_id = tostring(default_peer_id or "")
+        local evt_type = tostring(evt and evt.type or "")
+        if default_peer_id ~= ""
+            and (evt_type == "command_rejected" or evt_type == "lobby_offer_join_reject")
+        then
+            add_peer(default_peer_id)
+            return peer_ids
         end
         local target_peer = steam_peer_for_wire_player_id(evt and evt.payload and evt.payload.target_player_id or "")
         if target_peer ~= "" then
@@ -467,7 +476,18 @@ function M.create(opts)
                 end
             end
             if type(events) == "table" and #events > 0 then
-                dispatch_events(events)
+                local local_events = events
+                if steam_is_host() then
+                    local_events = {}
+                    for _, evt in ipairs(events) do
+                        if tostring(evt and evt.type or "") ~= "command_rejected" then
+                            local_events[#local_events + 1] = evt
+                        end
+                    end
+                end
+                if #local_events > 0 then
+                    dispatch_events(local_events)
+                end
                 steam_debug_log(state, string.format(
                     "MP STEAM GATEG | command_apply_local type=%s event_count=%d",
                     cmd_type,
@@ -983,6 +1003,7 @@ function M.create(opts)
                     on_log = state.steam_log,
                     on_wire_recv = handle_steam_wire_packet,
                     on_discovery_offer = state.on_discovery_offer,
+                    on_discovery_offer_cleared = state.on_discovery_offer_cleared,
                     net_protocol_version = state.net_protocol_version,
                     pairing_mode = state.steam_pairing_mode,
                     on_status = function(status, detail)

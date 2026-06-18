@@ -4,7 +4,7 @@
 **Working path:** `/Users/alexscarrow/Desktop/DVX/DVX-html5`  
 **Branch:** `feature/lobby-discovery`  
 **Transport:** `transport_mode = steam` in `game.project`  
-**Last banked commit:** *(this commit)* — launch-time N, min-1-guest gate, 2P leave/rejoin lifecycle  
+**Last banked commit:** `b1bf889` — launch-time N, min-1-guest gate, 2P leave/rejoin lifecycle  
 **Status:** **2P rituals pass** (join, setup Back→FIND, rejoin). **3P join works; P3 leave/rejoin broken** (next L2 tranche). **4P not smoke-tested.**
 
 Also read:
@@ -235,7 +235,9 @@ Same as 3P with three guests.
 
 | Commit | Notes |
 |--------|-------|
-| `f8a0958` *(HEAD)* | Update settings, cycle-2 sync, session-full reject UX |
+| `b1bf889` *(HEAD)* | Launch-time N, min-1-guest gate, 2P leave/rejoin lifecycle, L1 logging |
+| `6231a20` | Checkpoint before launch-time N reset |
+| `f8a0958` | Update settings, cycle-2 sync, session-full reject UX |
 | `232bd26` | Phase 5 in-match connected players + fan-out |
 | `17c9a03` | Phase 4 committed count, launch gate, roster sync |
 | `fb08b29` | Phase 3 steam↔wire seats |

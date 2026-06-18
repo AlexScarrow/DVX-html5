@@ -4,22 +4,22 @@
 **Working path:** `/Users/alexscarrow/Desktop/DVX/DVX-html5`  
 **Branch:** `feature/lobby-discovery`  
 **Transport:** `transport_mode = steam` in `game.project`  
-**Last banked commit:** `f8a0958` — *Bank lobby Update settings, cycle-2 sync fixes, and session-full reject UX*  
-**Dirty (uncommitted):** `main/game.script`, `main/multiplayer_transport.lua` — post-abort leave/re-join fixes (partial; see regressions below)  
-**Status:** 2P/3P join→launch→in-match **passed** in prior cycles. **2026-06-18 smoke failed** on post-abort re-join and lobby UX gaps. **4P not smoke-tested.**
+**Last banked commit:** *(this commit)* — launch-time N, min-1-guest gate, 2P leave/rejoin lifecycle  
+**Status:** **2P rituals pass** (join, setup Back→FIND, rejoin). **3P join works; P3 leave/rejoin broken** (next L2 tranche). **4P not smoke-tested.**
 
 Also read:
 - `AGENTS.md` — global safety rules (small diffs, host-authoritative MP, no desync risk)
+- `Docs/MP_LOBBY_LIFECYCLE_SPEC.md` — lobby lifecycle redesign (L1–L5)
 - `Docs/MP_LOBBY_TICKET_HANDOVER.md` — supermarket ticket architecture, Option A wire dispatch
 
 ---
 
 ## START HERE ← next AI priority
 
-1. **Fix discovery-merge regression** (blocks post-abort re-join) — see Issue B below  
+1. **P3 leave/rejoin** — enter, exit, cannot re-enter host session; extend L2 hardening (see Issue D)  
 2. **Lobby card player count UI** — sprite digits, not fonts — see Issue A  
 3. **Dual-host browse visibility** — investigate with logs — see Issue C  
-4. Bank + retest matrix at bottom
+4. Retest matrix at bottom
 
 ---
 
@@ -40,7 +40,17 @@ Also read:
 
 ---
 
-### Issue B — Post-abort re-join stuck on “joining” advisory (P2/P3)
+### Issue D — P3 leave/rejoin (open, 2026-06-18)
+
+**Symptom:** P3 can join a 3P lobby and reach setup, but after setup Back → FIND cannot re-enter P1’s session.
+
+**Status:** **P2 same ritual passes** after launch-time N + L2 join hardening in this bank. P3 not yet fixed — likely multi-guest seat map, per-peer wire routing, or stale offer path specific to p3.
+
+**Next:** Reproduce with P3 debug log; grep `guest_setup_evicted`, `join_session_wire`, `pending_join_incomplete`, `seat_assign local=p3`. Extend L2 per `Docs/MP_LOBBY_LIFECYCLE_SPEC.md`.
+
+---
+
+### Issue B — Post-abort re-join stuck on “joining” advisory (P2/P3) — P2 fixed in this bank
 
 **Symptom:** After setup back/abort, P2 and P3 return to FIND, tap session again, see **joining** advisory indefinitely. Never reach setup.
 
@@ -135,22 +145,14 @@ Previously spec-only; now banked. Core behavior:
 
 ---
 
-## Uncommitted dirty work (`game.script`, `multiplayer_transport.lua`)
+## Banked in this milestone (launch-time N + 2P lifecycle)
 
-Not banked. Intended for post-abort leave + stale finder occupancy. **Treat as WIP — contains regression (Issue B).**
-
-| Symbol | Purpose |
-|--------|---------|
-| `multiplayer_steam_release_guest_wire_seat` | Clear Steam wire seat on guest leave |
-| `multiplayer_lobby_remove_player_from_session` | Normalized wire-id compare + steam seat release |
-| `multiplayer_lobby_prune_steam_disconnected_guests` | Drop roster guests not in Steam lobby |
-| `multiplayer_lobby_merge_incoming_offer_fields` | Steam discovery authoritative for `players` — **needs B1 fix** |
-| `lobby_leave_session` handler | `leave_session_roster_prune` / `leave_session_reject` logging |
-| `leave_match_request` / guest setup back | Also send `lobby_leave_session` |
-| `session_full` preflight | Tombstone only if offer not newer than reject |
-| `transport.steam_get_lobby_guest_steam_ids` | Guest enumeration (`multiplayer_transport.lua`) |
-
-**Recommendation for next AI:** Fix B1 on dirty branch, retest Issue B, then bank or revert selectively.
+- **Launch-time N:** roster-baked at Launch; removed 2/3/4 buttons and Update settings traffic  
+- **Min-1-guest launch gate** on host setup  
+- **Guest setup Back → FIND** (`multiplayer_lobby_guest_leave_setup_to_find`) — transport stays alive  
+- **Wire roster join truth:** stale snapshot eviction removed; offer merge guards; `steam_rejoin`, `forget_peer`, find-idle ping ignore  
+- **L1 lifecycle logging:** `main/multiplayer_lobby_lifecycle.lua`  
+- **Spec:** `Docs/MP_LOBBY_LIFECYCLE_SPEC.md`
 
 ---
 
@@ -208,11 +210,11 @@ Not banked. Intended for post-abort leave + stale finder occupancy. **Treat as W
 3. Launch blocked with 1 guest; OK with 2  
 4. All three in match; abort optional  
 
-### Post-abort re-join (currently failing)
+### Post-abort re-join
 1. 3P in setup  
 2. P2 and P3 back to FIND  
-3. P2 re-joins → must reach setup (not joining forever)  
-4. Repeat for P3  
+3. **P2 re-joins → setup** — passes (2026-06-18)  
+4. **P3 re-joins → setup** — fails (Issue D)  
 
 ### 4P (not yet run)
 Same as 3P with three guests.
@@ -244,4 +246,4 @@ Same as 3P with three guests.
 
 ## Current stage (one paragraph)
 
-**Steam 2P/3P rewiring and Update settings are banked** (`f8a0958`). **2026-06-18 smoke exposed three gaps:** (A) lobby cards never render player count — implementation missing, use `score_N` sprites; (B) post-abort re-join fails — likely host roster wiped by `steam_discovery` merge plus failed `lobby_leave_session`, leaving guests in Steam lobby without wire handshake (`joining` advisory stuck); uncommitted leave/merge fixes need refinement before banking; (C) dual-host browse showing one session — needs logged repro. **Next AI:** fix discovery merge regression (B1), retest re-join, add card occupancy UI (A), investigate dual-host browse (C).
+**Launch-time N milestone banked:** wire roster is sole join truth; host bakes N at Launch; min-1-guest gate; 2P join → setup → Back → FIND → rejoin → setup **passes**. L1 lifecycle logging landed. **Open:** P3 leave/rejoin (Issue D), lobby card N/M digits (Issue A), dual-host browse (Issue C). Next L2 tranche targets 3P/4P guest re-entry per `Docs/MP_LOBBY_LIFECYCLE_SPEC.md`.

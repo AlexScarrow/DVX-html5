@@ -775,7 +775,7 @@ MP_SETUP_START_GLOW_W = 171
 MP_SETUP_START_GLOW_H = 72
 MP_SETUP_SEAT_X = { 250, 510, 770, 1030 }
 MP_SETUP_SLOT_X_OFFSET = 52
-MP_SETUP_SLOT_Y = { 390, 300 }
+MP_SETUP_SLOT_Y = { 390, 300, 210, 120 }
 MP_SETUP_SLOT_W = 82
 MP_SETUP_SLOT_H = 82
 MP_SETUP_UNIT_POOL_X = { 460, 614, 749, 889 }
@@ -1500,6 +1500,7 @@ SCORE_RUNTIME = require("main.score_runtime")
 MP_TRANSPORT = require("main.multiplayer_transport")
 MP_SESSION_TICKET = require("main.multiplayer_session_ticket")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
+MP_LOBBY_LIFECYCLE = require("main.multiplayer_lobby_lifecycle")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
 LEVEL_EDITOR = require("main.level_editor")
@@ -11739,14 +11740,22 @@ select_level_index_for_mission = function(self, mission_type)
 end
 
 multiplayer_get_slot_count_for_player = function(player_count, player_id)
-    if player_count == 2 then
+    if player_count == 1 then
+        if player_id == "p1" then
+            return 4
+        end
+        return 0
+    elseif player_count == 2 then
         if player_id == "p1" or player_id == "p2" then
             return 2
         end
         return 0
     elseif player_count == 3 then
-        if player_id == "p1" or player_id == "p2" or player_id == "p3" then
+        if player_id == "p1" then
             return 2
+        end
+        if player_id == "p2" or player_id == "p3" then
+            return 1
         end
         return 0
     end
@@ -11766,8 +11775,12 @@ multiplayer_get_required_ready_player_ids_for_count = function(player_count)
 end
 
 multiplayer_get_default_seat_assignments = function(player_count)
-    local count = math.max(2, math.min(4, player_count or 4))
-    if count == 2 then
+    local count = multiplayer_setup_clamp_player_count(player_count)
+    if count == 1 then
+        return {
+            p1 = { "sarge", "techie", "medic", "gunner" }
+        }
+    elseif count == 2 then
         return {
             p1 = { "sarge", "techie" },
             p2 = { "medic", "gunner" }
@@ -11789,7 +11802,7 @@ end
 
 multiplayer_clone_seat_assignments = function(src_assignments, player_count)
     local out = {}
-    local count = math.max(2, math.min(4, player_count or 4))
+    local count = multiplayer_setup_clamp_player_count(player_count)
     for i = 1, count do
         local player_id = "p" .. tostring(i)
         out[player_id] = {}
@@ -12525,7 +12538,8 @@ local function initialize_unit_ui(self)
     end
     for _, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
         self.ui.flow_mp_slot_icons[player_id] = {}
-        for slot_index = 1, 2 do
+        local slot_total = player_id == "p1" and 4 or 2
+        for slot_index = 1, slot_total do
             self.ui.flow_mp_slot_icons[player_id][slot_index] = create_ui_marker_sprite(multiplayer_get_unit_anim_id("sarge"), MP_SETUP_UI_Z + 0.002)
         end
     end
@@ -16493,40 +16507,113 @@ function start_multiplayer_game_flow(self, session_config)
 end
 
 multiplayer_setup_clamp_player_count = function(player_count)
-    return math.max(2, math.min(4, tonumber(player_count or 2) or 2))
+    return math.max(1, math.min(4, tonumber(player_count or 1) or 1))
 end
 
-multiplayer_setup_refresh_player_count_dirty = function(self)
+multiplayer_lobby_lifecycle_log = function(self, message)
+    multiplayer_debug_log(self, message)
+end
+
+multiplayer_lobby_lifecycle_guest = function(self, new_state, detail)
+    if not (self and self.mp_lobby) then
+        return false
+    end
+    MP_LOBBY_LIFECYCLE.ensure(self.mp_lobby)
+    return MP_LOBBY_LIFECYCLE.guest_transition(
+        self.mp_lobby,
+        new_state,
+        detail,
+        function(message) multiplayer_lobby_lifecycle_log(self, message) end
+    )
+end
+
+multiplayer_lobby_lifecycle_host = function(self, new_state, detail)
+    if not (self and self.mp_lobby) then
+        return false
+    end
+    MP_LOBBY_LIFECYCLE.ensure(self.mp_lobby)
+    return MP_LOBBY_LIFECYCLE.host_transition(
+        self.mp_lobby,
+        new_state,
+        detail,
+        function(message) multiplayer_lobby_lifecycle_log(self, message) end
+    )
+end
+
+multiplayer_lobby_lifecycle_refresh_host = function(self, session)
+    if not (self and self.mp_lobby and multiplayer_lobby_is_local_offer_owner(self)) then
+        return
+    end
+    session = session or multiplayer_lobby_get_active_session(self)
+    MP_LOBBY_LIFECYCLE.ensure(self.mp_lobby)
+    if self.mp_lobby.lifecycle_host_state == MP_LOBBY_LIFECYCLE.HOST_LAUNCHED then
+        return
+    end
+    local guest_count = multiplayer_lobby_count_session_guests(self, session)
+    local guests_synced = multiplayer_lobby_joined_guests_setup_synced(self, session)
+    MP_LOBBY_LIFECYCLE.refresh_host_derived(
+        self.mp_lobby,
+        guest_count,
+        guests_synced,
+        function(message) multiplayer_lobby_lifecycle_log(self, message) end
+    )
+end
+
+multiplayer_setup_roster_player_count = function(self, session)
+    session = session or (self and multiplayer_lobby_get_active_session(self))
+    if type(session) ~= "table" then
+        return 1
+    end
+    if type(session.joined_player_ids) == "table" and #session.joined_player_ids > 0 then
+        return multiplayer_setup_clamp_player_count(#session.joined_player_ids)
+    end
+    local players = tonumber(session.players or 0) or 0
+    if players > 0 then
+        return multiplayer_setup_clamp_player_count(players)
+    end
+    return 1
+end
+
+multiplayer_setup_sync_player_count_from_roster = function(self, session)
     if not (self and self.mp_setup) then
         return false
     end
-    local pending = multiplayer_setup_clamp_player_count(self.mp_setup.player_count)
-    if self.mp_setup.committed_player_count == nil then
-        self.mp_setup.committed_player_count = pending
-    end
-    local committed = multiplayer_setup_clamp_player_count(self.mp_setup.committed_player_count)
-    self.mp_setup.committed_player_count = committed
-    self.mp_setup.player_count_dirty = pending ~= committed
-    return self.mp_setup.player_count_dirty == true
-end
-
-multiplayer_setup_is_player_count_dirty = function(self)
-    if not (self and self.mp_setup) then
+    local roster_n = multiplayer_setup_roster_player_count(self, session)
+    if tonumber(self.mp_setup.player_count or 0) == roster_n then
         return false
     end
-    if self.mp_setup.player_count_dirty == nil then
-        multiplayer_setup_refresh_player_count_dirty(self)
+    multiplayer_setup_set_player_count(self, roster_n)
+    return true
+end
+
+multiplayer_lobby_collect_launch_guest_ids = function(self, session)
+    local guest_ids = {}
+    if type(session) ~= "table" then
+        return guest_ids
     end
-    return self.mp_setup.player_count_dirty == true
+    local host_id = mp_normalize_network_player_id(
+        self and self.mp_state and (self.mp_state.host_player_id or self.mp_state.local_player_id or "p1") or "p1"
+    )
+    for _, joined_id in ipairs(session.joined_player_ids or {}) do
+        local guest_id = mp_normalize_network_player_id(joined_id)
+        if guest_id ~= "" and guest_id ~= host_id then
+            guest_ids[#guest_ids + 1] = guest_id
+        end
+    end
+    return guest_ids
+end
+
+multiplayer_setup_refresh_player_count_dirty = function(_self)
+    return false
+end
+
+multiplayer_setup_is_player_count_dirty = function(_self)
+    return false
 end
 
 multiplayer_setup_init_runtime = function(self)
     self.mp_setup = self.mp_setup or {}
-    self.mp_setup.player_count = self.mp_setup.player_count or 2
-    self.mp_setup.committed_player_count = multiplayer_setup_clamp_player_count(
-        self.mp_setup.committed_player_count or self.mp_setup.player_count
-    )
-    self.mp_setup.player_count_dirty = self.mp_setup.player_count_dirty == true
+    self.mp_setup.player_count = multiplayer_setup_clamp_player_count(self.mp_setup.player_count or 1)
     self.mp_setup.mission_type = multiplayer_normalize_mission_type(self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     self.mp_setup.selected_unit_id = self.mp_setup.selected_unit_id or "techie"
     self.mp_setup.seat_slots = self.mp_setup.seat_slots or {}
@@ -16547,19 +16634,12 @@ multiplayer_setup_init_runtime = function(self)
             end
         end
     end
-    multiplayer_setup_refresh_player_count_dirty(self)
 end
 
 multiplayer_setup_set_player_count = function(self, player_count)
     self.mp_setup = self.mp_setup or {}
     local selected_unit_before = self.mp_setup.selected_unit_id
     local new_count = multiplayer_setup_clamp_player_count(player_count)
-    local committed = multiplayer_setup_clamp_player_count(
-        self.mp_setup.committed_player_count or self.mp_setup.player_count
-    )
-    if new_count ~= committed and not self.mp_setup.committed_setup_snapshot then
-        self.mp_setup.committed_setup_snapshot = multiplayer_setup_build_session_config(self, committed)
-    end
     self.mp_setup.player_count = new_count
     self.mp_setup.mission_type = multiplayer_normalize_mission_type(self.mp_setup.mission_type or MISSION_TYPE_ESCAPE)
     self.mp_setup.selected_unit_id = selected_unit_before or "techie"
@@ -16578,10 +16658,6 @@ multiplayer_setup_set_player_count = function(self, player_count)
                 self.mp_setup.seat_slots[player_id][slot_index] = unit_id
             end
         end
-    end
-    multiplayer_setup_refresh_player_count_dirty(self)
-    if not self.mp_setup.player_count_dirty then
-        self.mp_setup.committed_setup_snapshot = nil
     end
 end
 
@@ -16671,22 +16747,18 @@ multiplayer_setup_is_valid = function(self)
     if multiplayer_get_player_for_unit(self.mp_setup.seat_slots, count, "sarge") ~= "p1" then
         return false
     end
-    if count == 2 then
+    if count == 1 then
+        if (assigned_per_player.p1 or 0) ~= 4 then
+            return false
+        end
+    elseif count == 2 then
         if assigned_per_player.p1 ~= 2 or assigned_per_player.p2 ~= 2 then
             return false
         end
     elseif count == 3 then
-        local p1 = assigned_per_player.p1 or 0
-        local p2 = assigned_per_player.p2 or 0
-        local p3 = assigned_per_player.p3 or 0
-        if p1 < 1 or p1 > 2 or p2 < 1 or p2 > 2 or p3 < 1 or p3 > 2 then
-            return false
-        end
-        local two_count = 0
-        if p1 == 2 then two_count = two_count + 1 end
-        if p2 == 2 then two_count = two_count + 1 end
-        if p3 == 2 then two_count = two_count + 1 end
-        if two_count ~= 1 then
+        if (assigned_per_player.p1 or 0) ~= 2
+            or (assigned_per_player.p2 or 0) ~= 1
+            or (assigned_per_player.p3 or 0) ~= 1 then
             return false
         end
     elseif count == 4 then
@@ -16732,20 +16804,9 @@ multiplayer_setup_build_session_config = function(self, override_player_count)
 end
 
 multiplayer_setup_build_guest_wire_config = function(self, session)
-    local committed = multiplayer_lobby_committed_player_count(self, session)
-    if multiplayer_setup_is_player_count_dirty(self) and self.mp_setup and self.mp_setup.committed_setup_snapshot then
-        local snap = self.mp_setup.committed_setup_snapshot
-        return {
-            player_count = committed,
-            seat_assignments = multiplayer_clone_seat_assignments(snap.seat_assignments or {}, committed),
-            mission_type = multiplayer_normalize_mission_type(snap.mission_type or self.mp_setup.mission_type or MISSION_TYPE_ESCAPE),
-            civilian_seed = snap.civilian_seed,
-            wire_dispatch_player_id = snap.wire_dispatch_player_id
-                or multiplayer_resolve_wire_dispatch_player_id(self)
-        }
-    end
-    local config = multiplayer_setup_build_session_config(self, committed)
-    config.player_count = committed
+    local roster_n = multiplayer_setup_roster_player_count(self, session)
+    local config = multiplayer_setup_build_session_config(self, roster_n)
+    config.player_count = roster_n
     return config
 end
 
@@ -16754,7 +16815,7 @@ multiplayer_setup_apply_session_config = function(self, session_config)
         return
     end
     local selected_unit_before = self.mp_setup and self.mp_setup.selected_unit_id or nil
-    local player_count = math.max(2, math.min(4, tonumber(session_config.player_count or 2) or 2))
+    local player_count = multiplayer_setup_clamp_player_count(session_config.player_count or 1)
     multiplayer_setup_set_player_count(self, player_count)
     if selected_unit_before and selected_unit_before ~= false then
         self.mp_setup.selected_unit_id = selected_unit_before
@@ -16785,10 +16846,6 @@ multiplayer_host_start_match_from_setup = function(self)
         multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=not_session_host")
         return false
     end
-    if multiplayer_setup_is_player_count_dirty(self) then
-        multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=player_count_dirty")
-        return false
-    end
     if not multiplayer_setup_is_valid(self) then
         multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=invalid_setup")
         return false
@@ -16797,9 +16854,21 @@ multiplayer_host_start_match_from_setup = function(self)
         multiplayer_debug_log(self, "MP STEAM GATEF | start_match_blocked reason=guest_setup_not_synced")
         return false
     end
-    local config = multiplayer_setup_build_session_config(self)
+    local session = multiplayer_lobby_get_active_session(self)
+    multiplayer_setup_sync_player_count_from_roster(self, session)
+    local launch_count = multiplayer_setup_roster_player_count(self, session)
+    local launch_guest_ids = multiplayer_lobby_collect_launch_guest_ids(self, session)
+    local config = multiplayer_setup_build_session_config(self, launch_count)
+    config.player_count = launch_count
     config.level_index = select_level_index_for_mission(self, config.mission_type or MISSION_TYPE_ESCAPE)
+    if self.mp_state then
+        self.mp_state.player_count = launch_count
+    end
     multiplayer_lobby_ensure_runtime(self)
+    multiplayer_lobby_lifecycle_host(self, MP_LOBBY_LIFECYCLE.HOST_LAUNCHED, {
+        players = launch_count,
+        guests = #launch_guest_ids
+    })
     local active_offer_id = tostring(self.mp_lobby and self.mp_lobby.local_active_offer_id or "")
     if active_offer_id ~= "" then
         local active_session = multiplayer_lobby_get_session_by_id(self, active_offer_id)
@@ -16817,9 +16886,8 @@ multiplayer_host_start_match_from_setup = function(self)
         })
         multiplayer_lobby_clear_steam_discovery_if_host(self)
     end
-    local active_session = multiplayer_lobby_get_active_session(self)
-    if active_session then
-        for _, joined_id in ipairs(active_session.joined_player_ids or {}) do
+    if session then
+        for _, joined_id in ipairs(session.joined_player_ids or {}) do
             multiplayer_mark_remote_player_alive(self, joined_id)
         end
     end
@@ -16829,15 +16897,12 @@ multiplayer_host_start_match_from_setup = function(self)
     multiplayer_transport_on_event(self, host_evt)
     local guest_events = {}
     local host_id = mp_normalize_network_player_id(self.mp_state.host_player_id or self.mp_state.local_player_id or "p1")
-    if active_session and type(active_session.joined_player_ids) == "table" then
-        for _, joined_id in ipairs(active_session.joined_player_ids) do
-            local guest_id = mp_normalize_network_player_id(joined_id)
-            if guest_id ~= "" and guest_id ~= host_id then
-                guest_events[#guest_events + 1] = multiplayer_transport_emit_event(self, "match_started", {
-                    target_player_id = guest_id,
-                    session_config = config
-                })
-            end
+    for _, guest_id in ipairs(launch_guest_ids) do
+        if guest_id ~= "" and guest_id ~= host_id then
+            guest_events[#guest_events + 1] = multiplayer_transport_emit_event(self, "match_started", {
+                target_player_id = guest_id,
+                session_config = config
+            })
         end
     end
     if #guest_events > 0 then
@@ -16846,7 +16911,7 @@ multiplayer_host_start_match_from_setup = function(self)
     multiplayer_debug_log(self, string.format(
         "MP STEAM GATEF | start_match host_local players=%d roster_guests=%d",
         tonumber(config.player_count or 0) or 0,
-        #guest_events
+        #launch_guest_ids
     ))
     return true
 end
@@ -16858,10 +16923,11 @@ multiplayer_setup_push_state = function(self)
     if not multiplayer_lobby_is_local_offer_owner(self) then
         return
     end
-    if multiplayer_setup_is_player_count_dirty(self) then
-        return
-    end
-    local config = multiplayer_setup_build_session_config(self)
+    local session = multiplayer_lobby_get_active_session(self)
+    multiplayer_setup_sync_player_count_from_roster(self, session)
+    local roster_n = multiplayer_setup_roster_player_count(self, session)
+    local config = multiplayer_setup_build_session_config(self, roster_n)
+    config.player_count = roster_n
     -- Primary path: direct host event broadcast keeps setup UI synced even if command handling drops.
     multiplayer_transport_broadcast_event(self, "setup_state_updated", {
         session_config = config
@@ -17285,88 +17351,18 @@ multiplayer_lobby_session_host_wire_id = function(session)
 end
 
 multiplayer_lobby_committed_player_count = function(self, session)
-    if session and session.max_players ~= nil then
-        return multiplayer_setup_clamp_player_count(session.max_players)
-    end
-    if self and self.mp_setup and self.mp_setup.committed_player_count ~= nil then
-        return multiplayer_setup_clamp_player_count(self.mp_setup.committed_player_count)
-    end
-    return multiplayer_setup_clamp_player_count(self and self.mp_setup and self.mp_setup.player_count or 2)
+    return multiplayer_setup_roster_player_count(self, session)
 end
 
-multiplayer_lobby_is_player_count_update_blocked = function(self, pending_count, session)
-    session = session or multiplayer_lobby_get_active_session(self)
-    if not session then
-        return false
-    end
-    local pending = multiplayer_setup_clamp_player_count(
-        pending_count or (self and self.mp_setup and self.mp_setup.player_count or 2)
-    )
-    local guest_count = multiplayer_lobby_count_session_guests(self, session)
-    return guest_count > math.max(0, pending - 1)
+multiplayer_lobby_is_player_count_update_blocked = function(_self, _pending_count, _session)
+    return false
 end
 
 multiplayer_lobby_commit_player_count_settings = function(self)
     if not (self and self.mp_state and self.mp_state.enabled) then
         return false
     end
-    if not multiplayer_lobby_is_local_offer_owner(self) then
-        return false
-    end
-    if not multiplayer_setup_is_player_count_dirty(self) then
-        return true
-    end
-    multiplayer_lobby_ensure_runtime(self)
-    local session = multiplayer_lobby_get_active_session(self)
-    if not session then
-        return false
-    end
-    local pending_count = multiplayer_setup_clamp_player_count(self.mp_setup.player_count)
-    local guest_count = multiplayer_lobby_count_session_guests(self, session)
-    if guest_count > math.max(0, pending_count - 1) then
-        show_mp_lobby_advisory(self, 2.2, "update_not_allowed")
-        multiplayer_debug_log(self, string.format(
-            "MP LOBBY | update_settings_blocked guests=%d pending=%d",
-            guest_count,
-            pending_count
-        ))
-        return false
-    end
-    session.max_players = pending_count
-    self.mp_setup.committed_player_count = pending_count
-    self.mp_setup.player_count_dirty = false
-    self.mp_setup.committed_setup_snapshot = nil
-    session.players = math.max(1, math.min(pending_count, tonumber(#(session.joined_player_ids or {})) or 1))
-    session.updated_at_ms = get_wall_clock_ms()
-    self.mp_lobby.offers_by_id[tostring(session.id or "")] = session
-    multiplayer_lobby_sync_sessions_from_offers(self)
-    multiplayer_lobby_emit_offer_upsert(self, session)
-    local setup_config = multiplayer_setup_build_session_config(self)
-    setup_config.player_count = pending_count
-    local host_id = multiplayer_lobby_session_host_wire_id(session)
-    self.mp_lobby.setup_sync_player_ids = self.mp_lobby.setup_sync_player_ids or {}
-    for _, joined_id in ipairs(session.joined_player_ids or {}) do
-        local jid = mp_normalize_network_player_id(joined_id)
-        if jid ~= "" and jid ~= host_id then
-            self.mp_lobby.setup_sync_player_ids[jid] = nil
-        end
-    end
-    local events = {}
-    multiplayer_lobby_append_roster_setup_sync_events(self, events, session, setup_config, nil)
-    if #events > 0 then
-        multiplayer_transport_broadcast_events(self, events)
-    else
-        multiplayer_setup_push_state(self)
-    end
-    if self.mp_state then
-        self.mp_state.player_count = pending_count
-    end
-    multiplayer_debug_log(self, string.format(
-        "MP LOBBY | update_settings_committed count=%d guests=%d",
-        pending_count,
-        guest_count
-    ))
-    return true
+    return multiplayer_lobby_is_local_offer_owner(self)
 end
 
 multiplayer_lobby_count_session_guests = function(self, session)
@@ -17379,6 +17375,19 @@ multiplayer_lobby_count_session_guests = function(self, session)
         end
     end
     return count
+end
+
+multiplayer_lobby_wire_id_in_roster = function(session, wire_id)
+    wire_id = mp_normalize_network_player_id(wire_id or "")
+    if wire_id == "" or type(session) ~= "table" then
+        return false
+    end
+    for _, joined_id in ipairs(session.joined_player_ids or {}) do
+        if mp_normalize_network_player_id(joined_id) == wire_id then
+            return true
+        end
+    end
+    return false
 end
 
 multiplayer_lobby_reset_setup_sync_runtime = function(self, session)
@@ -17401,23 +17410,11 @@ multiplayer_lobby_host_waiting_for_guest_sync = function(self)
     if not multiplayer_lobby_is_local_offer_owner(self) then
         return false
     end
-    if multiplayer_setup_is_player_count_dirty(self) then
-        return false
-    end
-    if not multiplayer_lobby_can_host_launch(self) then
-        return false
-    end
     local session = multiplayer_lobby_get_active_session(self)
     if not session then
         return false
     end
-    local guest_count = multiplayer_lobby_count_session_guests(self, session)
-    local committed = multiplayer_lobby_committed_player_count(self, session)
-    local required_guests = math.max(0, committed - 1)
-    if guest_count < required_guests then
-        return false
-    end
-    if guest_count == 0 and committed >= 2 then
+    if multiplayer_lobby_count_session_guests(self, session) == 0 then
         return false
     end
     return not multiplayer_lobby_joined_guests_setup_synced(self, session)
@@ -17738,11 +17735,15 @@ multiplayer_lobby_try_complete_pending_join_from_offer = function(self, offer)
     end
     local flow = tostring(self.game_flow_state or "")
     if flow == FLOW_STATE_MP_SETUP then
-        self.mp_lobby.pending_join_session_id = ""
-        self.mp_lobby.pending_steam_lobby_id = ""
-        self.mp_lobby.pending_join_wire_sent = false
-        self.mp_lobby.pending_join_wire_session_id = ""
-        return true
+        local local_id = mp_normalize_network_player_id(self.mp_state and self.mp_state.local_player_id or "")
+        if local_id ~= "" and multiplayer_lobby_wire_id_in_roster(offer, local_id) then
+            self.mp_lobby.pending_join_session_id = ""
+            self.mp_lobby.pending_steam_lobby_id = ""
+            self.mp_lobby.pending_join_wire_sent = false
+            self.mp_lobby.pending_join_wire_session_id = ""
+            return true
+        end
+        return false
     end
     if flow ~= FLOW_STATE_MP_LOBBY then
         multiplayer_debug_log(self, string.format(
@@ -17775,6 +17776,19 @@ multiplayer_lobby_try_complete_pending_join_from_offer = function(self, offer)
             type(offer.joined_player_ids) == "table" and #offer.joined_player_ids or 0
         ))
         return false
+    end
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
+        local wire_ready = self.mp_transport
+            and self.mp_transport.steam_is_wire_ready
+            and self.mp_transport.steam_is_wire_ready() == true
+        if wire_ready ~= true then
+            multiplayer_debug_log(self, string.format(
+                "MP LOBBY | pending_join_deferred session=%s local=%s reason=wire_not_ready",
+                offer_id,
+                local_id
+            ))
+            return false
+        end
     end
     local session = multiplayer_lobby_get_session_by_id(self, offer_id) or offer
     multiplayer_debug_log(self, string.format(
@@ -17865,17 +17879,7 @@ multiplayer_lobby_joined_guests_setup_synced = function(self, session)
             end
         end
     end
-    local committed_players = multiplayer_lobby_committed_player_count(self, session)
-    local required_guests = math.max(0, committed_players - 1)
-    if guest_count < required_guests then
-        multiplayer_lobby_note_launch_block(self, "", "waiting_guests")
-        return false
-    end
-    if guest_count > required_guests then
-        multiplayer_lobby_note_launch_block(self, "", "roster_over_capacity")
-        return false
-    end
-    if guest_count == 0 and committed_players >= 2 then
+    if guest_count == 0 then
         multiplayer_lobby_note_launch_block(self, "", "no_guests")
         return false
     end
@@ -18028,6 +18032,14 @@ multiplayer_lobby_mark_guest_setup_synced = function(self, player_id)
     self.mp_lobby.guest_join_resend_pending = self.mp_lobby.guest_join_resend_pending or {}
     self.mp_lobby.setup_sync_player_ids[pid] = true
     self.mp_lobby.guest_join_resend_pending[pid] = nil
+    if not multiplayer_lobby_is_host(self) then
+        local local_id = mp_normalize_network_player_id(self.mp_state and self.mp_state.local_player_id or "")
+        if local_id ~= "" and local_id == pid then
+            multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_SETUP_SYNCED, {
+                guest = pid
+            })
+        end
+    end
 end
 
 multiplayer_lobby_deliver_pending_join_notifications = function(self)
@@ -18107,6 +18119,7 @@ multiplayer_lobby_ensure_runtime = function(self)
     lobby.last_setup_roster_revision_acked = tonumber(lobby.last_setup_roster_revision_acked or 0) or 0
     lobby.last_setup_roster_revision_acked_session_id = tostring(lobby.last_setup_roster_revision_acked_session_id or "")
     lobby.pairing_intent = tostring(lobby.pairing_intent or "host")
+    MP_LOBBY_LIFECYCLE.ensure(lobby)
     lobby.discovery_browse_count = tonumber(lobby.discovery_browse_count or 0) or 0
     lobby.discovery_session_count = tonumber(lobby.discovery_session_count or -1) or -1
     lobby.local_active_offer_id = tostring(lobby.local_active_offer_id or "")
@@ -18173,6 +18186,135 @@ multiplayer_lobby_on_discovery_browse = function(self, detail)
     end
 end
 
+multiplayer_lobby_guest_prune_local_offer_membership = function(self, session_id)
+    if not (self and self.mp_lobby and self.mp_state) then
+        return false
+    end
+    session_id = tostring(session_id or "")
+    if session_id == "" then
+        return false
+    end
+    local session = self.mp_lobby.offers_by_id[session_id]
+    if type(session) ~= "table" then
+        return false
+    end
+    local local_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "")
+    if local_id == "" then
+        return false
+    end
+    session.joined_player_ids = session.joined_player_ids or {}
+    local changed = false
+    for i = #session.joined_player_ids, 1, -1 do
+        if mp_normalize_network_player_id(session.joined_player_ids[i]) == local_id then
+            table.remove(session.joined_player_ids, i)
+            changed = true
+        end
+    end
+    if changed then
+        session.players = math.max(1, #session.joined_player_ids)
+        session.updated_at_ms = get_wall_clock_ms()
+        multiplayer_lobby_sync_sessions_from_offers(self)
+        multiplayer_debug_log(self, string.format(
+            "MP LOBBY | guest_prune_local_offer session=%s local=%s players=%d",
+            session_id,
+            local_id,
+            tonumber(session.players or 1) or 1
+        ))
+    end
+    return changed
+end
+
+multiplayer_lobby_on_wire_ready = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return false
+    end
+    multiplayer_apply_steam_transport_seat_ids(self)
+    return multiplayer_lobby_complete_pending_steam_join(self) == true
+end
+
+multiplayer_lobby_guest_handle_roster_eviction = function(self, session_id)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return false
+    end
+    if multiplayer_lobby_is_host(self) then
+        return false
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    local lobby = self.mp_lobby
+    session_id = tostring(session_id or lobby.pending_join_session_id or self.mp_state.lobby_ticket_id or "")
+    lobby.pending_join_wire_sent = false
+    lobby.pending_join_wire_session_id = ""
+    lobby.pending_join_session_id = ""
+    lobby.pending_steam_lobby_id = ""
+    if self.mp_lobby.setup_sync_player_ids then
+        local local_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "")
+        if local_id ~= "" then
+            self.mp_lobby.setup_sync_player_ids[local_id] = nil
+        end
+    end
+    self.mp_state.lobby_ticket_id = ""
+    self.mp_state.session_id = "local_session"
+    multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_DISCONNECTED, {
+        session = session_id,
+        reason = "roster_evicted"
+    })
+    multiplayer_debug_log(self, string.format(
+        "MP LOBBY | guest_roster_evicted session=%s local=%s",
+        session_id,
+        tostring(self.mp_state.local_player_id or "")
+    ))
+    return true
+end
+
+multiplayer_lobby_guest_leave_setup_to_find = function(self)
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return false
+    end
+    if multiplayer_lobby_is_session_host(self) then
+        return false
+    end
+    local session_id = multiplayer_lobby_get_lobby_ticket_id(self)
+    local session = multiplayer_lobby_get_session_by_id(self, session_id)
+    local host_steam_id = tostring(session and session.host_steam_id or "")
+    multiplayer_transport_send_command(self, "lobby_leave_session", {
+        session_id = session_id
+    }, self.mp_state.local_player_id)
+    if self.mp_transport and self.mp_transport.flush_wire_queue then
+        pcall(self.mp_transport.flush_wire_queue)
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    self.mp_lobby.pending_join_session_id = ""
+    self.mp_lobby.pending_steam_lobby_id = ""
+    self.mp_lobby.pending_join_wire_sent = false
+    self.mp_lobby.pending_join_wire_session_id = ""
+    self.mp_lobby.guest_setup_sync_epoch = 0
+    self.mp_lobby.guest_setup_sync_last_requested_epoch = 0
+    multiplayer_lobby_clear_pin_join_state(self)
+    self.mp_lobby.pairing_intent = "find"
+    self.mp_state.lobby_ticket_id = ""
+    self.mp_state.session_id = "local_session"
+    multiplayer_lobby_guest_prune_local_offer_membership(self, session_id)
+    multiplayer_apply_steam_lobby_wire_defaults(self)
+    if host_steam_id ~= "" and self.mp_transport and self.mp_transport.steam_forget_peer then
+        pcall(self.mp_transport.steam_forget_peer, host_steam_id)
+    end
+    if self.mp_transport and self.mp_transport.steam_leave_lobby then
+        pcall(self.mp_transport.steam_leave_lobby)
+    end
+    multiplayer_reset_steam_wire_handshake(self)
+    multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_DISCONNECTED, {
+        reason = "leave_setup_to_find"
+    })
+    self.multiplayer_mode_active = true
+    enter_flow_state(self, FLOW_STATE_MP_LOBBY)
+    show_mp_lobby_advisory(self, 2.2, "find")
+    multiplayer_debug_log(self, string.format(
+        "MP LOBBY | guest_leave_setup_to_find session=%s",
+        tostring(session_id or "")
+    ))
+    return true
+end
+
 multiplayer_reset_steam_wire_handshake = function(self)
     if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
         return false
@@ -18206,7 +18348,14 @@ multiplayer_lobby_request_steam_lobby_for_join = function(self, session_id, stea
         if wire_ready == true then
             return true
         end
-        if self.mp_transport and self.mp_transport.steam_reset_gateb_handshake then
+        if self.mp_transport and self.mp_transport.steam_rejoin_lobby then
+            multiplayer_debug_log(self, string.format(
+                "MP LOBBY | join_session_steam_rejoin session=%s lobby=%s",
+                sid,
+                lobby_id
+            ))
+            self.mp_transport.steam_rejoin_lobby(lobby_id)
+        elseif self.mp_transport and self.mp_transport.steam_reset_gateb_handshake then
             multiplayer_debug_log(self, string.format(
                 "MP LOBBY | join_session_steam_handshake_reset session=%s lobby=%s",
                 sid,
@@ -18214,6 +18363,15 @@ multiplayer_lobby_request_steam_lobby_for_join = function(self, session_id, stea
             ))
             self.mp_transport.steam_reset_gateb_handshake()
         end
+        return true
+    end
+    if self.mp_transport and self.mp_transport.steam_rejoin_lobby then
+        multiplayer_debug_log(self, string.format(
+            "MP LOBBY | join_session_steam_rejoin session=%s lobby=%s",
+            sid,
+            lobby_id
+        ))
+        self.mp_transport.steam_rejoin_lobby(lobby_id)
         return true
     end
     if self.mp_transport and self.mp_transport.steam_join_lobby then
@@ -18250,6 +18408,8 @@ multiplayer_lobby_complete_pending_steam_join = function(self)
             end
             if steam_lobby_id ~= "" and current_lobby == steam_lobby_id then
                 multiplayer_reset_steam_wire_handshake(self)
+            elseif steam_lobby_id ~= "" and self.mp_transport.steam_rejoin_lobby then
+                self.mp_transport.steam_rejoin_lobby(steam_lobby_id)
             elseif steam_lobby_id ~= "" and self.mp_transport.steam_join_lobby then
                 self.mp_transport.steam_join_lobby(steam_lobby_id)
             end
@@ -18259,7 +18419,18 @@ multiplayer_lobby_complete_pending_steam_join = function(self)
     if tostring(lobby.pending_join_wire_session_id or "") == pending_id
         and lobby.pending_join_wire_sent == true
     then
-        return true
+        local session = multiplayer_lobby_get_session_by_id(self, pending_id)
+        local local_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "")
+        if multiplayer_lobby_wire_id_in_roster(session, local_id) then
+            return false
+        end
+        lobby.pending_join_wire_sent = false
+        lobby.pending_join_wire_session_id = ""
+        multiplayer_debug_log(self, string.format(
+            "MP LOBBY | join_session_wire_retry session=%s local=%s reason=not_in_roster",
+            pending_id,
+            local_id
+        ))
     end
     local join_pin = tostring(lobby.pending_join_pin or "")
     if join_pin == "" and lobby.pin_mode == "join_locked" then
@@ -18276,6 +18447,9 @@ multiplayer_lobby_complete_pending_steam_join = function(self)
     lobby.pending_join_wire_sent = true
     lobby.pending_join_wire_session_id = pending_id
     lobby.pin_join_wire_timeout_timer = 0
+    multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_JOIN_WIRE_PENDING, {
+        session = pending_id
+    })
     multiplayer_debug_log(self, string.format(
         "MP LOBBY | join_session_wire session=%s pin_len=%d",
         pending_id,
@@ -18322,6 +18496,11 @@ multiplayer_lobby_request_join_session = function(self, session)
         return true
     end
     lobby.pending_join_session_id = session_id
+    lobby.pending_join_wire_sent = false
+    lobby.pending_join_wire_session_id = ""
+    multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_STEAM_JOINING, {
+        session = session_id
+    })
     if multiplayer_lobby_request_steam_lobby_for_join(self, session_id, session.steam_lobby_id) then
         show_mp_lobby_advisory(self, 2.0, "joining")
         print("MP LOBBY | Joining host...")
@@ -18922,7 +19101,12 @@ multiplayer_lobby_merge_incoming_offer_fields = function(existing_offer, offer)
         and incoming_updated < existing_updated
     then
         merged_players = math.max(merged_players, tonumber(existing_offer.players or 0) or 0)
-        if #incoming_joined == 0 and type(existing_offer.joined_player_ids) == "table" then
+        if type(existing_offer.joined_player_ids) == "table"
+            and #existing_offer.joined_player_ids >= #merged_joined
+        then
+            merged_joined = multiplayer_clone_simple_table(existing_offer.joined_player_ids)
+            merged_players = math.max(merged_players, #merged_joined)
+        elseif #incoming_joined == 0 and type(existing_offer.joined_player_ids) == "table" then
             merged_joined = multiplayer_clone_simple_table(existing_offer.joined_player_ids)
         end
     end
@@ -18963,6 +19147,7 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
     end
     local owner_player_id = tostring(offer.owner_player_id or MP_SESSION_TICKET.SESSION_HOST_NETWORK_ID)
     local publish_status = tostring(offer.publish_status or offer.status or MP_SESSION_TICKET.PUBLISH_OPEN)
+    local incoming_is_discovery = offer.steam_discovery == true
     for existing_offer_id, existing_offer in pairs(self.mp_lobby.offers_by_id or {}) do
         if tostring(existing_offer_id or "") ~= offer_id then
             local same_host_steam = tostring(existing_offer and existing_offer.host_steam_id or "") ~= ""
@@ -18976,6 +19161,12 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
         end
     end
     local existing_offer = self.mp_lobby.offers_by_id[offer_id]
+    local guest_local_id = mp_normalize_network_player_id(self.mp_state and self.mp_state.local_player_id or "")
+    local guest_was_in_roster = guest_local_id ~= ""
+        and existing_offer
+        and multiplayer_lobby_wire_id_in_roster(existing_offer, guest_local_id)
+    local incoming_updated_ms = tonumber(offer.updated_at_ms or 0) or 0
+    local existing_updated_ms = tonumber(existing_offer and existing_offer.updated_at_ms or 0) or 0
     local merged_joined, merged_players = multiplayer_lobby_merge_incoming_offer_fields(existing_offer, offer)
     self.mp_lobby.offers_by_id[offer_id] = {
         id = offer_id,
@@ -19013,12 +19204,38 @@ multiplayer_lobby_apply_offer_upsert = function(self, offer)
             tonumber(offer.setup_roster_revision or 0) or 0,
             tonumber(existing_offer and existing_offer.setup_roster_revision or 0) or 0
         ),
-        updated_at_ms = tonumber(offer.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms(),
+        updated_at_ms = math.max(
+            tonumber(offer.updated_at_ms or 0) or 0,
+            tonumber(existing_offer and existing_offer.updated_at_ms or 0) or 0
+        ),
         last_seen_local_ms = get_wall_clock_ms()
     }
     print(string.format("LOBBY_COMMAND | offer_upsert_apply | offer=%s owner=%s", offer_id, owner_player_id))
     multiplayer_lobby_sync_sessions_from_offers(self)
     multiplayer_lobby_try_complete_pending_join_from_offer(self, self.mp_lobby.offers_by_id[offer_id])
+    if incoming_is_discovery or multiplayer_lobby_is_host(self) then
+        return
+    end
+    if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_MP_SETUP then
+        local ticket = tostring(self.mp_state.lobby_ticket_id or "")
+        if ticket ~= "" and ticket == offer_id and guest_was_in_roster then
+            local applied = self.mp_lobby.offers_by_id[offer_id]
+            local now_in_roster = applied and multiplayer_lobby_wire_id_in_roster(applied, guest_local_id)
+            if not now_in_roster
+                and incoming_updated_ms > 0
+                and (existing_updated_ms <= 0 or incoming_updated_ms >= existing_updated_ms)
+            then
+                multiplayer_debug_log(self, string.format(
+                    "MP LOBBY | guest_setup_evicted offer=%s local=%s incoming_ms=%d existing_ms=%d",
+                    offer_id,
+                    guest_local_id,
+                    incoming_updated_ms,
+                    existing_updated_ms
+                ))
+                multiplayer_lobby_guest_leave_setup_to_find(self)
+            end
+        end
+    end
 end
 
 multiplayer_lobby_apply_offer_remove = function(self, offer_id)
@@ -19207,15 +19424,21 @@ multiplayer_lobby_enter_mp_setup_from_session = function(self, session, skip_req
         local ticket_id = tostring(session.id or session.session_key or "")
         self.mp_state.lobby_ticket_id = ticket_id
         self.mp_state.session_id = ticket_id ~= "" and ticket_id or tostring(self.mp_state.session_id or "local_session")
-        self.mp_state.player_count = math.max(2, math.min(4, tonumber(session.players or session.max_players or 2) or 2))
+        self.mp_state.player_count = multiplayer_setup_roster_player_count(self, session)
         multiplayer_apply_wire_dispatch_player_id(self, session)
     end
     multiplayer_setup_init_runtime(self)
     if multiplayer_lobby_is_local_offer_owner(self, session) and self.mp_setup then
-        local committed = multiplayer_lobby_committed_player_count(self, session)
-        self.mp_setup.committed_player_count = committed
-        self.mp_setup.player_count_dirty = false
-        self.mp_setup.committed_setup_snapshot = nil
+        multiplayer_setup_sync_player_count_from_roster(self, session)
+    end
+    if multiplayer_lobby_is_local_offer_owner(self, session) then
+        multiplayer_lobby_lifecycle_host(self, MP_LOBBY_LIFECYCLE.HOST_ALONE, {
+            session = tostring(session.id or "")
+        })
+    elseif self.mp_state and self.mp_state.enabled then
+        multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_IN_ROSTER, {
+            session = tostring(session.id or "")
+        })
     end
     enter_flow_state(self, FLOW_STATE_MP_SETUP)
     if skip_request_setup ~= true then
@@ -19284,11 +19507,9 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
     multiplayer_steam_ensure_session_roster_maps(session)
     multiplayer_lobby_reset_setup_sync_runtime(self, session)
     session.players = 1
-    local pending_count = multiplayer_setup_clamp_player_count(self.mp_setup and self.mp_setup.player_count or 2)
-    session.max_players = pending_count
+    session.max_players = 4
     if self.mp_setup then
-        self.mp_setup.committed_player_count = pending_count
-        self.mp_setup.player_count_dirty = false
+        multiplayer_setup_sync_player_count_from_roster(self, session)
     end
     lobby.offers_by_id[tostring(session.id or "")] = session
     lobby.pending_join_session_id = ""
@@ -19412,6 +19633,9 @@ multiplayer_lobby_abort_guest_join = function(self)
     lobby.guest_setup_sync_last_requested_epoch = 0
     multiplayer_lobby_clear_pin_join_state(self)
     multiplayer_reset_steam_wire_handshake(self)
+    multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_DISCONNECTED, {
+        reason = "abort_guest_join"
+    })
     if not multiplayer_lobby_is_host(self) then
         if self.mp_transport and self.mp_transport.steam_leave_lobby then
             pcall(self.mp_transport.steam_leave_lobby)
@@ -20886,17 +21110,18 @@ function update_flow_ui(self, dt)
         return
     end
     if state == FLOW_STATE_MP_SETUP then
+        local is_setup_host = multiplayer_lobby_is_local_offer_owner(self)
+        if is_setup_host and self.mp_state and self.mp_state.enabled then
+            local active_session = multiplayer_lobby_get_active_session(self)
+            multiplayer_setup_sync_player_count_from_roster(self, active_session)
+            multiplayer_lobby_lifecycle_refresh_host(self, active_session)
+        end
         local valid = multiplayer_setup_is_valid(self)
         local guests_synced = multiplayer_lobby_joined_guests_setup_synced(self)
-        local player_count_dirty = multiplayer_setup_is_player_count_dirty(self)
-        local is_setup_host = multiplayer_lobby_is_local_offer_owner(self)
-        local can_launch = not player_count_dirty
+        local can_launch = valid
             and is_setup_host
             and multiplayer_lobby_can_host_launch(self)
             and guests_synced
-        local can_update = player_count_dirty
-            and is_setup_host
-            and not multiplayer_lobby_is_player_count_update_blocked(self)
         local waiting_guest_sync = multiplayer_lobby_host_waiting_for_guest_sync(self)
         if waiting_guest_sync then
             show_mp_lobby_advisory(self, 2.5, "waiting_guest_sync")
@@ -20958,15 +21183,12 @@ function update_flow_ui(self, dt)
                 set_ui_square_transform(self, hitbox_id, mission_x + 3, mission_y, MP_SETUP_UI_Z + 0.02, hitbox_tint, MP_SETUP_MISSION_BTN_W, MP_SETUP_MISSION_BTN_H)
             end
         end
-        local count_x = { MP_SETUP_BTN_2P_X + 11, MP_SETUP_BTN_3P_X + 1, MP_SETUP_BTN_4P_X + 1 }
         if self.ui.flow_mp_count_buttons then
-            for i, btn in ipairs(self.ui.flow_mp_count_buttons) do
-                local tint = vmath.vector4(1, 1, 1, 0)
-                set_ui_square_transform(self, btn, count_x[i], MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, tint, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
+            for _, btn in ipairs(self.ui.flow_mp_count_buttons) do
+                set_ui_square_transform(self, btn, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_BTN_W * 0.021, MP_SETUP_COUNT_BTN_H * 0.021)
             end
         end
-        local active_idx = math.max(1, math.min(3, (self.mp_setup and self.mp_setup.player_count or 2) - 1))
-        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, count_x[active_idx] - 1, MP_SETUP_COUNT_BTN_Y, MP_SETUP_UI_Z, vmath.vector4(1, 1, 1, 1), MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
+        set_ui_square_transform(self, self.ui.flow_mp_count_active_ring, -9999, -9999, MP_SETUP_UI_Z, hidden, MP_SETUP_COUNT_ACTIVE_RING_W * 0.021, MP_SETUP_COUNT_ACTIVE_RING_H * 0.021)
         local flow_back_tint = FLOW_BUTTON_HITBOX_DEBUG_VISIBLE and vmath.vector4(0.2, 0.95, 0.2, 0) or vmath.vector4(1, 1, 1, 0)
         set_ui_square_transform(self, self.ui.flow_mp_back_button, MP_SETUP_BACK_BTN_X, MP_SETUP_BACK_BTN_Y, MP_SETUP_UI_Z, flow_back_tint, MP_SETUP_ACTION_BTN_W * 0.021, MP_SETUP_ACTION_BTN_H * 0.021)
         if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE then
@@ -20974,15 +21196,13 @@ function update_flow_ui(self, dt)
             set_ui_square_transform(self, self.ui.flow_debug_solo_launch_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H)
         end
         local action_anim = hash("disabled_button")
-        if can_update then
-            action_anim = hash("mp_btn_updateSession")
-        elseif can_launch then
+        if can_launch then
             action_anim = hash("launch_button")
         elseif waiting_guest_sync then
             action_anim = hash("disabled_button")
         end
         pcall(msg.post, msg.url(nil, self.ui.flow_mp_start_button, "sprite"), "play_animation", { id = action_anim })
-        local show_action_btn = can_launch or can_update or waiting_guest_sync
+        local show_action_btn = is_setup_host
         set_ui_square_transform(self, self.ui.flow_mp_start_button, show_action_btn and MP_SETUP_START_BTN_X or -9999, show_action_btn and MP_SETUP_START_BTN_Y or -9999, MP_SETUP_UI_Z, show_action_btn and vmath.vector4(1, 1, 1, 1) or hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
         set_ui_square_transform(self, self.ui.flow_mp_start_enabled_glow, -9999, -9999, MP_SETUP_UI_Z - 0.001, hidden, MP_SETUP_START_GLOW_SCALE_X, MP_SETUP_START_GLOW_SCALE_Y)
         set_ui_square_transform(self, self.ui.flow_mp_start_disabled_overlay, -9999, -9999, MP_SETUP_UI_Z + 0.001, hidden, MP_SETUP_ACTION_BTN_SCALE_X, MP_SETUP_ACTION_BTN_SCALE_Y)
@@ -21215,22 +21435,10 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
         if self.mp_state and self.mp_state.enabled and multiplayer_lobby_is_session_host(self) then
             multiplayer_lobby_cancel_session(self, multiplayer_lobby_get_lobby_ticket_id(self))
         elseif self.mp_state and self.mp_state.enabled then
-            multiplayer_transport_send_command(self, "lobby_leave_session", {
-                session_id = multiplayer_lobby_get_lobby_ticket_id(self)
-            }, self.mp_state.local_player_id)
-            if self.mp_transport and self.mp_transport.flush_wire_queue then
-                pcall(self.mp_transport.flush_wire_queue)
-            end
-            multiplayer_lobby_abort_guest_join(self)
+            multiplayer_lobby_guest_leave_setup_to_find(self)
+        else
+            enter_flow_state(self, FLOW_STATE_TITLE)
         end
-        if self.mp_state then
-            self.mp_state.lobby_ticket_id = ""
-            self.mp_state.session_id = "local_session"
-            multiplayer_apply_steam_lobby_wire_defaults(self)
-            self.mp_state.enabled = false
-        end
-        self.multiplayer_mode_active = false
-        enter_flow_state(self, FLOW_STATE_TITLE)
         return true
     end
     if is_client_not_host then
@@ -21264,44 +21472,27 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
     }
     for _, btn in ipairs(count_buttons) do
         if is_point_in_screen_rect(input_x, input_y, btn.x, MP_SETUP_COUNT_BTN_Y, MP_SETUP_COUNT_BTN_W, MP_SETUP_COUNT_BTN_H) then
-            multiplayer_setup_set_player_count(self, btn.count)
-            if multiplayer_setup_is_player_count_dirty(self) then
-                local session = multiplayer_lobby_get_active_session(self)
-                if multiplayer_lobby_is_player_count_update_blocked(self, btn.count, session) then
-                    show_mp_lobby_advisory(self, 2.2, "update_not_allowed")
-                else
-                    local committed = multiplayer_lobby_committed_player_count(self, session)
-                    show_advisory(self, string.format("Listing still shows %d players until you update.", committed), 2.2)
-                end
-            end
             return true
         end
     end
     if is_point_in_screen_rect(input_x, input_y, MP_SETUP_START_BTN_X, MP_SETUP_START_BTN_Y, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H) then
-        if multiplayer_setup_is_player_count_dirty(self)
-            and multiplayer_lobby_is_local_offer_owner(self)
-            and multiplayer_lobby_is_player_count_update_blocked(self) then
-            show_mp_lobby_advisory(self, 2.2, "update_not_allowed")
-            return true
-        end
-        if multiplayer_setup_is_player_count_dirty(self)
-            and multiplayer_lobby_is_local_offer_owner(self)
-            and not multiplayer_lobby_is_player_count_update_blocked(self) then
-            multiplayer_lobby_commit_player_count_settings(self)
-            return true
-        end
         if multiplayer_lobby_can_host_launch(self)
-            and not multiplayer_setup_is_player_count_dirty(self)
             and multiplayer_lobby_joined_guests_setup_synced(self)
             and multiplayer_setup_is_valid(self) then
             if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
                 multiplayer_host_start_match_from_setup(self)
             else
+                local session = multiplayer_lobby_get_active_session(self)
+                multiplayer_setup_sync_player_count_from_roster(self, session)
+                local launch_count = multiplayer_setup_roster_player_count(self, session)
                 multiplayer_transport_send_command(self, "start_match_request", {
-                    session_config = multiplayer_setup_build_session_config(self)
+                    session_config = multiplayer_setup_build_session_config(self, launch_count)
                 }, self.mp_state and self.mp_state.local_player_id or "p1")
             end
         elseif multiplayer_lobby_host_waiting_for_guest_sync(self) then
+            show_mp_lobby_advisory(self, 2.2, "waiting_guest_sync")
+        elseif multiplayer_lobby_can_host_launch(self)
+            and multiplayer_lobby_count_session_guests(self, multiplayer_lobby_get_active_session(self)) == 0 then
             show_mp_lobby_advisory(self, 2.2, "waiting_guest_sync")
         elseif multiplayer_lobby_can_host_launch(self) then
             print("MP SETUP | invalid assignment: each active seat must be filled, unique units, and Sarge must stay on p1.")
@@ -25813,8 +26004,7 @@ multiplayer_transport_handle_command = function(self, command)
             return events
         end
         local session_max_players = math.max(2, math.min(4, tonumber(session.max_players or 4) or 4))
-        local committed_player_count = multiplayer_lobby_committed_player_count(self, session)
-        local guest_capacity = math.max(0, math.min(session_max_players, committed_player_count) - 1)
+        local guest_capacity = math.max(0, session_max_players - 1)
         local already_joined = false
         for _, joined_id in ipairs(session.joined_player_ids or {}) do
             if mp_normalize_network_player_id(joined_id) == mp_normalize_network_player_id(requester_player_id) then
@@ -25909,17 +26099,21 @@ multiplayer_transport_handle_command = function(self, command)
             offer_id = session_id,
             session_id = session_id
         }))
-        local setup_config = multiplayer_setup_build_guest_wire_config(self, session)
-        setup_config.player_count = committed_player_count
+        local setup_config = multiplayer_setup_build_session_config(self, multiplayer_setup_roster_player_count(self, session))
+        if multiplayer_lobby_is_session_host(self, session) then
+            multiplayer_setup_sync_player_count_from_roster(self, session)
+            setup_config = multiplayer_setup_build_session_config(self, multiplayer_setup_roster_player_count(self, session))
+        end
+        setup_config.player_count = multiplayer_setup_roster_player_count(self, session)
         table.insert(events, multiplayer_transport_emit_event(self, "setup_state_updated", {
             target_player_id = requester_player_id,
             session_config = setup_config
         }))
         multiplayer_lobby_append_roster_setup_sync_events(self, events, session, setup_config, requester_player_id)
-        if self.mp_state and not multiplayer_setup_is_player_count_dirty(self) then
+        if self.mp_state then
             self.mp_state.player_count = setup_config.player_count
         end
-        if self.mp_setup and not multiplayer_setup_is_player_count_dirty(self) then
+        if self.mp_setup and multiplayer_lobby_is_session_host(self, session) then
             multiplayer_setup_apply_session_config(self, setup_config)
         end
         table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
@@ -25945,6 +26139,9 @@ multiplayer_transport_handle_command = function(self, command)
             roster_str,
             tonumber(session.setup_roster_revision or 0) or 0
         ))
+        if multiplayer_lobby_is_session_host(self, session) then
+            multiplayer_lobby_lifecycle_refresh_host(self, session)
+        end
         return events
     end
 
@@ -26012,18 +26209,22 @@ multiplayer_transport_handle_command = function(self, command)
             reason = reason
         }))
         if accepted then
-            local committed_player_count = multiplayer_lobby_committed_player_count(self, session)
-            local setup_config = multiplayer_setup_build_guest_wire_config(self, session)
-            setup_config.player_count = committed_player_count
+            local roster_n = multiplayer_setup_roster_player_count(self, session)
+            if multiplayer_lobby_is_session_host(self, session) then
+                multiplayer_setup_sync_player_count_from_roster(self, session)
+                roster_n = multiplayer_setup_roster_player_count(self, session)
+            end
+            local setup_config = multiplayer_setup_build_session_config(self, roster_n)
+            setup_config.player_count = roster_n
             table.insert(events, multiplayer_transport_emit_event(self, "setup_state_updated", {
                 target_player_id = requester_player_id,
                 session_config = setup_config
             }))
             multiplayer_lobby_append_roster_setup_sync_events(self, events, session, setup_config, requester_player_id)
-            if self.mp_state and not multiplayer_setup_is_player_count_dirty(self) then
+            if self.mp_state then
                 self.mp_state.player_count = setup_config.player_count
             end
-            if self.mp_setup and not multiplayer_setup_is_player_count_dirty(self) then
+            if self.mp_setup and multiplayer_lobby_is_session_host(self, session) then
                 multiplayer_setup_apply_session_config(self, setup_config)
             end
             table.insert(events, multiplayer_transport_emit_event(self, "lobby_join_accepted", {
@@ -26129,7 +26330,18 @@ multiplayer_transport_handle_command = function(self, command)
                 departing_id = mp_normalize_network_player_id(mapped_wire)
             end
         end
+        local departing_steam_id = guest_steam_id
+        if departing_steam_id == "" and type(session) == "table" then
+            multiplayer_steam_ensure_session_roster_maps(session)
+            departing_steam_id = tostring(session.steam_id_by_wire_id[departing_id] or "")
+        end
         if multiplayer_lobby_remove_player_from_session(self, session_id, departing_id) then
+            if departing_steam_id ~= ""
+                and self.mp_transport
+                and self.mp_transport.steam_forget_peer
+            then
+                pcall(self.mp_transport.steam_forget_peer, departing_steam_id)
+            end
             self.mp_lobby.guest_join_resend_pending = self.mp_lobby.guest_join_resend_pending or {}
             self.mp_lobby.guest_join_resend_pending[departing_id] = nil
             if self.mp_lobby.setup_sync_player_ids then
@@ -26137,7 +26349,13 @@ multiplayer_transport_handle_command = function(self, command)
             end
             multiplayer_lobby_prune_guest_sync_maps(self, multiplayer_lobby_get_session_by_id(self, session_id))
             multiplayer_lobby_prune_steam_disconnected_guests(self)
-            multiplayer_reset_steam_wire_handshake(self)
+            if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_MP_SETUP
+                and multiplayer_lobby_is_session_host(self, multiplayer_lobby_get_session_by_id(self, session_id)) then
+                local active_session = multiplayer_lobby_get_session_by_id(self, session_id)
+                multiplayer_setup_sync_player_count_from_roster(self, active_session)
+                multiplayer_setup_push_state(self)
+                multiplayer_lobby_lifecycle_refresh_host(self, active_session)
+            end
             multiplayer_debug_log(self, string.format(
                 "MP LOBBY | leave_session_roster_prune session=%s player=%s guests=%d players=%d",
                 session_id,
@@ -26145,9 +26363,6 @@ multiplayer_transport_handle_command = function(self, command)
                 multiplayer_lobby_count_session_guests(self, multiplayer_lobby_get_session_by_id(self, session_id)),
                 tonumber(multiplayer_lobby_get_session_by_id(self, session_id) and multiplayer_lobby_get_session_by_id(self, session_id).players or 1) or 1
             ))
-            table.insert(events, multiplayer_transport_emit_event(self, "lobby_state_updated", {
-                lobby_state = multiplayer_lobby_build_state_payload(self)
-            }))
         else
             multiplayer_debug_log(self, string.format(
                 "MP LOBBY | leave_session_reject session=%s sender=%s steam=%s",
@@ -26187,7 +26402,12 @@ multiplayer_transport_handle_command = function(self, command)
             }))
             return events
         end
-        local config = multiplayer_setup_build_session_config(self)
+        local session = multiplayer_lobby_get_active_session(self)
+        multiplayer_setup_sync_player_count_from_roster(self, session)
+        local launch_count = multiplayer_setup_roster_player_count(self, session)
+        local launch_guest_ids = multiplayer_lobby_collect_launch_guest_ids(self, session)
+        local config = multiplayer_setup_build_session_config(self, launch_count)
+        config.player_count = launch_count
         if not multiplayer_setup_is_valid(self) then
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "start_match_request",
@@ -26211,16 +26431,12 @@ multiplayer_transport_handle_command = function(self, command)
             session_config = config
         }))
         local host_id = mp_normalize_network_player_id(self.mp_state.host_player_id or sender or "p1")
-        local active_session = multiplayer_lobby_get_active_session(self)
-        if active_session and type(active_session.joined_player_ids) == "table" then
-            for _, joined_id in ipairs(active_session.joined_player_ids) do
-                local guest_id = mp_normalize_network_player_id(joined_id)
-                if guest_id ~= "" and guest_id ~= host_id then
-                    table.insert(events, multiplayer_transport_emit_event(self, "match_started", {
-                        target_player_id = guest_id,
-                        session_config = config
-                    }))
-                end
+        for _, guest_id in ipairs(launch_guest_ids) do
+            if guest_id ~= "" and guest_id ~= host_id then
+                table.insert(events, multiplayer_transport_emit_event(self, "match_started", {
+                    target_player_id = guest_id,
+                    session_config = config
+                }))
             end
         end
         return events
@@ -28170,23 +28386,12 @@ multiplayer_transport_on_event = function(self, event)
                 end
             end
             multiplayer_setup_apply_session_config(self, config)
-            if self.mp_setup then
-                self.mp_setup.committed_player_count = multiplayer_setup_clamp_player_count(config.player_count)
-                self.mp_setup.player_count_dirty = false
-            end
             multiplayer_guest_sync_runtime_from_session_config(self, config)
             if is_guest then
                 self.mp_lobby.pending_join_session_id = ""
                 self.mp_lobby.pending_steam_lobby_id = ""
                 self.mp_lobby.pending_join_wire_sent = false
                 self.mp_lobby.pending_join_wire_session_id = ""
-                local new_player_count = tonumber(config.player_count or 0) or 0
-                if flow == FLOW_STATE_MP_SETUP
-                    and new_player_count >= 2
-                    and prev_player_count >= 2
-                    and new_player_count ~= prev_player_count then
-                    show_advisory(self, string.format("Host set session to %d players.", new_player_count), 2.0)
-                end
                 if show_joined_advisory then
                     show_mp_lobby_advisory(self, 1.8, "joined")
                     print("MP LOBBY | Joined game -> setup")
@@ -28218,7 +28423,7 @@ multiplayer_transport_on_event = function(self, event)
         return
     end
     if event.type == "lobby_state_updated" then
-        -- Legacy lobby snapshots can resurrect stale offers; offer-plane events are authoritative now.
+        -- Offer upserts are authoritative; legacy lobby snapshots can arrive stale after rejoin.
         return
     end
     if event.type == "lobby_offer_upsert" then
@@ -28338,6 +28543,9 @@ multiplayer_transport_on_event = function(self, event)
         multiplayer_lobby_clear_pin_join_state(self)
         multiplayer_lobby_guest_bump_setup_sync_epoch(self)
         multiplayer_lobby_guest_request_setup_sync(self)
+        multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_IN_ROSTER, {
+            session = session_id
+        })
         show_mp_lobby_advisory(self, 1.8, "joined")
         print("MP LOBBY | Joined game -> setup")
         print("MP LOBBY | join accepted -> setup")
@@ -28380,6 +28588,11 @@ multiplayer_transport_on_event = function(self, event)
             end
         end
         local config = event.payload and event.payload.session_config or nil
+        if type(config) == "table" and self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+            multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_IN_MATCH, {
+                players = tonumber(config.player_count or 0) or 0
+            })
+        end
         if type(config) ~= "table" then
             config = multiplayer_setup_build_session_config(self)
         end
@@ -29674,15 +29887,37 @@ multiplayer_transport_init = function(self)
                 self.mp_state.transport_status_detail = detail or {}
             end
             if status == "gateb_ok" then
-                multiplayer_apply_steam_transport_seat_ids(self)
-                multiplayer_lobby_complete_pending_steam_join(self)
+                if not multiplayer_lobby_is_host(self) and multiplayer_lobby_is_find_intent(self) then
+                    local pending = tostring(self.mp_lobby and self.mp_lobby.pending_join_session_id or "")
+                    local in_steam_lobby = false
+                    if self.mp_transport and self.mp_transport.steam_get_lobby_id then
+                        in_steam_lobby = tostring(self.mp_transport.steam_get_lobby_id() or "") ~= ""
+                    end
+                    if pending == "" and not in_steam_lobby then
+                        multiplayer_debug_log(self, "MP LOBBY | gateb_ok_ignored reason=find_idle")
+                        multiplayer_reset_steam_wire_handshake(self)
+                        return
+                    end
+                end
+                multiplayer_lobby_on_wire_ready(self)
                 if self.mp_transport and self.mp_transport.flush_wire_queue then
-                    self.mp_transport.flush_wire_queue()
+                    pcall(self.mp_transport.flush_wire_queue)
+                end
+            elseif status == "lobby_join_entered" then
+                if not multiplayer_lobby_is_host(self)
+                    and tostring(self.mp_lobby and self.mp_lobby.pending_join_session_id or "") ~= ""
+                then
+                    if detail and detail.wire_ready == true then
+                        multiplayer_lobby_on_wire_ready(self)
+                    end
+                    if self.mp_transport and self.mp_transport.flush_wire_queue then
+                        pcall(self.mp_transport.flush_wire_queue)
+                    end
                 end
             elseif status == "discovery_browse" then
                 multiplayer_lobby_on_discovery_browse(self, detail)
             elseif status == "gatec_ok" then
-                multiplayer_lobby_complete_pending_steam_join(self)
+                multiplayer_lobby_on_wire_ready(self)
                 multiplayer_lobby_prune_steam_disconnected_guests(self)
                 multiplayer_lobby_deliver_pending_join_notifications(self)
                 if self.mp_transport and self.mp_transport.flush_wire_queue then

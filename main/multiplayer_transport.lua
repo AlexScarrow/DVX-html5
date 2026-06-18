@@ -944,6 +944,13 @@ function M.create(opts)
         return false
     end
 
+    function transport.steam_forget_peer(steam_id)
+        if state.steam_gateb and state.steam_gateb.forget_peer then
+            return state.steam_gateb.forget_peer(steam_id) == true
+        end
+        return false
+    end
+
     function transport.steam_reset_gateb_handshake()
         reset_steam_gatec()
         if state.steam_gateb and state.steam_gateb.reset_handshake then

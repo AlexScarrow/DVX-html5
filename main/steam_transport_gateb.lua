@@ -484,6 +484,14 @@ local steam_listener_installed = false
         accept_peer(state, peer_id)
         if packet.type == "ping" then
             if state.is_host ~= true then
+                if is_find_pairing_mode(state) and not is_valid_steam_id(state.lobby_id) then
+                    log(state, string.format(
+                        "MP STEAM GATEB | ping_ignored find_idle seq=%d from=%s",
+                        packet.seq,
+                        peer_id
+                    ))
+                    return
+                end
                 local host_id = resolve_lobby_owner_steam_id(state)
                 if is_valid_steam_id(host_id) then
                     if tostring(peer_id) ~= tostring(host_id) then
@@ -662,6 +670,12 @@ local steam_listener_installed = false
         log(state, string.format("MP STEAM GATEB | lobby_enter id=%s host=%s", lobby_id, tostring(state.is_host == true)))
         state.phase = "in_lobby"
         emit_discovery_offer(state, lobby_id)
+        if state.is_host ~= true and state.on_status then
+            pcall(state.on_status, "lobby_join_entered", {
+                lobby_id = lobby_id,
+                wire_ready = state.passed == true and is_valid_steam_id(state.peer_steam_id)
+            })
+        end
     end
 
     local function on_lobby_data_update(state, data)
@@ -800,6 +814,21 @@ function M.create(opts)
             state.pass_seq = 1
             join_gate_lobby(state, lobby_id)
             log(state, string.format("MP STEAM GATEB | lobby_rejoin_requested id=%s", tostring(lobby_id)))
+            return true
+        end
+
+        function gateb.forget_peer(steam_id)
+            steam_id = tostring(steam_id or "")
+            if steam_id == "" then
+                return false
+            end
+            state.ping_sent_peers = state.ping_sent_peers or {}
+            state.ping_sent_peers[steam_id] = nil
+            if tostring(state.peer_steam_id or "") == steam_id then
+                state.peer_steam_id = nil
+                state.passed = false
+            end
+            log(state, string.format("MP STEAM GATEB | peer_forgotten id=%s", steam_id))
             return true
         end
 

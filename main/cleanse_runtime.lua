@@ -807,9 +807,7 @@ function M.extend(runtime, ctx)
     end
 
     runtime.cleanse_on_new_turn_start = function(self)
-        if not is_cleanse_mission(self) then
-            return
-        end
+        local cleanse_active = is_cleanse_mission(self)
         local state = self.cleanse_state or {}
         local next_flame = {}
         for cell_id, turns_left in pairs(state.flame_cells or {}) do
@@ -821,6 +819,12 @@ function M.extend(runtime, ctx)
         state.flame_cells = next_flame
         self.cleanse_state = state
         state.cleanse_visuals_dirty = true
+        for cell_id, _ in pairs(self.cleanse_state.flame_cells or {}) do
+            apply_flame_kill_on_cell(self, cell_id)
+        end
+        if not cleanse_active then
+            return
+        end
         local grew = runtime.cleanse_try_grow_one_cell(self)
         if grew then
             print("CLEANSE | weed grew by one cell.")
@@ -830,9 +834,6 @@ function M.extend(runtime, ctx)
             if cell_id then
                 remove_weed_cell(self, cell_id, true)
             end
-        end
-        for cell_id, _ in pairs(self.cleanse_state.flame_cells or {}) do
-            apply_flame_kill_on_cell(self, cell_id)
         end
     end
 
@@ -1148,9 +1149,7 @@ function M.extend(runtime, ctx)
     end
 
     runtime.cleanse_update_visuals = function(self, dt)
-        if not is_cleanse_mission(self) then
-            return
-        end
+        local cleanse_active = is_cleanse_mission(self)
         local state = self.cleanse_state or nil
         if not state then
             return
@@ -1170,10 +1169,16 @@ function M.extend(runtime, ctx)
             end
         end
         if state.cleanse_visuals_dirty == true then
-            refresh_weed_visuals(self)
+            if cleanse_active then
+                refresh_weed_visuals(self)
+            end
             refresh_flame_fx(self)
             refresh_flame_markers(self)
             state.cleanse_visuals_dirty = false
+        end
+        if not cleanse_active then
+            tick_flame_markers(self, step_dt)
+            return
         end
         state.weed_burst_accum_s = (tonumber(state.weed_burst_accum_s or 0) or 0) + step_dt
         if state.weed_burst_accum_s >= WEED_BURST_RESELECT_S then

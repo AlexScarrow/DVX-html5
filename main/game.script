@@ -466,11 +466,11 @@ MP_CHOOSER_BTN_GAP = 16
 MP_CHOOSER_BTN_STEP = MP_CHOOSER_BTN_H + MP_CHOOSER_BTN_GAP
 MP_CHOOSER_STACK_CENTER_Y = SCREEN_HEIGHT * 0.5
 MP_CHOOSER_BACK_BTN_X = MP_CHOOSER_BTN_X
-MP_CHOOSER_BACK_BTN_Y = MP_CHOOSER_STACK_CENTER_Y - MP_CHOOSER_BTN_STEP
+MP_CHOOSER_BACK_BTN_Y = MP_CHOOSER_STACK_CENTER_Y - (MP_CHOOSER_BTN_STEP * 2)
 MP_CHOOSER_FIND_BTN_X = MP_CHOOSER_BTN_X
-MP_CHOOSER_FIND_BTN_Y = MP_CHOOSER_STACK_CENTER_Y
+MP_CHOOSER_FIND_BTN_Y = MP_CHOOSER_STACK_CENTER_Y - MP_CHOOSER_BTN_STEP
 MP_CHOOSER_HOST_BTN_X = MP_CHOOSER_BTN_X
-MP_CHOOSER_HOST_BTN_Y = MP_CHOOSER_STACK_CENTER_Y + MP_CHOOSER_BTN_STEP
+MP_CHOOSER_HOST_BTN_Y = MP_CHOOSER_STACK_CENTER_Y
 TITLE_DEBUG_BUTTON_X = TITLE_TUTORIAL_BUTTON_X - 300
 TITLE_DEBUG_BUTTON_Y = TITLE_TUTORIAL_BUTTON_Y
 TITLE_DEBUG_BUTTON_W = 220
@@ -527,8 +527,8 @@ TUTORIAL_PANEL_Z = FLOW_UI_PANEL_Z + 0.02
 TUTORIAL_NEXT_HOTSPOT_SIZE = 128
 TUTORIAL_PANEL_DRAW_SCALE = 0.8
 ADVISORY_TEXT_Z = 0.86
-ADVISORY_TEXT_SCALE = 1.5
-ADVISORY_TEXT_Y = 36
+ADVISORY_TEXT_SCALE = 1.2
+ADVISORY_TEXT_Y = NEW_TURN_BUTTON_Y
 ADVISORY_DEFAULT_DURATION = 1.8
 UI_ACTION_FEEDBACK_FADE_IN_S = 0.25
 UI_ACTION_FEEDBACK_MIN_ALPHA = 0.35
@@ -806,6 +806,8 @@ MP_LOBBY_CARD_W = 285
 MP_LOBBY_CARD_H = 170
 MP_LOBBY_CARD_COL_X = { 172.5, 477.5, 782.5, 1087.5 }
 MP_LOBBY_CARD_ROW_Y = { 205, 405 }
+MP_LOBBY_COUNT_MAX_CHARS = 3
+MP_LOBBY_COUNT_NAME_GAP = 12
 MP_LOBBY_BACK_BTN_X = 90
 MP_LOBBY_BACK_BTN_Y = 46
 MP_LOBBY_BACK_BTN_W = 140
@@ -863,6 +865,8 @@ MP_LOBBY_NAME_MAX_CHARS = 12
 MP_LOBBY_NAME_LETTER_SPACING = 7
 MP_LOBBY_NAME_BASE_Y_OFFSET = -57
 MP_LOBBY_NAME_SCALE = 0.25
+MP_LOBBY_COUNT_SCALE = MP_LOBBY_NAME_SCALE
+MP_LOBBY_COUNT_SPACING = MP_LOBBY_NAME_LETTER_SPACING
 MP_SETUP_NAME_MAX_CHARS = 12
 MP_SETUP_NAME_LETTER_SPACING = 12
 MP_SETUP_NAME_Y = 229
@@ -903,6 +907,14 @@ mp_lobby_name_glyph_anim_id = function(ch)
         return hash("score_" .. ch)
     end
     return hash("letter_" .. ch)
+end
+
+mp_lobby_count_glyph_anim_id = function(ch)
+    ch = string.sub(tostring(ch or ""), 1, 1)
+    if ch == "/" then
+        return hash("score_slash")
+    end
+    return hash("score_" .. ch)
 end
 
 leaderboard_sanitize_name = function(raw_name, max_chars)
@@ -12294,6 +12306,7 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_host_private_art = nil,
         flow_mp_lobby_back_button = nil,
         flow_mp_lobby_name_letters = {},
+        flow_mp_lobby_count_digits = {},
         flow_mp_setup_name_letters = {},
         flow_mp_lobby_pin_keys = {},
         flow_mp_lobby_pin_modal_bg = nil,
@@ -12698,6 +12711,9 @@ local function initialize_unit_ui(self)
     end
     for i = 1, (MP_LOBBY_SLOTS_PER_PAGE * MP_LOBBY_NAME_MAX_CHARS) do
         self.ui.flow_mp_lobby_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
+    end
+    for i = 1, (MP_LOBBY_SLOTS_PER_PAGE * MP_LOBBY_COUNT_MAX_CHARS) do
+        self.ui.flow_mp_lobby_count_digits[i] = create_ui_marker_sprite(hash("score_0"), MP_SETUP_UI_Z + 0.004)
     end
     for i = 1, (#MP_SETUP_PLAYER_IDS * MP_SETUP_NAME_MAX_CHARS) do
         self.ui.flow_mp_setup_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
@@ -13107,6 +13123,11 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
         end
     end
+    if self.ui.flow_mp_lobby_count_digits then
+        for _, digit_id in ipairs(self.ui.flow_mp_lobby_count_digits) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
+    end
     if self.ui.flow_mp_setup_name_letters then
         for _, letter_id in ipairs(self.ui.flow_mp_setup_name_letters) do
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
@@ -13253,11 +13274,12 @@ update_advisory_ui = function(self, dt)
         msg.post(msg.url(nil, self.ui.advisory_sprite, "sprite"), "play_animation", { id = self.advisory_anim_id })
         self.advisory_anim_active = self.advisory_anim_id
     end
+    local advisory_y = tonumber(NEW_TURN_BUTTON_Y or ADVISORY_TEXT_Y) or ADVISORY_TEXT_Y
     set_ui_square_transform(
         self,
         self.ui.advisory_sprite,
         SCREEN_WIDTH * 0.5,
-        ADVISORY_TEXT_Y,
+        advisory_y,
         advisory_z,
         vmath.vector4(1, 1, 1, 1),
         ADVISORY_TEXT_SCALE,
@@ -20132,9 +20154,6 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
         )
     end
     set_ui_square_transform(self, boxes[2], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
-    if find_intent then
-        set_ui_square_transform(self, boxes[2], MP_LOBBY_CREATE_BTN_X, mp_lobby_y(MP_LOBBY_CREATE_BTN_Y), MP_SETUP_UI_Z, create_tint, MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
-    end
     set_ui_square_transform(self, boxes[3], MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, mp_lobby_y(MP_LOBBY_PAGE_LABEL_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
@@ -20156,9 +20175,15 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
     end
     local session_index = 1
     local letter_cursor = 1
+    local count_cursor = 1
     if self.ui.flow_mp_lobby_name_letters then
         for _, letter_id in ipairs(self.ui.flow_mp_lobby_name_letters) do
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, vmath.vector4(0, 0, 0, 0), 1, 1)
+        end
+    end
+    if self.ui.flow_mp_lobby_count_digits then
+        for _, digit_id in ipairs(self.ui.flow_mp_lobby_count_digits) do
+            set_ui_square_transform(self, digit_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, vmath.vector4(0, 0, 0, 0), 1, 1)
         end
     end
     for row = 1, 2 do
@@ -20177,12 +20202,28 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                 if strip_id then
                     set_ui_square_transform(self, strip_id, card_x, card_y - 52, MP_SETUP_UI_Z + 0.003, tint, MP_LOBBY_CARD_W - 34, 56)
                 end
+                local count_text = nil
+                if session and self.ui.flow_mp_lobby_count_digits then
+                    local joined_count = type(session.joined_player_ids) == "table" and #session.joined_player_ids or 0
+                    local players = math.max(1, tonumber(session.players or 0) or 0, joined_count)
+                    local max_players = math.max(2, tonumber(session.max_players or 4) or 4)
+                    count_text = string.format("%d/%d", players, max_players)
+                    if #count_text > MP_LOBBY_COUNT_MAX_CHARS then
+                        count_text = string.sub(count_text, 1, MP_LOBBY_COUNT_MAX_CHARS)
+                    end
+                end
                 if session and self.ui.flow_mp_lobby_name_letters then
                     local name_text = mp_lobby_sanitize_name(session.host_display_name or session.host_name or "host")
                     local name_len = #name_text
                     if name_len > 0 then
-                        local span = (name_len - 1) * MP_LOBBY_NAME_LETTER_SPACING
-                        local start_x = card_x - (span * 0.5)
+                        local name_span = (name_len - 1) * MP_LOBBY_NAME_LETTER_SPACING
+                        local count_len = count_text and #count_text or 0
+                        local count_span = count_len > 0 and ((count_len - 1) * MP_LOBBY_COUNT_SPACING) or 0
+                        local total_span = name_span
+                        if count_len > 0 then
+                            total_span = total_span + MP_LOBBY_COUNT_NAME_GAP + count_span
+                        end
+                        local start_x = card_x - (total_span * 0.5)
                         local name_y = card_y + MP_LOBBY_NAME_BASE_Y_OFFSET
                         for ci = 1, name_len do
                             local glyph_id = self.ui.flow_mp_lobby_name_letters[letter_cursor]
@@ -20202,6 +20243,28 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                                 MP_LOBBY_NAME_SCALE
                             )
                             letter_cursor = letter_cursor + 1
+                        end
+                        if count_len > 0 then
+                            local count_start_x = start_x + name_span + MP_LOBBY_COUNT_NAME_GAP
+                            for ci = 1, count_len do
+                                local digit_id = self.ui.flow_mp_lobby_count_digits[count_cursor]
+                                if not digit_id then
+                                    break
+                                end
+                                local ch = string.sub(count_text, ci, ci)
+                                msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = mp_lobby_count_glyph_anim_id(ch) })
+                                set_ui_square_transform(
+                                    self,
+                                    digit_id,
+                                    count_start_x + ((ci - 1) * MP_LOBBY_COUNT_SPACING),
+                                    name_y,
+                                    MP_SETUP_UI_Z + 0.004,
+                                    vmath.vector4(1, 1, 1, 0.9),
+                                    MP_LOBBY_COUNT_SCALE,
+                                    MP_LOBBY_COUNT_SCALE
+                                )
+                                count_cursor = count_cursor + 1
+                            end
                         end
                     end
                 end
@@ -21935,11 +21998,6 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
             lobby.pin_feedback = ""
             lobby.pin_feedback_timer = 0
         end
-        return true
-    end
-    if multiplayer_lobby_is_find_intent(self)
-        and is_point_in_screen_rect(input_x, input_y, MP_LOBBY_CREATE_BTN_X, mp_lobby_y(MP_LOBBY_CREATE_BTN_Y), MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H) then
-        multiplayer_lobby_switch_to_host_intent(self)
         return true
     end
     local visible_sessions = multiplayer_lobby_get_visible_sessions(self)

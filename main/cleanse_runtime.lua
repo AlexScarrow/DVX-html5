@@ -933,9 +933,6 @@ function M.extend(runtime, ctx)
     end
 
     runtime.cleanse_try_fire_flamer = function(self, unit, target_cell_id)
-        if not is_cleanse_mission(self) then
-            return false, "not_cleanse"
-        end
         if not (unit and target_cell_id and unit.cell_id and (tonumber(unit.current_health or 0) or 0) > 0) then
             return true, "invalid_unit"
         end
@@ -1083,9 +1080,6 @@ function M.extend(runtime, ctx)
     end
 
     runtime.cleanse_can_attempt_flamer = function(self, unit, target_cell_id)
-        if not is_cleanse_mission(self) then
-            return false
-        end
         if not (ctx.unit_has_equipped_buff_kind and ctx.unit_has_equipped_buff_kind(unit, "flamer")) then
             return false
         end
@@ -1107,9 +1101,6 @@ function M.extend(runtime, ctx)
     end
 
     runtime.cleanse_get_flamer_shots = function(self, unit)
-        if not is_cleanse_mission(self) then
-            return 0
-        end
         return get_or_init_flamer_shots(self, unit, true)
     end
 

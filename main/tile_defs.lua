@@ -1777,58 +1777,105 @@ library["cavern"] = cavern
         conference.cells[9].accessRight = false
 
         conference.cells[1].object1 = {
-            name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 201, isDependentOn = {}, objectId = 101,
             offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
         }
-
+        conference.cells[2].object1 = {
+            name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 201,
+            offsetX = -80, offsetY = 70, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+        }
         conference.cells[3].object1 = {
-            name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
-            offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
-            lootItems = { "ammo", "ammo", "meds", "material","meds", "wiring_straight", COMPONENT_UI.component_fuse }
-        }
-
-        conference.cells[3].object2 = {
-            name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
-            offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-        }
-
-
-        conference.cells[4].object1 = {
-            name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 302, isDependentOn = {}, objectId = 301,
             offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
         }
-
-
-
-        conference.cells[6].object1 = {
-            name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 602, isDependentOn = {}, objectId = 601,
-            offsetX = -90, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+        conference.cells[3].object2 = {
+            name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+            offsetX = 80, offsetY = 70, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
         }
-
+        conference.cells[4].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 501, isDependentOn = {}, objectId = 401,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+        conference.cells[5].object1 = {
+            name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 501,
+            offsetX = -80, offsetY = 70, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+        }
+        conference.cells[6].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 602, isDependentOn = {}, objectId = 601,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
         conference.cells[6].object2 = {
             name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
-            offsetX = 10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+            offsetX = 80, offsetY = 70, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
         }
-
-        conference.cells[6].object3 = {
-            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 603,
-            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        conference.cells[9].object1 = {
+            name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 901,
+            offsetX = -90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+            lootItems = { "buff_flamer", "buff_hazmat", "meds", "material","meds", "wiring_straight", COMPONENT_UI.component_fuse }
         }
 
         conference.cells[8].object1 = {
             name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 801,
             offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
         }
-
         conference.cells[8].object2 = {
-            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 802,
-            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+            name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 902,
+            offsetX = 90, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+            lootItems = { "buff_flamer", "buff_hazmat", "meds", "material","meds", "wiring_straight", COMPONENT_UI.component_fuse }
         }
 
-        conference.cells[9].object1 = {
-            name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
-            offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
-        }
+
+        
+       
+        
+        -- conference.cells[3].object1 = {
+        --     name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+        --     offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+        --     lootItems = { "ammo", "ammo", "meds", "material","meds", "wiring_straight", COMPONENT_UI.component_fuse }
+        -- }
+-- 
+--         conference.cells[3].object2 = {
+--             name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+--             offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+--         }
+-- 
+-- 
+--         conference.cells[4].object1 = {
+--             name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+--             offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--         }
+-- 
+-- 
+-- 
+--         conference.cells[6].object1 = {
+--             name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 602, isDependentOn = {}, objectId = 601,
+--             offsetX = -90, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+--         }
+-- 
+--         conference.cells[6].object2 = {
+--             name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+--             offsetX = 10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+--         }
+-- 
+--         conference.cells[6].object3 = {
+--             name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 603,
+--             offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--         }
+-- 
+--         conference.cells[8].object1 = {
+--             name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 801,
+--             offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+--         }
+-- 
+--         conference.cells[8].object2 = {
+--             name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 802,
+--             offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+--         }
+-- 
+--         conference.cells[9].object1 = {
+--             name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+--             offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+--         }
 
         library["conference"] = conference
 

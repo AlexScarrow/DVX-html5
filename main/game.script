@@ -1928,6 +1928,7 @@ ALIEN_TYPE_CONFIG = {
     - lightValue: Light level (1-5)
     - moveValue: Movement cost (1-5)
     - coverValue: Cover protection (1-5)
+    - noEnter: Boolean - cell is authored out of bounds and cannot be occupied/path-entered
     - accessRight: Boolean - can move through right border
     - accessDown: Boolean - can move through bottom border
     - isPowered: Boolean - is this cell powered
@@ -1948,6 +1949,7 @@ function create_cell_prototype(id_number, x_cell, y_cell)
         coverValue = 1,
         isOutside = false,
         hazard_type = "none",
+        noEnter = false,
         accessRight = true,
         accessDown = true,
         isPowered = false,
@@ -1991,6 +1993,7 @@ function create_tile_prototype(tile_id)
             coverValue = 1,
             isOutside = false,
             hazard_type = "none",
+            noEnter = false,
             accessRight = true,
             accessDown = true,
             isPowered = false,
@@ -2351,19 +2354,29 @@ trigger_obstacle_pass_nudge = function(self, cell_id, from_cell_id, nudge_scale)
     cell.obstacleNudgeCurrentByIndex = current_by_index
 end
 
+is_enterable_cell = function(world_grid, cell_id, allow_void)
+    local cell = world_grid and world_grid[cell_id] or nil
+    if not cell then
+        return false
+    end
+    if cell.noEnter == true then
+        return false
+    end
+    if allow_void == true then
+        return cell.tileID ~= hash("void")
+    end
+    return cell.tileID ~= hash("empty") and cell.tileID ~= hash("void")
+end
+
 function can_cross_between_cells(world_grid, from_cell_id, to_cell_id)
+    if not world_grid then
+        return false
+    end
+    if not is_enterable_cell(world_grid, from_cell_id, false) or not is_enterable_cell(world_grid, to_cell_id, false) then
+        return false
+    end
     local from_cell = world_grid[from_cell_id]
     local to_cell = world_grid[to_cell_id]
-    if not from_cell or not to_cell then
-        return false
-    end
-    if from_cell.tileID == hash("empty")
-        or to_cell.tileID == hash("empty")
-        or from_cell.tileID == hash("void")
-        or to_cell.tileID == hash("void")
-    then
-        return false
-    end
 
     local dx = to_cell.xCell - from_cell.xCell
     local dy = to_cell.yCell - from_cell.yCell
@@ -3128,9 +3141,8 @@ function get_neighbors(cell_id, world_grid, movement_profile, path_context)
     for _, dir in ipairs(directions) do
         local adj_id = get_adjacent_cell(cell_id, dir)
         if adj_id then
-            local cell = world_grid[adj_id]
             -- Check if cell is part of traversable terrain.
-            if cell.tileID ~= hash("empty") and cell.tileID ~= hash("void") then
+            if is_enterable_cell(world_grid, adj_id, false) then
                 if not (CLEANSE_WEED_BLOCKED and CLEANSE_WEED_BLOCKED[adj_id] == true) then
                 local allow_closed_doors = movement_profile == MOVEMENT_PROFILE_HUMAN
                     and path_context
@@ -3356,6 +3368,7 @@ function bake_level_to_world_grid(world_grid, level_design, tile_library)
                         world_cell.coverValue = tile_cell.coverValue
                         world_cell.isOutside = tile_cell.isOutside == true
                         world_cell.hazard_type = tostring(tile_cell.hazard_type or tile_cell.hazardType or tile_cell.hazard or "none")
+                        world_cell.noEnter = tile_cell.noEnter == true or tile_cell.no_enter == true or tile_cell.cannotEnter == true or tile_cell.cannot_enter == true
                         world_cell.isFireHazard = tile_cell.isFireHazard == true or tile_cell.has_fire_hazard == true or tile_cell.hasFireHazard == true
                         world_cell.isGasHazard = tile_cell.isGasHazard == true or tile_cell.has_gas_hazard == true or tile_cell.hasGasHazard == true
                         world_cell.accessRight = tile_cell.accessRight
@@ -3460,8 +3473,8 @@ function find_path(world_grid, start_id, end_id, max_action_points, movement_pro
         return nil
     end
 
-    if world_grid[end_id].tileID == hash("empty") then
-        return nil  -- Can't path to VOID cell
+    if not is_enterable_cell(world_grid, start_id, false) or not is_enterable_cell(world_grid, end_id, false) then
+        return nil  -- Can't path to VOID or no-enter cells.
     end
 
     movement_profile = movement_profile or MOVEMENT_PROFILE_HUMAN
@@ -3547,6 +3560,9 @@ end
 
 local function find_alien_path(world_grid, alien_type, start_id, end_id, max_action_points, hidden_reveal_type, runtime_ctx)
     if not world_grid[start_id] or not world_grid[end_id] then
+        return nil
+    end
+    if world_grid[start_id].noEnter == true or world_grid[end_id].noEnter == true then
         return nil
     end
 
@@ -9629,8 +9645,7 @@ center_camera_on_living_humans_max_zoom_out = function(self)
 end
 
 local function is_walkable_cell(world_grid, cell_id)
-    local cell = world_grid[cell_id]
-    return cell and cell.tileID ~= hash("empty") and cell.tileID ~= hash("void")
+    return is_enterable_cell(world_grid, cell_id, false)
 end
 
 local function create_empty_equipment()
@@ -10860,8 +10875,8 @@ local function print_squad_debug_overview(self)
 end
 
 local function find_first_walkable_cell(world_grid)
-    for cell_id, cell in ipairs(world_grid) do
-        if cell.tileID ~= hash("empty") then
+    for cell_id, _cell in ipairs(world_grid) do
+        if is_enterable_cell(world_grid, cell_id, false) then
             return cell_id
         end
     end
@@ -23778,6 +23793,12 @@ hide_selected_unit_panel_ui = function(self)
     close_comms_panel(self)
 end
 
+mark_selected_unit_panel_dirty = function(self)
+    if self then
+        self.human_ui_panel_hidden_for_unit_id = nil
+    end
+end
+
 update_ui_action_feedback = function(self, dt)
     local state = ui_feedback_state_ensure(self)
     if not state then
@@ -23872,6 +23893,7 @@ function update_selected_unit_ui(self)
     end
     if not unit then
         self.human_ui_panel_open = false
+        mark_selected_unit_panel_dirty(self)
         record_ui_action_feedback_snapshot(self, nil)
         set_ui_hidden(self)
         update_human_portrait_ui(self)
@@ -23916,11 +23938,16 @@ function update_selected_unit_ui(self)
     end
     local ui_feedback = record_ui_action_feedback_snapshot(self, unit)
     if self.human_ui_panel_open ~= true then
-        hide_selected_unit_panel_ui(self)
+        local unit_id = tostring(unit.id or "")
+        if self.human_ui_panel_hidden_for_unit_id ~= unit_id then
+            hide_selected_unit_panel_ui(self)
+            self.human_ui_panel_hidden_for_unit_id = unit_id
+        end
         update_global_ui_buttons(self)
         update_human_portrait_ui(self)
         return
     end
+    self.human_ui_panel_hidden_for_unit_id = nil
     local hp_fill_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.hp_gain_timer_s or 0)
     local ammo_fill_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.ammo_gain_timer_s or 0)
 
@@ -24522,6 +24549,7 @@ try_select_human_portrait = function(self, screen_x, screen_y)
         self.awaiting_slot_shuffle_click = false
         self.selected_start_cell = nil
         self.human_ui_panel_open = was_selected == true
+        mark_selected_unit_panel_dirty(self)
         close_comms_panel(self)
         play_human_confirm_select_sfx(self, unit)
         local unit_world_x = nil
@@ -24601,6 +24629,7 @@ function try_close_selected_unit_ui(self, screen_x, screen_y)
         return false
     end
     self.human_ui_panel_open = false
+    mark_selected_unit_panel_dirty(self)
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
     self.objective_reminder_visible = false
@@ -31782,21 +31811,21 @@ function spawn_human_unit(self)
     if leftmost_tile then
         leftmost_spawn_cell_id = coords_to_id(leftmost_tile.x, leftmost_tile.y)
     end
-    if configured_spawn_cell_id and self.world_grid[configured_spawn_cell_id] and self.world_grid[configured_spawn_cell_id].tileID ~= hash("empty") then
+    if configured_spawn_cell_id and is_enterable_cell(self.world_grid, configured_spawn_cell_id, false) then
         for i = 1, 4 do
             spawn_cells[i] = configured_spawn_cell_id
         end
-    elseif entry_spawn_cell_id and self.world_grid[entry_spawn_cell_id] and self.world_grid[entry_spawn_cell_id].tileID ~= hash("empty") then
+    elseif entry_spawn_cell_id and is_enterable_cell(self.world_grid, entry_spawn_cell_id, false) then
         for i = 1, 4 do
             spawn_cells[i] = entry_spawn_cell_id
         end
-    elseif leftmost_spawn_cell_id and self.world_grid[leftmost_spawn_cell_id] and self.world_grid[leftmost_spawn_cell_id].tileID ~= hash("empty") then
+    elseif leftmost_spawn_cell_id and is_enterable_cell(self.world_grid, leftmost_spawn_cell_id, false) then
         for i = 1, 4 do
             spawn_cells[i] = leftmost_spawn_cell_id
         end
     else
-        for cell_id, cell in ipairs(self.world_grid) do
-            if cell.tileID ~= hash("empty") then
+        for cell_id, _cell in ipairs(self.world_grid) do
+            if is_enterable_cell(self.world_grid, cell_id, false) then
                 table.insert(spawn_cells, cell_id)
             end
         end
@@ -34216,6 +34245,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             clear_locked_manual_target(self)
             if self.human_ui_panel_open ~= true then
                 self.human_ui_panel_open = true
+                mark_selected_unit_panel_dirty(self)
                 close_comms_panel(self)
                 update_human_visual_state(self)
                 update_human_ap_debug_label(self)
@@ -34282,6 +34312,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             deselect_all_units(self)
             clicked_unit.is_selected = true
             self.human_ui_panel_open = false
+            mark_selected_unit_panel_dirty(self)
             close_comms_panel(self)
             self.camera_follow_disabled_by_pan = false
             play_human_confirm_select_sfx(self, clicked_unit)
@@ -34540,8 +34571,8 @@ end
 
 function process_cell_selection(self, clicked_cell_id)
     local cell = self.world_grid[clicked_cell_id]
-    if cell.tileID == hash("empty") then
-        print("Clicked VOID cell. Select a valid cell.")
+    if not is_enterable_cell(self.world_grid, clicked_cell_id, false) then
+        print("Clicked invalid cell. Select a valid cell.")
         return
     end
 
@@ -35461,20 +35492,6 @@ end
 -- =============================================================================
 
 function update(self, dt)
-    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam" then
-        if STEAM_RUNTIME and type(STEAM_RUNTIME.update) == "function" then
-            pcall(STEAM_RUNTIME.update)
-        else
-            local steam_global = rawget(_G, "steam")
-            if type(steam_global) == "table" then
-                if type(steam_global.update) == "function" then
-                    pcall(steam_global.update)
-                elseif type(steam_global.run_callbacks) == "function" then
-                    pcall(steam_global.run_callbacks)
-                end
-            end
-        end
-    end
     apply_runtime_hud_layout(self)
     if self.pending_level_load and self.pending_level_load.level_index then
         local remaining = tonumber(self.pending_level_load.frames_until_spawn or 0) or 0

@@ -23,6 +23,7 @@ local function create_tile_prototype(tile_id)
             coverValue = 1,
             isOutside = false,
             hazard_type = "none",
+            noEnter = false,
             accessRight = true,
             accessDown = true,
             isPowered = false,
@@ -874,6 +875,10 @@ library["canteen"] = canteen
     passage1.cells[6].moveValue = 3
     passage1.cells[9].moveValue = 3
 
+
+    passage1.cells[1].noEnter = true
+    passage1.cells[4].noEnter = true
+    passage1.cells[7].noEnter = true
     -- Internal connectivity:
     -- - Vertical shaft only on right column: 3 <-> 6 <-> 9
     -- - Single isolated accessible cell: 4

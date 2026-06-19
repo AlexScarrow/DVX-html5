@@ -868,6 +868,7 @@ function M.create(opts)
             pass_seq = 1,
             passed = false,
             started = false,
+            steam_initialized = false,
             lobby_search_pending = false,
             lobby_search_timer = 0,
             lobby_search_wait = 0,
@@ -1074,6 +1075,7 @@ function M.create(opts)
                 end
                 log(state, "MP STEAM GATEB | init_ok")
             end
+            state.steam_initialized = true
             install_steam_listener(state)
             state.local_steam_id = get_local_steam_id(backend)
             state.local_persona_name = get_persona_name(backend, "")
@@ -1090,7 +1092,7 @@ function M.create(opts)
             if state.phase == "failed" then
                 return
             end
-            if type(state.backend.update) == "function" then
+            if state.started == true and state.steam_initialized == true and type(state.backend.update) == "function" then
                 pcall(state.backend.update)
             end
             if state.lobby_search_pending == true then

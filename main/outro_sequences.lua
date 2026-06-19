@@ -1018,6 +1018,8 @@ M.SEQUENCES.purge_lose = M.SEQUENCES.lose
 M.SEQUENCES.rescue_lose = M.SEQUENCES.lose
 M.SEQUENCES.dna_sample_lose = M.SEQUENCES.lose
 M.SEQUENCES.escape_lose = M.SEQUENCES.lose
+M.SEQUENCES.holdout_win = M.SEQUENCES.purge_win
+M.SEQUENCES.holdout_lose = M.SEQUENCES.lose
 
 local function ensure_rotation_defaults(shot)
     if type(shot) ~= "table" then

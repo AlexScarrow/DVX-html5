@@ -956,6 +956,12 @@ images {
 images {
   image: "/assets/images/demo_explainer.png"
 }
+images {
+  image: "/assets/images/tile_conference_off.png"
+}
+images {
+  image: "/assets/images/tile_conference_on.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

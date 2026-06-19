@@ -1133,6 +1133,7 @@ MISSION_TYPE_CLEANSE = "cleanse"
 MISSION_TYPE_HOLDOUT = "holdout"
 MISSION_TYPE_TUTORIAL = "tutorial"
 CLEANSE_WEED_BLOCKED = {}
+HOLDOUT_DEFAULT_TURNS = 50
 RESCUE_ENTRY_TILE_NAME = "rescue_entry"
 RESCUE_ENTRY_TILE_NAME_ALT = "entry_rescue"
 RESCUE_ENTRY_VICTORY_LOCAL_CELL = 5
@@ -1222,7 +1223,7 @@ SOLO_SETUP_MISSION_COUNT = 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
 SOLO_SETUP_MISSION_LEVEL_MAP = {
-    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10, [10] = 11, [11]=12, [12] = 13, [13]=14,[14]=15, [15]=16, [16]=17
+    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10, [10] = 11, [11]=12, [12] = 13, [13]=14,[14]=15, [15]=18, [16]=17
 }
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
@@ -7845,6 +7846,102 @@ local function purge_tick_turn_countdown_if_needed(self)
     end
 end
 
+holdout_is_active_mission = function(self)
+    return tostring(get_current_mission_type(self) or "") == MISSION_TYPE_HOLDOUT
+end
+
+holdout_get_configured_turns = function(self)
+    local level_def = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+    local turns = tonumber(type(level_def) == "table" and level_def.holdout_turns or nil) or HOLDOUT_DEFAULT_TURNS
+    turns = math.floor(turns + 0.5)
+    if turns <= 0 then
+        turns = HOLDOUT_DEFAULT_TURNS
+    end
+    return turns
+end
+
+holdout_reset_runtime = function(self)
+    local configured_turns = holdout_get_configured_turns(self)
+    self.holdout_configured_turns = configured_turns
+    if holdout_is_active_mission(self) then
+        self.holdout_turns_remaining = configured_turns
+        self.holdout_timer_started = true
+        self.holdout_result_locked = false
+    else
+        self.holdout_turns_remaining = 0
+        self.holdout_timer_started = false
+        self.holdout_result_locked = false
+    end
+end
+
+holdout_get_alive_human_count = function(self)
+    local count = 0
+    for _, unit in pairs(self and self.squad_units or {}) do
+        if unit and (tonumber(unit.current_health or 0) or 0) > 0 then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+holdout_get_mission_status = function(self)
+    local configured_turns = tonumber(self and self.holdout_configured_turns or nil) or 0
+    if configured_turns <= 0 then
+        configured_turns = holdout_get_configured_turns(self)
+    end
+    configured_turns = math.max(1, configured_turns)
+    local remaining_turns = math.max(0, tonumber(self and self.holdout_turns_remaining or configured_turns) or configured_turns)
+    return {
+        timer_started = (self and self.holdout_timer_started == true) or holdout_is_active_mission(self),
+        remaining_turns = remaining_turns,
+        configured_turns = configured_turns,
+        expired = remaining_turns <= 0,
+        result_locked = self and self.holdout_result_locked == true
+    }
+end
+
+holdout_tick_turn_countdown_if_needed = function(self)
+    if not holdout_is_active_mission(self) then
+        return false
+    end
+    if self.holdout_result_locked == true then
+        return false
+    end
+    local host_authority = true
+    if self.mp_state and self.mp_state.enabled then
+        host_authority = self.mp_state.local_player_id == self.mp_state.host_player_id
+    end
+    if not host_authority then
+        return false
+    end
+    if holdout_get_alive_human_count(self) <= 0 then
+        return false
+    end
+    local turns_remaining = math.max(0, tonumber(self.holdout_turns_remaining or holdout_get_configured_turns(self)) or 0)
+    if turns_remaining <= 0 then
+        return false
+    end
+    turns_remaining = turns_remaining - 1
+    self.holdout_turns_remaining = turns_remaining
+    if SCORE_RUNTIME and SCORE_RUNTIME.record_holdout_turn_survived then
+        SCORE_RUNTIME.record_holdout_turn_survived(ensure_score_state(self))
+    end
+    if turns_remaining > 0 then
+        print(string.format("HOLDOUT | countdown tick: %d turns remaining.", turns_remaining))
+        return false
+    end
+    if holdout_get_alive_human_count(self) <= 0 then
+        print("HOLDOUT | countdown expired with no living humans.")
+        return false
+    end
+    self.holdout_result_locked = true
+    self.game_won = true
+    score_record_holdout_success(self, holdout_get_alive_human_count(self))
+    print("HOLDOUT | SUCCESS survived countdown.")
+    enter_mission_outro(self, "win", "holdout_survived")
+    return true
+end
+
 local function update_all_humans_dead_loss(self)
     if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
         return
@@ -13324,6 +13421,8 @@ function ensure_score_state(self)
         score_profile_id = "purge_and_power"
     elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
         score_profile_id = "holdout"
+    elseif mission_type == MISSION_TYPE_HOLDOUT then
+        score_profile_id = "holdout"
     end
     if not self.score_state then
         self.score_state = SCORE_RUNTIME.create_state(score_profile_id)
@@ -13335,7 +13434,11 @@ end
 
 function get_current_score_total(self)
     local state = ensure_score_state(self)
-    if self and self.game_won ~= true and LOOT_RUNTIME and LOOT_RUNTIME.get_launch_status then
+    if self and self.game_won ~= true
+        and get_current_mission_type(self) ~= MISSION_TYPE_HOLDOUT
+        and LOOT_RUNTIME
+        and LOOT_RUNTIME.get_launch_status
+    then
         local launch_status = LOOT_RUNTIME.get_launch_status(self) or {}
         local preview_saved = math.max(0, tonumber(launch_status.seated_humans or 0) or 0)
         state.metrics = state.metrics or {}
@@ -13697,6 +13800,11 @@ update_mp_build_hud = function(self, visible)
 end
 
 local function get_purge_timer_display_text(self)
+    if holdout_is_active_mission and holdout_is_active_mission(self) then
+        local status = holdout_get_mission_status(self)
+        local turns_remaining = math.max(0, tonumber(status.remaining_turns or status.configured_turns or HOLDOUT_DEFAULT_TURNS) or 0)
+        return string.format("%04d", turns_remaining)
+    end
     local status = get_purge_mission_status(self)
     if status.timer_started ~= true then
         return string.format("%04d", PURGE_COUNTDOWN_TURNS)
@@ -13717,10 +13825,14 @@ local function update_purge_timer_hud(self, visible)
         return
     end
     local hidden = vmath.vector4(0, 0, 0, 0)
-    local status = get_purge_mission_status(self)
-    if visible ~= true or not purge_is_active_mission(self) or status.timer_started ~= true then
+    local holdout_active = holdout_is_active_mission and holdout_is_active_mission(self)
+    local purge_active = purge_is_active_mission(self)
+    local status = holdout_active and holdout_get_mission_status(self) or get_purge_mission_status(self)
+    if visible ~= true or (not purge_active and not holdout_active) or status.timer_started ~= true then
         self.purge_timer_hud_next_ring_s = nil
         self.purge_timer_hud_ring_end_s = nil
+        self.purge_timer_hud_ring_visible = false
+        self.purge_timer_hud_last_text = nil
         for _, digit_id in ipairs(self.ui.purge_timer_digit_icons) do
             set_ui_square_transform(
                 self,
@@ -13737,14 +13849,28 @@ local function update_purge_timer_hud(self, visible)
         return
     end
     local now_s = get_purge_timer_clock_s()
-    local pulse = 1.0 + (PURGE_TIMER_HUD_PULSE_AMPLITUDE * math.sin(now_s * PURGE_TIMER_HUD_PULSE_SPEED))
+    local text = get_purge_timer_display_text(self)
+    local text_changed = self.purge_timer_hud_last_text ~= text
+    local pulse = 1.0
+    if not holdout_active then
+        pulse = 1.0 + (PURGE_TIMER_HUD_PULSE_AMPLITUDE * math.sin(now_s * PURGE_TIMER_HUD_PULSE_SPEED))
+    end
     local draw_scale_x = PURGE_TIMER_HUD_DIGIT_DRAW_W * 0.021 * PURGE_TIMER_HUD_SCALE * pulse
     local draw_scale_y = PURGE_TIMER_HUD_DIGIT_DRAW_H * 0.021 * PURGE_TIMER_HUD_SCALE * pulse
-    if not self.purge_timer_hud_next_ring_s then
+    if holdout_active then
+        self.purge_timer_hud_next_ring_s = nil
+        if text_changed and self.purge_timer_hud_last_text ~= nil then
+            self.purge_timer_hud_ring_end_s = now_s + PURGE_TIMER_HUD_RING_DURATION_S
+            self.purge_timer_hud_ring_visible = true
+            if self.ui.purge_timer_ring then
+                msg.post(msg.url(nil, self.ui.purge_timer_ring, "sprite"), "play_animation", { id = hash("impactRing") })
+            end
+        end
+    elseif not self.purge_timer_hud_next_ring_s then
         self.purge_timer_hud_next_ring_s = now_s
-    end
-    if now_s >= self.purge_timer_hud_next_ring_s then
+    elseif now_s >= self.purge_timer_hud_next_ring_s then
         self.purge_timer_hud_ring_end_s = now_s + PURGE_TIMER_HUD_RING_DURATION_S
+        self.purge_timer_hud_ring_visible = true
         if self.ui.purge_timer_ring then
             msg.post(msg.url(nil, self.ui.purge_timer_ring, "sprite"), "play_animation", { id = hash("impactRing") })
         end
@@ -13768,19 +13894,21 @@ local function update_purge_timer_hud(self, visible)
                 ring_scale,
                 ring_scale
             )
-        else
+            self.purge_timer_hud_ring_visible = true
+        elseif self.purge_timer_hud_ring_visible == true then
             set_ui_square_transform(self, self.ui.purge_timer_ring, -9999, -9999, PURGE_TIMER_HUD_Z - 0.001, hidden, PURGE_TIMER_HUD_RING_SCALE, PURGE_TIMER_HUD_RING_SCALE)
+            self.purge_timer_hud_ring_visible = false
         end
     end
-    local text = get_purge_timer_display_text(self)
     local count = #text
     local spacing = PURGE_TIMER_HUD_DIGIT_SPACING_PX * PURGE_TIMER_HUD_SCALE
     local start_x = PURGE_TIMER_HUD_CENTER_X - ((count - 1) * spacing * 0.5)
     local tint = vmath.vector4(1.0, 0.25, 0.25, 1)
     for i, digit_id in ipairs(self.ui.purge_timer_digit_icons) do
         local ch = string.sub(text, i, i)
-        msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
-        pcall(go.set, msg.url(nil, digit_id, "sprite"), "blend_mode", hash("add"))
+        if text_changed then
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. ch) })
+        end
         local dx = start_x + ((i - 1) * spacing)
         set_ui_square_transform(
             self,
@@ -13793,6 +13921,7 @@ local function update_purge_timer_hud(self, visible)
             draw_scale_y
         )
     end
+    self.purge_timer_hud_last_text = text
 end
 
 update_input_map_cursor_debug = function(self)
@@ -13968,6 +14097,13 @@ function score_record_launch_success(self, escaped_humans_alive_count)
     SCORE_RUNTIME.record_humans_alive_at_end(state, alive)
     SCORE_RUNTIME.record_mission_complete(state)
     score_log_snapshot(self, "launch_success")
+end
+
+function score_record_holdout_success(self, alive_humans_count)
+    local state = ensure_score_state(self)
+    SCORE_RUNTIME.record_humans_alive_at_end(state, alive_humans_count or 0)
+    SCORE_RUNTIME.record_mission_complete(state)
+    score_log_snapshot(self, "holdout_success")
 end
 
 function score_record_civilian_escorted(self, civilian_id)
@@ -21807,10 +21943,6 @@ multiplayer_setup_handle_touch = function(self, input_x, input_y)
             MP_SETUP_MISSION_BTN_W,
             MP_SETUP_MISSION_BTN_H
         ) then
-            if mission_type == MISSION_TYPE_HOLDOUT then
-                print("MP SETUP | holdout mission setup is not wired yet.")
-                return true
-            end
             self.mp_setup.mission_type = multiplayer_normalize_mission_type(mission_type)
             multiplayer_setup_push_state(self)
             return true
@@ -22302,6 +22434,10 @@ finish_level_load_after_clear = function(self, level_index)
     self.purge_turns_remaining = 0
     self.purge_timer_hud_next_ring_s = nil
     self.purge_timer_hud_ring_end_s = nil
+    self.holdout_configured_turns = 0
+    self.holdout_turns_remaining = 0
+    self.holdout_timer_started = false
+    self.holdout_result_locked = false
     self.cleanse_state = {}
     self.end_result = ""
     self.end_mission_type = ""
@@ -22387,6 +22523,9 @@ finish_level_load_after_clear = function(self, level_index)
     end
     if loading_tutorial == true then
         tutorial_set_current_step(self, self.tutorial_step_index or 1)
+    end
+    if holdout_reset_runtime then
+        holdout_reset_runtime(self)
     end
     log_runtime_reference_audit(self, "post_load")
     print("Loaded level " .. tostring(level_index))
@@ -32959,6 +33098,10 @@ multiplayer_build_snapshot_state = function(self)
         purge_result_locked = self.purge_result_locked == true,
         purge_turns_remaining = tonumber(self.purge_turns_remaining or 0) or 0,
         purge_deadline_epoch_ms = tonumber(self.purge_deadline_epoch_ms or 0) or 0,
+        holdout_configured_turns = tonumber(self.holdout_configured_turns or 0) or 0,
+        holdout_turns_remaining = tonumber(self.holdout_turns_remaining or 0) or 0,
+        holdout_timer_started = self.holdout_timer_started == true,
+        holdout_result_locked = self.holdout_result_locked == true,
         end_result = tostring(self.end_result or ""),
         end_mission_type = tostring(self.end_mission_type or ""),
         end_outro_sequence_id = tostring(self.end_outro_sequence_id or ""),
@@ -33068,6 +33211,12 @@ multiplayer_compute_realtime_snapshot_signature = function(snapshot)
         "p",
         tonumber(snapshot.purge_turns_remaining or 0) or 0,
         snapshot.purge_timer_started == true and 1 or 0
+    )
+    push(
+        "h",
+        tonumber(snapshot.holdout_turns_remaining or 0) or 0,
+        snapshot.holdout_timer_started == true and 1 or 0,
+        snapshot.holdout_result_locked == true and 1 or 0
     )
     push("d", tonumber(snapshot.dna_analysis_progress or 0) or 0, snapshot.dna_sample_returned == true and 1 or 0)
 
@@ -33434,6 +33583,10 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
     self.purge_result_locked = snapshot.purge_result_locked == true
     self.purge_turns_remaining = tonumber(snapshot.purge_turns_remaining or self.purge_turns_remaining or 0) or 0
     self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
+    self.holdout_configured_turns = tonumber(snapshot.holdout_configured_turns or self.holdout_configured_turns or 0) or 0
+    self.holdout_turns_remaining = tonumber(snapshot.holdout_turns_remaining or self.holdout_turns_remaining or 0) or 0
+    self.holdout_timer_started = snapshot.holdout_timer_started == true
+    self.holdout_result_locked = snapshot.holdout_result_locked == true
 
     if not decouple_motion then
         multiplayer_enforce_controlled_unit(self, true)
@@ -33618,6 +33771,10 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     self.purge_result_locked = snapshot.purge_result_locked == true
     self.purge_turns_remaining = tonumber(snapshot.purge_turns_remaining or self.purge_turns_remaining or 0) or 0
     self.purge_deadline_epoch_ms = tonumber(snapshot.purge_deadline_epoch_ms or self.purge_deadline_epoch_ms or 0) or 0
+    self.holdout_configured_turns = tonumber(snapshot.holdout_configured_turns or self.holdout_configured_turns or 0) or 0
+    self.holdout_turns_remaining = tonumber(snapshot.holdout_turns_remaining or self.holdout_turns_remaining or 0) or 0
+    self.holdout_timer_started = snapshot.holdout_timer_started == true
+    self.holdout_result_locked = snapshot.holdout_result_locked == true
     self.end_result = tostring(snapshot.end_result or self.end_result or "")
     self.end_mission_type = tostring(snapshot.end_mission_type or self.end_mission_type or "")
     self.end_outro_sequence_id = tostring(snapshot.end_outro_sequence_id or self.end_outro_sequence_id or "")
@@ -35145,6 +35302,10 @@ function init(self)
     self.purge_turns_remaining = 0
     self.purge_timer_hud_next_ring_s = nil
     self.purge_timer_hud_ring_end_s = nil
+    self.holdout_configured_turns = 0
+    self.holdout_turns_remaining = 0
+    self.holdout_timer_started = false
+    self.holdout_result_locked = false
     self.end_result = ""
     self.end_mission_type = ""
     self.end_outro_sequence_id = ""
@@ -36920,6 +37081,10 @@ function on_message(self, message_id, message, sender)
         end
         next_turn_reset_human_ap(self)
         purge_tick_turn_countdown_if_needed(self)
+        holdout_tick_turn_countdown_if_needed(self)
+        if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_GAME then
+            return
+        end
         local skip_authoritative_sim = message and message.skip_authoritative_sim == true
         if skip_authoritative_sim then
             if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then

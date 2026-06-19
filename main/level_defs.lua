@@ -664,6 +664,35 @@ levels[4] = {
     levels[17].spawn_tile = "rescue_entry"
     levels[17].spawn_cell = 2
     levels[17].unit_loadouts = levels[1].unit_loadouts
+
+    levels[18] = {
+        { x = 8, y = 14, tile = "coms" },
+        { x = 14, y = 14, tile = "armoury" },
+        { x = 5, y = 11, tile = "coms" },
+        { x = 8, y = 11, tile = "workshop" },
+        { x = 11, y = 11, tile = "factory" },
+        { x = 14, y = 11, tile = "medbay" },
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "medbay" },
+        { x = 8, y = 8, tile = "conference" },
+        { x = 11, y = 8, tile = "corridor1" },
+        { x = 14, y = 8, tile = "canteen" },
+        { x = 2, y = 5, tile = "void" },
+        { x = 5, y = 5, tile = "passage1" },
+        { x = 8, y = 5, tile = "passage1" },
+        { x = 11, y = 5, tile = "passage1" },
+        { x = 14, y = 5, tile = "passage1" },
+        { x = 2, y = 2, tile = "portal" },
+        { x = 5, y = 2, tile = "cavern" },
+        { x = 8, y = 2, tile = "portal" },
+        { x = 11, y = 2, tile = "cavern" },
+        { x = 14, y = 2, tile = "portal" },
+    }
+    levels[18].mission_type = "holdout"
+    levels[18].holdout_turns = 50
+    levels[18].spawn_tile = "rescue_entry"
+    levels[18].spawn_cell = 2
+    levels[18].unit_loadouts = levels[1].unit_loadouts
     
     return levels
 end

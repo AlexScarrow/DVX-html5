@@ -7,7 +7,8 @@ local MISSION_ORDER = {
     "rescue",
     "purge",
     "cleanse",
-    "dna_sample"
+    "dna_sample",
+    "holdout"
 }
 
 local MISSION_TO_SPAWN_TILE = {
@@ -15,7 +16,8 @@ local MISSION_TO_SPAWN_TILE = {
     rescue = "rescue_entry",
     purge = "rescue_entry",
     cleanse = "rescue_entry",
-    dna_sample = "rescue_entry"
+    dna_sample = "rescue_entry",
+    holdout = "rescue_entry"
 }
 
 local TAB_Y = 684
@@ -44,6 +46,12 @@ local DELETE_BTN_X = 64
 local DELETE_BTN_Y = 526
 local DELETE_BTN_W = 124
 local DELETE_BTN_H = 62
+local HOLDOUT_TURNS_X = 64
+local HOLDOUT_TURNS_Y = 448
+local HOLDOUT_TURNS_BTN_W = 44
+local HOLDOUT_TURNS_BTN_H = 44
+local HOLDOUT_TURNS_STEP = 5
+local HOLDOUT_TURNS_DEFAULT = 50
 
 local STATUS_X = 250
 local STATUS_Y = 36
@@ -194,10 +202,20 @@ local function mission_for_level(level_def)
         return "escape"
     end
     local m = tostring(level_def.mission_type or "escape")
-    if m ~= "escape" and m ~= "rescue" and m ~= "purge" and m ~= "cleanse" and m ~= "dna_sample" then
+    if m ~= "escape" and m ~= "rescue" and m ~= "purge" and m ~= "cleanse" and m ~= "dna_sample" and m ~= "holdout" then
         return "escape"
     end
     return m
+end
+
+local function normalize_holdout_turns(value)
+    local turns = math.floor((tonumber(value or HOLDOUT_TURNS_DEFAULT) or HOLDOUT_TURNS_DEFAULT) + 0.5)
+    if turns < HOLDOUT_TURNS_STEP then
+        turns = HOLDOUT_TURNS_STEP
+    elseif turns > 999 then
+        turns = 999
+    end
+    return turns
 end
 
 local function get_level_indices_for_mission(level_library, mission_type)
@@ -561,7 +579,7 @@ local function validate_editor_map(self)
     return result
 end
 
-local function make_lua_export_snippet(level_id, mission_type, placements, spawn_tile)
+local function make_lua_export_snippet(level_id, mission_type, placements, spawn_tile, holdout_turns)
     local lines = {}
     lines[#lines + 1] = string.format("-- level editor export | level=%d mission=%s", level_id, mission_type)
     lines[#lines + 1] = string.format("levels[%d] = {", level_id)
@@ -576,6 +594,9 @@ local function make_lua_export_snippet(level_id, mission_type, placements, spawn
     end
     lines[#lines + 1] = "}"
     lines[#lines + 1] = string.format("levels[%d].mission_type = \"%s\"", level_id, mission_type)
+    if mission_type == "holdout" then
+        lines[#lines + 1] = string.format("levels[%d].holdout_turns = %d", level_id, normalize_holdout_turns(holdout_turns))
+    end
     lines[#lines + 1] = string.format("levels[%d].spawn_tile = \"%s\"", level_id, spawn_tile)
     lines[#lines + 1] = string.format("levels[%d].spawn_cell = 2", level_id)
     lines[#lines + 1] = string.format("levels[%d].unit_loadouts = levels[1].unit_loadouts", level_id)
@@ -584,12 +605,14 @@ end
 
 local function write_export_payload(self, level_id, mission_type, placements)
     local spawn_tile = MISSION_TO_SPAWN_TILE[mission_type] or "entry"
-    local snippet = make_lua_export_snippet(level_id, mission_type, clone_placements(placements), spawn_tile)
+    local holdout_turns = normalize_holdout_turns(self.level_editor and self.level_editor.holdout_turns or HOLDOUT_TURNS_DEFAULT)
+    local snippet = make_lua_export_snippet(level_id, mission_type, clone_placements(placements), spawn_tile, holdout_turns)
     local payload = {
         level_id = level_id,
         mission_type = mission_type,
         spawn_tile = spawn_tile,
         spawn_cell = 2,
+        holdout_turns = mission_type == "holdout" and holdout_turns or nil,
         placements = clone_placements(placements),
         lua_snippet = snippet
     }
@@ -641,6 +664,7 @@ local function load_level_into_editor(self, level_index)
     clear_invalid_tint(self)
     ed.selected_level_index = level_index
     ed.placements = clone_placements(level_def)
+    ed.holdout_turns = normalize_holdout_turns(level_def.holdout_turns)
     ed.selected_placement_index = nil
     rebuild_preview_tile_visuals(self)
 end
@@ -776,6 +800,9 @@ local function commit_save(self, is_new)
     local spawn_tile = MISSION_TO_SPAWN_TILE[mission_type] or "entry"
     local next_level = clone_placements(ed.placements)
     next_level.mission_type = mission_type
+    if mission_type == "holdout" then
+        next_level.holdout_turns = normalize_holdout_turns(ed.holdout_turns)
+    end
     next_level.spawn_tile = spawn_tile
     next_level.spawn_cell = 2
     local template = self.level_library and self.level_library[1] or nil
@@ -819,11 +846,21 @@ local function hide_ui(self)
     self.set_ui_square_transform(self, ed.ui.save_new_button, -9999, -9999, BTN_Z, hidden, ACTION_W, ACTION_H)
     self.set_ui_square_transform(self, ed.ui.back_button, -9999, -9999, BTN_Z, hidden, EXIT_W, EXIT_H)
     self.set_ui_square_transform(self, ed.ui.delete_button, -9999, -9999, BTN_Z, hidden, DELETE_BTN_W, DELETE_BTN_H)
+    self.set_ui_square_transform(self, ed.ui.holdout_turns_minus_button, -9999, -9999, BTN_Z, hidden, HOLDOUT_TURNS_BTN_W, HOLDOUT_TURNS_BTN_H)
+    self.set_ui_square_transform(self, ed.ui.holdout_turns_plus_button, -9999, -9999, BTN_Z, hidden, HOLDOUT_TURNS_BTN_W, HOLDOUT_TURNS_BTN_H)
     self.set_ui_square_transform(self, ed.ui.status_strip, -9999, -9999, STATUS_Z, hidden, STATUS_W, STATUS_H)
     for _, group in ipairs(ed.level_button_digits or {}) do
         for _, id in ipairs(group) do
             self.set_ui_square_transform(self, id, -9999, -9999, BTN_Z + 0.002, hidden, 0.2, 0.2)
         end
+    end
+    for _, id in ipairs(ed.holdout_turn_digits or {}) do
+        self.set_ui_square_transform(self, id, -9999, -9999, BTN_Z + 0.002, hidden, 0.22, 0.22)
+    end
+    if ed.text then
+        set_text_markers(self, ed.text.holdout_turns_label, "turns", -9999, -9999, 0.28, 0, 10, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.holdout_turns_minus, "down", -9999, -9999, 0.22, 0, 8, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.holdout_turns_plus, "up", -9999, -9999, 0.25, 0, 9, vmath.vector4(0, 0, 0, 1))
     end
     for _, group in ipairs(ed.x_axis_labels or {}) do
         for _, id in ipairs(group) do
@@ -990,6 +1027,29 @@ local function show_ui(self)
     local has_selected = ed.selected_placement_index and ed.placements and ed.placements[ed.selected_placement_index]
     local delete_tint = has_selected and vmath.vector4(0.88, 0.08, 0.08, 1) or vmath.vector4(0.35, 0.1, 0.1, 1)
     self.set_ui_square_transform(self, ed.ui.delete_button, DELETE_BTN_X, DELETE_BTN_Y, BTN_Z, delete_tint, DELETE_BTN_W, DELETE_BTN_H)
+    local show_holdout_turns = ed.selected_mission_type == "holdout"
+    local holdout_turns = normalize_holdout_turns(ed.holdout_turns)
+    ed.holdout_turns = holdout_turns
+    self.set_ui_square_transform(
+        self,
+        ed.ui.holdout_turns_minus_button,
+        show_holdout_turns and (HOLDOUT_TURNS_X - 44) or -9999,
+        show_holdout_turns and HOLDOUT_TURNS_Y or -9999,
+        BTN_Z,
+        show_holdout_turns and vmath.vector4(0.25, 0.35, 0.6, 1) or hidden,
+        HOLDOUT_TURNS_BTN_W,
+        HOLDOUT_TURNS_BTN_H
+    )
+    self.set_ui_square_transform(
+        self,
+        ed.ui.holdout_turns_plus_button,
+        show_holdout_turns and (HOLDOUT_TURNS_X + 44) or -9999,
+        show_holdout_turns and HOLDOUT_TURNS_Y or -9999,
+        BTN_Z,
+        show_holdout_turns and vmath.vector4(0.25, 0.6, 0.35, 1) or hidden,
+        HOLDOUT_TURNS_BTN_W,
+        HOLDOUT_TURNS_BTN_H
+    )
     if ed.text then
         set_text_markers(self, ed.text.save_new_top, "save", SAVE_NEW_X, SAVE_Y + 11, 0.3, 1, 11, vmath.vector4(0, 0, 0, 1))
         set_text_markers(self, ed.text.save_new_bottom, "new", SAVE_NEW_X, SAVE_Y - 11, 0.3, 1, 11, vmath.vector4(0, 0, 0, 1))
@@ -1000,6 +1060,18 @@ local function show_ui(self)
         for i, word in ipairs(MISSION_ORDER) do
             local text_word = word == "dna_sample" and "dna" or word
             set_text_markers(self, ed.text.tabs[i], text_word, get_tab_center_x(self.SCREEN_WIDTH, i), TAB_Y, 0.33, 1, 12, vmath.vector4(0, 0, 0, 1))
+        end
+        set_text_markers(self, ed.text.holdout_turns_label, "turns", HOLDOUT_TURNS_X, HOLDOUT_TURNS_Y + 34, 0.28, show_holdout_turns and 1 or 0, 10, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.holdout_turns_minus, "down", HOLDOUT_TURNS_X - 44, HOLDOUT_TURNS_Y, 0.22, show_holdout_turns and 1 or 0, 8, vmath.vector4(0, 0, 0, 1))
+        set_text_markers(self, ed.text.holdout_turns_plus, "up", HOLDOUT_TURNS_X + 44, HOLDOUT_TURNS_Y, 0.25, show_holdout_turns and 1 or 0, 9, vmath.vector4(0, 0, 0, 1))
+    end
+    for i, digit_id in ipairs(ed.holdout_turn_digits or {}) do
+        if show_holdout_turns then
+            local padded = string.format("%03d", holdout_turns)
+            msg.post(msg.url(nil, digit_id, "sprite"), "play_animation", { id = hash("score_" .. string.sub(padded, i, i)) })
+            self.set_ui_square_transform(self, digit_id, HOLDOUT_TURNS_X - 18 + ((i - 1) * 18), HOLDOUT_TURNS_Y - 28, BTN_Z + 0.002, vmath.vector4(0, 0, 0, 1), 0.22, 0.22)
+        else
+            self.set_ui_square_transform(self, digit_id, -9999, -9999, BTN_Z + 0.002, hidden, 0.22, 0.22)
         end
     end
     local status_tint = vmath.vector4(0.15, 0.2, 0.35, 0.65)
@@ -1154,6 +1226,22 @@ function M.handle_input(self, action, input_x, input_y, inside_view)
         if math.abs(input_x - SAVE_NEW_X) <= (ACTION_W * 0.5) and math.abs(input_y - SAVE_Y) <= (ACTION_H * 0.5) then
             commit_save(self, true)
             return true
+        end
+        if ed.selected_mission_type == "holdout" then
+            if math.abs(input_x - (HOLDOUT_TURNS_X - 44)) <= (HOLDOUT_TURNS_BTN_W * 0.5)
+                and math.abs(input_y - HOLDOUT_TURNS_Y) <= (HOLDOUT_TURNS_BTN_H * 0.5)
+            then
+                ed.holdout_turns = normalize_holdout_turns(normalize_holdout_turns(ed.holdout_turns) - HOLDOUT_TURNS_STEP)
+                ed.status = "holdout_turns_changed"
+                return true
+            end
+            if math.abs(input_x - (HOLDOUT_TURNS_X + 44)) <= (HOLDOUT_TURNS_BTN_W * 0.5)
+                and math.abs(input_y - HOLDOUT_TURNS_Y) <= (HOLDOUT_TURNS_BTN_H * 0.5)
+            then
+                ed.holdout_turns = normalize_holdout_turns(normalize_holdout_turns(ed.holdout_turns) + HOLDOUT_TURNS_STEP)
+                ed.status = "holdout_turns_changed"
+                return true
+            end
         end
         if math.abs(input_x - EXIT_X) <= (EXIT_W * 0.5) and math.abs(input_y - EXIT_Y) <= (EXIT_H * 0.5) then
             self.enter_flow_state(self, self.FLOW_STATE_TITLE)
@@ -1319,6 +1407,7 @@ function M.init(self, deps)
         pan_start_cam_x = 0,
         pan_start_cam_y = 0,
         palette_scroll_offset = 0,
+        holdout_turns = HOLDOUT_TURNS_DEFAULT,
         last_validation = nil,
         status = "boot",
         ui = {
@@ -1330,10 +1419,13 @@ function M.init(self, deps)
             save_new_button = nil,
             back_button = nil,
             delete_button = nil,
+            holdout_turns_minus_button = nil,
+            holdout_turns_plus_button = nil,
             status_strip = nil
         },
         palette_icons = {},
         level_button_digits = {},
+        holdout_turn_digits = {},
         text = {
             save_new_top = {},
             save_new_bottom = {},
@@ -1341,6 +1433,9 @@ function M.init(self, deps)
             save_edit_bottom = {},
             exit_word = {},
             delete_word = {},
+            holdout_turns_label = {},
+            holdout_turns_minus = {},
+            holdout_turns_plus = {},
             tabs = {}
         },
         editor_backdrop = nil
@@ -1383,6 +1478,9 @@ function M.init(self, deps)
     self.level_editor.text.save_edit_bottom = create_text_markers(self, "edit", BTN_Z + 0.003)
     self.level_editor.text.exit_word = create_text_markers(self, "exit", BTN_Z + 0.003)
     self.level_editor.text.delete_word = create_text_markers(self, "delete", BTN_Z + 0.003)
+    self.level_editor.text.holdout_turns_label = create_text_markers(self, "turns", BTN_Z + 0.003)
+    self.level_editor.text.holdout_turns_minus = create_text_markers(self, "down", BTN_Z + 0.003)
+    self.level_editor.text.holdout_turns_plus = create_text_markers(self, "up", BTN_Z + 0.003)
     for i, word in ipairs(MISSION_ORDER) do
         local text_word = word == "dna_sample" and "dna" or word
         self.level_editor.text.tabs[i] = create_text_markers(self, text_word, BTN_Z + 0.003)
@@ -1408,11 +1506,21 @@ function M.init(self, deps)
     ui.save_new_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), ACTION_W, ACTION_H)
     ui.back_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), EXIT_W, EXIT_H)
     ui.delete_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), DELETE_BTN_W, DELETE_BTN_H)
+    ui.holdout_turns_minus_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), HOLDOUT_TURNS_BTN_W, HOLDOUT_TURNS_BTN_H)
+    ui.holdout_turns_plus_button = self.create_ui_square(0, 0, BTN_Z, vmath.vector4(0, 0, 0, 0), HOLDOUT_TURNS_BTN_W, HOLDOUT_TURNS_BTN_H)
     pcall(go.set, msg.url(nil, ui.save_button, "sprite"), "blend_mode", hash("alpha"))
     pcall(go.set, msg.url(nil, ui.save_new_button, "sprite"), "blend_mode", hash("alpha"))
     pcall(go.set, msg.url(nil, ui.back_button, "sprite"), "blend_mode", hash("alpha"))
     pcall(go.set, msg.url(nil, ui.delete_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, ui.holdout_turns_minus_button, "sprite"), "blend_mode", hash("alpha"))
+    pcall(go.set, msg.url(nil, ui.holdout_turns_plus_button, "sprite"), "blend_mode", hash("alpha"))
     ui.status_strip = self.create_ui_square(0, 0, STATUS_Z, vmath.vector4(0, 0, 0, 0), STATUS_W, STATUS_H)
+    for i = 1, 3 do
+        self.level_editor.holdout_turn_digits[i] = self.create_ui_marker_sprite(hash("score_0"), BTN_Z + 0.002)
+        if self.level_editor.holdout_turn_digits[i] then
+            pcall(go.set, msg.url(nil, self.level_editor.holdout_turn_digits[i], "sprite"), "blend_mode", hash("alpha"))
+        end
+    end
 
     local names = {}
     for tile_name, tile_def in pairs(self.tile_library or {}) do
@@ -1511,12 +1619,17 @@ function M.final(self)
             delete_go_array(digits)
         end
     end
+    delete_go_array(self.level_editor.holdout_turn_digits)
     if self.level_editor.text then
         delete_go_array(self.level_editor.text.save_new_top)
         delete_go_array(self.level_editor.text.save_new_bottom)
         delete_go_array(self.level_editor.text.save_edit_top)
         delete_go_array(self.level_editor.text.save_edit_bottom)
         delete_go_array(self.level_editor.text.exit_word)
+        delete_go_array(self.level_editor.text.delete_word)
+        delete_go_array(self.level_editor.text.holdout_turns_label)
+        delete_go_array(self.level_editor.text.holdout_turns_minus)
+        delete_go_array(self.level_editor.text.holdout_turns_plus)
         for _, markers in ipairs(self.level_editor.text.tabs or {}) do
             delete_go_array(markers)
         end

@@ -1724,9 +1724,117 @@ library["cavern"] = cavern
 
         library["furnace"] = furnace
 
+        -- =====================================================================
+        -- CONFERENCE (a suitable last stand location)
+        -- =====================================================================
+        local conference = create_tile_prototype("conference")
+        conference.visualTile = "conference_off"
+        conference.powerLightOffAnim = "tile_conference_off"
+        conference.powerLightOnAnim = "tile_conference_on"
+
+        for i = 1, 9 do
+            conference.cells[i].lightValue = 0
+            conference.cells[i].moveValue = 1
+            conference.cells[i].coverValue = 0
+        end
+
+        conference.cells[1].lightValue = 3
+        conference.cells[2].lightValue = 3
+        conference.cells[3].lightValue = 0
+        conference.cells[4].lightValue = 3
+        conference.cells[5].lightValue = 3
+        conference.cells[6].lightValue = 1
+        conference.cells[7].lightValue = 1
+        conference.cells[8].lightValue = 1
+        conference.cells[9].lightValue = 3
+        -- showers.cells[4].moveValue = 1
+        -- showers.cells[3].moveValue = 3
+        -- showers.cells[6].moveValue = 3
+        -- showers.cells[9].moveValue = 3
+
+        -- Internal connectivity:
+        -- - Vertical shaft only on right column: 3 <-> 6 <-> 9
+        -- - Single isolated accessible cell: 4
+        -- - Cell 4 remains enterable from left neighbor tile via edge rules.
+        conference.cells[1].accessDown = false   -- blocks 2 <-> 3
+        conference.cells[2].accessDown = true
+        conference.cells[3].accessDown = false
+        conference.cells[4].accessDown = false
+        conference.cells[5].accessDown = true
+        conference.cells[6].accessDown = true
+        conference.cells[7].accessDown = true
+        conference.cells[8].accessDown = false
+        conference.cells[9].accessDown = false
+
+        conference.cells[1].accessRight = true
+        conference.cells[2].accessRight = true
+        conference.cells[3].accessRight = true
+        conference.cells[4].accessRight = true
+        conference.cells[5].accessRight = true
+        conference.cells[6].accessRight = true
+        conference.cells[7].accessRight = false
+        conference.cells[8].accessRight = true
+        conference.cells[9].accessRight = false
+
+        conference.cells[1].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 101,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+
+        conference.cells[3].object1 = {
+            name = hash("loot_crate"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 301,
+            offsetX = -100, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil,
+            lootItems = { "ammo", "ammo", "meds", "material","meds", "wiring_straight", COMPONENT_UI.component_fuse }
+        }
+
+        conference.cells[3].object2 = {
+            name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 302,
+            offsetX = 0, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+        }
+
+
+        conference.cells[4].object1 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+
+
+
+        conference.cells[6].object1 = {
+            name = hash("ammo_vending_machine"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 602, isDependentOn = {}, objectId = 601,
+            offsetX = -90, offsetY = 8, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 64, hitH = 124, requiredComponent = COMPONENT_UI.component_fuse
+        }
+
+        conference.cells[6].object2 = {
+            name = hash("wiregap"), isFixed = false, isWelded = false, isOpen = false, dependsOn = 0, isDependentOn = {}, objectId = 602,
+            offsetX = 10, offsetY = 50, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, fxFactory = "/sparks_small_fx_factory#sparks_small_fx_factory", hitW = 32, hitH = 32, requiredComponent = COMPONENT_UI.component_wiring_straight
+        }
+
+        conference.cells[6].object3 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 603,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+
+        conference.cells[8].object1 = {
+            name = hash("power_node"), isFixed = true, dependsOn = 0, isDependentOn = {}, objectId = 801,
+            offsetX = -90, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = -90, hitW = 64, hitH = 124, requiredComponent = nil
+        }
+
+        conference.cells[8].object2 = {
+            name = hash("door"), isFixed = true, isWelded = false, isOpen = true, dependsOn = 0, isDependentOn = {}, objectId = 802,
+            offsetX = 115, offsetY = 10, fxOffsetX = 0, fxOffsetY = 0, fxRotation = 0, hitW = 42, hitH = 72, requiredComponent = COMPONENT_UI.component_plate
+        }
+
+        conference.cells[9].object1 = {
+            name = hash("vent"), isFixed = true, isWelded = false, dependsOn = 0, isDependentOn = {}, objectId = 401,
+            offsetX = -70, offsetY = -35, hitW = 32, hitH = 32, requiredComponent = nil
+        }
+
+        library["conference"] = conference
+
 
         -- =====================================================================
-        -- PASSAGE 1 (vertical only in middle)
+        -- VOID - an empty tile
         -- =====================================================================
         local void = create_tile_prototype("void")
         void.visualTile = "void"

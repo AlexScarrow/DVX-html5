@@ -507,6 +507,8 @@ TITLE_BUTTON_ART_PULSE_SPEED = 2.2
 TITLE_BUTTON_ART_PULSE_AMPLITUDE = 0.03
 TITLE_SPACE_TILE_W = 1260
 TITLE_SPACE_TILE_H = 720
+TITLE_SPACE_TILE_COLS = 4
+TITLE_SPACE_TILE_ROWS = 4
 TITLE_SPACE_SCROLL_SPEED_X = 16
 TITLE_SPACE_SCROLL_SPEED_Y = 8
 TITLE_GRID_TILE_ART_W = 300
@@ -20871,13 +20873,14 @@ update_flow_title_space_grid_background = function(self, dt)
                 self.ui.flow_title_panel_3,
                 self.ui.flow_title_panel_4
             }
-            for i = 5, 9 do
-                local panel = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
-                if panel then
-                    pcall(go.set, msg.url(nil, panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
-                    pcall(go.set, msg.url(nil, panel, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
-                    table.insert(self.ui.flow_title_space_tiles, panel)
-                end
+        end
+        local target_space_tile_count = TITLE_SPACE_TILE_COLS * TITLE_SPACE_TILE_ROWS
+        for i = #self.ui.flow_title_space_tiles + 1, target_space_tile_count do
+            local panel = create_outro_marker_sprite(hash("outro_purge_win_space"), FLOW_UI_PANEL_Z + 0.001)
+            if panel then
+                pcall(go.set, msg.url(nil, panel, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+                pcall(go.set, msg.url(nil, panel, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
+                table.insert(self.ui.flow_title_space_tiles, panel)
             end
         end
     end
@@ -20937,8 +20940,8 @@ update_flow_title_space_grid_background = function(self, dt)
         local base_space_x = (SCREEN_WIDTH * 0.5) + self.title_space_scroll_x - space_tile_w
         local base_space_y = (SCREEN_HEIGHT * 0.5) + self.title_space_scroll_y - space_tile_h
         local tile_i = 1
-        for row = 0, 2 do
-            for col = 0, 2 do
+        for row = 0, TITLE_SPACE_TILE_ROWS - 1 do
+            for col = 0, TITLE_SPACE_TILE_COLS - 1 do
                 local tile = space_tiles[tile_i]
                 if tile then
                     set_ui_square_transform(
@@ -23730,6 +23733,51 @@ ui_feedback_alpha_from_timer = function(timer_s)
     return min_a + ((1 - min_a) * progress)
 end
 
+is_human_ui_panel_open = function(self)
+    return self and self.human_ui_panel_open == true and get_selected_unit(self) ~= nil
+end
+
+hide_selected_unit_panel_ui = function(self)
+    if not (self and self.ui) then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    set_ui_panel_transform(self, self.ui.panel_art, -9999, -9999, 0.8, UI_PANEL_W, UI_PANEL_H, vmath.vector4(1, 1, 1, 1))
+    set_ui_panel_transform(self, self.ui.panel_shadow, -9999, -9999, 0.79, UI_PANEL_W, UI_PANEL_H, hidden)
+    for i = 1, UI_MAX_PIPS do
+        set_ui_square_transform(self, self.ui.ap_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.hp_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+        set_ui_square_transform(self, self.ui.ammo_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BAR_PIP_SIZE, UI_BAR_PIP_SIZE)
+    end
+    for i = 1, COMMAND_UI.max_pips do
+        set_ui_square_transform(self, self.ui.command_pips[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, COMMAND_UI.pip_size, COMMAND_UI.pip_size)
+        set_ui_square_transform(self, self.ui.command_pip_icons[i], -9999, -9999, HUMAN_UI_COMMAND_ICON_Z, hidden, COMMAND_UI.pip_size * 0.021 * 0.75, COMMAND_UI.pip_size * 0.021 * 0.75)
+    end
+    for i = 1, (UI_BACKPACK_COLS * UI_BACKPACK_ROWS) do
+        set_ui_square_transform(self, self.ui.backpack_slots[i], -9999, -9999, HUMAN_UI_BASE_Z, hidden, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, HUMAN_UI_BACKPACK_ICON_Z, hidden, UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
+    end
+    for i = 1, #BUFF_SLOT_ORDER do
+        set_ui_square_transform(self, self.ui.buff_slots[i], -9999, -9999, HUMAN_UI_BUFF_SLOT_Z, hidden, BUFF_SLOT_FRAME_SIZE, BUFF_SLOT_FRAME_SIZE)
+        set_ui_square_transform(self, self.ui.buff_item_icons[i], -9999, -9999, HUMAN_UI_BUFF_ICON_Z, hidden, 1, 1)
+    end
+    set_ui_square_transform(self, self.ui.component_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.button_size, COMPONENT_UI.button_size)
+    set_ui_square_transform(self, self.ui.fix_button, -9999, -9999, 0.82, hidden, COMPONENT_UI.fix_button_size, COMPONENT_UI.fix_button_size)
+    set_ui_square_transform(self, self.ui.loot_button, -9999, -9999, 0.82, hidden, LOOT_UI.button_size, LOOT_UI.button_size)
+    set_ui_square_transform(self, self.ui.retrieve_button, -9999, -9999, 0.82, hidden, LOOT_UI.retrieve_button_size, LOOT_UI.retrieve_button_size)
+    set_ui_square_transform(self, self.ui.comms_toggle_button, -9999, -9999, COMMS_TOGGLE_BTN_Z, hidden, COMMS_TOGGLE_BTN_DRAW, COMMS_TOGGLE_BTN_DRAW)
+    set_ui_panel_transform(self, self.ui.comms_panel, -9999, -9999, COMMS_PANEL_Z, COMMS_PANEL_W, COMMS_PANEL_H, hidden)
+    set_ui_square_transform(self, self.ui.close_button, -9999, -9999, 0.83, hidden, 28, 28)
+    set_ui_square_transform(self, self.ui.not_enough_ap_icon, -9999, -9999, 0.835, hidden, 0.81, 0.81)
+    if self.ui.flamer_ammo_icons then
+        for _, icon_id in ipairs(self.ui.flamer_ammo_icons) do
+            set_ui_square_transform(self, icon_id, -9999, -9999, HUMAN_UI_COMMAND_ICON_Z, hidden, (70 * 0.021) * 0.5, (70 * 0.021) * 0.5)
+        end
+    end
+    set_ui_square_transform(self, self.ui.reactive_toggle_button, -9999, -9999, 0.84, hidden, 64, 32)
+    close_comms_panel(self)
+end
+
 update_ui_action_feedback = function(self, dt)
     local state = ui_feedback_state_ensure(self)
     if not state then
@@ -23823,6 +23871,7 @@ function update_selected_unit_ui(self)
         end
     end
     if not unit then
+        self.human_ui_panel_open = false
         record_ui_action_feedback_snapshot(self, nil)
         set_ui_hidden(self)
         update_human_portrait_ui(self)
@@ -23866,6 +23915,12 @@ function update_selected_unit_ui(self)
         return
     end
     local ui_feedback = record_ui_action_feedback_snapshot(self, unit)
+    if self.human_ui_panel_open ~= true then
+        hide_selected_unit_panel_ui(self)
+        update_global_ui_buttons(self)
+        update_human_portrait_ui(self)
+        return
+    end
     local hp_fill_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.hp_gain_timer_s or 0)
     local ammo_fill_alpha = ui_feedback_alpha_from_timer(ui_feedback and ui_feedback.ammo_gain_timer_s or 0)
 
@@ -24466,6 +24521,7 @@ try_select_human_portrait = function(self, screen_x, screen_y)
         self.ui_close_on_next_non_unit_click = false
         self.awaiting_slot_shuffle_click = false
         self.selected_start_cell = nil
+        self.human_ui_panel_open = was_selected == true
         close_comms_panel(self)
         play_human_confirm_select_sfx(self, unit)
         local unit_world_x = nil
@@ -24538,19 +24594,19 @@ function is_point_in_close_ui_button(screen_x, screen_y)
 end
 
 function try_close_selected_unit_ui(self, screen_x, screen_y)
-    if not get_selected_unit(self) then
+    if not is_human_ui_panel_open(self) then
         return false
     end
     if not is_point_in_close_ui_button(screen_x, screen_y) then
         return false
     end
-    deselect_all_units(self)
+    self.human_ui_panel_open = false
     self.ui_close_on_next_non_unit_click = false
     self.awaiting_slot_shuffle_click = false
     self.objective_reminder_visible = false
     self.selected_start_cell = nil
     close_comms_panel(self)
-    update_human_visual_state(self)
+    update_selected_unit_ui(self)
     print("Unit panel closed.")
     return true
 end
@@ -24560,6 +24616,9 @@ local function is_point_in_comms_panel(screen_x, screen_y)
 end
 
 local function try_toggle_comms_panel(self, screen_x, screen_y)
+    if not is_human_ui_panel_open(self) then
+        return false
+    end
     local unit = get_selected_unit(self)
     if not should_show_comms_ui(self, unit) then
         close_comms_panel(self)
@@ -24594,6 +24653,9 @@ local function emit_comms_command(self, unit, slot_index)
 end
 
 local function try_activate_comms_slot(self, screen_x, screen_y)
+    if not is_human_ui_panel_open(self) then
+        return false
+    end
     local unit = get_selected_unit(self)
     if not should_show_comms_ui(self, unit) then
         close_comms_panel(self)
@@ -24615,6 +24677,9 @@ local function try_activate_comms_slot(self, screen_x, screen_y)
 end
 
 function try_toggle_reactive_combat(self, screen_x, screen_y)
+    if not is_human_ui_panel_open(self) then
+        return false
+    end
     local selected_unit = get_selected_unit(self)
     if not selected_unit then
         return false
@@ -31891,7 +31956,7 @@ get_alien_turn_overlay_scale_multiplier = function()
     end
     local sx = (tonumber(win_w or SCREEN_WIDTH) or SCREEN_WIDTH) / SCREEN_WIDTH
     local sy = (tonumber(win_h or SCREEN_HEIGHT) or SCREEN_HEIGHT) / SCREEN_HEIGHT
-    return math.max(1, math.min(2.2, math.max(sx, sy))) * 0.8
+    return math.max(1, math.min(1.65, math.max(sx, sy) * 0.85))
 end
 
 local function update_single_unit_movement(self, unit, dt)
@@ -34149,6 +34214,14 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         end
         if self.controlled_unit_id == clicked_unit.id and clicked_unit.is_selected then
             clear_locked_manual_target(self)
+            if self.human_ui_panel_open ~= true then
+                self.human_ui_panel_open = true
+                close_comms_panel(self)
+                update_human_visual_state(self)
+                update_human_ap_debug_label(self)
+                update_selected_unit_ui(self)
+                return true
+            end
             if self.cell_slot_assignments and self.cell_slot_assignments[clicked_cell_id] then
                 local is_non_host_client_shuffle = self.mp_state
                     and self.mp_state.enabled
@@ -34208,6 +34281,8 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
             self.controlled_unit_id = clicked_unit.id
             deselect_all_units(self)
             clicked_unit.is_selected = true
+            self.human_ui_panel_open = false
+            close_comms_panel(self)
             self.camera_follow_disabled_by_pan = false
             play_human_confirm_select_sfx(self, clicked_unit)
             spawn_green_impact_ring_for_unit(self, clicked_unit, 0.6)
@@ -36351,7 +36426,7 @@ function on_input(self, action_id, action)
                 self.did_drag = true
                 return true
             end
-            if get_selected_unit(self)
+            if is_human_ui_panel_open(self)
                 and (
                     is_point_in_ui_panel(input_x, input_y)
                     or is_point_in_screen_rect(
@@ -36374,7 +36449,7 @@ function on_input(self, action_id, action)
                 return true
             end
             if (not alien_activity_blocked)
-                and get_selected_unit(self)
+                and is_human_ui_panel_open(self)
                 and (
                     is_point_in_ui_panel(input_x, input_y)
                     or is_point_in_screen_rect(
@@ -36570,7 +36645,7 @@ function on_input(self, action_id, action)
                     dismiss_ranged_hit_preview(self)
                     return true
                 end
-                if get_selected_unit(self)
+                if is_human_ui_panel_open(self)
                     and (
                         is_point_in_ui_panel(input_x, input_y)
                         or is_point_in_screen_rect(

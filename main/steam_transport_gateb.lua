@@ -273,8 +273,14 @@ local steam_listener_installed = false
             return ""
         end
         local target_id = tostring(steam_id or "")
-        if target_id ~= "" and type(backend.friends_get_persona_name) == "function" then
-            local ok, name = pcall(backend.friends_get_persona_name, target_id)
+        if target_id ~= "" and type(backend.friends_get_friend_persona_name) == "function" then
+            local ok, name = pcall(backend.friends_get_friend_persona_name, target_id)
+            if ok and type(name) == "string" and name ~= "" then
+                return name
+            end
+        end
+        if target_id == "" and type(backend.friends_get_persona_name) == "function" then
+            local ok, name = pcall(backend.friends_get_persona_name)
             if ok and type(name) == "string" and name ~= "" then
                 return name
             end
@@ -1072,9 +1078,10 @@ function M.create(opts)
             state.local_steam_id = get_local_steam_id(backend)
             state.local_persona_name = get_persona_name(backend, "")
             log(state, string.format(
-                "MP STEAM GATEB | local_steam_id=%s mode=%s",
+                "MP STEAM GATEB | local_steam_id=%s mode=%s persona=%s",
                 tostring(state.local_steam_id),
-                tostring(state.pairing_mode or "host")
+                tostring(state.pairing_mode or "host"),
+                tostring(state.local_persona_name or "")
             ))
             request_lobby_list(state)
         end

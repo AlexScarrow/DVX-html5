@@ -887,7 +887,7 @@ end
 
 mp_lobby_sanitize_name = function(raw_name)
     local normalized = string.lower(tostring(raw_name or "host"))
-    normalized = string.gsub(normalized, "[^a-z]", "")
+    normalized = string.gsub(normalized, "[^a-z0-9]", "")
     if normalized == "" then
         normalized = "player"
     end
@@ -895,6 +895,14 @@ mp_lobby_sanitize_name = function(raw_name)
         normalized = string.sub(normalized, 1, MP_LOBBY_NAME_MAX_CHARS)
     end
     return normalized
+end
+
+mp_lobby_name_glyph_anim_id = function(ch)
+    ch = string.sub(string.lower(tostring(ch or "")), 1, 1)
+    if string.match(ch, "%d") then
+        return hash("score_" .. ch)
+    end
+    return hash("letter_" .. ch)
 end
 
 leaderboard_sanitize_name = function(raw_name, max_chars)
@@ -13448,7 +13456,7 @@ update_score_flow_team_names = function(self, visible)
                 return
             end
             local ch = string.sub(token, ci, ci)
-            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = mp_lobby_name_glyph_anim_id(ch) })
             set_ui_square_transform(
                 self,
                 glyph_id,
@@ -13583,7 +13591,7 @@ leaderboard_render_rows = function(self)
                     break
                 end
                 local ch = string.sub(draw_token, ci, ci)
-                msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+                msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = mp_lobby_name_glyph_anim_id(ch) })
                 set_ui_square_transform(
                     self,
                     glyph_id,
@@ -20182,7 +20190,7 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                                 break
                             end
                             local ch = string.sub(name_text, ci, ci)
-                            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+                            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = mp_lobby_name_glyph_anim_id(ch) })
                             set_ui_square_transform(
                                 self,
                                 glyph_id,
@@ -21529,7 +21537,7 @@ function update_flow_ui(self, dt)
                                 break
                             end
                             local ch = string.sub(label, ci, ci)
-                            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = hash("letter_" .. ch) })
+                            msg.post(msg.url(nil, glyph_id, "sprite"), "play_animation", { id = mp_lobby_name_glyph_anim_id(ch) })
                             set_ui_square_transform(
                                 self,
                                 glyph_id,

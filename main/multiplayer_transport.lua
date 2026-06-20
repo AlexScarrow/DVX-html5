@@ -905,6 +905,13 @@ function M.create(opts)
         return false
     end
 
+    function transport.steam_refresh_lobbies()
+        if state.steam_gateb and state.steam_gateb.refresh_lobbies then
+            return state.steam_gateb.refresh_lobbies() == true
+        end
+        return false
+    end
+
     function transport.steam_is_wire_ready()
         if state.steam_gateb and state.steam_gateb.is_wire_ready then
             return state.steam_gateb.is_wire_ready() == true

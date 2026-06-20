@@ -818,6 +818,10 @@ MP_LOBBY_CREATE_BTN_X = 1190
 MP_LOBBY_CREATE_BTN_Y = 46
 MP_LOBBY_CREATE_BTN_W = 140
 MP_LOBBY_CREATE_BTN_H = 52
+MP_LOBBY_REFRESH_BTN_X = MP_LOBBY_CREATE_BTN_X
+MP_LOBBY_REFRESH_BTN_Y = MP_LOBBY_CREATE_BTN_Y
+MP_LOBBY_REFRESH_BTN_W = MP_LOBBY_CREATE_BTN_W
+MP_LOBBY_REFRESH_BTN_H = MP_LOBBY_CREATE_BTN_H
 MP_LOBBY_PAGE_LEFT_X = 45
 MP_LOBBY_PAGE_LEFT_Y = 359
 MP_LOBBY_PAGE_RIGHT_X = 1235
@@ -867,6 +871,8 @@ MP_LOBBY_NAME_MAX_CHARS = 12
 MP_LOBBY_NAME_LETTER_SPACING = 7
 MP_LOBBY_NAME_BASE_Y_OFFSET = -57
 MP_LOBBY_NAME_SCALE = 0.25
+MP_LOBBY_REFRESH_LABEL_SCALE = 0.28
+MP_LOBBY_REFRESH_LABEL_SPACING = 8
 MP_LOBBY_COUNT_SCALE = MP_LOBBY_NAME_SCALE
 MP_LOBBY_COUNT_SPACING = MP_LOBBY_NAME_LETTER_SPACING
 MP_SETUP_NAME_MAX_CHARS = 12
@@ -12420,6 +12426,7 @@ local function initialize_unit_ui(self)
         flow_mp_lobby_host_private_art = nil,
         flow_mp_lobby_back_button = nil,
         flow_mp_lobby_name_letters = {},
+        flow_mp_lobby_refresh_letters = {},
         flow_mp_lobby_count_digits = {},
         flow_mp_setup_name_letters = {},
         flow_mp_lobby_pin_keys = {},
@@ -12825,6 +12832,9 @@ local function initialize_unit_ui(self)
     end
     for i = 1, (MP_LOBBY_SLOTS_PER_PAGE * MP_LOBBY_NAME_MAX_CHARS) do
         self.ui.flow_mp_lobby_name_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
+    end
+    for i = 1, 7 do
+        self.ui.flow_mp_lobby_refresh_letters[i] = create_ui_marker_sprite(hash("letter_a"), MP_SETUP_UI_Z + 0.004)
     end
     for i = 1, (MP_LOBBY_SLOTS_PER_PAGE * MP_LOBBY_COUNT_MAX_CHARS) do
         self.ui.flow_mp_lobby_count_digits[i] = create_ui_marker_sprite(hash("score_0"), MP_SETUP_UI_Z + 0.004)
@@ -13237,6 +13247,11 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
         end
     end
+    if self.ui.flow_mp_lobby_refresh_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_lobby_refresh_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
+    end
     if self.ui.flow_mp_lobby_count_digits then
         for _, digit_id in ipairs(self.ui.flow_mp_lobby_count_digits) do
             set_ui_square_transform(self, digit_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
@@ -13280,6 +13295,7 @@ multiplayer_is_mp_status_advisory = function(anim_id)
         or anim_id == ADVISORY_ANIM_MP_UPDATE_NOT_ALLOWED
         or anim_id == ADVISORY_ANIM_MP_WAITING_GUEST_SYNC
         or anim_id == ADVISORY_ANIM_MP_SESSION_FULL
+        or anim_id == ADVISORY_ANIM_TRY_AGAIN
 end
 
 show_mp_lobby_advisory = function(self, duration_s, advisory_kind)
@@ -13300,6 +13316,8 @@ show_mp_lobby_advisory = function(self, duration_s, advisory_kind)
         anim_id = ADVISORY_ANIM_MP_WAITING_GUEST_SYNC
     elseif kind == "session_full" then
         anim_id = ADVISORY_ANIM_MP_SESSION_FULL
+    elseif kind == "try_again" then
+        anim_id = ADVISORY_ANIM_TRY_AGAIN
     end
     self.advisory_anim_id = anim_id
     self.advisory_timer_s = tonumber(duration_s or ADVISORY_DEFAULT_DURATION) or ADVISORY_DEFAULT_DURATION
@@ -17174,6 +17192,8 @@ multiplayer_host_start_match_from_setup = function(self)
         multiplayer_transport_broadcast_event(self, "lobby_offer_remove", {
             offer_id = active_offer_id,
             owner_player_id = tostring(self.mp_state.host_player_id or self.mp_state.local_player_id or "p1"),
+            reason = "launched",
+            lobby_status = MP_SESSION_TICKET.LOBBY_STATUS_LAUNCHED,
             removed_at_ms = get_wall_clock_ms()
         })
         multiplayer_lobby_clear_steam_discovery_if_host(self)
@@ -18739,7 +18759,9 @@ multiplayer_lobby_complete_pending_steam_join = function(self)
     multiplayer_transport_send_command(self, "lobby_join_session", join_payload, self.mp_state.local_player_id or "p1")
     lobby.pending_join_wire_sent = true
     lobby.pending_join_wire_session_id = pending_id
-    lobby.pin_join_wire_timeout_timer = 0
+    if (tonumber(lobby.pin_join_wire_timeout_timer or 0) or 0) <= 0 then
+        lobby.pin_join_wire_timeout_timer = MP_LOBBY_PIN_JOIN_WIRE_TIMEOUT_S
+    end
     multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_JOIN_WIRE_PENDING, {
         session = pending_id
     })
@@ -18791,6 +18813,7 @@ multiplayer_lobby_request_join_session = function(self, session)
     lobby.pending_join_session_id = session_id
     lobby.pending_join_wire_sent = false
     lobby.pending_join_wire_session_id = ""
+    lobby.pin_join_wire_timeout_timer = MP_LOBBY_PIN_JOIN_WIRE_TIMEOUT_S
     multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_STEAM_JOINING, {
         session = session_id
     })
@@ -18814,6 +18837,8 @@ multiplayer_lobby_request_join_session = function(self, session)
         multiplayer_lobby_join_wire_payload(self, session_id),
         self.mp_state.local_player_id or "p1"
     )
+    lobby.pending_join_wire_sent = true
+    lobby.pending_join_wire_session_id = session_id
     return true
 end
 
@@ -18901,6 +18926,11 @@ multiplayer_lobby_chooser_render_ui = function(self, dt, hidden)
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
         end
     end
+    if self.ui.flow_mp_lobby_refresh_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_lobby_refresh_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+        end
+    end
 end
 
 multiplayer_lobby_chooser_handle_touch = function(self, input_x, input_y)
@@ -18958,8 +18988,16 @@ multiplayer_lobby_republish_steam_discovery_if_host = function(self)
     if status ~= "published_open" and status ~= "published_private" then
         return false
     end
+    local steam_lobby_id = ""
     if self.mp_transport and self.mp_transport.steam_get_lobby_id then
-        session.steam_lobby_id = tostring(self.mp_transport.steam_get_lobby_id() or "")
+        steam_lobby_id = tostring(self.mp_transport.steam_get_lobby_id() or "")
+        session.steam_lobby_id = steam_lobby_id
+    end
+    if steam_lobby_id == "" then
+        if self.mp_transport and self.mp_transport.steam_request_create_lobby then
+            self.mp_transport.steam_request_create_lobby()
+        end
+        return false
     end
     if self.mp_transport and self.mp_transport.steam_publish_session then
         return self.mp_transport.steam_publish_session(session) == true
@@ -19424,6 +19462,27 @@ multiplayer_lobby_tick_offer_presence = function(self, dt)
         lobby.steam_discovery_republish_timer = 3
         multiplayer_lobby_republish_steam_discovery_if_host(self)
     end
+end
+
+multiplayer_lobby_request_find_refresh = function(self)
+    if not (self and self.mp_lobby and multiplayer_lobby_is_find_intent(self)) then
+        return false
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    local lobby = self.mp_lobby
+    if tostring(lobby.pending_join_session_id or "") ~= "" then
+        show_mp_lobby_advisory(self, 1.2, "joining")
+        return true
+    end
+    lobby.discovery_browse_count = 0
+    lobby.discovery_session_count = -1
+    lobby.discovery_refresh_requested_ms = get_wall_clock_ms()
+    if self.mp_transport and self.mp_transport.steam_refresh_lobbies then
+        self.mp_transport.steam_refresh_lobbies()
+    end
+    show_mp_lobby_advisory(self, 1.6, "find")
+    multiplayer_debug_log(self, "MP LOBBY | finder_refresh_requested")
+    return true
 end
 
 multiplayer_lobby_merge_incoming_offer_fields = function(existing_offer, offer)
@@ -19956,6 +20015,15 @@ multiplayer_lobby_publish_host_draft = function(self, private_pin)
     lobby.offers_by_id[tostring(session.id or "")] = session
     lobby.pending_join_session_id = ""
     multiplayer_lobby_sync_sessions_from_offers(self)
+    if tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam"
+        and self.mp_transport
+        and self.mp_transport.steam_get_lobby_id
+        and tostring(self.mp_transport.steam_get_lobby_id() or "") == ""
+        and self.mp_transport.steam_request_create_lobby
+    then
+        self.mp_transport.steam_request_create_lobby()
+    end
+    lobby.steam_discovery_republish_timer = 0
     multiplayer_lobby_emit_offer_upsert(self, session)
     return multiplayer_lobby_enter_mp_setup_from_session(self, session)
 end
@@ -20085,6 +20153,62 @@ multiplayer_lobby_abort_guest_join = function(self)
     end
 end
 
+multiplayer_lobby_force_guest_disconnect = function(self, reason, target_flow, advisory_kind)
+    if not (self and self.mp_state and self.mp_state.enabled and self.mp_lobby) then
+        return false
+    end
+    if multiplayer_lobby_is_session_host(self) then
+        return false
+    end
+    multiplayer_lobby_ensure_runtime(self)
+    local lobby = self.mp_lobby
+    local session_id = tostring(lobby.pending_join_session_id or "")
+    if session_id == "" then
+        session_id = multiplayer_lobby_get_lobby_ticket_id(self)
+    end
+    if session_id ~= "" and session_id ~= "local_session" then
+        multiplayer_lobby_guest_prune_local_offer_membership(self, session_id)
+    end
+    local local_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "")
+    if local_id ~= "" and lobby.setup_sync_player_ids then
+        lobby.setup_sync_player_ids[local_id] = nil
+    end
+    lobby.pending_join_session_id = ""
+    lobby.pending_steam_lobby_id = ""
+    lobby.pending_join_wire_sent = false
+    lobby.pending_join_wire_session_id = ""
+    lobby.guest_setup_sync_epoch = 0
+    lobby.guest_setup_sync_last_requested_epoch = 0
+    lobby.pairing_intent = "find"
+    multiplayer_lobby_clear_pin_join_state(self)
+    self.mp_state.lobby_ticket_id = ""
+    self.mp_state.session_id = "local_session"
+    multiplayer_apply_steam_lobby_wire_defaults(self)
+    if self.mp_transport and self.mp_transport.steam_leave_lobby then
+        pcall(self.mp_transport.steam_leave_lobby)
+    end
+    multiplayer_reset_steam_wire_handshake(self)
+    multiplayer_lobby_lifecycle_guest(self, MP_LOBBY_LIFECYCLE.GUEST_DISCONNECTED, {
+        reason = tostring(reason or "guest_disconnect")
+    })
+    self.multiplayer_mode_active = true
+    if tostring(target_flow or "chooser") == "lobby" then
+        enter_flow_state(self, FLOW_STATE_MP_LOBBY)
+        if advisory_kind and advisory_kind ~= "" then
+            show_mp_lobby_advisory(self, 2.4, advisory_kind)
+        end
+    else
+        enter_flow_state(self, FLOW_STATE_MP_CHOOSER)
+    end
+    multiplayer_debug_log(self, string.format(
+        "MP LOBBY | guest_force_disconnect reason=%s session=%s flow=%s",
+        tostring(reason or ""),
+        tostring(session_id or ""),
+        tostring(target_flow or "chooser")
+    ))
+    return true
+end
+
 multiplayer_lobby_restore_pin_join_after_reject = function(self, session_id, reason)
     if not (self and self.mp_lobby) then
         return
@@ -20112,15 +20236,18 @@ end
 
 multiplayer_lobby_update_pin_join_wire_timeout = function(self, dt)
     local lobby = self.mp_lobby
-    if not lobby or lobby.pin_mode ~= "join_locked" then
+    if not lobby then
+        return
+    end
+    local pending_id = tostring(lobby.pending_join_session_id or "")
+    if pending_id == "" then
         if lobby then
             lobby.pin_join_wire_timeout_timer = 0
         end
         return
     end
-    local pending_id = tostring(lobby.pending_join_session_id or "")
     local timer = tonumber(lobby.pin_join_wire_timeout_timer or 0) or 0
-    if pending_id == "" or timer <= 0 or lobby.pending_join_wire_sent == true then
+    if timer <= 0 then
         return
     end
     timer = math.max(0, timer - (dt or 0))
@@ -20130,7 +20257,7 @@ multiplayer_lobby_update_pin_join_wire_timeout = function(self, dt)
             "MP LOBBY | pin_join_wire_timeout session=%s",
             pending_id
         ))
-        multiplayer_lobby_restore_pin_join_after_reject(self, pending_id, "wire_timeout")
+        multiplayer_lobby_force_guest_disconnect(self, "join_timeout", "lobby", "try_again")
     end
 end
 
@@ -20279,7 +20406,42 @@ multiplayer_lobby_hide_non_lobby_ui = function(self, hidden)
     set_ui_square_transform(self, self.ui.flow_mp_chooser_find_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
 end
 
-multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_tint, host_info_tint)
+multiplayer_lobby_render_refresh_label = function(self, hidden)
+    local letters = self.ui and self.ui.flow_mp_lobby_refresh_letters or nil
+    if not letters then
+        return
+    end
+    for _, letter_id in ipairs(letters) do
+        set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
+    end
+    if not multiplayer_lobby_is_find_intent(self) then
+        return
+    end
+    local text = "refresh"
+    local span = (#text - 1) * MP_LOBBY_REFRESH_LABEL_SPACING
+    local start_x = MP_LOBBY_REFRESH_BTN_X - (span * 0.5)
+    local y = mp_lobby_y(MP_LOBBY_REFRESH_BTN_Y - 25)
+    for ci = 1, #text do
+        local letter_id = letters[ci]
+        if not letter_id then
+            break
+        end
+        local ch = string.sub(text, ci, ci)
+        msg.post(msg.url(nil, letter_id, "sprite"), "play_animation", { id = mp_lobby_name_glyph_anim_id(ch) })
+        set_ui_square_transform(
+            self,
+            letter_id,
+            start_x + ((ci - 1) * MP_LOBBY_REFRESH_LABEL_SPACING),
+            y,
+            MP_SETUP_UI_Z + 0.004,
+            vmath.vector4(1, 1, 1, 0.95),
+            MP_LOBBY_REFRESH_LABEL_SCALE,
+            MP_LOBBY_REFRESH_LABEL_SCALE
+        )
+    end
+end
+
+multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_tint, host_info_tint, hidden)
     local boxes = self.ui and self.ui.flow_mp_lobby_boxes or nil
     if not boxes then
         return
@@ -20306,7 +20468,12 @@ multiplayer_lobby_render_nav_and_actions = function(self, create_tint, page_btn_
             MP_LOBBY_BACK_BTN_H * 0.021
         )
     end
-    set_ui_square_transform(self, boxes[2], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
+    if find_intent then
+        set_ui_square_transform(self, boxes[2], MP_LOBBY_REFRESH_BTN_X, mp_lobby_y(MP_LOBBY_REFRESH_BTN_Y - 25), MP_SETUP_UI_Z, create_tint, MP_LOBBY_REFRESH_BTN_W, MP_LOBBY_REFRESH_BTN_H)
+    else
+        set_ui_square_transform(self, boxes[2], -9999, -9999, MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CREATE_BTN_W, MP_LOBBY_CREATE_BTN_H)
+    end
+    multiplayer_lobby_render_refresh_label(self, hidden or vmath.vector4(0, 0, 0, 0))
     set_ui_square_transform(self, boxes[3], MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[4], MP_LOBBY_PAGE_RIGHT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_SETUP_UI_Z, page_btn_tint, MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H)
     set_ui_square_transform(self, boxes[5], MP_LOBBY_PAGE_LABEL_X, mp_lobby_y(MP_LOBBY_PAGE_LABEL_Y), MP_SETUP_UI_Z, vmath.vector4(0, 0, 0, 0), MP_LOBBY_PAGE_LABEL_W, MP_LOBBY_PAGE_LABEL_H)
@@ -20553,7 +20720,8 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
         self,
         create_tint,
         page_btn_tint,
-        host_info_tint
+        host_info_tint,
+        hidden
     )
     local only_incompatible_published = published_total > 0 and compatible_total == 0
     if only_incompatible_published and lobby.pin_mode == "" then
@@ -22124,6 +22292,11 @@ multiplayer_lobby_handle_touch = function(self, input_x, input_y)
         self.mp_transport = nil
         enter_flow_state(self, FLOW_STATE_TITLE)
         return true
+    end
+    if multiplayer_lobby_is_find_intent(self)
+        and is_point_in_screen_rect(input_x, input_y, MP_LOBBY_REFRESH_BTN_X, mp_lobby_y(MP_LOBBY_REFRESH_BTN_Y - 25), MP_LOBBY_REFRESH_BTN_W, MP_LOBBY_REFRESH_BTN_H)
+    then
+        return multiplayer_lobby_request_find_refresh(self)
     end
     if is_point_in_screen_rect(input_x, input_y, MP_LOBBY_PAGE_LEFT_X, mp_lobby_y(MP_LOBBY_HOST_OPEN_BTN_Y), MP_LOBBY_PAGE_BTN_W, MP_LOBBY_PAGE_BTN_H) then
         lobby.page_index = math.max(1, (tonumber(lobby.page_index or 1) or 1) - 1)
@@ -29008,9 +29181,23 @@ multiplayer_transport_on_event = function(self, event)
             return
         end
         local offer_id = event.payload and event.payload.offer_id or ""
+        local remove_reason = tostring(event.payload and event.payload.reason or "")
+        local remove_status = tostring(event.payload and event.payload.lobby_status or "")
+        local is_launch_remove = remove_reason == "launched"
+            or remove_status == MP_SESSION_TICKET.LOBBY_STATUS_LAUNCHED
+        local ticket_id = multiplayer_lobby_get_lobby_ticket_id(self)
+        local pending_id = tostring(self.mp_lobby and self.mp_lobby.pending_join_session_id or "")
+        local pin_target_id = tostring(self.mp_lobby and self.mp_lobby.pin_target_session_id or "")
+        local should_disconnect = not multiplayer_lobby_is_session_host(self)
+            and not is_launch_remove
+            and offer_id ~= ""
+            and (offer_id == ticket_id or offer_id == pending_id or offer_id == pin_target_id)
         local removed_at_ms = tonumber(event.payload and event.payload.removed_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
         multiplayer_lobby_note_offer_removed(self, offer_id, removed_at_ms)
         multiplayer_lobby_apply_offer_remove(self, offer_id)
+        if should_disconnect then
+            multiplayer_lobby_force_guest_disconnect(self, "offer_removed", "chooser")
+        end
         return
     end
     if event.type == "lobby_offer_join_request" then
@@ -29120,16 +29307,16 @@ multiplayer_transport_on_event = function(self, event)
     if event.type == "lobby_session_closed" then
         local closed_session_id = tostring(event.payload and event.payload.session_id or "")
         local local_session_id = tostring(self.mp_state and self.mp_state.session_id or "")
+        local ticket_id = multiplayer_lobby_get_lobby_ticket_id(self)
+        local pending_id = tostring(self.mp_lobby and self.mp_lobby.pending_join_session_id or "")
         local is_client = self.mp_state and self.mp_state.local_player_id ~= self.mp_state.host_player_id
-        if is_client and closed_session_id ~= "" and local_session_id ~= "" and closed_session_id == local_session_id then
-            multiplayer_lobby_ensure_runtime(self)
-            self.mp_state.lobby_ticket_id = ""
-            self.mp_state.session_id = "local_session"
-            multiplayer_apply_steam_lobby_wire_defaults(self)
-            multiplayer_lobby_abort_guest_join(self)
-            self.multiplayer_mode_active = true
-            enter_flow_state(self, FLOW_STATE_MP_LOBBY)
-            print("MP LOBBY | host closed session, client ejected to lobby.")
+        if is_client and closed_session_id ~= "" and (
+            closed_session_id == local_session_id
+            or closed_session_id == ticket_id
+            or closed_session_id == pending_id
+        ) then
+            multiplayer_lobby_force_guest_disconnect(self, "session_closed", "chooser")
+            print("MP LOBBY | host closed session, client ejected to chooser.")
         end
         return
     end
@@ -30505,6 +30692,8 @@ multiplayer_transport_init = function(self)
                 multiplayer_lobby_on_discovery_browse(self, detail)
             elseif status == "host_lobby_created" then
                 multiplayer_lobby_republish_steam_discovery_if_host(self)
+            elseif status == "lobby_host_lost" then
+                multiplayer_lobby_force_guest_disconnect(self, "host_lost", "chooser")
             elseif status == "gatec_ok" then
                 multiplayer_lobby_on_wire_ready(self)
                 multiplayer_lobby_prune_steam_disconnected_guests(self)

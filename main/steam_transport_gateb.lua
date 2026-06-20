@@ -491,6 +491,7 @@ local steam_listener_installed = false
         state.ping_sent_peers = {}
         state.peer_steam_id = nil
         state.peer_resolve_logged = false
+        state.host_lost_notified = false
     end
 
     local function create_gate_lobby(state)
@@ -911,6 +912,7 @@ function M.create(opts)
             state.ping_sent_peers = {}
             state.peer_steam_id = nil
             state.peer_resolve_logged = false
+            state.host_lost_notified = false
             state.pass_seq = 1
             if state.phase == "passed" or state.phase == "in_lobby" then
                 state.phase = is_find_pairing_mode(state) and "searching" or "idle"
@@ -931,6 +933,7 @@ function M.create(opts)
             state.ping_sent_peers = {}
             state.peer_steam_id = nil
             state.peer_resolve_logged = false
+            state.host_lost_notified = false
             state.pass_seq = 1
             join_gate_lobby(state, lobby_id)
             log(state, string.format("MP STEAM GATEB | lobby_rejoin_requested id=%s", tostring(lobby_id)))
@@ -958,6 +961,7 @@ function M.create(opts)
             state.ping_sent_peers = {}
             state.peer_steam_id = nil
             state.peer_resolve_logged = false
+            state.host_lost_notified = false
             state.pass_seq = 1
             if is_valid_steam_id(state.lobby_id) then
                 state.phase = "in_lobby"
@@ -983,6 +987,12 @@ function M.create(opts)
             return true
         end
 
+        function gateb.refresh_lobbies()
+            state.discovery_timer = FIND_DISCOVERY_REFRESH_SECONDS
+            refresh_discovery_list(state)
+            return true
+        end
+
         function gateb.restart()
             state.phase = "idle"
             state.peer_steam_id = nil
@@ -1000,6 +1010,7 @@ function M.create(opts)
             state.empty_search_count = 0
             state.create_pending = false
             state.peer_resolve_logged = false
+            state.host_lost_notified = false
             state.discovery_seen_ids = {}
             state.discovery_clear_miss_by_lobby = {}
             state.discovery_refresh_only = false
@@ -1145,9 +1156,16 @@ function M.create(opts)
                                 lobby_id = tostring(state.lobby_id or ""),
                                 member_count = member_count
                             })
+                        elseif state.is_host ~= true and state.host_lost_notified ~= true and state.on_status then
+                            state.host_lost_notified = true
+                            pcall(state.on_status, "lobby_host_lost", {
+                                lobby_id = tostring(state.lobby_id or ""),
+                                member_count = member_count
+                            })
                         end
                     elseif member_count >= 2 then
                         state.lobby_alone_notified = false
+                        state.host_lost_notified = false
                     end
                 end
             end

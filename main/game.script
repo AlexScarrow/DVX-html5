@@ -7618,6 +7618,9 @@ spawn_pressure_trigger_matches = function(self, trigger)
             end
         end
         return false
+    elseif kind == "dna_brute_alive_on_lab_cells" then
+        local brute_target_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DNA_BRUTE_LOCAL_CELLS)
+        return has_alive_brute_on_any_cell(self, build_cell_lookup(brute_target_cells))
     elseif kind == "dna_sample_spawned" then
         return self and (self.dna_sample_spawned == true or self.dna_sample_returned == true)
     elseif kind == "purge_bomb_planted" then
@@ -7800,7 +7803,7 @@ get_spawn_pressure_profile = function(self)
         local extra_by_tier = (SPAWN_PRESSURE_DEFAULTS and SPAWN_PRESSURE_DEFAULTS.escape_extra_spawn_by_tier) or DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER or {}
         extra_spawn = tonumber(extra_by_tier[tier] or 0) or 0
     end
-    if mission_type == MISSION_TYPE_CLEANSE then
+    if mission_type == MISSION_TYPE_CLEANSE and get_current_level_spawn_pressure_config(self) == nil then
         local status = CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status and CLEANSE_RUNTIME.cleanse_get_status(self) or nil
         local weeds = tonumber(status and status.weed_count or 0) or 0
         if weeds >= 8 then

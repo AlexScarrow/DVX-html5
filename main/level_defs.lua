@@ -32,6 +32,14 @@ function M.create_level_library()
     levels[1].mission_type = "escape"
     levels[1].spawn_tile = "entry"
     levels[1].spawn_cell = 2
+    levels[1].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "launch_objectives_satisfied_at_least", value = 1 },
+            { tier = 2, kind = "launch_objectives_satisfied_at_least", value = 2 },
+            { tier = 3, kind = "launch_objectives_satisfied_at_least", value = 3 },
+        }
+    }
     levels[1].unit_loadouts = {
         sarge = {
             starting_backpack_items = {},
@@ -72,7 +80,10 @@ function M.create_level_library()
     levels[2].mission_type = "rescue"
     levels[2].spawn_tile = "rescue_entry"
     levels[2].spawn_cell = 2
-levels[2].spawn_pressure_fixed_tier = 0
+    levels[2].spawn_pressure = {
+        enabled = true,
+        fixed_tier = 0
+    }
     levels[2].unit_loadouts = {
         sarge = {
             starting_backpack_items = {},
@@ -147,6 +158,14 @@ levels[3] = {
 levels[3].mission_type = "dna_sample"
 levels[3].spawn_tile = "rescue_entry"
 levels[3].spawn_cell = 2
+levels[3].spawn_pressure = {
+    enabled = true,
+    triggers = {
+        { tier = 1, kind = "dna_lab_powered" },
+        { tier = 2, kind = "dna_brute_alive_on_lab_cells" },
+        { tier = 3, kind = "dna_sample_spawned" },
+    }
+}
 --levels[3].unit_loadouts = levels[1].unit_loadouts
 levels[3].unit_loadouts = {
     sarge = {
@@ -190,6 +209,14 @@ levels[4] = {
     levels[4].mission_type = "purge"
     levels[4].spawn_tile = "rescue_entry"
     levels[4].spawn_cell = 2
+    levels[4].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "unit_adjacent_to_tile", tile = "portal" },
+            { tier = 2, kind = "unit_on_tile", tile = "portal" },
+            { tier = 3, kind = "purge_bomb_planted" },
+        }
+    }
     levels[4].unit_loadouts = {
         sarge = {
             starting_backpack_items = { "bomb" },
@@ -235,6 +262,10 @@ levels[4] = {
     levels[5].mission_type = "tutorial"
     levels[5].spawn_tile = "entry"
     levels[5].spawn_cell = 2
+    levels[5].spawn_pressure = {
+        enabled = true,
+        fixed_tier = 0
+    }
     levels[5].unit_loadouts = {
         sarge = {
             starting_backpack_items = {"power","ammo","ammo" },
@@ -293,6 +324,14 @@ levels[4] = {
     levels[6].mission_type = "escape"
     levels[6].spawn_tile = "entry"
     levels[6].spawn_cell = 2
+    levels[6].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "launch_objectives_satisfied_at_least", value = 1 },
+            { tier = 2, kind = "launch_objectives_satisfied_at_least", value = 2 },
+            { tier = 3, kind = "launch_objectives_satisfied_at_least", value = 3 },
+        }
+    }
     levels[6].unit_loadouts = levels[1].unit_loadouts
 
     levels[7] = {
@@ -317,6 +356,14 @@ levels[4] = {
     levels[7].mission_type = "escape"
     levels[7].spawn_tile = "entry"
     levels[7].spawn_cell = 2
+    levels[7].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "launch_objectives_satisfied_at_least", value = 1 },
+            { tier = 2, kind = "launch_objectives_satisfied_at_least", value = 2 },
+            { tier = 3, kind = "launch_objectives_satisfied_at_least", value = 3 },
+        }
+    }
     levels[7].unit_loadouts = levels[1].unit_loadouts
 
     levels[8] = {
@@ -341,6 +388,14 @@ levels[4] = {
     levels[8].mission_type = "purge"
     levels[8].spawn_tile = "rescue_entry"
     levels[8].spawn_cell = 2
+    levels[8].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "unit_adjacent_to_tile", tile = "portal" },
+            { tier = 2, kind = "unit_on_tile", tile = "portal" },
+            { tier = 3, kind = "purge_bomb_planted" },
+        }
+    }
     --levels[8].unit_loadouts = levels[1].unit_loadouts
     levels[8].unit_loadouts = {
         sarge = {
@@ -385,6 +440,14 @@ levels[4] = {
     levels[9].mission_type = "rescue"
     levels[9].spawn_tile = "rescue_entry"
     levels[9].spawn_cell = 2
+    levels[9].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "civilian_awake_count_at_least", value = 1 },
+            { tier = 2, kind = "all_living_civilians_awake" },
+            { tier = 3, kind = "civilian_adjacent_to_exit" },
+        }
+    }
     levels[9].unit_loadouts = levels[1].unit_loadouts
 
     levels[10] = {
@@ -409,6 +472,14 @@ levels[4] = {
     levels[10].mission_type = "dna_sample"
     levels[10].spawn_tile = "rescue_entry"
     levels[10].spawn_cell = 2
+    levels[10].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "dna_lab_powered" },
+            { tier = 2, kind = "dna_brute_alive_on_lab_cells" },
+            { tier = 3, kind = "dna_sample_spawned" },
+        }
+    }
     --levels[10].unit_loadouts = levels[3].unit_loadouts
     levels[10].unit_loadouts = {
         sarge = {
@@ -455,6 +526,14 @@ levels[4] = {
     levels[11].mission_type = "purge"
     levels[11].spawn_tile = "rescue_entry"
     levels[11].spawn_cell = 2
+    levels[11].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "unit_adjacent_to_tile", tile = "portal" },
+            { tier = 2, kind = "unit_on_tile", tile = "portal" },
+            { tier = 3, kind = "purge_bomb_planted" },
+        }
+    }
     levels[11].unit_loadouts = {
         sarge = {
             starting_backpack_items = { "bomb", "bomb" },
@@ -496,6 +575,14 @@ levels[4] = {
     levels[12].mission_type = "dna_sample"
     levels[12].spawn_tile = "rescue_entry"
     levels[12].spawn_cell = 2
+    levels[12].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "dna_lab_powered" },
+            { tier = 2, kind = "dna_brute_alive_on_lab_cells" },
+            { tier = 3, kind = "dna_sample_spawned" },
+        }
+    }
     levels[12].unit_loadouts = levels[1].unit_loadouts
 
     levels[13] = {
@@ -520,6 +607,14 @@ levels[4] = {
     levels[13].mission_type = "escape"
     levels[13].spawn_tile = "entry"
     levels[13].spawn_cell = 2
+    levels[13].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "launch_objectives_satisfied_at_least", value = 1 },
+            { tier = 2, kind = "launch_objectives_satisfied_at_least", value = 2 },
+            { tier = 3, kind = "launch_objectives_satisfied_at_least", value = 3 },
+        }
+    }
     levels[13].unit_loadouts = levels[1].unit_loadouts
 
     levels[14] = {
@@ -543,6 +638,14 @@ levels[4] = {
     levels[14].mission_type = "rescue"
     levels[14].spawn_tile = "rescue_entry"
     levels[14].spawn_cell = 2
+    levels[14].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "civilian_awake_count_at_least", value = 1 },
+            { tier = 2, kind = "all_living_civilians_awake" },
+            { tier = 3, kind = "civilian_adjacent_to_exit" },
+        }
+    }
     levels[14].unit_loadouts = levels[1].unit_loadouts
 
     levels[15] = {
@@ -569,6 +672,14 @@ levels[4] = {
     levels[15].mission_type = "cleanse"
     levels[15].spawn_tile = "rescue_entry"
     levels[15].spawn_cell = 2
+    levels[15].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "weed_count_at_least", value = 8 },
+            { tier = 2, kind = "weed_count_at_least", value = 18 },
+            { tier = 3, kind = "weed_count_at_least", value = 32 },
+        }
+    }
     levels[15].unit_loadouts = {
         sarge = {
             starting_backpack_items = { "bomb" },
@@ -616,6 +727,14 @@ levels[4] = {
     levels[16].mission_type = "cleanse"
     levels[16].spawn_tile = "rescue_entry"
     levels[16].spawn_cell = 2
+    levels[16].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "weed_count_at_least", value = 8 },
+            { tier = 2, kind = "weed_count_at_least", value = 18 },
+            { tier = 3, kind = "weed_count_at_least", value = 32 },
+        }
+    }
     levels[16].unit_loadouts = {
         sarge = {
             starting_backpack_items = { "bomb", "bomb" },
@@ -663,6 +782,14 @@ levels[4] = {
     levels[17].mission_type = "dna_sample"
     levels[17].spawn_tile = "rescue_entry"
     levels[17].spawn_cell = 2
+    levels[17].spawn_pressure = {
+        enabled = true,
+        triggers = {
+            { tier = 1, kind = "dna_lab_powered" },
+            { tier = 2, kind = "dna_brute_alive_on_lab_cells" },
+            { tier = 3, kind = "dna_sample_spawned" },
+        }
+    }
     levels[17].unit_loadouts = levels[1].unit_loadouts
 
     levels[18] = {
@@ -729,6 +856,15 @@ levels[4] = {
     levels[19].spawn_tile = "rescue_entry"
     levels[19].spawn_cell = 2
     levels[19].unit_loadouts = levels[1].unit_loadouts
+    levels[19].spawn_pressure = {
+        enabled = true,
+        active_alien_cap = 16,
+        triggers = {
+            { tier = 1, kind = "holdout_turns_remaining_at_most", value = 42 },
+            { tier = 2, kind = "holdout_turns_remaining_at_most", value = 24 },
+            { tier = 3, kind = "holdout_turns_remaining_at_most", value = 12 },
+        }
+    }
 
     levels[20] = {
         { x = 4, y = 14, tile = "coms" },
@@ -759,6 +895,15 @@ levels[4] = {
     levels[20].spawn_tile = "rescue_entry"
     levels[20].spawn_cell = 2
     levels[20].unit_loadouts = levels[1].unit_loadouts
+    levels[20].spawn_pressure = {
+        enabled = true,
+        active_alien_cap = 16,
+        triggers = {
+            { tier = 1, kind = "holdout_turns_remaining_at_most", value = 49 },
+            { tier = 2, kind = "holdout_turns_remaining_at_most", value = 28 },
+            { tier = 3, kind = "holdout_turns_remaining_at_most", value = 14 },
+        }
+    }
     
     return levels
 end

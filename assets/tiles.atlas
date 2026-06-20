@@ -699,6 +699,9 @@ images {
   image: "/assets/images/launch_button.png"
 }
 images {
+  image: "/assets/images/survived_button.png"
+}
+images {
   image: "/assets/images/ready_button.png"
 }
 images {

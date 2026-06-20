@@ -7872,10 +7872,12 @@ holdout_reset_runtime = function(self)
     if holdout_is_active_mission(self) then
         self.holdout_turns_remaining = configured_turns
         self.holdout_timer_started = true
+        self.holdout_survival_pending = false
         self.holdout_result_locked = false
     else
         self.holdout_turns_remaining = 0
         self.holdout_timer_started = false
+        self.holdout_survival_pending = false
         self.holdout_result_locked = false
     end
 end
@@ -7902,8 +7904,36 @@ holdout_get_mission_status = function(self)
         remaining_turns = remaining_turns,
         configured_turns = configured_turns,
         expired = remaining_turns <= 0,
+        survival_pending = self and self.holdout_survival_pending == true,
         result_locked = self and self.holdout_result_locked == true
     }
+end
+
+holdout_has_survived_pending_confirmation = function(self)
+    return holdout_is_active_mission(self)
+        and self
+        and self.holdout_survival_pending == true
+        and self.holdout_result_locked ~= true
+end
+
+holdout_confirm_survival_if_ready = function(self)
+    if not holdout_has_survived_pending_confirmation(self) then
+        return false
+    end
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        return false
+    end
+    if holdout_get_alive_human_count(self) <= 0 then
+        print("HOLDOUT | survival confirmation blocked; no living humans.")
+        return false
+    end
+    self.holdout_survival_pending = false
+    self.holdout_result_locked = true
+    self.game_won = true
+    score_record_holdout_success(self, holdout_get_alive_human_count(self))
+    print("HOLDOUT | SUCCESS confirmed by host.")
+    enter_mission_outro(self, "win", "holdout_survived")
+    return true
 end
 
 holdout_tick_turn_countdown_if_needed = function(self)
@@ -7940,11 +7970,8 @@ holdout_tick_turn_countdown_if_needed = function(self)
         print("HOLDOUT | countdown expired with no living humans.")
         return false
     end
-    self.holdout_result_locked = true
-    self.game_won = true
-    score_record_holdout_success(self, holdout_get_alive_human_count(self))
-    print("HOLDOUT | SUCCESS survived countdown.")
-    enter_mission_outro(self, "win", "holdout_survived")
+    self.holdout_survival_pending = true
+    print("HOLDOUT | countdown survived; awaiting host confirmation.")
     return true
 end
 
@@ -22610,6 +22637,7 @@ finish_level_load_after_clear = function(self, level_index)
     self.holdout_configured_turns = 0
     self.holdout_turns_remaining = 0
     self.holdout_timer_started = false
+    self.holdout_survival_pending = false
     self.holdout_result_locked = false
     self.cleanse_state = {}
     self.end_result = ""
@@ -23066,12 +23094,16 @@ function update_global_ui_buttons(self)
         end
     end
     local launch_status = LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
-    local launch_enabled = self.game_won or (launch_status and launch_status.can_launch)
+    local holdout_survival_pending = holdout_has_survived_pending_confirmation(self)
+    local launch_enabled = self.game_won or holdout_survival_pending or (launch_status and launch_status.can_launch)
     local client_no_launch_authority = self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id
     if client_no_launch_authority then
         launch_enabled = false
     end
     local launch_anim = launch_enabled and hash("launch_button") or hash("disabled_button")
+    if holdout_survival_pending and not client_no_launch_authority then
+        launch_anim = hash("survived_button")
+    end
     pcall(msg.post, msg.url(nil, self.ui.launch_button_art, "sprite"), "play_animation", { id = launch_anim })
     local realtime_btn_color = (REALTIME_TOGGLE_BUTTON_DISABLED == true)
         and vmath.vector4(0.4, 0.4, 0.4, 0.9)
@@ -31348,6 +31380,9 @@ function try_launch_button(self, screen_x, screen_y)
             print("Launch is host-only in multiplayer.")
             return true
         end
+        if holdout_confirm_survival_if_ready(self) then
+            return true
+        end
         if LOOT_RUNTIME.try_launch_escape_pod then
             local launched = LOOT_RUNTIME.try_launch_escape_pod(self)
             if launched then
@@ -32313,7 +32348,7 @@ get_alien_turn_overlay_scale_multiplier = function()
     end
     local sx = (tonumber(win_w or SCREEN_WIDTH) or SCREEN_WIDTH) / SCREEN_WIDTH
     local sy = (tonumber(win_h or SCREEN_HEIGHT) or SCREEN_HEIGHT) / SCREEN_HEIGHT
-    return math.max(1, math.min(1.65, math.max(sx, sy) * 0.85))
+    return math.max(1, math.min(1.8, math.max(sx, sy) * 0.935))
 end
 
 local function update_single_unit_movement(self, unit, dt)
@@ -33290,6 +33325,7 @@ multiplayer_build_snapshot_state = function(self)
         holdout_configured_turns = tonumber(self.holdout_configured_turns or 0) or 0,
         holdout_turns_remaining = tonumber(self.holdout_turns_remaining or 0) or 0,
         holdout_timer_started = self.holdout_timer_started == true,
+        holdout_survival_pending = self.holdout_survival_pending == true,
         holdout_result_locked = self.holdout_result_locked == true,
         end_result = tostring(self.end_result or ""),
         end_mission_type = tostring(self.end_mission_type or ""),
@@ -33405,6 +33441,7 @@ multiplayer_compute_realtime_snapshot_signature = function(snapshot)
         "h",
         tonumber(snapshot.holdout_turns_remaining or 0) or 0,
         snapshot.holdout_timer_started == true and 1 or 0,
+        snapshot.holdout_survival_pending == true and 1 or 0,
         snapshot.holdout_result_locked == true and 1 or 0
     )
     push("d", tonumber(snapshot.dna_analysis_progress or 0) or 0, snapshot.dna_sample_returned == true and 1 or 0)
@@ -33775,6 +33812,7 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
     self.holdout_configured_turns = tonumber(snapshot.holdout_configured_turns or self.holdout_configured_turns or 0) or 0
     self.holdout_turns_remaining = tonumber(snapshot.holdout_turns_remaining or self.holdout_turns_remaining or 0) or 0
     self.holdout_timer_started = snapshot.holdout_timer_started == true
+    self.holdout_survival_pending = snapshot.holdout_survival_pending == true
     self.holdout_result_locked = snapshot.holdout_result_locked == true
 
     if not decouple_motion then
@@ -33963,6 +34001,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
     self.holdout_configured_turns = tonumber(snapshot.holdout_configured_turns or self.holdout_configured_turns or 0) or 0
     self.holdout_turns_remaining = tonumber(snapshot.holdout_turns_remaining or self.holdout_turns_remaining or 0) or 0
     self.holdout_timer_started = snapshot.holdout_timer_started == true
+    self.holdout_survival_pending = snapshot.holdout_survival_pending == true
     self.holdout_result_locked = snapshot.holdout_result_locked == true
     self.end_result = tostring(snapshot.end_result or self.end_result or "")
     self.end_mission_type = tostring(snapshot.end_mission_type or self.end_mission_type or "")
@@ -35494,6 +35533,7 @@ function init(self)
     self.holdout_configured_turns = 0
     self.holdout_turns_remaining = 0
     self.holdout_timer_started = false
+    self.holdout_survival_pending = false
     self.holdout_result_locked = false
     self.end_result = ""
     self.end_mission_type = ""

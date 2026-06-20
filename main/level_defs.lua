@@ -693,6 +693,72 @@ levels[4] = {
     levels[18].spawn_tile = "rescue_entry"
     levels[18].spawn_cell = 2
     levels[18].unit_loadouts = levels[1].unit_loadouts
+    levels[18].spawn_pressure = {
+        enabled = true,
+        active_alien_cap = 16,
+        triggers = {
+            { tier = 1, kind = "holdout_turns_remaining_at_most", value = 35 },
+            { tier = 2, kind = "holdout_turns_remaining_at_most", value = 20 },
+            { tier = 3, kind = "holdout_turns_remaining_at_most", value = 10 },
+        }
+    }
+
+    levels[19] = {
+        { x = 8, y = 14, tile = "coms" },
+        { x = 8, y = 11, tile = "corridor1" },
+        { x = 11, y = 11, tile = "exterior1" },
+        { x = 14, y = 11, tile = "armoury" },
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "exterior1" },
+        { x = 8, y = 8, tile = "showers" },
+        { x = 11, y = 8, tile = "corridor1" },
+        { x = 14, y = 8, tile = "medbay" },
+        { x = 2, y = 5, tile = "corridor1" },
+        { x = 5, y = 5, tile = "corridor1" },
+        { x = 8, y = 5, tile = "furnace" },
+        { x = 11, y = 5, tile = "conference" },
+        { x = 14, y = 5, tile = "canteen" },
+        { x = 2, y = 2, tile = "portal" },
+        { x = 5, y = 2, tile = "cavern" },
+        { x = 8, y = 2, tile = "portal" },
+        { x = 11, y = 2, tile = "corridor1" },
+        { x = 14, y = 2, tile = "portal" },
+    }
+    levels[19].mission_type = "holdout"
+    levels[19].holdout_turns = 60
+    levels[19].spawn_tile = "rescue_entry"
+    levels[19].spawn_cell = 2
+    levels[19].unit_loadouts = levels[1].unit_loadouts
+
+    levels[20] = {
+        { x = 4, y = 14, tile = "coms" },
+        { x = 11, y = 14, tile = "exterior1" },
+        { x = 14, y = 14, tile = "coms" },
+        { x = 5, y = 11, tile = "canteen" },
+        { x = 8, y = 11, tile = "exterior2" },
+        { x = 11, y = 11, tile = "jungle" },
+        { x = 14, y = 11, tile = "portal" },
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "exterior1" },
+        { x = 8, y = 8, tile = "showers" },
+        { x = 11, y = 8, tile = "conference" },
+        { x = 14, y = 8, tile = "furnace" },
+        { x = 2, y = 5, tile = "void" },
+        { x = 5, y = 5, tile = "portal" },
+        { x = 8, y = 5, tile = "bunkroom" },
+        { x = 11, y = 5, tile = "canteen" },
+        { x = 14, y = 5, tile = "jungle" },
+        { x = 2, y = 2, tile = "workshop" },
+        { x = 5, y = 2, tile = "factory" },
+        { x = 8, y = 2, tile = "cavern" },
+        { x = 11, y = 2, tile = "armoury" },
+        { x = 14, y = 2, tile = "portal" },
+    }
+    levels[20].mission_type = "holdout"
+    levels[20].holdout_turns = 70
+    levels[20].spawn_tile = "rescue_entry"
+    levels[20].spawn_cell = 2
+    levels[20].unit_loadouts = levels[1].unit_loadouts
     
     return levels
 end

@@ -1,5 +1,61 @@
 local M = {}
 
+-- Central build/dev switches. Runtime sys.get_config overrides may still win in game.script.
+M.FEATURE_FLAGS = {
+    demo_build = false,
+    demo_allow_tutorial = true,
+    multiplayer_enabled = true,
+    level_editor_enabled = true,
+    unlock_all_solo_missions = true,
+    debug_level_buttons_enabled = false,
+    mp_lag_sim_ui_enabled = false,
+    realtime_toggle_disabled = true
+}
+
+M.SOLO_PROGRESSION = {
+    mission_count = 20,
+    mission_level_map = {
+        [5] = 6,
+        [6] = 7,
+        [7] = 8,
+        [8] = 9,
+        [9] = 10,
+        [10] = 11,
+        [11] = 12,
+        [12] = 13,
+        [13] = 14,
+        [14] = 15,
+        [15] = 16,
+        [16] = 17,
+        [17] = 18
+    },
+    tier_thresholds = { 10000, 30000, 45000 }
+}
+
+M.DEMO = {
+    demo_build = M.FEATURE_FLAGS.demo_build,
+    demo_allow_tutorial = M.FEATURE_FLAGS.demo_allow_tutorial,
+    level_slot_to_level_index = {
+        [1] = 6,
+        [2] = 2,
+        [3] = 8
+    }
+}
+
+M.SPAWN_PRESSURE_DEFAULTS = {
+    enabled = true,
+    active_alien_cap = 16,
+    tiers = {
+        [0] = { spawn_delta = 0, strong_multiplier = 1.00, burst_chance = 0.00 },
+        [1] = { spawn_delta = 1, strong_multiplier = 1.20, burst_chance = 0.10 },
+        [2] = { spawn_delta = 2, strong_multiplier = 1.45, burst_chance = 0.25 },
+        [3] = { spawn_delta = 3, strong_multiplier = 1.75, burst_chance = 0.40 }
+    },
+    escape_extra_spawn_by_tier = {
+        [2] = 1
+    }
+}
+
 function M.create_ui_config(ui_panel_x, ui_panel_y, ui_panel_w, ui_panel_h)
     local loot_ui = {
         button_color = vmath.vector4(0.55, 0.36, 0.18, 1),

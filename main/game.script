@@ -174,7 +174,11 @@ LEVEL_BUTTON_H = 24
 LEVEL1_BUTTON_X = 240
 LEVEL_BUTTON_GAP = 10
 LEVEL_BUTTON_Z = 0.845
-DEBUG_LEVEL_BUTTONS_ENABLED = false
+CONFIG = require("main.config")
+FEATURE_FLAGS = CONFIG.FEATURE_FLAGS or {}
+SOLO_PROGRESSION_CFG = CONFIG.SOLO_PROGRESSION or {}
+SPAWN_PRESSURE_DEFAULTS = CONFIG.SPAWN_PRESSURE_DEFAULTS or {}
+DEBUG_LEVEL_BUTTONS_ENABLED = FEATURE_FLAGS.debug_level_buttons_enabled == true
 UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
 UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
 UI_COLOR_AMMO = vmath.vector4(0.65, 0.65, 0.65, 1)
@@ -275,7 +279,8 @@ NEW_TURN_BUTTON_H = 64
 NEW_TURN_BUTTON_Z = 0.845
 NEW_TURN_BUTTON_VISUAL_SCALE = 1.0
 MULTIPLAYER_DISABLED_BY_CONFIG = (function()
-    local cfg = tostring((sys.get_config and sys.get_config("dvx.disable_multiplayer")) or "0")
+    local default_disabled = FEATURE_FLAGS.multiplayer_enabled == false
+    local cfg = tostring((sys.get_config and sys.get_config("dvx.disable_multiplayer")) or (default_disabled and "1" or "0"))
     return cfg == "1" or cfg == "true" or cfg == "on"
 end)()
 MULTIPLAYER_ENABLED = not MULTIPLAYER_DISABLED_BY_CONFIG
@@ -292,7 +297,7 @@ MULTIPLAYER_DEBUG_FILE_ENABLED = tostring((sys.get_config and sys.get_config("dv
 MULTIPLAYER_DEBUG_FILE_NAME = tostring((sys.get_config and sys.get_config("dvx.mp_debug_filename")) or "dvx_mp_debug.txt")
 WINDOW_LOCK_TO_DESIGN_SIZE = tostring((sys.get_config and sys.get_config("dvx.lock_fixed_window")) or "0") == "1"
 START_MAXIMIZED_ON_LAUNCH = tostring((sys.get_config and sys.get_config("dvx.start_maximized")) or "0") == "1"
-MP_LAG_SIM_UI_ENABLED = false
+MP_LAG_SIM_UI_ENABLED = FEATURE_FLAGS.mp_lag_sim_ui_enabled == true
 MULTIPLAYER_READY_BUTTON_W = 28
 MULTIPLAYER_READY_BUTTON_H = 28
 MULTIPLAYER_READY_BUTTON_GAP = 22
@@ -328,7 +333,7 @@ REALTIME_TOGGLE_BUTTON_W = 180
 REALTIME_TOGGLE_BUTTON_H = 54
 REALTIME_TOGGLE_BUTTON_DRAW_W = 44.25
 REALTIME_TOGGLE_BUTTON_DRAW_H = 30.5
-REALTIME_TOGGLE_BUTTON_DISABLED = true
+REALTIME_TOGGLE_BUTTON_DISABLED = FEATURE_FLAGS.realtime_toggle_disabled ~= false
 MP_LAG_SIM_MODE_OFF = "off"
 MP_LAG_SIM_MODE_LOW = "low"
 MP_LAG_SIM_MODE_HIGH = "high"
@@ -590,7 +595,7 @@ FLOW_STATE_SOLO_SETUP = "solo_setup"
 FLOW_STATE_LEVEL_EDITOR = "level_editor"
 FLOW_STATE_DEMO_SELECT = "demo_select"
 FLOW_STATE_DEMO_RESULT = "demo_result"
-LEVEL_EDITOR_ENABLED = true
+LEVEL_EDITOR_ENABLED = FEATURE_FLAGS.level_editor_enabled ~= false
 LEVEL_DEBUG_FORCE_NEWEST_MISSION_LEVEL = false -- temporary test toggle
 EXIT_TEST_STASH_ENABLED = false
 SFX_TITLE_URL = "main:/sfx_title_screen#sound"
@@ -1154,15 +1159,8 @@ PURGE_BOMB_TILE_NAME = "portal"
 PURGE_BOMB_LOCAL_CELL = 6
 PURGE_RESCUE_RETURN_LOCAL_CELL = 5
 PURGE_COUNTDOWN_TURNS = 5
-DIFFICULTY_PRESSURE_BY_TIER = {
-    [0] = { spawn_delta = 0, strong_multiplier = 1.00, burst_chance = 0.00 },
-    [1] = { spawn_delta = 1, strong_multiplier = 1.20, burst_chance = 0.10 },
-    [2] = { spawn_delta = 2, strong_multiplier = 1.45, burst_chance = 0.25 },
-    [3] = { spawn_delta = 3, strong_multiplier = 1.75, burst_chance = 0.40 }
-}
-DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER = {
-    [2] = 1
-}
+DIFFICULTY_PRESSURE_BY_TIER = SPAWN_PRESSURE_DEFAULTS.tiers or {}
+DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER = SPAWN_PRESSURE_DEFAULTS.escape_extra_spawn_by_tier or {}
 DIFFICULTY_ALL_TILE_LOCAL_CELLS = { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
 do
     local sync_trace_cfg = sys.get_config and sys.get_config("multiplayer.sync_trace") or nil
@@ -1201,13 +1199,13 @@ local function read_debug_outro_preview_settings()
     end
     return enabled, sequence, result
 end
-AP_COSTS = require("main.config").AP_COSTS or {}
-ALIEN_BALANCE = require("main.config").ALIEN_BALANCE or {}
-REALTIME_MODE_CFG = require("main.config").REALTIME_MODE or {}
-BUFFS = require("main.config").BUFFS or {}
-BUFF_SLOT_ORDER = require("main.config").BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
-BUFF_ARMOR_HIT_REDUCTION = tonumber(require("main.config").BUFF_ARMOR_HIT_REDUCTION or 15) or 15
-HAZARD_DAMAGE = require("main.config").HAZARD_DAMAGE or {}
+AP_COSTS = CONFIG.AP_COSTS or {}
+ALIEN_BALANCE = CONFIG.ALIEN_BALANCE or {}
+REALTIME_MODE_CFG = CONFIG.REALTIME_MODE or {}
+BUFFS = CONFIG.BUFFS or {}
+BUFF_SLOT_ORDER = CONFIG.BUFF_SLOT_ORDER or { "top", "center", "left", "right", "bottom" }
+BUFF_ARMOR_HIT_REDUCTION = tonumber(CONFIG.BUFF_ARMOR_HIT_REDUCTION or 15) or 15
+HAZARD_DAMAGE = CONFIG.HAZARD_DAMAGE or {}
 BUFFS_BY_ITEM_TYPE = {}
 do
     for _, buff_def in pairs(BUFFS) do
@@ -1225,12 +1223,10 @@ SOLO_SETUP_PANEL_H = 720
 SOLO_SETUP_PANEL_Z = FLOW_UI_PANEL_Z
 SOLO_SETUP_UI_Z = FLOW_UI_BUTTON_Z
 SOLO_SETUP_PANEL_SCALE = 1.0
-SOLO_SETUP_MISSION_COUNT = 20
+SOLO_SETUP_MISSION_COUNT = tonumber(SOLO_PROGRESSION_CFG.mission_count or 20) or 20
 SOLO_SETUP_MISSION_COLS = 5
 SOLO_SETUP_MISSION_ROWS = 4
-SOLO_SETUP_MISSION_LEVEL_MAP = {
-    [5] = 6, [6] =7, [7] = 8, [8] = 9, [9] =10, [10] = 11, [11]=12, [12] = 13, [13]=14,[14]=15, [15]=16, [16]=17, [17]=18
-}
+SOLO_SETUP_MISSION_LEVEL_MAP = SOLO_PROGRESSION_CFG.mission_level_map or {}
 SOLO_SETUP_MISSION_BOX_W = 150
 SOLO_SETUP_MISSION_BOX_H = 100
 SOLO_SETUP_MISSION_BASE_X = 100
@@ -1241,8 +1237,8 @@ SOLO_SETUP_FILL_BAR_W = 950
 SOLO_SETUP_FILL_BAR_H = 20
 SOLO_SETUP_FILL_BAR_X = 100
 SOLO_SETUP_FILL_BAR_Y = { 160, 300, 440 }
-SOLO_SETUP_TIER_THRESHOLDS = { 10000, 30000, 45000 }
-SOLO_SETUP_DEBUG_UNLOCK_ALL_MISSIONS = true
+SOLO_SETUP_TIER_THRESHOLDS = SOLO_PROGRESSION_CFG.tier_thresholds or { 10000, 30000, 45000 }
+SOLO_SETUP_DEBUG_UNLOCK_ALL_MISSIONS = FEATURE_FLAGS.unlock_all_solo_missions == true
 SOLO_SETUP_LOCK_ICON_W = 50
 SOLO_SETUP_LOCK_ICON_H = 50
 SOLO_SETUP_LOCK_ICON_X = 1100
@@ -1815,7 +1811,7 @@ HUMAN_REACTIVE_FIRE_INTERVAL_SECONDS = 0.4
 HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S = 0.0
 HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S = 1.0
 SPITTER_MAX_RANGE_CELLS = tonumber((ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter and ALIEN_BALANCE.TYPES.spitter.ranged_cells) or 4) or 4
-MULTIPLAYER_ACTIVE_ALIEN_CAP = 16
+MULTIPLAYER_ACTIVE_ALIEN_CAP = tonumber(SPAWN_PRESSURE_DEFAULTS.active_alien_cap or 16) or 16
 SPITTER_SHOT_AP_COST = tonumber(ALIEN_ACTION_COSTS.ranged_attack or 1) or 1
 SPITTER_SHOT_INTERVAL_SECONDS = 0.5
 SPITTER_PROJECTILE_SPEED = 900
@@ -4501,7 +4497,7 @@ local function spawn_alien(self, alien_type, cell_id)
     if not cfg then
         return nil
     end
-    local active_alien_cap = tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
+    local active_alien_cap = get_active_alien_cap and get_active_alien_cap(self) or tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
     if active_alien_cap > 0 then
         local alive_count = 0
         for _, alien in ipairs(self.aliens or {}) do
@@ -6792,7 +6788,7 @@ local function spawn_initial_blips(self, count)
             active_count = active_count + 1
         end
     end
-    local mp_cap = tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
+    local mp_cap = get_active_alien_cap and get_active_alien_cap(self) or tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
     local cap_active = self.mp_state and self.mp_state.enabled and mp_cap > 0
 
     local used = {}
@@ -7454,6 +7450,216 @@ local function purge_is_active_mission(self)
     return mission_type == MISSION_TYPE_PURGE or mission_type == MISSION_TYPE_CLEANSE
 end
 
+get_current_level_spawn_pressure_config = function(self)
+    local level_def = self and self.level_library and self.level_library[self.current_level_index or 1] or nil
+    if type(level_def) ~= "table" then
+        return nil
+    end
+    if type(level_def.spawn_pressure) == "table" then
+        return level_def.spawn_pressure
+    end
+    return nil
+end
+
+spawn_pressure_clone_profile = function(profile)
+    local out = {}
+    if type(profile) == "table" then
+        out.spawn_delta = tonumber(profile.spawn_delta or 0) or 0
+        out.strong_multiplier = tonumber(profile.strong_multiplier or 1.0) or 1.0
+        out.burst_chance = tonumber(profile.burst_chance or 0.0) or 0.0
+    end
+    return out
+end
+
+spawn_pressure_get_tier_profile = function(self, tier)
+    tier = math.max(0, math.min(3, tonumber(tier or 0) or 0))
+    local base_tiers = (SPAWN_PRESSURE_DEFAULTS and SPAWN_PRESSURE_DEFAULTS.tiers) or DIFFICULTY_PRESSURE_BY_TIER or {}
+    local profile = spawn_pressure_clone_profile(base_tiers[tier] or base_tiers[0])
+    local cfg = get_current_level_spawn_pressure_config(self)
+    local overrides = type(cfg) == "table" and cfg.tiers or nil
+    local level_profile = type(overrides) == "table" and overrides[tier] or nil
+    if type(level_profile) == "table" then
+        if level_profile.spawn_delta ~= nil then
+            profile.spawn_delta = tonumber(level_profile.spawn_delta or 0) or 0
+        end
+        if level_profile.strong_multiplier ~= nil then
+            profile.strong_multiplier = tonumber(level_profile.strong_multiplier or 1.0) or 1.0
+        end
+        if level_profile.burst_chance ~= nil then
+            profile.burst_chance = tonumber(level_profile.burst_chance or 0.0) or 0.0
+        end
+    end
+    return profile
+end
+
+spawn_pressure_count_launch_objectives_satisfied = function(self)
+    local status = LOOT_RUNTIME and LOOT_RUNTIME.get_launch_status and LOOT_RUNTIME.get_launch_status(self) or nil
+    local satisfied = 0
+    if status and status.supplies_ready == true then
+        satisfied = satisfied + 1
+    end
+    if status and status.nav_ready == true then
+        satisfied = satisfied + 1
+    end
+    if status and (tonumber(status.power_loaded or 0) or 0) >= 9 then
+        satisfied = satisfied + 1
+    end
+    return satisfied
+end
+
+spawn_pressure_any_living_unit_matches_tile = function(self, tile_name, adjacent)
+    local target_tile = tostring(tile_name or "")
+    if target_tile == "" then
+        return false
+    end
+    local target_lookup = build_cell_lookup(get_world_cell_ids_for_tile_local_cells(self, target_tile, DIFFICULTY_ALL_TILE_LOCAL_CELLS))
+    for _, unit in pairs(self and self.squad_units or {}) do
+        if unit and (tonumber(unit.current_health or 0) or 0) > 0 and unit.in_shuttle ~= true then
+            local cell_id = tonumber(unit.cell_id or 0) or 0
+            if target_lookup[cell_id] == true then
+                return true
+            end
+            if adjacent == true then
+                local cell = self.world_grid and self.world_grid[cell_id] or nil
+                if cell then
+                    local c1 = coords_to_id(cell.xCell + 1, cell.yCell)
+                    local c2 = coords_to_id(cell.xCell - 1, cell.yCell)
+                    local c3 = coords_to_id(cell.xCell, cell.yCell + 1)
+                    local c4 = coords_to_id(cell.xCell, cell.yCell - 1)
+                    if target_lookup[c1] == true
+                        or target_lookup[c2] == true
+                        or target_lookup[c3] == true
+                        or target_lookup[c4] == true
+                    then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+spawn_pressure_civilian_awake_count = function(self)
+    local awake_total = 0
+    for _, civilian in ipairs(self and self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true and civilian.is_awake == true then
+            awake_total = awake_total + 1
+        end
+    end
+    return awake_total
+end
+
+spawn_pressure_living_civilian_count = function(self)
+    local living_total = 0
+    for _, civilian in ipairs(self and self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true then
+            living_total = living_total + 1
+        end
+    end
+    return living_total
+end
+
+spawn_pressure_any_civilian_adjacent_to_exit = function(self)
+    for _, civilian in ipairs(self and self.civilians or {}) do
+        if civilian and civilian.is_dead ~= true then
+            local civ_cell = self.world_grid and self.world_grid[tonumber(civilian.cell_id or 0) or 0] or nil
+            if civ_cell then
+                local c1 = coords_to_id(civ_cell.xCell + 1, civ_cell.yCell)
+                local c2 = coords_to_id(civ_cell.xCell - 1, civ_cell.yCell)
+                local c3 = coords_to_id(civ_cell.xCell, civ_cell.yCell + 1)
+                local c4 = coords_to_id(civ_cell.xCell, civ_cell.yCell - 1)
+                if is_cell_in_any_rescue_entry_tile(self, c1)
+                    or is_cell_in_any_rescue_entry_tile(self, c2)
+                    or is_cell_in_any_rescue_entry_tile(self, c3)
+                    or is_cell_in_any_rescue_entry_tile(self, c4)
+                then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+spawn_pressure_trigger_matches = function(self, trigger)
+    if type(trigger) ~= "table" then
+        return false
+    end
+    local kind = tostring(trigger.kind or "")
+    local value = tonumber(trigger.value or 0) or 0
+    if kind == "turn_at_least" then
+        local turn_id = tonumber(self and self.mp_state and self.mp_state.turn_id or self and self.score_turn_counter or 0) or 0
+        return turn_id >= value
+    elseif kind == "holdout_turns_remaining_at_most" then
+        if not self or self.holdout_turns_remaining == nil then
+            return false
+        end
+        return (tonumber(self.holdout_turns_remaining or 0) or 0) <= value
+    elseif kind == "launch_objectives_satisfied_at_least" then
+        return spawn_pressure_count_launch_objectives_satisfied(self) >= value
+    elseif kind == "civilian_awake_count_at_least" then
+        return spawn_pressure_civilian_awake_count(self) >= value
+    elseif kind == "all_living_civilians_awake" then
+        local living_total = spawn_pressure_living_civilian_count(self)
+        return living_total > 0 and spawn_pressure_civilian_awake_count(self) >= living_total
+    elseif kind == "civilian_adjacent_to_exit" then
+        return spawn_pressure_any_civilian_adjacent_to_exit(self)
+    elseif kind == "unit_on_tile" then
+        return spawn_pressure_any_living_unit_matches_tile(self, trigger.tile or trigger.tile_name, false)
+    elseif kind == "unit_adjacent_to_tile" then
+        return spawn_pressure_any_living_unit_matches_tile(self, trigger.tile or trigger.tile_name, true)
+    elseif kind == "dna_lab_powered" then
+        local lab_cells = get_world_cell_ids_for_tile_local_cells(self, DNA_LAB_TILE_NAME, DIFFICULTY_ALL_TILE_LOCAL_CELLS)
+        for _, cell_id in ipairs(lab_cells or {}) do
+            local cell = self.world_grid and self.world_grid[cell_id] or nil
+            if cell and cell.isPowered == true then
+                return true
+            end
+        end
+        return false
+    elseif kind == "dna_sample_spawned" then
+        return self and (self.dna_sample_spawned == true or self.dna_sample_returned == true)
+    elseif kind == "purge_bomb_planted" then
+        return self and self.purge_bomb_planted == true
+    elseif kind == "weed_count_at_least" then
+        local status = CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status and CLEANSE_RUNTIME.cleanse_get_status(self) or nil
+        return (tonumber(status and status.weed_count or 0) or 0) >= value
+    end
+    return false
+end
+
+get_level_defined_spawn_pressure_tier = function(self, cfg)
+    if type(cfg) ~= "table" then
+        return nil
+    end
+    if cfg.enabled == false then
+        return 0
+    end
+    local fixed_tier = tonumber(cfg.fixed_tier)
+    if fixed_tier ~= nil then
+        return math.max(0, math.min(3, math.floor(fixed_tier + 0.5)))
+    end
+    if type(cfg.triggers) ~= "table" then
+        return nil
+    end
+    local tier = 0
+    for _, trigger in ipairs(cfg.triggers) do
+        if spawn_pressure_trigger_matches(self, trigger) then
+            tier = math.max(tier, math.max(0, math.min(3, tonumber(trigger.tier or 0) or 0)))
+        end
+    end
+    return tier
+end
+
+get_active_alien_cap = function(self)
+    local cfg = get_current_level_spawn_pressure_config(self)
+    if type(cfg) == "table" and cfg.active_alien_cap ~= nil then
+        return math.max(0, tonumber(cfg.active_alien_cap or 0) or 0)
+    end
+    return math.max(0, tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0)
+end
+
 get_spawn_pressure_tier = function(self)
     if not self then
         return 0
@@ -7466,6 +7672,10 @@ get_spawn_pressure_tier = function(self)
         local fixed_tier = tonumber(level_def.spawn_pressure_fixed_tier)
         if fixed_tier ~= nil then
             return math.max(0, math.min(3, math.floor(fixed_tier + 0.5)))
+        end
+        local cfg_tier = get_level_defined_spawn_pressure_tier(self, get_current_level_spawn_pressure_config(self))
+        if cfg_tier ~= nil then
+            return cfg_tier
         end
     end
     local mission_type = tostring(get_current_mission_type(self) or "")
@@ -7583,11 +7793,12 @@ end
 get_spawn_pressure_profile = function(self)
     local tier = tonumber(get_spawn_pressure_tier and get_spawn_pressure_tier(self) or 0) or 0
     tier = math.max(0, math.min(3, tier))
-    local profile = DIFFICULTY_PRESSURE_BY_TIER[tier] or DIFFICULTY_PRESSURE_BY_TIER[0]
+    local profile = spawn_pressure_get_tier_profile(self, tier)
     local mission_type = tostring(get_current_mission_type(self) or "")
     local extra_spawn = 0
     if mission_type == MISSION_TYPE_ESCAPE then
-        extra_spawn = tonumber(DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER[tier] or 0) or 0
+        local extra_by_tier = (SPAWN_PRESSURE_DEFAULTS and SPAWN_PRESSURE_DEFAULTS.escape_extra_spawn_by_tier) or DIFFICULTY_ESCAPE_EXTRA_SPAWN_BY_TIER or {}
+        extra_spawn = tonumber(extra_by_tier[tier] or 0) or 0
     end
     if mission_type == MISSION_TYPE_CLEANSE then
         local status = CLEANSE_RUNTIME and CLEANSE_RUNTIME.cleanse_get_status and CLEANSE_RUNTIME.cleanse_get_status(self) or nil
@@ -7601,7 +7812,7 @@ get_spawn_pressure_profile = function(self)
         if weeds >= 32 then
             tier = math.max(tier, 3)
         end
-        profile = DIFFICULTY_PRESSURE_BY_TIER[tier] or profile
+        profile = spawn_pressure_get_tier_profile(self, tier)
     end
     return {
         tier = tier,
@@ -7632,7 +7843,7 @@ spawn_blip_wave_for_pressure = function(self, reason_tag)
             active_count = active_count + 1
         end
     end
-    local mp_cap = tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
+    local mp_cap = get_active_alien_cap and get_active_alien_cap(self) or tonumber(MULTIPLAYER_ACTIVE_ALIEN_CAP or 0) or 0
     local cap_active = self.mp_state and self.mp_state.enabled and mp_cap > 0
     if cap_active and active_count >= mp_cap then
         print(string.format(

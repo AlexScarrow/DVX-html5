@@ -16361,6 +16361,8 @@ solo_progress_get_mission_type_label = function(self, mission_slot)
         label = "cleanse"
     elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
         label = "dna"
+    elseif mission_type == MISSION_TYPE_HOLDOUT then
+        label = "holdout"
     end
     label = string.lower(tostring(label or "escape"))
     label = string.gsub(label, "[^a-z]", "")

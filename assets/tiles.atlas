@@ -80,6 +80,9 @@ images {
   image: "/assets/images/alien_brute_side_boardgame.png"
 }
 images {
+  image: "/assets/images/brute_smokepuff.png"
+}
+images {
   image: "/assets/images/barricade.png"
 }
 images {

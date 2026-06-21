@@ -56,6 +56,21 @@ M.SPAWN_PRESSURE_DEFAULTS = {
     }
 }
 
+M.VISUAL_FX = {
+    brute_ghost = {
+        enabled = true,
+        spawn_interval_s = 0.267,
+        max_puffs = 5,
+        lifetime_min_s = 3.3,
+        lifetime_max_s = 4.8,
+        alpha_max = 0.34,
+        scale_min = 0.54,
+        scale_max = 1.86,
+        offset_x = 42,
+        offset_y = 30
+    }
+}
+
 function M.create_ui_config(ui_panel_x, ui_panel_y, ui_panel_w, ui_panel_h)
     local loot_ui = {
         button_color = vmath.vector4(0.55, 0.36, 0.18, 1),

@@ -41,7 +41,7 @@
 -- luacheck: globals apply_human_aesthetic_animations apply_alien_aesthetic_animations apply_computer_emissive_accents
 -- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
 -- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
--- luacheck: globals apply_brute_alpha_pulse
+-- luacheck: globals apply_brute_alpha_pulse update_brute_ghost_fx delete_brute_ghost_fx spawn_brute_ghost_puff
 -- luacheck: globals get_obstacle_move_speed_multiplier
 
 CELL_WIDTH = 250          -- Width of each cell in pixels
@@ -178,6 +178,7 @@ CONFIG = require("main.config")
 FEATURE_FLAGS = CONFIG.FEATURE_FLAGS or {}
 SOLO_PROGRESSION_CFG = CONFIG.SOLO_PROGRESSION or {}
 SPAWN_PRESSURE_DEFAULTS = CONFIG.SPAWN_PRESSURE_DEFAULTS or {}
+VISUAL_FX_CFG = CONFIG.VISUAL_FX or {}
 DEBUG_LEVEL_BUTTONS_ENABLED = FEATURE_FLAGS.debug_level_buttons_enabled == true
 UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
 UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
@@ -1812,6 +1813,17 @@ HUMAN_REACTIVE_REALTIME_STAGGER_MIN_S = 0.0
 HUMAN_REACTIVE_REALTIME_STAGGER_MAX_S = 1.0
 SPITTER_MAX_RANGE_CELLS = tonumber((ALIEN_BALANCE.TYPES and ALIEN_BALANCE.TYPES.spitter and ALIEN_BALANCE.TYPES.spitter.ranged_cells) or 4) or 4
 MULTIPLAYER_ACTIVE_ALIEN_CAP = tonumber(SPAWN_PRESSURE_DEFAULTS.active_alien_cap or 16) or 16
+BRUTE_GHOST_FX_CFG = VISUAL_FX_CFG.brute_ghost or {}
+BRUTE_GHOST_FX_ENABLED = BRUTE_GHOST_FX_CFG.enabled == true
+BRUTE_GHOST_FX_SPAWN_INTERVAL_S = tonumber(BRUTE_GHOST_FX_CFG.spawn_interval_s or 0.4) or 0.4
+BRUTE_GHOST_FX_MAX_PUFFS = math.max(0, math.floor(tonumber(BRUTE_GHOST_FX_CFG.max_puffs or 5) or 5))
+BRUTE_GHOST_FX_LIFETIME_MIN_S = tonumber(BRUTE_GHOST_FX_CFG.lifetime_min_s or 1.1) or 1.1
+BRUTE_GHOST_FX_LIFETIME_MAX_S = tonumber(BRUTE_GHOST_FX_CFG.lifetime_max_s or 1.6) or 1.6
+BRUTE_GHOST_FX_ALPHA_MAX = tonumber(BRUTE_GHOST_FX_CFG.alpha_max or 0.34) or 0.34
+BRUTE_GHOST_FX_SCALE_MIN = tonumber(BRUTE_GHOST_FX_CFG.scale_min or 0.18) or 0.18
+BRUTE_GHOST_FX_SCALE_MAX = tonumber(BRUTE_GHOST_FX_CFG.scale_max or 0.62) or 0.62
+BRUTE_GHOST_FX_OFFSET_X = tonumber(BRUTE_GHOST_FX_CFG.offset_x or 42) or 42
+BRUTE_GHOST_FX_OFFSET_Y = tonumber(BRUTE_GHOST_FX_CFG.offset_y or 30) or 30
 SPITTER_SHOT_AP_COST = tonumber(ALIEN_ACTION_COSTS.ranged_attack or 1) or 1
 SPITTER_SHOT_INTERVAL_SECONDS = 0.5
 SPITTER_PROJECTILE_SPEED = 900
@@ -4338,6 +4350,7 @@ local function refresh_alien_visual(self, alien)
         wanted_visual_kind = "brute"
     end
     if alien.go_id and alien.visual_kind ~= wanted_visual_kind then
+        delete_brute_ghost_fx(alien)
         go.delete(alien.go_id)
         alien.go_id = nil
     end
@@ -4737,6 +4750,7 @@ local function remove_dead_aliens(self)
                 alien.spitter_bottom_go_id = nil
             end
             if alien.go_id then
+                delete_brute_ghost_fx(alien)
                 go.delete(alien.go_id)
                 alien.go_id = nil
             end
@@ -5230,7 +5244,7 @@ local function update_spitter_projectiles(self, dt)
                         target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
                         if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
                             play_brute_damage_sfx(self)
-                            target.brute_damage_flash_timer = 0.24
+                            target.brute_damage_flash_timer = 0.12
                             multiplayer_emit_combat_fx_event(self, {
                                 fx_type = "brute_damage_flash",
                                 alien_id = target.id,
@@ -5502,7 +5516,7 @@ local function resolve_turret_pending_shot(self, shot_id)
                 end
                 if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
                     play_brute_damage_sfx(self)
-                    target_alien.brute_damage_flash_timer = 0.24
+                    target_alien.brute_damage_flash_timer = 0.12
                     multiplayer_emit_combat_fx_event(self, {
                         fx_type = "brute_damage_flash",
                         alien_id = target_alien.id,
@@ -5973,34 +5987,117 @@ local function update_spitter_attack_phase(self, dt)
     self.spitter_attack_timer = SPITTER_SHOT_INTERVAL_SECONDS
 end
 
+delete_brute_ghost_fx = function(alien)
+    if not (alien and alien.brute_ghost_puffs) then
+        return
+    end
+    for _, puff in ipairs(alien.brute_ghost_puffs) do
+        if puff and puff.go_id then
+            pcall(go.delete, puff.go_id)
+            puff.go_id = nil
+        end
+    end
+    alien.brute_ghost_puffs = nil
+    alien.brute_ghost_spawn_timer = nil
+end
+
+spawn_brute_ghost_puff = function(self, alien)
+    if not (self and alien and alien.go_id) then
+        return
+    end
+    alien.brute_ghost_puffs = alien.brute_ghost_puffs or {}
+    local puff = nil
+    for _, candidate in ipairs(alien.brute_ghost_puffs) do
+        if candidate and candidate.active ~= true then
+            puff = candidate
+            break
+        end
+    end
+    if not puff then
+        if #alien.brute_ghost_puffs >= BRUTE_GHOST_FX_MAX_PUFFS then
+            return
+        end
+        local base_pos = go.get_position(alien.go_id)
+        local go_id = factory.create("/brute_smokepuff_factory#brute_smokepuff_factory", vmath.vector3(base_pos.x, base_pos.y, base_pos.z - 0.02))
+        if not go_id then
+            return
+        end
+        puff = { go_id = go_id }
+        table.insert(alien.brute_ghost_puffs, puff)
+    end
+
+    local base_pos = go.get_position(alien.go_id)
+    local offset_x = (math.random() * 2 - 1) * BRUTE_GHOST_FX_OFFSET_X
+    local offset_y = (math.random() * 2 - 1) * BRUTE_GHOST_FX_OFFSET_Y
+    local lifetime_span = math.max(0.1, BRUTE_GHOST_FX_LIFETIME_MAX_S - BRUTE_GHOST_FX_LIFETIME_MIN_S)
+    puff.active = true
+    puff.age = 0
+    puff.lifetime = BRUTE_GHOST_FX_LIFETIME_MIN_S + (math.random() * lifetime_span)
+    puff.scale_start = BRUTE_GHOST_FX_SCALE_MIN * (0.85 + (math.random() * 0.3))
+    puff.scale_end = BRUTE_GHOST_FX_SCALE_MAX * (0.85 + (math.random() * 0.3))
+    puff.alpha_max = BRUTE_GHOST_FX_ALPHA_MAX * (0.75 + (math.random() * 0.25))
+    pcall(go.set_position, vmath.vector3(base_pos.x + offset_x, base_pos.y + offset_y, base_pos.z - 0.02), puff.go_id)
+    pcall(go.set_rotation, vmath.quat_rotation_z(0), puff.go_id)
+    pcall(go.set_scale, vmath.vector3(puff.scale_start, puff.scale_start, 1), puff.go_id)
+    pcall(go.set, msg.url(nil, puff.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+end
+
+update_brute_ghost_fx = function(self, alien, dt)
+    if BRUTE_GHOST_FX_ENABLED ~= true or BRUTE_GHOST_FX_MAX_PUFFS <= 0 then
+        delete_brute_ghost_fx(alien)
+        return
+    end
+    if (not alien) or alien.is_dead or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.go_id) then
+        delete_brute_ghost_fx(alien)
+        return
+    end
+
+    alien.brute_ghost_spawn_timer = (alien.brute_ghost_spawn_timer or 0) - dt
+    if alien.brute_ghost_spawn_timer <= 0 then
+        spawn_brute_ghost_puff(self, alien)
+        local jitter = BRUTE_GHOST_FX_SPAWN_INTERVAL_S * 0.25
+        alien.brute_ghost_spawn_timer = math.max(0.1, BRUTE_GHOST_FX_SPAWN_INTERVAL_S + ((math.random() * 2 - 1) * jitter))
+    end
+
+    for _, puff in ipairs(alien.brute_ghost_puffs or {}) do
+        if puff and puff.active == true and puff.go_id then
+            puff.age = (puff.age or 0) + dt
+            local lifetime = math.max(0.1, tonumber(puff.lifetime or 1) or 1)
+            local t = math.max(0, math.min(1, (puff.age or 0) / lifetime))
+            if t >= 1 then
+                puff.active = false
+                pcall(go.set, msg.url(nil, puff.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0))
+            else
+                local fade = 1
+                if t < 0.2 then
+                    fade = t / 0.2
+                else
+                    fade = 1 - ((t - 0.2) / 0.8)
+                end
+                local scale = (puff.scale_start or BRUTE_GHOST_FX_SCALE_MIN)
+                    + (((puff.scale_end or BRUTE_GHOST_FX_SCALE_MAX) - (puff.scale_start or BRUTE_GHOST_FX_SCALE_MIN)) * t)
+                local alpha = math.max(0, fade) * (puff.alpha_max or BRUTE_GHOST_FX_ALPHA_MAX)
+                pcall(go.set_scale, vmath.vector3(scale, scale, 1), puff.go_id)
+                pcall(go.set, msg.url(nil, puff.go_id, "sprite"), "tint", vmath.vector4(1, 1, 1, alpha))
+            end
+        end
+    end
+end
+
 apply_brute_alpha_pulse = function(self, alien, dt)
     if (not alien) or alien.is_dead or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.go_id) or alien.melee_flash_active then
         return
     end
     local sprite_url = msg.url(nil, alien.go_id, "sprite")
     if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
-        if alien.alpha_pulse_speed == nil then
-            alien.alpha_pulse_speed = 0.275 + (math.random() * 0.625)
-        end
-        if alien.emissive_phase == nil then
-            alien.emissive_phase = math.random() * math.pi * 2
-        end
-        alien.emissive_phase = (alien.emissive_phase or 0) + (dt * math.pi * 2 * (alien.alpha_pulse_speed or 1))
-        local glow = (math.sin(alien.emissive_phase) * 0.5) + 0.5
         local flash_timer = alien.brute_damage_flash_timer or 0
         if flash_timer > 0 then
             flash_timer = math.max(0, flash_timer - dt)
             alien.brute_damage_flash_timer = flash_timer
-            pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.9, 0.3, 1.0))
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.9, 0.3, 0.5))
             return
         end
-        if alien.is_moving then
-            -- Pulse moving brute alpha 0..1 in computer aesthetic.
-            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, glow))
-            return
-        end
-        local alpha = math.pow(glow, 3.8)
-        pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, alpha))
+        pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 0))
     else
         pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 1))
     end
@@ -23084,6 +23181,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
     self.workshop_states = {}
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
+            delete_brute_ghost_fx(alien)
             safe_delete(alien and alien.go_id)
         end
     end
@@ -31390,7 +31488,7 @@ multiplayer_apply_combat_fx_event = function(self, payload)
     elseif fx_type == "brute_damage_flash" then
         local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
         if alien and (not alien.is_dead) then
-            alien.brute_damage_flash_timer = math.max(0.05, tonumber(payload.duration_s or 0.24) or 0.24)
+            alien.brute_damage_flash_timer = math.max(0.05, tonumber(payload.duration_s or 0.12) or 0.12)
             return true
         end
         return false
@@ -36571,6 +36669,7 @@ function update(self, dt)
                 alien.melee_pose_lock_timer = math.max(0, (alien.melee_pose_lock_timer or 0) - dt)
             end
             apply_brute_alpha_pulse(self, alien, dt)
+            update_brute_ghost_fx(self, alien, dt)
             if alien
                 and (not alien.is_dead)
                 and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE)

@@ -893,6 +893,16 @@ embedded_instances {
   ""
 }
 embedded_instances {
+  id: "brute_smokepuff_factory"
+  data: "embedded_components {\n"
+  "  id: \"brute_smokepuff_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/brute_smokepuff.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}
+embedded_instances {
   id: "ui_panel_factory"
   data: "embedded_components {\n"
   "  id: \"ui_panel_factory\"\n"

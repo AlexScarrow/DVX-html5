@@ -42,6 +42,8 @@
 -- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
 -- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
 -- luacheck: globals apply_brute_alpha_pulse update_brute_ghost_fx delete_brute_ghost_fx spawn_brute_ghost_puff reveal_brute_sprite_for_action
+-- luacheck: globals reset_alien_path_cache cached_find_alien_path cached_find_alien_vent_path log_alien_path_cache_stats
+-- luacheck: globals clone_path_for_cache get_alien_path_cache_key
 -- luacheck: globals get_obstacle_move_speed_multiplier
 
 CELL_WIDTH = 250          -- Width of each cell in pixels
@@ -2677,6 +2679,7 @@ try_brute_break_adjacent_barricade = function(self, alien)
     if not removed then
         return false
     end
+    reset_alien_path_cache(self, "barricade_changed")
     self.barricade_damage_cells_this_turn[target_cell_id] = true
     local target_cell = self.world_grid and self.world_grid[target_cell_id]
     if target_cell then
@@ -2772,6 +2775,7 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
         return false
     end
     self.door_damage_cells_this_turn = self.door_damage_cells_this_turn or {}
+    reset_alien_path_cache(self, "door_changed")
     local damage_key = owner_cell.idNumber or 0
     if alien.go_id and is_true_brute then
         local cell_x, cell_y = coords_to_world_pos(owner_cell.xCell, owner_cell.yCell)
@@ -3677,6 +3681,135 @@ local function find_alien_path(world_grid, alien_type, start_id, end_id, max_act
     return nil
 end
 
+ALIEN_PATH_CACHE_ENABLED = true
+ALIEN_PATH_CACHE_DIAGNOSTICS_ENABLED = false
+
+clone_path_for_cache = function(path)
+    if type(path) ~= "table" then
+        return nil
+    end
+    local out = {}
+    for i = 1, #path do
+        out[i] = path[i]
+    end
+    return out
+end
+
+reset_alien_path_cache = function(self, reason)
+    if not self then
+        return
+    end
+    self.alien_path_cache = {}
+    if reason == "alien_turn_start" or not self.alien_path_cache_stats then
+        self.alien_path_cache_stats = {
+            reason = tostring(reason or "reset"),
+            alien_calls = 0,
+            alien_hits = 0,
+            vent_calls = 0,
+            vent_hits = 0,
+            fallback_calls = 0,
+            brute_fallback_calls = 0,
+            invalidations = 0
+        }
+    else
+        self.alien_path_cache_stats.invalidations = (self.alien_path_cache_stats.invalidations or 0) + 1
+        self.alien_path_cache_stats.reason = tostring(reason or "invalidate")
+    end
+end
+
+get_alien_path_cache_key = function(kind, alien_type, start_id, end_id, hidden_reveal_type, max_action_points)
+    return table.concat({
+        tostring(kind or "alien"),
+        tostring(alien_type or ""),
+        tostring(start_id or 0),
+        tostring(end_id or 0),
+        tostring(hidden_reveal_type or ""),
+        tostring(max_action_points or "")
+    }, "|")
+end
+
+cached_find_alien_path = function(self, alien_type, start_id, end_id, max_action_points, hidden_reveal_type, stat_kind)
+    if not (self and self.world_grid) then
+        return nil, nil
+    end
+    if not (ALIEN_PATH_CACHE_ENABLED == true and self and self.world_grid) then
+        return find_alien_path(self.world_grid, alien_type, start_id, end_id, max_action_points, hidden_reveal_type, self)
+    end
+    self.alien_path_cache = self.alien_path_cache or {}
+    self.alien_path_cache_stats = self.alien_path_cache_stats or {}
+    self.alien_path_cache_stats.alien_calls = (self.alien_path_cache_stats.alien_calls or 0) + 1
+    if stat_kind == "fallback" then
+        self.alien_path_cache_stats.fallback_calls = (self.alien_path_cache_stats.fallback_calls or 0) + 1
+    elseif stat_kind == "brute_fallback" then
+        self.alien_path_cache_stats.brute_fallback_calls = (self.alien_path_cache_stats.brute_fallback_calls or 0) + 1
+    end
+    local key = get_alien_path_cache_key("alien", alien_type, start_id, end_id, hidden_reveal_type, max_action_points)
+    local cached = self.alien_path_cache[key]
+    if cached ~= nil then
+        self.alien_path_cache_stats.alien_hits = (self.alien_path_cache_stats.alien_hits or 0) + 1
+        if cached == false then
+            return nil, nil
+        end
+        return clone_path_for_cache(cached.path), cached.cost
+    end
+    local path, cost = find_alien_path(self.world_grid, alien_type, start_id, end_id, max_action_points, hidden_reveal_type, self)
+    if path and cost then
+        self.alien_path_cache[key] = { path = clone_path_for_cache(path), cost = cost }
+    else
+        self.alien_path_cache[key] = false
+    end
+    return path, cost
+end
+
+cached_find_alien_vent_path = function(self, start_id, end_id)
+    if not (self and self.world_grid) then
+        return nil, nil
+    end
+    if not (ALIEN_PATH_CACHE_ENABLED == true and self and self.world_grid) then
+        return find_path(self.world_grid, start_id, end_id, nil, MOVEMENT_PROFILE_ALIEN_VENT, { target_cell_id = end_id })
+    end
+    self.alien_path_cache = self.alien_path_cache or {}
+    self.alien_path_cache_stats = self.alien_path_cache_stats or {}
+    self.alien_path_cache_stats.vent_calls = (self.alien_path_cache_stats.vent_calls or 0) + 1
+    local key = get_alien_path_cache_key("vent", "vent", start_id, end_id, nil)
+    local cached = self.alien_path_cache[key]
+    if cached ~= nil then
+        self.alien_path_cache_stats.vent_hits = (self.alien_path_cache_stats.vent_hits or 0) + 1
+        if cached == false then
+            return nil, nil
+        end
+        return clone_path_for_cache(cached.path), cached.cost
+    end
+    local path, cost = find_path(self.world_grid, start_id, end_id, nil, MOVEMENT_PROFILE_ALIEN_VENT, { target_cell_id = end_id })
+    if path and cost then
+        self.alien_path_cache[key] = { path = clone_path_for_cache(path), cost = cost }
+    else
+        self.alien_path_cache[key] = false
+    end
+    return path, cost
+end
+
+log_alien_path_cache_stats = function(self, reason)
+    if ALIEN_PATH_CACHE_DIAGNOSTICS_ENABLED ~= true then
+        return
+    end
+    local stats = self and self.alien_path_cache_stats or nil
+    if not stats then
+        return
+    end
+    print(string.format(
+        "ALIEN PATH CACHE | %s alien=%d hits=%d vent=%d vent_hits=%d fallback=%d brute_fallback=%d invalidations=%d",
+        tostring(reason or stats.reason or "alien_turn"),
+        tonumber(stats.alien_calls or 0) or 0,
+        tonumber(stats.alien_hits or 0) or 0,
+        tonumber(stats.vent_calls or 0) or 0,
+        tonumber(stats.vent_hits or 0) or 0,
+        tonumber(stats.fallback_calls or 0) or 0,
+        tonumber(stats.brute_fallback_calls or 0) or 0,
+        tonumber(stats.invalidations or 0) or 0
+    ))
+end
+
 local function pick_weighted_blip_reveal_type(self)
     local speedy_weight = ALIEN_REVEAL_WEIGHT_SPEEDY
     local cannon_weight = ALIEN_REVEAL_WEIGHT_CANNON
@@ -3758,8 +3891,8 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
     local can_use_vent = alien_type ~= ALIEN_TYPE_BRUTE and (not hidden_brute_blip) and not blip_in_void
     for _, human_cell_id in ipairs(human_ids) do
         local normal_path, normal_cost
-        normal_path, normal_cost = find_alien_path(
-            self.world_grid,
+        normal_path, normal_cost = cached_find_alien_path(
+            self,
             alien_type,
             from_cell_id,
             human_cell_id,
@@ -3770,13 +3903,10 @@ local function get_nearest_reachable_human_cell_id(self, alien_type, from_cell_i
         local chosen_path = normal_path
         local chosen_cost = normal_cost or math.huge
         if can_use_vent then
-            local vent_path, vent_cost = find_path(
-                self.world_grid,
+            local vent_path, vent_cost = cached_find_alien_vent_path(
+                self,
                 from_cell_id,
-                human_cell_id,
-                nil,
-                MOVEMENT_PROFILE_ALIEN_VENT,
-                { target_cell_id = human_cell_id }
+                human_cell_id
             )
             local mission_type = tostring(
                 self.current_mission_type
@@ -3831,7 +3961,7 @@ get_blip_fallback_staging_target = function(self, from_cell_id, alien_type, hidd
 
     for candidate_id, candidate_cell in ipairs(self.world_grid) do
         if candidate_id ~= from_cell_id and candidate_cell and candidate_cell.tileID ~= hash("empty") then
-            local candidate_path, candidate_cost = find_alien_path(self.world_grid, fallback_alien_type, from_cell_id, candidate_id, nil, hidden_reveal_type, self)
+            local candidate_path, candidate_cost = cached_find_alien_path(self, fallback_alien_type, from_cell_id, candidate_id, nil, hidden_reveal_type, "fallback")
             if candidate_path and candidate_cost and candidate_cost > 0 then
                 local nearest_human_dist = math.huge
                 for _, human_id in ipairs(human_ids) do
@@ -3867,7 +3997,7 @@ get_brute_barricade_staging_target = function(self, from_cell_id)
 
     for cell_id, cell in ipairs(self.world_grid) do
         if cell and cell.tileID ~= hash("empty") and is_cell_barricaded(self.world_grid, cell_id) then
-            local path, cost = find_alien_path(self.world_grid, ALIEN_TYPE_BRUTE, from_cell_id, cell_id, nil, nil, self)
+            local path, cost = cached_find_alien_path(self, ALIEN_TYPE_BRUTE, from_cell_id, cell_id, nil, nil, "brute_fallback")
             if path and cost then
                 if cost < best_cost or (cost == best_cost and (best_target == nil or cell_id < best_target)) then
                     best_target = cell_id
@@ -6675,6 +6805,7 @@ local function process_alien_turn(self)
     end
 
     if not self.alien_turn_active then
+        reset_alien_path_cache(self, "alien_turn_start")
         if not (self.realtime_rules_enabled == true and not (self.mp_state and self.mp_state.enabled)) then
             spawn_blip_wave_for_pressure(self, "Turn event")
         end
@@ -6886,6 +7017,8 @@ local function process_alien_turn(self)
     if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         self.mp_state.client_alien_activity_visible = false
     end
+    log_alien_path_cache_stats(self, "alien_turn_end")
+    self.alien_path_cache = nil
     print("=== Alien Turn End ===")
 end
 

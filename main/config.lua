@@ -27,7 +27,10 @@ M.SOLO_PROGRESSION = {
         [14] = 15,
         [15] = 16,
         [16] = 17,
-        [17] = 18
+        [17] = 18,
+        [18] = 19,
+        [19] = 20,
+        [20] = 20
     },
     tier_thresholds = { 10000, 30000, 45000 }
 }
@@ -44,7 +47,7 @@ M.DEMO = {
 
 M.SPAWN_PRESSURE_DEFAULTS = {
     enabled = true,
-    active_alien_cap = 16,
+    active_alien_cap = 30,
     tiers = {
         [0] = { spawn_delta = 0, strong_multiplier = 1.00, burst_chance = 0.00 },
         [1] = { spawn_delta = 1, strong_multiplier = 1.20, burst_chance = 0.10 },

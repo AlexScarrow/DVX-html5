@@ -41,7 +41,7 @@
 -- luacheck: globals apply_human_aesthetic_animations apply_alien_aesthetic_animations apply_computer_emissive_accents
 -- luacheck: globals apply_aesthetic_mode apply_backdrop_emissive_tint update_backdrop_cloud_fx
 -- luacheck: globals set_aesthetic_mode toggle_aesthetic_mode
--- luacheck: globals apply_brute_alpha_pulse update_brute_ghost_fx delete_brute_ghost_fx spawn_brute_ghost_puff
+-- luacheck: globals apply_brute_alpha_pulse update_brute_ghost_fx delete_brute_ghost_fx spawn_brute_ghost_puff reveal_brute_sprite_for_action
 -- luacheck: globals get_obstacle_move_speed_multiplier
 
 CELL_WIDTH = 250          -- Width of each cell in pixels
@@ -1820,6 +1820,8 @@ BRUTE_GHOST_FX_MAX_PUFFS = math.max(0, math.floor(tonumber(BRUTE_GHOST_FX_CFG.ma
 BRUTE_GHOST_FX_LIFETIME_MIN_S = tonumber(BRUTE_GHOST_FX_CFG.lifetime_min_s or 1.1) or 1.1
 BRUTE_GHOST_FX_LIFETIME_MAX_S = tonumber(BRUTE_GHOST_FX_CFG.lifetime_max_s or 1.6) or 1.6
 BRUTE_GHOST_FX_ALPHA_MAX = tonumber(BRUTE_GHOST_FX_CFG.alpha_max or 0.34) or 0.34
+BRUTE_GHOST_FX_MELEE_REVEAL_ALPHA = tonumber(BRUTE_GHOST_FX_CFG.melee_reveal_alpha or 0.4) or 0.4
+BRUTE_GHOST_FX_MELEE_REVEAL_DURATION_S = tonumber(BRUTE_GHOST_FX_CFG.melee_reveal_duration_s or 0.28) or 0.28
 BRUTE_GHOST_FX_SCALE_MIN = tonumber(BRUTE_GHOST_FX_CFG.scale_min or 0.18) or 0.18
 BRUTE_GHOST_FX_SCALE_MAX = tonumber(BRUTE_GHOST_FX_CFG.scale_max or 0.62) or 0.62
 BRUTE_GHOST_FX_OFFSET_X = tonumber(BRUTE_GHOST_FX_CFG.offset_x or 42) or 42
@@ -2639,6 +2641,7 @@ try_brute_break_adjacent_barricade = function(self, alien)
             local sprite_url = msg.url(nil, alien.go_id, "sprite")
             local shadow_url = msg.url(nil, alien.go_id, "shadow")
             alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
+            reveal_brute_sprite_for_action(alien)
             local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
                 and hash("alien_brute_side_boardgame")
                 or hash("alien_brute_side")
@@ -2788,6 +2791,7 @@ try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
         local sprite_url = msg.url(nil, alien.go_id, "sprite")
         local shadow_url = msg.url(nil, alien.go_id, "shadow")
         alien.melee_pose_lock_timer = math.max(alien.melee_pose_lock_timer or 0, 0.36)
+        reveal_brute_sprite_for_action(alien)
         local side_anim = (self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME)
             and hash("alien_brute_side_boardgame")
             or hash("alien_brute_side")
@@ -5248,7 +5252,7 @@ local function update_spitter_projectiles(self, dt)
                             multiplayer_emit_combat_fx_event(self, {
                                 fx_type = "brute_damage_flash",
                                 alien_id = target.id,
-                                duration_s = 0.24
+                                duration_s = 0.12
                             })
                         end
                         if target.hp_current <= 0 then
@@ -5520,7 +5524,7 @@ local function resolve_turret_pending_shot(self, shot_id)
                     multiplayer_emit_combat_fx_event(self, {
                         fx_type = "brute_damage_flash",
                         alien_id = target_alien.id,
-                        duration_s = 0.24
+                        duration_s = 0.12
                     })
                 end
                 if target_alien.hp_current <= 0 then
@@ -6084,6 +6088,14 @@ update_brute_ghost_fx = function(self, alien, dt)
     end
 end
 
+reveal_brute_sprite_for_action = function(alien, duration_s)
+    if not alien or alien.type ~= ALIEN_TYPE_BRUTE then
+        return
+    end
+    local duration = tonumber(duration_s or BRUTE_GHOST_FX_MELEE_REVEAL_DURATION_S) or BRUTE_GHOST_FX_MELEE_REVEAL_DURATION_S
+    alien.brute_melee_reveal_timer = math.max(alien.brute_melee_reveal_timer or 0, math.max(0.05, duration))
+end
+
 apply_brute_alpha_pulse = function(self, alien, dt)
     if (not alien) or alien.is_dead or alien.type ~= ALIEN_TYPE_BRUTE or (not alien.go_id) or alien.melee_flash_active then
         return
@@ -6095,6 +6107,13 @@ apply_brute_alpha_pulse = function(self, alien, dt)
             flash_timer = math.max(0, flash_timer - dt)
             alien.brute_damage_flash_timer = flash_timer
             pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.9, 0.3, 0.5))
+            return
+        end
+        local melee_reveal_timer = alien.brute_melee_reveal_timer or 0
+        if melee_reveal_timer > 0 then
+            melee_reveal_timer = math.max(0, melee_reveal_timer - dt)
+            alien.brute_melee_reveal_timer = melee_reveal_timer
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, BRUTE_GHOST_FX_MELEE_REVEAL_ALPHA))
             return
         end
         pcall(go.set, sprite_url, "tint", vmath.vector4(1, 1, 1, 0))
@@ -32117,6 +32136,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     end,
     play_civ_melee_hit_sfx = function(self_ref, world_x, world_y)
         play_civ_melee_hit_sfx(self_ref, world_x, world_y)
+    end,
+    reveal_brute_sprite_for_action = function(alien, duration_s)
+        reveal_brute_sprite_for_action(alien, duration_s)
     end,
     spawn_impact_ring_at_world = function(self_ref, world_x, world_y, tint, duration_s)
         if LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then

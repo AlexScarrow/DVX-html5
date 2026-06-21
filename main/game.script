@@ -3816,13 +3816,21 @@ local function pick_weighted_blip_reveal_type(self)
     local spitter_weight = ALIEN_REVEAL_WEIGHT_SPITTER
     local brute_weight = ALIEN_REVEAL_WEIGHT_BRUTE
     local pressure = get_spawn_pressure_profile and get_spawn_pressure_profile(self) or nil
-    local strong_multiplier = tonumber(pressure and pressure.strong_multiplier or 1.0) or 1.0
-    if strong_multiplier < 1.0 then
-        strong_multiplier = 1.0
+    local alien_weights = pressure and pressure.alien_weights or nil
+    if type(alien_weights) == "table" then
+        cannon_weight = math.max(0, tonumber(alien_weights.cannon_fodder or cannon_weight) or cannon_weight)
+        speedy_weight = math.max(0, tonumber(alien_weights.speedy or speedy_weight) or speedy_weight)
+        spitter_weight = math.max(0, tonumber(alien_weights.spitter or spitter_weight) or spitter_weight)
+        brute_weight = math.max(0, tonumber(alien_weights.brute or brute_weight) or brute_weight)
+    else
+        local strong_multiplier = tonumber(pressure and pressure.strong_multiplier or 1.0) or 1.0
+        if strong_multiplier < 1.0 then
+            strong_multiplier = 1.0
+        end
+        speedy_weight = math.max(1, math.floor((speedy_weight * strong_multiplier) + 0.5))
+        spitter_weight = math.max(1, math.floor((spitter_weight * strong_multiplier) + 0.5))
+        brute_weight = math.max(1, math.floor((brute_weight * strong_multiplier) + 0.5))
     end
-    speedy_weight = math.max(1, math.floor((speedy_weight * strong_multiplier) + 0.5))
-    spitter_weight = math.max(1, math.floor((spitter_weight * strong_multiplier) + 0.5))
-    brute_weight = math.max(1, math.floor((brute_weight * strong_multiplier) + 0.5))
     if SFX_TEST_FAVOR_SPEEDY_REVEAL == true then
         -- TEMP TEST TWEAK: bias reveals toward speedies for movement SFX validation.
         speedy_weight = math.max(speedy_weight, cannon_weight + spitter_weight + brute_weight)
@@ -7716,6 +7724,14 @@ spawn_pressure_clone_profile = function(profile)
         out.spawn_delta = tonumber(profile.spawn_delta or 0) or 0
         out.strong_multiplier = tonumber(profile.strong_multiplier or 1.0) or 1.0
         out.burst_chance = tonumber(profile.burst_chance or 0.0) or 0.0
+        if type(profile.alien_weights) == "table" then
+            out.alien_weights = {
+                cannon_fodder = tonumber(profile.alien_weights.cannon_fodder or ALIEN_REVEAL_WEIGHT_CANNON) or ALIEN_REVEAL_WEIGHT_CANNON,
+                speedy = tonumber(profile.alien_weights.speedy or ALIEN_REVEAL_WEIGHT_SPEEDY) or ALIEN_REVEAL_WEIGHT_SPEEDY,
+                spitter = tonumber(profile.alien_weights.spitter or ALIEN_REVEAL_WEIGHT_SPITTER) or ALIEN_REVEAL_WEIGHT_SPITTER,
+                brute = tonumber(profile.alien_weights.brute or ALIEN_REVEAL_WEIGHT_BRUTE) or ALIEN_REVEAL_WEIGHT_BRUTE
+            }
+        end
     end
     return out
 end
@@ -7733,6 +7749,14 @@ spawn_pressure_get_tier_profile = function(self, tier)
         end
         if level_profile.strong_multiplier ~= nil then
             profile.strong_multiplier = tonumber(level_profile.strong_multiplier or 1.0) or 1.0
+        end
+        if type(level_profile.alien_weights) == "table" then
+            profile.alien_weights = {
+                cannon_fodder = tonumber(level_profile.alien_weights.cannon_fodder or ALIEN_REVEAL_WEIGHT_CANNON) or ALIEN_REVEAL_WEIGHT_CANNON,
+                speedy = tonumber(level_profile.alien_weights.speedy or ALIEN_REVEAL_WEIGHT_SPEEDY) or ALIEN_REVEAL_WEIGHT_SPEEDY,
+                spitter = tonumber(level_profile.alien_weights.spitter or ALIEN_REVEAL_WEIGHT_SPITTER) or ALIEN_REVEAL_WEIGHT_SPITTER,
+                brute = tonumber(level_profile.alien_weights.brute or ALIEN_REVEAL_WEIGHT_BRUTE) or ALIEN_REVEAL_WEIGHT_BRUTE
+            }
         end
         if level_profile.burst_chance ~= nil then
             profile.burst_chance = tonumber(level_profile.burst_chance or 0.0) or 0.0
@@ -8070,7 +8094,8 @@ get_spawn_pressure_profile = function(self)
         tier = tier,
         spawn_delta = (tonumber(profile and profile.spawn_delta or 0) or 0) + extra_spawn,
         strong_multiplier = tonumber(profile and profile.strong_multiplier or 1.0) or 1.0,
-        burst_chance = tonumber(profile and profile.burst_chance or 0.0) or 0.0
+        burst_chance = tonumber(profile and profile.burst_chance or 0.0) or 0.0,
+        alien_weights = profile and profile.alien_weights or nil
     }
 end
 

@@ -49,10 +49,26 @@ M.SPAWN_PRESSURE_DEFAULTS = {
     enabled = true,
     active_alien_cap = 30,
     tiers = {
-        [0] = { spawn_delta = 0, strong_multiplier = 1.00, burst_chance = 0.00 },
-        [1] = { spawn_delta = 1, strong_multiplier = 1.20, burst_chance = 0.10 },
-        [2] = { spawn_delta = 2, strong_multiplier = 1.45, burst_chance = 0.25 },
-        [3] = { spawn_delta = 3, strong_multiplier = 1.75, burst_chance = 0.40 }
+        [0] = {
+            spawn_delta = 0,
+            burst_chance = 0.00,
+            alien_weights = { cannon_fodder = 10, speedy = 2, spitter = 4, brute = 4 }
+        },
+        [1] = {
+            spawn_delta = 1,
+            burst_chance = 0.10,
+            alien_weights = { cannon_fodder = 8, speedy = 2, spitter = 6, brute = 5 }
+        },
+        [2] = {
+            spawn_delta = 2,
+            burst_chance = 0.25,
+            alien_weights = { cannon_fodder = 6, speedy = 3, spitter = 10, brute = 6 }
+        },
+        [3] = {
+            spawn_delta = 3,
+            burst_chance = 0.40,
+            alien_weights = { cannon_fodder = 4, speedy = 4, spitter = 14, brute = 8 }
+        }
     },
     escape_extra_spawn_by_tier = {
         [2] = 1

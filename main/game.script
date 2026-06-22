@@ -445,6 +445,7 @@ MP_BADGE_BELOW_NAME_OFFSET_Y = -18
 LEADERBOARD_LOCAL_MAX_ENTRIES = 200
 LEADERBOARD_LOCAL_SAVE_KEY_SOLO = "dvx_leaderboard_solo_local"
 LEADERBOARD_LOCAL_SAVE_KEY_MP = "dvx_leaderboard_mp_local"
+LEADERBOARD_SOLO_PROGRESS_SYNC_SAVE_KEY = "dvx_leaderboard_solo_progress_sync_v1"
 SOLO_PROGRESS_LOCAL_SAVE_KEY = "dvx_solo_progress_v1"
 RANGED_HIT_PREVIEW_Z = 0.82
 RANGED_HIT_PREVIEW_DIGIT_SPACING_PX = 14
@@ -1033,10 +1034,34 @@ end
 multiplayer_lobby_join_wire_payload = function(self, session_id, extra)
     multiplayer_lobby_ensure_runtime(self)
     multiplayer_steam_refresh_local_username(self)
+    local local_steam_id = ""
+    if self and self.mp_transport and self.mp_transport.steam_get_local_steam_id then
+        local_steam_id = tostring(self.mp_transport.steam_get_local_steam_id() or "")
+    end
     local payload = {
         session_id = tostring(session_id or ""),
         protocol_version = tostring(NET_PROTOCOL_VERSION or "1"),
-        display_name = tostring(self.mp_lobby.local_username or mp_lobby_sanitize_name("guest"))
+        display_name = tostring(self.mp_lobby.local_username or mp_lobby_sanitize_name("guest")),
+        guest_steam_id = local_steam_id
+    }
+    if type(extra) == "table" then
+        for key, value in pairs(extra) do
+            payload[key] = value
+        end
+    end
+    return payload
+end
+
+multiplayer_lobby_guest_identity_payload = function(self, extra)
+    multiplayer_lobby_ensure_runtime(self)
+    multiplayer_steam_refresh_local_username(self)
+    local local_steam_id = ""
+    if self and self.mp_transport and self.mp_transport.steam_get_local_steam_id then
+        local_steam_id = tostring(self.mp_transport.steam_get_local_steam_id() or "")
+    end
+    local payload = {
+        display_name = tostring(self and self.mp_lobby and self.mp_lobby.local_username or mp_lobby_sanitize_name("guest")),
+        guest_steam_id = local_steam_id
     }
     if type(extra) == "table" then
         for key, value in pairs(extra) do
@@ -14403,6 +14428,149 @@ leaderboard_badge_counts_from_value = function(value)
     return { solo = 0, coop = 0 }
 end
 
+leaderboard_is_local_fallback_steam_id = function(steam_id)
+    local id = tostring(steam_id or "")
+    return id == "" or string.sub(id, 1, 6) == "local_"
+end
+
+leaderboard_get_local_steam_identity = function(self)
+    local steam_id = ""
+    local display_name = ""
+    local source = "none"
+    if self
+        and not self.mp_transport
+        and tostring(MULTIPLAYER_TRANSPORT_MODE or "") == "steam"
+        and multiplayer_transport_init
+    then
+        local ok_init = pcall(function()
+            multiplayer_transport_init(self)
+            if self.mp_transport and self.mp_transport.connect then
+                self.mp_transport.connect()
+            end
+        end)
+        if ok_init then
+            source = "transport_lazy"
+        end
+    end
+    if self and self.mp_transport then
+        if self.mp_transport.steam_get_local_steam_id then
+            steam_id = tostring(self.mp_transport.steam_get_local_steam_id() or "")
+        end
+        if self.mp_transport.steam_get_local_persona_name then
+            display_name = tostring(self.mp_transport.steam_get_local_persona_name() or "")
+        end
+        if steam_id ~= "" or display_name ~= "" then
+            if source ~= "transport_lazy" then
+                source = "transport"
+            end
+        end
+    end
+    if steam_id == "" or display_name == "" then
+        local backend = nil
+        if STEAM_RUNTIME and type(STEAM_RUNTIME.get_backend) == "function" then
+            local ok_backend, backend_or_err = pcall(STEAM_RUNTIME.get_backend)
+            if ok_backend and type(backend_or_err) == "table" then
+                backend = backend_or_err
+                source = "steam_runtime"
+            end
+        end
+        if type(backend) ~= "table" then
+            local steam_global = rawget(_G, "steam")
+            if type(steam_global) == "table" then
+                backend = steam_global
+                source = "steam_global"
+            end
+        end
+        if type(backend) == "table" then
+            if steam_id == "" and type(backend.user_get_steam_id) == "function" then
+                local ok_id, id = pcall(backend.user_get_steam_id)
+                if ok_id then
+                    steam_id = tostring(id or "")
+                end
+            end
+            if display_name == "" and type(backend.friends_get_persona_name) == "function" then
+                local ok_name, name = pcall(backend.friends_get_persona_name)
+                if ok_name then
+                    display_name = tostring(name or "")
+                end
+            end
+            if display_name == "" and type(backend.user_get_persona_name) == "function" then
+                local ok_name, name = pcall(backend.user_get_persona_name)
+                if ok_name then
+                    display_name = tostring(name or "")
+                end
+            end
+            if display_name == "" and type(backend.user_get_name) == "function" then
+                local ok_name, name = pcall(backend.user_get_name)
+                if ok_name then
+                    display_name = tostring(name or "")
+                end
+            end
+        end
+    end
+    steam_id = tostring(steam_id or "")
+    display_name = mp_lobby_sanitize_name(display_name)
+    if steam_id == "" or steam_id == "0" then
+        steam_id = ""
+    end
+    if self then
+        self.leaderboard_last_local_steam_identity_source = source
+    end
+    return steam_id, display_name
+end
+
+leaderboard_get_steam_display_name_for_id = function(steam_id)
+    local target_id = tostring(steam_id or "")
+    if target_id == "" then
+        return ""
+    end
+    local backend = nil
+    if STEAM_RUNTIME and type(STEAM_RUNTIME.get_backend) == "function" then
+        local ok_backend, backend_or_err = pcall(STEAM_RUNTIME.get_backend)
+        if ok_backend and type(backend_or_err) == "table" then
+            backend = backend_or_err
+        end
+    end
+    if type(backend) ~= "table" then
+        local steam_global = rawget(_G, "steam")
+        if type(steam_global) == "table" then
+            backend = steam_global
+        end
+    end
+    if type(backend) ~= "table" then
+        return ""
+    end
+    if type(backend.friends_get_friend_persona_name) == "function" then
+        local ok_name, name = pcall(backend.friends_get_friend_persona_name, target_id)
+        if ok_name and tostring(name or "") ~= "" then
+            return mp_lobby_sanitize_name(name)
+        end
+    end
+    if type(backend.user_get_persona_name) == "function" then
+        local ok_name, name = pcall(backend.user_get_persona_name, target_id)
+        if ok_name and tostring(name or "") ~= "" then
+            return mp_lobby_sanitize_name(name)
+        end
+    end
+    return ""
+end
+
+leaderboard_get_steam_lobby_guest_id_for_wire = function(self, wire_id)
+    local normalized_wire = mp_normalize_network_player_id(wire_id or "")
+    local slot_number = tonumber(string.match(normalized_wire, "^p(%d+)$") or 0) or 0
+    if slot_number <= 1 then
+        return ""
+    end
+    if not (self and self.mp_transport and self.mp_transport.steam_get_lobby_guest_steam_ids) then
+        return ""
+    end
+    local guests = self.mp_transport.steam_get_lobby_guest_steam_ids() or {}
+    table.sort(guests, function(a, b)
+        return tostring(a or "") < tostring(b or "")
+    end)
+    return tostring(guests[slot_number - 1] or "")
+end
+
 leaderboard_get_player_identity = function(self, wire_id)
     local normalized_wire = mp_normalize_network_player_id(wire_id or "")
     if normalized_wire == "" then
@@ -14414,17 +14582,62 @@ leaderboard_get_player_identity = function(self, wire_id)
         steam_id = tostring(session.steam_id_by_wire_id[normalized_wire] or "")
     end
     local local_wire = tostring(self and self.mp_state and self.mp_state.local_player_id or "")
-    if steam_id == "" and normalized_wire == local_wire and self and self.mp_transport and self.mp_transport.steam_get_local_steam_id then
-        steam_id = tostring(self.mp_transport.steam_get_local_steam_id() or "")
+    local is_local_identity = (local_wire == "" and normalized_wire == "p1") or (local_wire ~= "" and normalized_wire == local_wire)
+    local local_steam_id = ""
+    local local_display_name = ""
+    if is_local_identity then
+        local_steam_id, local_display_name = leaderboard_get_local_steam_identity(self)
+    end
+    if steam_id == "" and not is_local_identity then
+        steam_id = leaderboard_get_steam_lobby_guest_id_for_wire(self, normalized_wire)
+        if steam_id ~= "" and type(session) == "table" then
+            multiplayer_steam_ensure_session_roster_maps(session)
+            session.steam_id_by_wire_id[normalized_wire] = steam_id
+            session.wire_id_by_steam_id[steam_id] = normalized_wire
+        end
+    end
+    if steam_id == "" and local_steam_id ~= "" then
+        steam_id = local_steam_id
     end
     if steam_id == "" then
         steam_id = "local_" .. normalized_wire
     end
     local display_name = mp_display_name_for_wire_id(self, normalized_wire)
+    if is_local_identity and local_display_name ~= "" then
+        display_name = local_display_name
+    end
+    if not is_local_identity and not leaderboard_is_local_fallback_steam_id(steam_id) then
+        local steam_display_name = leaderboard_get_steam_display_name_for_id(steam_id)
+        if steam_display_name ~= "" then
+            display_name = steam_display_name
+            if type(session) == "table" then
+                session.display_name_by_wire_id = multiplayer_lobby_merge_display_name_maps(
+                    session.display_name_by_wire_id,
+                    { [normalized_wire] = steam_display_name }
+                )
+            end
+        end
+    end
     if display_name == "" then
         display_name = mp_alpha_label_from_network_id(normalized_wire)
     end
     return steam_id, display_name
+end
+
+leaderboard_collect_mp_display_names = function(self)
+    local names = {}
+    local seen = {}
+    local count = math.max(2, math.min(4, tonumber(self and self.mp_state and self.mp_state.player_count or self and self.mp_setup and self.mp_setup.player_count or 2) or 2))
+    for i = 1, count do
+        local wire_id = "p" .. tostring(i)
+        local _steam_id, display_name = leaderboard_get_player_identity(self, wire_id)
+        local clean = leaderboard_sanitize_name(display_name, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+        if clean ~= "" and seen[clean] ~= true then
+            seen[clean] = true
+            names[#names + 1] = clean
+        end
+    end
+    return names
 end
 
 leaderboard_collect_units_for_player = function(self, player_id)
@@ -14509,11 +14722,107 @@ leaderboard_load_entries_for_view = function(self, score_state)
     return ok_fetch, entries
 end
 
+leaderboard_load_solo_progress_sync_marker = function()
+    local ok, data = pcall(sys.load, LEADERBOARD_SOLO_PROGRESS_SYNC_SAVE_KEY)
+    if not ok or type(data) ~= "table" then
+        return {}
+    end
+    return data
+end
+
+leaderboard_save_solo_progress_sync_marker = function(steam_id, signature, synced_count)
+    pcall(sys.save, LEADERBOARD_SOLO_PROGRESS_SYNC_SAVE_KEY, {
+        steam_id = tostring(steam_id or ""),
+        signature = tostring(signature or ""),
+        synced_count = math.max(0, tonumber(synced_count or 0) or 0),
+        synced_at_ms = get_wall_clock_ms()
+    })
+end
+
+leaderboard_build_solo_progress_sync_payloads = function(self, steam_id, display_name)
+    local payloads = {}
+    local signature_parts = {}
+    if not self then
+        return payloads, ""
+    end
+    solo_progress_ensure_runtime(self)
+    for slot = 1, SOLO_SETUP_MISSION_COUNT do
+        local entry = solo_progress_get_mission_entry(self, slot)
+        local result = tostring(entry and entry.result or "unplayed")
+        if result ~= "unplayed" then
+            if result ~= "win" then
+                result = "loss"
+            end
+            local score = result == "win" and math.max(0, tonumber(entry and entry.score or 0) or 0) or 0
+            signature_parts[#signature_parts + 1] = string.format("%d:%s:%d", slot, result, score)
+            payloads[#payloads + 1] = LEADERBOARD_REMOTE.normalize_solo_payload({
+                steam_id = steam_id,
+                display_name = display_name,
+                level_id = slot,
+                score = score,
+                result = result
+            })
+        end
+    end
+    return payloads, table.concat(signature_parts, "|")
+end
+
+leaderboard_sync_solo_progress_to_supabase = function(self)
+    if not (self and LEADERBOARD_REMOTE.is_enabled and LEADERBOARD_REMOTE.is_enabled()) then
+        return false, "disabled"
+    end
+    if self.leaderboard_solo_progress_sync_started == true then
+        return false, "in_progress"
+    end
+    local steam_id, display_name = leaderboard_get_local_steam_identity(self)
+    if leaderboard_is_local_fallback_steam_id(steam_id) then
+        return false, "no_steam_id"
+    end
+    local payloads, signature = leaderboard_build_solo_progress_sync_payloads(self, steam_id, display_name)
+    if #payloads <= 0 or signature == "" then
+        return false, "nothing_to_sync"
+    end
+    local marker = leaderboard_load_solo_progress_sync_marker()
+    if tostring(marker.steam_id or "") == tostring(steam_id or "") and tostring(marker.signature or "") == signature then
+        return false, "already_synced"
+    end
+    local pending = #payloads
+    local ok_count = 0
+    local fail_count = 0
+    self.leaderboard_solo_progress_sync_started = true
+    local function on_sync_done(ok, reason)
+        if ok then
+            ok_count = ok_count + 1
+        else
+            fail_count = fail_count + 1
+            print("LEADERBOARD | solo progress sync row failed reason=" .. tostring(reason or "unknown"))
+        end
+        pending = pending - 1
+        if pending <= 0 then
+            self.leaderboard_solo_progress_sync_started = false
+            if fail_count <= 0 then
+                leaderboard_save_solo_progress_sync_marker(steam_id, signature, ok_count)
+                print(string.format("LEADERBOARD | solo progress sync complete rows=%d", ok_count))
+            else
+                print(string.format("LEADERBOARD | solo progress sync incomplete ok=%d failed=%d", ok_count, fail_count))
+            end
+        end
+    end
+    for _, payload in ipairs(payloads) do
+        LEADERBOARD_REMOTE.submit(payload, on_sync_done)
+    end
+    print(string.format("LEADERBOARD | solo progress sync requested rows=%d", #payloads))
+    return true, "requested"
+end
+
 leaderboard_enter_from_title = function(self, score_state)
     leaderboard_load_badges(self)
     self.leaderboard_return_flow = "title"
     self.leaderboard_detail_entry_index = nil
     self.leaderboard_debug_page = 1
+    if score_state == FLOW_STATE_SCORE_SOLO then
+        leaderboard_sync_solo_progress_to_supabase(self)
+    end
     leaderboard_load_entries_for_view(self, score_state)
     enter_flow_state(self, score_state)
 end
@@ -14529,60 +14838,70 @@ leaderboard_get_rows_for_score_state = function(self, score_state)
     local entries = leaderboard_get_entries_for_score_state(self, score_state)
     local rows = {}
     for entry_index, entry in ipairs(entries) do
-        local names = type(entry.team_display_names) == "table" and entry.team_display_names or {}
-        local name_text = ""
-        local name_segments = {}
-        local badge_map = type(entry.winner_badges_by_steam_id) == "table" and entry.winner_badges_by_steam_id or {}
-        if type(entry.players) == "table" and #entry.players > 0 then
-            for i, player in ipairs(entry.players) do
-                local clean = leaderboard_sanitize_name(player and player.display_name or names[i] or "", LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
-                if clean ~= "" then
-                    local steam_id = tostring(player and player.steam_id or "")
-                    local entry_counts = leaderboard_badge_counts_from_value(badge_map[steam_id])
-                    local cached_counts = leaderboard_badge_counts_for_steam_id(self, steam_id)
-                    local segment = {
-                        text = clean,
-                        badge_counts = {
-                            solo = math.max(entry_counts.solo or 0, cached_counts.solo or 0),
-                            coop = math.max(entry_counts.coop or 0, cached_counts.coop or 0)
-                        }
-                    }
-                    name_segments[#name_segments + 1] = segment
-                    name_text = (name_text == "") and clean or (name_text .. " " .. clean)
-                end
-                if i >= 4 then
-                    break
-                end
+        local skip_entry = false
+        if score_state == FLOW_STATE_SCORE_SOLO and LEADERBOARD_REMOTE.is_enabled and LEADERBOARD_REMOTE.is_enabled() then
+            local players_for_filter = type(entry.players) == "table" and entry.players or {}
+            local first_player = players_for_filter[1] or {}
+            if leaderboard_is_local_fallback_steam_id(first_player.steam_id) then
+                skip_entry = true
             end
-        elseif #names > 0 then
-            for i, nm in ipairs(names) do
-                local clean = leaderboard_sanitize_name(nm, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
-                if clean ~= "" then
-                    name_segments[#name_segments + 1] = {
-                        text = clean,
-                        badge_counts = { solo = 0, coop = 0 }
-                    }
-                    if name_text == "" then
-                        name_text = clean
-                    else
-                        name_text = name_text .. " " .. clean
+        end
+        if not skip_entry then
+            local names = type(entry.team_display_names) == "table" and entry.team_display_names or {}
+            local name_text = ""
+            local name_segments = {}
+            local badge_map = type(entry.winner_badges_by_steam_id) == "table" and entry.winner_badges_by_steam_id or {}
+            if type(entry.players) == "table" and #entry.players > 0 then
+                for i, player in ipairs(entry.players) do
+                    local clean = leaderboard_sanitize_name(player and player.display_name or names[i] or "", LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
+                    if clean ~= "" then
+                        local steam_id = tostring(player and player.steam_id or "")
+                        local entry_counts = leaderboard_badge_counts_from_value(badge_map[steam_id])
+                        local cached_counts = leaderboard_badge_counts_for_steam_id(self, steam_id)
+                        local segment = {
+                            text = clean,
+                            badge_counts = {
+                                solo = math.max(entry_counts.solo or 0, cached_counts.solo or 0),
+                                coop = math.max(entry_counts.coop or 0, cached_counts.coop or 0)
+                            }
+                        }
+                        name_segments[#name_segments + 1] = segment
+                        name_text = (name_text == "") and clean or (name_text .. " " .. clean)
+                    end
+                    if i >= 4 then
+                        break
                     end
                 end
-                if i >= 4 then
-                    break
+            elseif #names > 0 then
+                for i, nm in ipairs(names) do
+                    local clean = leaderboard_sanitize_name(nm, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+                    if clean ~= "" then
+                        name_segments[#name_segments + 1] = {
+                            text = clean,
+                            badge_counts = { solo = 0, coop = 0 }
+                        }
+                        if name_text == "" then
+                            name_text = clean
+                        else
+                            name_text = name_text .. " " .. clean
+                        end
+                    end
+                    if i >= 4 then
+                        break
+                    end
                 end
             end
+            if name_text == "" then
+                name_text = leaderboard_sanitize_name(mp_alpha_label_from_network_id("p1"), LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+                name_segments[1] = { text = name_text, badge_counts = { solo = 0, coop = 0 } }
+            end
+            rows[#rows + 1] = {
+                score = math.max(0, tonumber(entry.score_total or 0) or 0),
+                name = name_text,
+                name_segments = name_segments,
+                entry_index = entry_index
+            }
         end
-        if name_text == "" then
-            name_text = leaderboard_sanitize_name(mp_alpha_label_from_network_id("p1"), LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
-            name_segments[1] = { text = name_text, badge_counts = { solo = 0, coop = 0 } }
-        end
-        rows[#rows + 1] = {
-            score = math.max(0, tonumber(entry.score_total or 0) or 0),
-            name = name_text,
-            name_segments = name_segments,
-            entry_index = entry_index
-        }
     end
     return rows
 end
@@ -15692,6 +16011,16 @@ end
 score_build_publish_payload = function(self, score_state)
     local breakdown = self.flow_score_breakdown or compute_placeholder_score_breakdown(self)
     local solo_steam_id, solo_display_name = leaderboard_get_player_identity(self, tostring((self.mp_state and self.mp_state.local_player_id) or "p1"))
+    local identity_tail = tostring(solo_steam_id or "")
+    if #identity_tail > 4 then
+        identity_tail = string.sub(identity_tail, -4)
+    end
+    print(string.format(
+        "LEADERBOARD | identity source=%s steam_tail=%s display=%s",
+        tostring(self and self.leaderboard_last_local_steam_identity_source or "unknown"),
+        tostring(identity_tail),
+        tostring(solo_display_name or "")
+    ))
     local payload = {
         match_id = string.format(
             "%s_t%d_%s",
@@ -15714,7 +16043,16 @@ score_build_publish_payload = function(self, score_state)
     if score_state == FLOW_STATE_SCORE_MP and self.mp_state and self.mp_state.enabled then
         local name_seen = {}
         local id_seen = {}
-        payload.players = leaderboard_collect_mp_players(self)
+        payload.players = type(self.flow_score_mp_players) == "table" and #self.flow_score_mp_players > 0
+            and multiplayer_clone_simple_table(self.flow_score_mp_players)
+            or leaderboard_collect_mp_players(self)
+        for _, player in ipairs(payload.players) do
+            local clean = leaderboard_sanitize_name(player and player.display_name or "", LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+            if clean ~= "" and name_seen[clean] ~= true then
+                name_seen[clean] = true
+                payload.team_display_names[#payload.team_display_names + 1] = clean
+            end
+        end
         if type(self.flow_score_team_display_names) == "table" then
             for _, display_name in ipairs(self.flow_score_team_display_names) do
                 local clean = leaderboard_sanitize_name(display_name, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
@@ -15883,7 +16221,28 @@ score_try_auto_publish = function(self, score_state)
                 score = payload.score_total,
                 players = payload.players
             })
-            LEADERBOARD_REMOTE.submit(remote_payload)
+            local mp_name_debug = {}
+            for _, player in ipairs(remote_payload.players or {}) do
+                local steam_tail = tostring(player.steam_id or "")
+                if #steam_tail > 4 then
+                    steam_tail = string.sub(steam_tail, -4)
+                end
+                mp_name_debug[#mp_name_debug + 1] = string.format("%s:%s", tostring(player.display_name or ""), steam_tail)
+            end
+            print(string.format(
+                "LEADERBOARD | mp submit requested team=%s score=%d players=%s",
+                tostring(remote_payload.team_entry_id or ""),
+                tonumber(remote_payload.score or 0) or 0,
+                table.concat(mp_name_debug, ",")
+            ))
+            LEADERBOARD_REMOTE.submit(remote_payload, function(ok, reason)
+                print(string.format(
+                    "LEADERBOARD | mp submit result ok=%s reason=%s team=%s",
+                    tostring(ok == true),
+                    tostring(reason or "unknown"),
+                    tostring(remote_payload.team_entry_id or "")
+                ))
+            end)
             self.flow_submit_done = true
             self.flow_score_publish_status = "published_host"
             print("SCORE | auto publish attempted (multiplayer host).")
@@ -18773,11 +19132,23 @@ multiplayer_steam_sync_transport_peer_map = function(self, session)
     self.mp_transport.steam_sync_peer_map(session.steam_id_by_wire_id)
 end
 
+multiplayer_steam_guest_steam_id_from_command = function(command)
+    if type(command) ~= "table" then
+        return ""
+    end
+    local from_command = tostring(command.guest_steam_id or "")
+    if from_command ~= "" then
+        return from_command
+    end
+    local payload = type(command.payload) == "table" and command.payload or {}
+    return tostring(payload.guest_steam_id or "")
+end
+
 multiplayer_steam_resolve_guest_wire_id = function(self, session, command)
     if tostring(MULTIPLAYER_TRANSPORT_MODE or "") ~= "steam" then
         return mp_normalize_network_player_id(command and command.sender_player_id or "")
     end
-    local guest_steam_id = tostring(command and command.guest_steam_id or "")
+    local guest_steam_id = multiplayer_steam_guest_steam_id_from_command(command)
     if guest_steam_id ~= "" and type(session) == "table" then
         local wire_id = multiplayer_steam_assign_wire_id_for_guest(self, session, guest_steam_id)
         if wire_id ~= "" then
@@ -19364,7 +19735,7 @@ multiplayer_lobby_guest_request_setup_sync = function(self)
     if sync_wire_id == "" then
         return false
     end
-    multiplayer_transport_send_command(self, "request_setup_state", {}, sync_wire_id)
+    multiplayer_transport_send_command(self, "request_setup_state", multiplayer_lobby_guest_identity_payload(self), sync_wire_id)
     multiplayer_debug_log(self, string.format(
         "MP LOBBY | setup_sync_request guest=%s epoch=%d",
         sync_wire_id,
@@ -20533,6 +20904,8 @@ multiplayer_lobby_emit_offer_upsert = function(self, session, target_player_id)
         is_locked = session.is_locked == true,
         joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
         display_name_by_wire_id = multiplayer_clone_simple_table(session.display_name_by_wire_id or {}),
+        steam_id_by_wire_id = multiplayer_clone_simple_table(session.steam_id_by_wire_id or {}),
+        wire_id_by_steam_id = multiplayer_clone_simple_table(session.wire_id_by_steam_id or {}),
         updated_at_ms = now_ms
     }
     print(string.format("LOBBY_COMMAND | offer_upsert_send_command | offer=%s owner=%s", tostring(session.id or ""), tostring(session.owner_player_id or "")))
@@ -21073,7 +21446,7 @@ multiplayer_lobby_enter_mp_setup_from_session = function(self, session, skip_req
         if multiplayer_lobby_is_local_offer_owner(self, session) then
             multiplayer_setup_push_state(self)
         elseif self.mp_state and self.mp_state.enabled then
-            multiplayer_transport_send_command(self, "request_setup_state", {}, self.mp_state.local_player_id)
+            multiplayer_transport_send_command(self, "request_setup_state", multiplayer_lobby_guest_identity_payload(self), self.mp_state.local_player_id)
         end
     end
     return true
@@ -22213,8 +22586,21 @@ function enter_mission_outro(self, result, reason)
                 end
             end
             local payload_team_names = {}
-            for _, pid in ipairs(payload_team_ids) do
-                payload_team_names[#payload_team_names + 1] = mp_alpha_label_from_network_id(pid)
+            self.flow_score_mp_players = leaderboard_collect_mp_players(self)
+            local resolved_team_names = {}
+            local resolved_name_seen = {}
+            for _, player in ipairs(self.flow_score_mp_players or {}) do
+                local clean = leaderboard_sanitize_name(player and player.display_name or "", LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+                if clean ~= "" and resolved_name_seen[clean] ~= true then
+                    resolved_name_seen[clean] = true
+                    resolved_team_names[#resolved_team_names + 1] = clean
+                end
+            end
+            if #resolved_team_names <= 0 then
+                resolved_team_names = leaderboard_collect_mp_display_names(self)
+            end
+            for _, name in ipairs(resolved_team_names) do
+                payload_team_names[#payload_team_names + 1] = name
             end
             if #payload_team_names <= 0 then
                 payload_team_names[1] = mp_alpha_label_from_network_id(self.mp_state.local_player_id or self.mp_state.host_player_id or "p1")
@@ -22224,7 +22610,8 @@ function enter_mission_outro(self, result, reason)
                 result = final_result_for_event,
                 reason = tostring(reason or "unknown"),
                 score_breakdown = final_score_breakdown,
-                team_display_names = payload_team_names
+                team_display_names = payload_team_names,
+                players = multiplayer_clone_simple_table(self.flow_score_mp_players or {})
             })
             self.mp_state.match_end_dispatched = true
             print(string.format(
@@ -23845,6 +24232,7 @@ finish_level_load_after_clear = function(self, level_index)
     self.flow_score_publish_status = ""
     self.flow_score_publish_pending_count = 0
     self.flow_score_last_publish_payload = nil
+    self.flow_score_mp_players = nil
     self.leaderboard_entries_solo = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_SOLO)
     self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
     score_load_pending_uploads(self)
@@ -27713,7 +28101,7 @@ multiplayer_transport_handle_command = function(self, command)
         self.mp_state.seen_command_ids = self.mp_state.seen_command_ids or {}
         local dedupe_key = string.format("%s|%s", tostring(sender or "unknown"), tostring(cmd_message_id))
         if cmd_type == "lobby_join_session" then
-            local join_identity = tostring(command.guest_steam_id or "")
+            local join_identity = multiplayer_steam_guest_steam_id_from_command(command)
             if join_identity == "" then
                 join_identity = tostring(sender or "unknown")
             end
@@ -27849,7 +28237,7 @@ multiplayer_transport_handle_command = function(self, command)
                 "MP LOBBY | setup_sync_ack guest=%s sender=%s steam=%s",
                 requester_id,
                 tostring(sender or ""),
-                tostring(command.guest_steam_id or "")
+                multiplayer_steam_guest_steam_id_from_command(command)
             ))
         end
         local config = multiplayer_setup_build_guest_wire_config(self, session)
@@ -27892,6 +28280,9 @@ multiplayer_transport_handle_command = function(self, command)
                     max_players = math.max(2, tonumber(session.max_players or 2) or 2),
                     is_locked = session.is_locked == true,
                     joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
+                    display_name_by_wire_id = multiplayer_clone_simple_table(session.display_name_by_wire_id or {}),
+                    steam_id_by_wire_id = multiplayer_clone_simple_table(session.steam_id_by_wire_id or {}),
+                    wire_id_by_steam_id = multiplayer_clone_simple_table(session.wire_id_by_steam_id or {}),
                     session_key = tostring(session.session_key or session.id or ""),
                     session_number = tonumber(session.session_number or 0) or 0,
                     host_steam_id = tostring(session.host_steam_id or ""),
@@ -27959,7 +28350,7 @@ multiplayer_transport_handle_command = function(self, command)
         end
         local requester_player_id = multiplayer_steam_resolve_guest_wire_id(self, session, command)
         if requester_player_id == "" then
-            local reject_reason = tostring(command.guest_steam_id or "") ~= "" and "session_full" or "requester_missing"
+            local reject_reason = multiplayer_steam_guest_steam_id_from_command(command) ~= "" and "session_full" or "requester_missing"
             table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
                 command_type = "lobby_join_session",
                 reason = reject_reason
@@ -28026,6 +28417,7 @@ multiplayer_transport_handle_command = function(self, command)
             session.joined_player_ids[#session.joined_player_ids + 1] = requester_player_id
             multiplayer_mark_remote_player_alive(self, requester_player_id)
         end
+        multiplayer_steam_ensure_session_roster_maps(session)
         session.display_name_by_wire_id = multiplayer_lobby_merge_display_name_maps(
             session.display_name_by_wire_id,
             { [requester_player_id] = payload.display_name or "" }
@@ -28059,6 +28451,8 @@ multiplayer_transport_handle_command = function(self, command)
                 is_locked = session.is_locked == true,
                 joined_player_ids = multiplayer_clone_simple_table(session.joined_player_ids or {}),
                 display_name_by_wire_id = multiplayer_clone_simple_table(session.display_name_by_wire_id or {}),
+                steam_id_by_wire_id = multiplayer_clone_simple_table(session.steam_id_by_wire_id or {}),
+                wire_id_by_steam_id = multiplayer_clone_simple_table(session.wire_id_by_steam_id or {}),
                 updated_at_ms = tonumber(session.updated_at_ms or get_wall_clock_ms()) or get_wall_clock_ms()
             }
         }))
@@ -28290,7 +28684,7 @@ multiplayer_transport_handle_command = function(self, command)
         end
         local session = multiplayer_lobby_get_session_by_id(self, session_id)
         local departing_id = mp_normalize_network_player_id(sender)
-        local guest_steam_id = tostring(command.guest_steam_id or "")
+        local guest_steam_id = multiplayer_steam_guest_steam_id_from_command(command)
         if guest_steam_id ~= "" and type(session) == "table" then
             multiplayer_steam_ensure_session_roster_maps(session)
             local mapped_wire = tostring(session.wire_id_by_steam_id[guest_steam_id] or "")
@@ -30375,7 +30769,7 @@ multiplayer_transport_on_event = function(self, event)
                         multiplayer_apply_steam_transport_seat_ids(self)
                         local sync_wire_id = mp_normalize_network_player_id(self.mp_state.local_player_id or "")
                         if sync_wire_id ~= "" then
-                            multiplayer_transport_send_command(self, "request_setup_state", {}, sync_wire_id)
+                            multiplayer_transport_send_command(self, "request_setup_state", multiplayer_lobby_guest_identity_payload(self), sync_wire_id)
                             multiplayer_debug_log(self, string.format(
                                 "MP LOBBY | setup_sync_roster_ack guest=%s session=%s rev=%d",
                                 sync_wire_id,
@@ -30682,6 +31076,9 @@ multiplayer_transport_on_event = function(self, event)
         end
         if type(payload.team_display_names) == "table" then
             self.flow_score_team_display_names = payload.team_display_names
+        end
+        if type(payload.players) == "table" then
+            self.flow_score_mp_players = multiplayer_clone_simple_table(payload.players)
         end
         print(string.format(
             "MP OUTRO | match_ended event applied | result=%s reason=%s",
@@ -31476,7 +31873,7 @@ multiplayer_transport_on_event = function(self, event)
                 multiplayer_lobby_push_state(self)
             end
         else
-            multiplayer_transport_send_command(self, "request_setup_state", {}, self.mp_state.local_player_id)
+            multiplayer_transport_send_command(self, "request_setup_state", multiplayer_lobby_guest_identity_payload(self), self.mp_state.local_player_id)
             print("MP SETUP | requested_from_host")
         end
         if not is_local_host then

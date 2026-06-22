@@ -20,6 +20,11 @@ local function to_score(value)
     return math.max(0, math.floor((tonumber(value or 0) or 0) + 0.5))
 end
 
+local function is_local_fallback_steam_id(steam_id)
+    local id = to_string(steam_id)
+    return id == "" or string.sub(id, 1, 6) == "local_"
+end
+
 local function shallow_clone_array(src)
     local out = {}
     if type(src) ~= "table" then
@@ -204,21 +209,23 @@ local function normalize_remote_solo_entries(rows)
     for i = 1, #rows do
         local row = type(rows[i]) == "table" and rows[i] or {}
         local steam_id = to_string(row.steam_id)
-        local display_name = to_string(row.display_name)
-        entries[#entries + 1] = {
-            match_id = "solo_total_" .. steam_id,
-            score_total = to_score(row.score),
-            team_display_names = display_name ~= "" and { display_name } or {},
-            players = {
-                {
-                    steam_id = steam_id,
-                    display_name = display_name,
-                    units_played = {}
-                }
-            },
-            winner_badges_by_steam_id = {},
-            created_at_ms = 0
-        }
+        if not is_local_fallback_steam_id(steam_id) then
+            local display_name = to_string(row.display_name)
+            entries[#entries + 1] = {
+                match_id = "solo_total_" .. steam_id,
+                score_total = to_score(row.score),
+                team_display_names = display_name ~= "" and { display_name } or {},
+                players = {
+                    {
+                        steam_id = steam_id,
+                        display_name = display_name,
+                        units_played = {}
+                    }
+                },
+                winner_badges_by_steam_id = {},
+                created_at_ms = 0
+            }
+        end
     end
     return entries
 end
@@ -406,14 +413,21 @@ function M.to_local_entry(payload)
     }
 end
 
-function M.submit(payload)
+function M.submit(payload, callback)
+    callback = type(callback) == "function" and callback or nil
     local cfg = M.get_config()
     if not cfg.enabled then
         M.enqueue(payload, "supabase_disabled")
+        if callback then
+            callback(false, "supabase_disabled")
+        end
         return false, "supabase_disabled"
     end
     if not (ok_json and json and json.encode) then
         M.enqueue(payload, "json_unavailable")
+        if callback then
+            callback(false, "json_unavailable")
+        end
         return false, "json_unavailable"
     end
     local requested, reason = post_json(cfg, "/functions/v1/" .. cfg.submit_function, payload, function(ok, submit_reason)
@@ -422,9 +436,15 @@ function M.submit(payload)
         else
             M.enqueue(payload, submit_reason or "submit_failed")
         end
+        if callback then
+            callback(ok == true, submit_reason or (ok and "ok" or "submit_failed"))
+        end
     end)
     if not requested then
         M.enqueue(payload, reason or "submit_request_failed")
+        if callback then
+            callback(false, reason or "submit_request_failed")
+        end
         return false, reason or "submit_request_failed"
     end
     return true, "requested"

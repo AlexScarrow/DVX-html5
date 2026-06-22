@@ -904,6 +904,42 @@ levels[4] = {
             { tier = 3, kind = "holdout_turns_remaining_at_most", value = 14 },
         }
     }
+    levels[21] = {
+        { x = 3, y = 14, tile = "coms" },
+        { x = 6, y = 14, tile = "armoury" },
+        { x = 9, y = 14, tile = "exterior1" },
+        { x = 12, y = 14, tile = "exterior2" },
+        { x = 4, y = 11, tile = "bunkroom" },
+        { x = 7, y = 11, tile = "jungle" },
+        { x = 10, y = 11, tile = "medbay" },
+        { x = 13, y = 11, tile = "portal" },
+        { x = 2, y = 8, tile = "entry" },
+        { x = 5, y = 8, tile = "exterior2" },
+        { x = 8, y = 8, tile = "exterior1" },
+        { x = 11, y = 8, tile = "conference" },
+        { x = 14, y = 8, tile = "exterior2" },
+        { x = 2, y = 5, tile = "void" },
+        { x = 5, y = 5, tile = "portal" },
+        { x = 8, y = 5, tile = "factory" },
+        { x = 11, y = 5, tile = "workshop" },
+        { x = 14, y = 5, tile = "portal" },
+        { x = 8, y = 2, tile = "cavern" },
+        { x = 11, y = 2, tile = "portal" },
+    }
+    levels[21].mission_type = "holdout"
+    levels[21].holdout_turns = 80
+    levels[21].spawn_tile = "rescue_entry"
+    levels[21].spawn_cell = 2
+    levels[21].unit_loadouts = levels[1].unit_loadouts
+    levels[21].spawn_pressure = {
+        enabled = true,
+        active_alien_cap = 16,
+        triggers = {
+            { tier = 1, kind = "holdout_turns_remaining_at_most", value = 49 },
+            { tier = 2, kind = "holdout_turns_remaining_at_most", value = 28 },
+            { tier = 3, kind = "holdout_turns_remaining_at_most", value = 14 },
+        }
+    }
     
     return levels
 end

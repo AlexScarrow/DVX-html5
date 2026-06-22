@@ -6332,6 +6332,9 @@ local function update_alien_movement(self, dt)
     end
 
     for _, alien in ipairs(self.aliens) do
+        if alien.go_id and not alien.is_moving then
+            reset_boardgame_alien_counter_move_visual(self, alien)
+        end
         if (alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_CANNON) and alien.go_id and (not alien.is_moving) then
             go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
         end
@@ -6367,9 +6370,10 @@ local function update_alien_movement(self, dt)
                     local profile = get_aesthetic_profile(self)
                     local move_z = 0.6
                     if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
-                        move_z = profile.counter_alien_move_z or 0.72
+                        move_z = profile.counter_human_move_z or profile.counter_alien_move_z or 0.72
                     end
-                    if alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE then
+                    local boardgame_counter_visual = apply_boardgame_alien_counter_move_visual(self, alien, profile, sdist, sdx, dt)
+                    if (not boardgame_counter_visual) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE) then
                         local anim_speed_mul = 1
                         if alien.type == ALIEN_TYPE_CANNON then
                             anim_speed_mul = CANNON_FODDER_MOVE_PULSE_SPEED_MULTIPLIER
@@ -6554,12 +6558,13 @@ local function update_alien_movement(self, dt)
                 local profile = get_aesthetic_profile(self)
                 local move_z = 0.6
                 if profile and profile.counter_token_move_enabled == true and alien.type ~= ALIEN_TYPE_BLIP then
-                    move_z = profile.counter_alien_move_z or 0.72
+                    move_z = profile.counter_human_move_z or profile.counter_alien_move_z or 0.72
                 end
                 if is_vent_jump then
                     alien.counter_shadow_offset = nil
                 end
-                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE) then
+                local boardgame_counter_visual = (not is_vent_jump) and apply_boardgame_alien_counter_move_visual(self, alien, profile, dist, dx, dt)
+                if (not boardgame_counter_visual) and (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY or alien.type == ALIEN_TYPE_BRUTE) then
                     local anim_speed_mul = 1
                     if alien.type == ALIEN_TYPE_CANNON then
                         anim_speed_mul = CANNON_FODDER_MOVE_PULSE_SPEED_MULTIPLIER
@@ -6638,7 +6643,7 @@ local function update_alien_movement(self, dt)
                         go.set_rotation(vmath.quat_rotation_z(0), alien.go_id)
                     end
                 end
-                if (not is_vent_jump) and alien.type == ALIEN_TYPE_BRUTE then
+                if (not is_vent_jump) and alien.type == ALIEN_TYPE_BRUTE and self.aesthetic_mode ~= AESTHETIC_MODE_BOARDGAME then
                     local sprite_url = msg.url(nil, alien.go_id, "sprite")
                     local shadow_url = msg.url(nil, alien.go_id, "shadow")
                     if math.abs(dx) >= math.abs(dy) and math.abs(dx) > 0.1 then
@@ -6662,7 +6667,7 @@ local function update_alien_movement(self, dt)
                         sprite.set_hflip(shadow_url, false)
                     end
                 end
-                if (not is_vent_jump) and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
+                if (not is_vent_jump) and self.aesthetic_mode ~= AESTHETIC_MODE_BOARDGAME and (alien.type == ALIEN_TYPE_CANNON or alien.type == ALIEN_TYPE_SPITTER or alien.type == ALIEN_TYPE_SPEEDY) then
                     if math.abs(dx) > 0.1 then
                         -- Requirement: flip sprite while moving right; unflipped while moving left.
                         alien.spitter_flip = dx > 0
@@ -11625,15 +11630,71 @@ get_counter_shadow_offset = function(profile, move_arc)
     )
 end
 
-get_counter_shadow_anim_for_alien = function(alien_type)
+get_alien_counter_base_scale = function(self, alien)
+    local alien_type = alien and alien.type or ""
+    local base_scale = 0.33333334
     if alien_type == ALIEN_TYPE_CANNON then
-        return hash("alien_cannonFodder_shadow")
-    elseif alien_type == ALIEN_TYPE_BRUTE then
-        return hash("alien_brute_shadow")
+        base_scale = 0.22 * CANNON_FODDER_SCALE_MULTIPLIER
     elseif alien_type == ALIEN_TYPE_SPITTER then
-        return hash("alien_spitter_shadow")
+        base_scale = (0.33333334 * 0.75) * SPITTER_SCALE_MULTIPLIER
     elseif alien_type == ALIEN_TYPE_SPEEDY then
-        return hash("alien_speedy_shadow")
+        base_scale = base_scale * 0.75
+    elseif alien_type == ALIEN_TYPE_BRUTE then
+        base_scale = (0.22 * 1.5 * 1.25 * 1.2 * 1.1) * ((self and self.aesthetic_mode == AESTHETIC_MODE_COMPUTER) and 1.2 or 1.0)
+    end
+    return base_scale
+end
+
+apply_boardgame_alien_counter_move_visual = function(self, alien, profile, remaining_dist, dx, dt)
+    if not (self and alien and alien.go_id and profile and profile.counter_token_move_enabled == true) then
+        return false
+    end
+    if alien.type == ALIEN_TYPE_BLIP then
+        return false
+    end
+    if self.aesthetic_mode ~= AESTHETIC_MODE_BOARDGAME then
+        return false
+    end
+    local dist = math.max(0, tonumber(remaining_dist or 0) or 0)
+    if not alien.counter_move_total_dist or alien.counter_move_total_dist <= 0 then
+        alien.counter_move_total_dist = math.max(dist, 1)
+    end
+    alien.spitter_anim_phase = (alien.spitter_anim_phase or 0) + ((dt or 0) * HUMAN_PINGPONG_SPEED * math.pi * 2)
+    local progress = 1 - math.max(0, math.min(1, dist / alien.counter_move_total_dist))
+    local lift = math.sin(progress * math.pi)
+    local move_arc = 4 * progress * (1 - progress)
+    local wobble = math.sin((alien.spitter_anim_phase or 0) * 2.0 + (((dx or 0) < 0) and 1.4 or 0))
+    local lift_scale = profile.counter_lift_scale or 0.16
+    local wobble_scale = profile.counter_wobble_scale or 0.04
+    local base_scale = get_alien_counter_base_scale(self, alien)
+    local scale_x = base_scale * (1 + (lift * lift_scale) + (wobble * wobble_scale))
+    local scale_y = base_scale * (1 + (lift * lift_scale) - (wobble * wobble_scale * 0.6))
+    alien.counter_shadow_offset = get_counter_shadow_offset(profile, move_arc)
+    pcall(go.set_scale, vmath.vector3(scale_x, scale_y, 1), alien.go_id)
+    pcall(go.set_rotation, vmath.quat_rotation_z(0), alien.go_id)
+    return true
+end
+
+reset_boardgame_alien_counter_move_visual = function(self, alien)
+    if not (self and alien and alien.go_id and self.aesthetic_mode == AESTHETIC_MODE_BOARDGAME) then
+        return
+    end
+    if alien.type == ALIEN_TYPE_BLIP then
+        return
+    end
+    alien.counter_shadow_offset = nil
+    alien.counter_move_total_dist = nil
+    pcall(go.set_scale, vmath.vector3(get_alien_counter_base_scale(self, alien), get_alien_counter_base_scale(self, alien), 1), alien.go_id)
+    pcall(go.set_rotation, vmath.quat_rotation_z(0), alien.go_id)
+end
+
+get_counter_shadow_anim_for_alien = function(alien_type)
+    if alien_type == ALIEN_TYPE_CANNON
+        or alien_type == ALIEN_TYPE_BRUTE
+        or alien_type == ALIEN_TYPE_SPITTER
+        or alien_type == ALIEN_TYPE_SPEEDY
+    then
+        return hash("human_proxyShadow_boardgame")
     end
     return nil
 end
@@ -37966,7 +38027,8 @@ function update(self, dt)
                     local proxy_id = ensure_counter_shadow_proxy(
                         alien,
                         get_counter_shadow_anim_for_alien(alien.type),
-                        vmath.vector4(1, 1, 1, 0.5)
+                        vmath.vector4(1, 1, 1, 0.5),
+                        "/human_shadow_proxy_factory#human_shadow_proxy_factory"
                     )
                     if proxy_id then
                         local apos = go.get_position(alien.go_id)

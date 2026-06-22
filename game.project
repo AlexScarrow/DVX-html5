@@ -67,3 +67,10 @@ disable_multiplayer = 0
 lock_fixed_window = 0
 start_maximized = 1
 
+[leaderboard]
+supabase_enabled = 1
+supabase_url = https://fvgdbkyfxqhfitijmbul.supabase.co
+supabase_anon_key = sb_publishable_PY27WC504R0SYduTgsw8Nw_yZt3LzEO
+supabase_submit_function = submit-leaderboard-score
+supabase_read_limit = 100
+

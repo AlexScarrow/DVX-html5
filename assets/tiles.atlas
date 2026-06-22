@@ -729,6 +729,12 @@ images {
   image: "/assets/images/leaderboard_team_header.png"
 }
 images {
+  image: "/assets/images/leaderboard_winner_coop.png"
+}
+images {
+  image: "/assets/images/leaderboard_winner_solo.png"
+}
+images {
   image: "/assets/images/letter_a.png"
 }
 images {

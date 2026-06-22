@@ -8,6 +8,7 @@ M.FEATURE_FLAGS = {
     level_editor_enabled = true,
     unlock_all_solo_missions = true,
     debug_level_buttons_enabled = false,
+    leaderboard_seed_winner_badges = false,
     mp_lag_sim_ui_enabled = false,
     realtime_toggle_disabled = true
 }
@@ -82,13 +83,13 @@ M.VISUAL_FX = {
         max_puffs = 7,
         lifetime_min_s = 3.0,
         lifetime_max_s = 4.0,
-        alpha_max = 0.4,
+        alpha_max = 0.5,
         melee_reveal_alpha = 0.6,
         melee_reveal_duration_s = 0.35,
         scale_min = 0.54,
-        scale_max = 1.86,
-        offset_x = 42,
-        offset_y = 30
+        scale_max = 3.86,
+        offset_x = 32,
+        offset_y = 50
     }
 }
 

@@ -415,6 +415,33 @@ LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER = 8
 LEADERBOARD_DEBUG_NAME_TOKEN_GAP_PX = 10
 LEADERBOARD_DEBUG_NAME_LETTER_SPACING = 6
 LEADERBOARD_DEBUG_NAME_LETTER_SCALE = 0.28
+LEADERBOARD_DETAIL_TEXT_MAX_NODES = 220
+LEADERBOARD_DETAIL_TEXT_X = 735
+LEADERBOARD_DETAIL_TEXT_Y = 515
+LEADERBOARD_DETAIL_TEXT_ROW_GAP = 34
+LEADERBOARD_DETAIL_TEXT_SPACING = 7
+LEADERBOARD_DETAIL_TEXT_SCALE = 0.25
+LEADERBOARD_BADGE_TEXT_MAX_NODES = 20
+LEADERBOARD_BADGE_TEXT_SPACING = 7
+LEADERBOARD_BADGE_TEXT_SCALE = 0.25
+LEADERBOARD_BADGE_ICON_MAX_NODES = 12
+LEADERBOARD_BADGE_ICON_SCALE = 0.55
+LEADERBOARD_BADGE_ICON_GAP = 46
+LEADERBOARD_BADGE_COUNT_OFFSET_X = 20
+LEADERBOARD_ROW_BADGE_ICON_MAX_NODES = 80
+LEADERBOARD_ROW_BADGE_TEXT_MAX_NODES = 160
+LEADERBOARD_ROW_BADGE_ICON_SCALE = 0.45
+LEADERBOARD_ROW_BADGE_TEXT_SCALE = 0.2
+LEADERBOARD_ROW_BADGE_NAME_GAP = 18
+LEADERBOARD_ROW_BADGE_ICON_GAP = 42
+LEADERBOARD_ROW_BADGE_COUNT_OFFSET_X = 18
+MP_BADGE_ICON_MAX_NODES = 24
+MP_BADGE_TEXT_MAX_NODES = 48
+MP_BADGE_ICON_SCALE = 0.34
+MP_BADGE_TEXT_SCALE = 0.17
+MP_BADGE_ICON_GAP = 42
+MP_BADGE_COUNT_OFFSET_X = 18
+MP_BADGE_BELOW_NAME_OFFSET_Y = -18
 LEADERBOARD_LOCAL_MAX_ENTRIES = 200
 LEADERBOARD_LOCAL_SAVE_KEY_SOLO = "dvx_leaderboard_solo_local"
 LEADERBOARD_LOCAL_SAVE_KEY_MP = "dvx_leaderboard_mp_local"
@@ -467,6 +494,15 @@ TITLE_SOLO_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_SOLO_BUTTON_Y = (SCREEN_HEIGHT * 0.52) + TITLE_BUTTON_Y_OFFSET
 TITLE_MULTIPLAYER_BUTTON_X = SCREEN_WIDTH * 0.5
 TITLE_MULTIPLAYER_BUTTON_Y = (SCREEN_HEIGHT * 0.38) + TITLE_BUTTON_Y_OFFSET
+TITLE_LEADERBOARD_BUTTON_W = 330
+TITLE_LEADERBOARD_BUTTON_H = 52
+TITLE_SOLO_LEADERBOARD_BUTTON_X = SCREEN_WIDTH * 0.33
+TITLE_SOLO_LEADERBOARD_BUTTON_Y = 74
+TITLE_MP_LEADERBOARD_BUTTON_X = SCREEN_WIDTH * 0.67
+TITLE_MP_LEADERBOARD_BUTTON_Y = 74
+TITLE_LEADERBOARD_LABEL_MAX_NODES = 36
+TITLE_LEADERBOARD_LABEL_SPACING = 9
+TITLE_LEADERBOARD_LABEL_SCALE = 0.28
 MP_CHOOSER_BTN_X = SCREEN_WIDTH * 0.5
 MP_CHOOSER_BTN_W = 280
 MP_CHOOSER_BTN_H = 70
@@ -757,6 +793,7 @@ MP_SETUP_PANEL_W = 1180
 MP_SETUP_PANEL_H = 640
 MP_SETUP_PANEL_Z = FLOW_UI_PANEL_Z + 0.005
 MP_SETUP_UI_Z = FLOW_UI_BUTTON_Z
+MP_BADGE_Z = MP_SETUP_UI_Z + 0.02
 MP_SETUP_MISSION_BTN_X = { 169, 297, 425, 169, 297, 425 }
 MP_SETUP_MISSION_BTN_Y = { 572, 572, 572, 510, 510, 510 }
 MP_SETUP_MISSION_BTN_W = 48
@@ -1642,6 +1679,7 @@ LOOT_UI, COMMAND_UI, COMPONENT_UI = (function()
     return cfg.LOOT_UI, cfg.COMMAND_UI, cfg.COMPONENT_UI
 end)()
 SCORE_RUNTIME = require("main.score_runtime")
+LEADERBOARD_REMOTE = require("main.leaderboard_remote")
 MP_TRANSPORT = require("main.multiplayer_transport")
 MP_SESSION_TICKET = require("main.multiplayer_session_ticket")
 MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
@@ -12933,6 +12971,14 @@ local function initialize_unit_ui(self)
         flow_score_team_name_letters = {},
         flow_leaderboard_dummy_name_letters = {},
         flow_leaderboard_dummy_score_digits = {},
+        flow_leaderboard_detail_letters = {},
+        flow_leaderboard_badge_letters = {},
+        flow_leaderboard_badge_icons = {},
+        flow_leaderboard_row_badge_letters = {},
+        flow_leaderboard_row_badge_icons = {},
+        flow_mp_badge_letters = {},
+        flow_mp_badge_icons = {},
+        flow_title_leaderboard_label_letters = {},
         flow_mp_lobby_boxes = {},
         flow_mp_lobby_cards = {},
         flow_mp_lobby_status_strips = {},
@@ -13325,6 +13371,30 @@ local function initialize_unit_ui(self)
     end
     for i = 1, (LEADERBOARD_DEBUG_ROWS_PER_PAGE * LEADERBOARD_DEBUG_SCORE_DIGITS_PER_ROW) do
         self.ui.flow_leaderboard_dummy_score_digits[i] = create_ui_marker_sprite(hash("score_0"), FLOW_UI_PANEL_Z + 0.006)
+    end
+    for i = 1, LEADERBOARD_DETAIL_TEXT_MAX_NODES do
+        self.ui.flow_leaderboard_detail_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_PANEL_Z + 0.007)
+    end
+    for i = 1, LEADERBOARD_BADGE_TEXT_MAX_NODES do
+        self.ui.flow_leaderboard_badge_letters[i] = create_ui_marker_sprite(hash("letter_w"), FLOW_UI_PANEL_Z + 0.008)
+    end
+    for i = 1, LEADERBOARD_BADGE_ICON_MAX_NODES do
+        self.ui.flow_leaderboard_badge_icons[i] = create_ui_marker_sprite(hash("leaderboard_winner_coop"), FLOW_UI_PANEL_Z + 0.008)
+    end
+    for i = 1, LEADERBOARD_ROW_BADGE_TEXT_MAX_NODES do
+        self.ui.flow_leaderboard_row_badge_letters[i] = create_ui_marker_sprite(hash("letter_x"), FLOW_UI_PANEL_Z + 0.008)
+    end
+    for i = 1, LEADERBOARD_ROW_BADGE_ICON_MAX_NODES do
+        self.ui.flow_leaderboard_row_badge_icons[i] = create_ui_marker_sprite(hash("leaderboard_winner_coop"), FLOW_UI_PANEL_Z + 0.008)
+    end
+    for i = 1, MP_BADGE_TEXT_MAX_NODES do
+        self.ui.flow_mp_badge_letters[i] = create_ui_marker_sprite(hash("letter_x"), MP_BADGE_Z)
+    end
+    for i = 1, MP_BADGE_ICON_MAX_NODES do
+        self.ui.flow_mp_badge_icons[i] = create_ui_marker_sprite(hash("leaderboard_winner_coop"), MP_BADGE_Z)
+    end
+    for i = 1, (TITLE_LEADERBOARD_LABEL_MAX_NODES * 2) do
+        self.ui.flow_title_leaderboard_label_letters[i] = create_ui_marker_sprite(hash("letter_a"), FLOW_UI_BUTTON_Z + 0.002)
     end
     for i = 1, 8 do
         self.ui.flow_mp_lobby_cards[i] = create_ui_square(0, 0, MP_SETUP_UI_Z + 0.002, vmath.vector4(0, 0, 0, 0), MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
@@ -13740,6 +13810,46 @@ local function set_ui_hidden(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
         end
     end
+    if self.ui.flow_leaderboard_detail_letters then
+        for _, letter_id in ipairs(self.ui.flow_leaderboard_detail_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.007, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_leaderboard_badge_letters then
+        for _, letter_id in ipairs(self.ui.flow_leaderboard_badge_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.008, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_leaderboard_badge_icons then
+        for _, icon_id in ipairs(self.ui.flow_leaderboard_badge_icons) do
+            set_ui_square_transform(self, icon_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.008, hidden, LEADERBOARD_BADGE_ICON_SCALE, LEADERBOARD_BADGE_ICON_SCALE)
+        end
+    end
+    if self.ui.flow_leaderboard_row_badge_letters then
+        for _, letter_id in ipairs(self.ui.flow_leaderboard_row_badge_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.008, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_leaderboard_row_badge_icons then
+        for _, icon_id in ipairs(self.ui.flow_leaderboard_row_badge_icons) do
+            set_ui_square_transform(self, icon_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.008, hidden, LEADERBOARD_ROW_BADGE_ICON_SCALE, LEADERBOARD_ROW_BADGE_ICON_SCALE)
+        end
+    end
+    if self.ui.flow_mp_badge_letters then
+        for _, letter_id in ipairs(self.ui.flow_mp_badge_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, MP_BADGE_Z, hidden, 1, 1)
+        end
+    end
+    if self.ui.flow_mp_badge_icons then
+        for _, icon_id in ipairs(self.ui.flow_mp_badge_icons) do
+            set_ui_square_transform(self, icon_id, -9999, -9999, MP_BADGE_Z, hidden, MP_BADGE_ICON_SCALE, MP_BADGE_ICON_SCALE)
+        end
+    end
+    if self.ui.flow_title_leaderboard_label_letters then
+        for _, letter_id in ipairs(self.ui.flow_title_leaderboard_label_letters) do
+            set_ui_square_transform(self, letter_id, -9999, -9999, FLOW_UI_BUTTON_Z + 0.002, hidden, 1, 1)
+        end
+    end
     if self.ui.flow_mp_lobby_cards then
         for _, card_id in ipairs(self.ui.flow_mp_lobby_cards) do
             set_ui_square_transform(self, card_id, -9999, -9999, MP_SETUP_UI_Z + 0.002, hidden, MP_LOBBY_CARD_W, MP_LOBBY_CARD_H)
@@ -14151,21 +14261,307 @@ update_score_flow_team_names = function(self, visible)
     end
 end
 
-leaderboard_get_rows_for_score_state = function(self, score_state)
-    local entries = nil
-    if score_state == FLOW_STATE_SCORE_MP then
-        entries = self.leaderboard_entries_mp or {}
-    else
-        entries = self.leaderboard_entries_solo or {}
+leaderboard_draw_text_nodes = function(self, nodes, text, start_index, x, y, opts)
+    opts = opts or {}
+    if not nodes then
+        return start_index or 1
     end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    local index = math.max(1, tonumber(start_index or 1) or 1)
+    local spacing = tonumber(opts.spacing or LEADERBOARD_DETAIL_TEXT_SPACING) or LEADERBOARD_DETAIL_TEXT_SPACING
+    local scale = tonumber(opts.scale or LEADERBOARD_DETAIL_TEXT_SCALE) or LEADERBOARD_DETAIL_TEXT_SCALE
+    local z = tonumber(opts.z or (FLOW_UI_PANEL_Z + 0.007)) or (FLOW_UI_PANEL_Z + 0.007)
+    local tint = opts.tint or vmath.vector4(1, 1, 1, 0.98)
+    local max_chars = math.max(0, tonumber(opts.max_chars or #tostring(text or "")) or 0)
+    local draw_text = string.lower(tostring(text or ""))
+    draw_text = string.gsub(draw_text, "[^a-z0-9 /]", "")
+    if max_chars > 0 and #draw_text > max_chars then
+        draw_text = string.sub(draw_text, 1, max_chars)
+    end
+    for ci = 1, #draw_text do
+        local node = nodes[index]
+        if not node then
+            return index
+        end
+        local ch = string.sub(draw_text, ci, ci)
+        if ch ~= " " then
+            msg.post(msg.url(nil, node, "sprite"), "play_animation", { id = mp_lobby_name_glyph_anim_id(ch) })
+            set_ui_square_transform(self, node, x + ((ci - 1) * spacing), y, z, tint, scale, scale)
+        else
+            set_ui_square_transform(self, node, -9999, -9999, z, hidden, scale, scale)
+        end
+        index = index + 1
+    end
+    return index
+end
+
+leaderboard_hide_nodes = function(self, nodes, z)
+    if not nodes then
+        return
+    end
+    local hidden = vmath.vector4(0, 0, 0, 0)
+    for _, node in ipairs(nodes) do
+        set_ui_square_transform(self, node, -9999, -9999, z or (FLOW_UI_PANEL_Z + 0.007), hidden, 1, 1)
+    end
+end
+
+leaderboard_seed_debug_badges = function(self, badges)
+    if FEATURE_FLAGS.leaderboard_seed_winner_badges == true then
+        badges = type(badges) == "table" and badges or {}
+        local seeded_counts = {
+            solo_count = 2,
+            coop_count = 3
+        }
+        local local_wire_id = tostring(self and self.mp_state and self.mp_state.local_player_id or "p1")
+        local steam_id = nil
+        if leaderboard_get_player_identity then
+            steam_id = select(1, leaderboard_get_player_identity(self, local_wire_id))
+        end
+        steam_id = tostring(steam_id or "local_p1")
+        if steam_id ~= "" then
+            badges[steam_id] = seeded_counts
+        end
+        badges[""] = seeded_counts
+        for i = 1, 4 do
+            badges["p" .. tostring(i)] = seeded_counts
+            badges["local_p" .. tostring(i)] = seeded_counts
+        end
+        return badges
+    end
+    return badges
+end
+
+leaderboard_load_badges = function(self)
+    self.leaderboard_winner_badges_by_steam_id = LEADERBOARD_REMOTE.load_badges()
+    self.leaderboard_winner_badges_by_steam_id = leaderboard_seed_debug_badges(self, self.leaderboard_winner_badges_by_steam_id)
+    if LEADERBOARD_REMOTE.fetch_badges_async and self and self.leaderboard_badges_fetch_started ~= true then
+        self.leaderboard_badges_fetch_started = true
+        LEADERBOARD_REMOTE.fetch_badges_async(function(ok, _reason, badges)
+            if ok and type(badges) == "table" then
+                self.leaderboard_winner_badges_by_steam_id = leaderboard_seed_debug_badges(self, badges)
+            end
+            self.leaderboard_badges_fetch_started = false
+        end)
+    end
+    return self.leaderboard_winner_badges_by_steam_id
+end
+
+leaderboard_badge_for_steam_id = function(self, steam_id)
+    local badges = self and self.leaderboard_winner_badges_by_steam_id or nil
+    if type(badges) ~= "table" then
+        badges = leaderboard_load_badges(self)
+    end
+    local raw = badges and badges[tostring(steam_id or "")] or nil
+    if type(raw) == "table" then
+        local solo_count = tonumber(raw.solo_count or raw.solo or 0) or 0
+        local coop_count = tonumber(raw.coop_count or raw.mp_count or raw.coop or raw.mp or 0) or 0
+        if solo_count > 0 or coop_count > 0 then
+            return "winner"
+        end
+        return tostring(raw.badge_type or "")
+    end
+    return tostring(raw or "")
+end
+
+leaderboard_badge_counts_for_steam_id = function(self, steam_id)
+    local badges = self and self.leaderboard_winner_badges_by_steam_id or nil
+    if type(badges) ~= "table" then
+        badges = leaderboard_load_badges(self)
+    elseif FEATURE_FLAGS.leaderboard_seed_winner_badges == true then
+        badges = leaderboard_seed_debug_badges(self, badges)
+        self.leaderboard_winner_badges_by_steam_id = badges
+    end
+    local raw = badges and badges[tostring(steam_id or "")] or nil
+    if type(raw) == "table" then
+        return {
+            solo = math.max(0, tonumber(raw.solo_count or raw.solo or 0) or 0),
+            coop = math.max(0, tonumber(raw.coop_count or raw.mp_count or raw.coop or raw.mp or 0) or 0)
+        }
+    end
+    local legacy = tostring(raw or "")
+    if legacy == "solo" then
+        return { solo = 1, coop = 0 }
+    elseif legacy == "coop" or legacy == "mp" or legacy == "winner" then
+        return { solo = 0, coop = 1 }
+    end
+    return { solo = 0, coop = 0 }
+end
+
+leaderboard_badge_counts_from_value = function(value)
+    if type(value) == "table" then
+        return {
+            solo = math.max(0, tonumber(value.solo_count or value.solo or 0) or 0),
+            coop = math.max(0, tonumber(value.coop_count or value.mp_count or value.coop or value.mp or 0) or 0)
+        }
+    end
+    local legacy = tostring(value or "")
+    if legacy == "solo" then
+        return { solo = 1, coop = 0 }
+    elseif legacy == "coop" or legacy == "mp" or legacy == "winner" then
+        return { solo = 0, coop = 1 }
+    end
+    return { solo = 0, coop = 0 }
+end
+
+leaderboard_get_player_identity = function(self, wire_id)
+    local normalized_wire = mp_normalize_network_player_id(wire_id or "")
+    if normalized_wire == "" then
+        normalized_wire = tostring(self and self.mp_state and self.mp_state.local_player_id or "p1")
+    end
+    local steam_id = ""
+    local session = multiplayer_lobby_get_active_session and multiplayer_lobby_get_active_session(self) or nil
+    if type(session) == "table" and type(session.steam_id_by_wire_id) == "table" then
+        steam_id = tostring(session.steam_id_by_wire_id[normalized_wire] or "")
+    end
+    local local_wire = tostring(self and self.mp_state and self.mp_state.local_player_id or "")
+    if steam_id == "" and normalized_wire == local_wire and self and self.mp_transport and self.mp_transport.steam_get_local_steam_id then
+        steam_id = tostring(self.mp_transport.steam_get_local_steam_id() or "")
+    end
+    if steam_id == "" then
+        steam_id = "local_" .. normalized_wire
+    end
+    local display_name = mp_display_name_for_wire_id(self, normalized_wire)
+    if display_name == "" then
+        display_name = mp_alpha_label_from_network_id(normalized_wire)
+    end
+    return steam_id, display_name
+end
+
+leaderboard_collect_units_for_player = function(self, player_id)
+    local units = {}
+    local slots = self and self.mp_setup and self.mp_setup.seat_slots and self.mp_setup.seat_slots[player_id] or nil
+    if type(slots) == "table" then
+        for _, unit_id in ipairs(slots) do
+            if unit_id and unit_id ~= false then
+                units[#units + 1] = tostring(unit_id)
+            end
+        end
+    end
+    return units
+end
+
+leaderboard_collect_mp_players = function(self)
+    local players = {}
+    local count = math.max(2, math.min(4, tonumber(self and self.mp_state and self.mp_state.player_count or self and self.mp_setup and self.mp_setup.player_count or 2) or 2))
+    for i = 1, count do
+        local wire_id = "p" .. tostring(i)
+        local steam_id, display_name = leaderboard_get_player_identity(self, wire_id)
+        players[#players + 1] = {
+            steam_id = steam_id,
+            display_name = display_name,
+            units_played = leaderboard_collect_units_for_player(self, wire_id)
+        }
+    end
+    return players
+end
+
+leaderboard_build_solo_title_entries = function(self)
+    local steam_id, display_name = leaderboard_get_player_identity(self, tostring(self and self.mp_state and self.mp_state.local_player_id or "p1"))
+    local total = solo_progress_get_global_total and solo_progress_get_global_total(self) or 0
+    return {
+        {
+            match_id = "solo_local_total",
+            score_total = math.max(0, tonumber(total or 0) or 0),
+            team_display_names = { display_name },
+            players = {
+                {
+                    steam_id = steam_id,
+                    display_name = display_name,
+                    units_played = {}
+                }
+            },
+            winner_badges_by_steam_id = self and self.leaderboard_winner_badges_by_steam_id or {},
+            created_at_ms = get_wall_clock_ms()
+        }
+    }
+end
+
+leaderboard_load_entries_for_view = function(self, score_state)
+    if score_state == FLOW_STATE_SCORE_MP then
+        local ok_fetch, _reason, cached = LEADERBOARD_REMOTE.fetch(LEADERBOARD_REMOTE.BOARD_MP)
+        local entries = type(cached) == "table" and #cached > 0 and cached or score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
+        self.leaderboard_entries_mp = entries
+        if LEADERBOARD_REMOTE.fetch_async and self.leaderboard_mp_fetch_started ~= true then
+            self.leaderboard_mp_fetch_started = true
+            LEADERBOARD_REMOTE.fetch_async(LEADERBOARD_REMOTE.BOARD_MP, function(ok, _async_reason, remote_entries)
+                if ok and type(remote_entries) == "table" then
+                    self.leaderboard_entries_mp = remote_entries
+                    self.leaderboard_debug_page = 1
+                end
+                self.leaderboard_mp_fetch_started = false
+            end)
+        end
+        return ok_fetch, entries
+    end
+    local ok_fetch, _reason, cached = LEADERBOARD_REMOTE.fetch(LEADERBOARD_REMOTE.BOARD_SOLO)
+    local entries = type(cached) == "table" and #cached > 0 and cached or leaderboard_build_solo_title_entries(self)
+    self.leaderboard_entries_solo = entries
+    if LEADERBOARD_REMOTE.fetch_async and self.leaderboard_solo_fetch_started ~= true then
+        self.leaderboard_solo_fetch_started = true
+        LEADERBOARD_REMOTE.fetch_async(LEADERBOARD_REMOTE.BOARD_SOLO, function(ok, _async_reason, remote_entries)
+            if ok and type(remote_entries) == "table" then
+                self.leaderboard_entries_solo = remote_entries
+                self.leaderboard_debug_page = 1
+            end
+            self.leaderboard_solo_fetch_started = false
+        end)
+    end
+    return ok_fetch, entries
+end
+
+leaderboard_enter_from_title = function(self, score_state)
+    leaderboard_load_badges(self)
+    self.leaderboard_return_flow = "title"
+    self.leaderboard_detail_entry_index = nil
+    self.leaderboard_debug_page = 1
+    leaderboard_load_entries_for_view(self, score_state)
+    enter_flow_state(self, score_state)
+end
+
+leaderboard_get_entries_for_score_state = function(self, score_state)
+    if score_state == FLOW_STATE_SCORE_MP then
+        return self.leaderboard_entries_mp or {}
+    end
+    return self.leaderboard_entries_solo or {}
+end
+
+leaderboard_get_rows_for_score_state = function(self, score_state)
+    local entries = leaderboard_get_entries_for_score_state(self, score_state)
     local rows = {}
-    for _, entry in ipairs(entries) do
+    for entry_index, entry in ipairs(entries) do
         local names = type(entry.team_display_names) == "table" and entry.team_display_names or {}
         local name_text = ""
-        if #names > 0 then
+        local name_segments = {}
+        local badge_map = type(entry.winner_badges_by_steam_id) == "table" and entry.winner_badges_by_steam_id or {}
+        if type(entry.players) == "table" and #entry.players > 0 then
+            for i, player in ipairs(entry.players) do
+                local clean = leaderboard_sanitize_name(player and player.display_name or names[i] or "", LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
+                if clean ~= "" then
+                    local steam_id = tostring(player and player.steam_id or "")
+                    local entry_counts = leaderboard_badge_counts_from_value(badge_map[steam_id])
+                    local cached_counts = leaderboard_badge_counts_for_steam_id(self, steam_id)
+                    local segment = {
+                        text = clean,
+                        badge_counts = {
+                            solo = math.max(entry_counts.solo or 0, cached_counts.solo or 0),
+                            coop = math.max(entry_counts.coop or 0, cached_counts.coop or 0)
+                        }
+                    }
+                    name_segments[#name_segments + 1] = segment
+                    name_text = (name_text == "") and clean or (name_text .. " " .. clean)
+                end
+                if i >= 4 then
+                    break
+                end
+            end
+        elseif #names > 0 then
             for i, nm in ipairs(names) do
                 local clean = leaderboard_sanitize_name(nm, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
                 if clean ~= "" then
+                    name_segments[#name_segments + 1] = {
+                        text = clean,
+                        badge_counts = { solo = 0, coop = 0 }
+                    }
                     if name_text == "" then
                         name_text = clean
                     else
@@ -14179,10 +14575,13 @@ leaderboard_get_rows_for_score_state = function(self, score_state)
         end
         if name_text == "" then
             name_text = leaderboard_sanitize_name(mp_alpha_label_from_network_id("p1"), LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
+            name_segments[1] = { text = name_text, badge_counts = { solo = 0, coop = 0 } }
         end
         rows[#rows + 1] = {
             score = math.max(0, tonumber(entry.score_total or 0) or 0),
-            name = name_text
+            name = name_text,
+            name_segments = name_segments,
+            entry_index = entry_index
         }
     end
     return rows
@@ -14203,6 +14602,8 @@ leaderboard_render_rows = function(self)
             set_ui_square_transform(self, digit_id, -9999, -9999, FLOW_UI_PANEL_Z + 0.006, hidden, 1, 1)
         end
     end
+    leaderboard_hide_nodes(self, self.ui.flow_leaderboard_row_badge_letters, FLOW_UI_PANEL_Z + 0.008)
+    leaderboard_hide_nodes(self, self.ui.flow_leaderboard_row_badge_icons, FLOW_UI_PANEL_Z + 0.008)
     local score_state = self.game_flow_state or FLOW_STATE_GAME
     if score_state ~= FLOW_STATE_SCORE_SOLO and score_state ~= FLOW_STATE_SCORE_MP then
         return
@@ -14214,6 +14615,8 @@ leaderboard_render_rows = function(self)
     local end_index = math.min(#rows, start_index + LEADERBOARD_DEBUG_ROWS_PER_PAGE - 1)
     local letter_cursor = 1
     local digit_cursor = 1
+    local row_badge_icon_cursor = 1
+    local row_badge_text_cursor = 1
     for idx = start_index, end_index do
         local row = rows[idx]
         local row_slot = idx - start_index
@@ -14239,24 +14642,20 @@ leaderboard_render_rows = function(self)
             digit_cursor = digit_cursor + 1
         end
         local name_limit = (score_state == FLOW_STATE_SCORE_MP) and LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP or LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_SOLO
-        local tokens = {}
-        local raw_name_text = tostring(row.name or "")
-        for token in string.gmatch(raw_name_text, "%S+") do
-            local clean = leaderboard_sanitize_name(token, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
-            if clean ~= "" then
-                tokens[#tokens + 1] = clean
-            end
-        end
-        if #tokens <= 0 then
-            tokens[1] = leaderboard_sanitize_name(raw_name_text, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
+        local segments = type(row.name_segments) == "table" and row.name_segments or {}
+        if #segments <= 0 then
+            segments[1] = {
+                text = leaderboard_sanitize_name(tostring(row.name or ""), LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER),
+                badge_counts = { solo = 0, coop = 0 }
+            }
         end
         local remaining_chars = name_limit
         local cursor_x = LEADERBOARD_DEBUG_NAME_X
-        for token_index, token_text in ipairs(tokens) do
+        for token_index, segment in ipairs(segments) do
             if remaining_chars <= 0 then
                 break
             end
-            local draw_token = token_text
+            local draw_token = leaderboard_sanitize_name(segment and segment.text or "", LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_PLAYER)
             if #draw_token > remaining_chars then
                 draw_token = string.sub(draw_token, 1, remaining_chars)
             end
@@ -14281,11 +14680,199 @@ leaderboard_render_rows = function(self)
             end
             cursor_x = cursor_x + (#draw_token * LEADERBOARD_DEBUG_NAME_LETTER_SPACING)
             remaining_chars = remaining_chars - #draw_token
-            if token_index < #tokens and remaining_chars > 0 then
+            local badge_counts = segment and segment.badge_counts or nil
+            if badge_counts and (((badge_counts.solo or 0) > 0) or ((badge_counts.coop or 0) > 0)) then
+                local badge_slots = (((badge_counts.solo or 0) > 0) and 1 or 0) + (((badge_counts.coop or 0) > 0) and 1 or 0)
+                row_badge_icon_cursor, row_badge_text_cursor = leaderboard_render_badge_icons(self, badge_counts, row_badge_icon_cursor, row_badge_text_cursor, cursor_x + LEADERBOARD_ROW_BADGE_NAME_GAP, row_y, {
+                    icon_nodes = self.ui.flow_leaderboard_row_badge_icons,
+                    text_nodes = self.ui.flow_leaderboard_row_badge_letters,
+                    icon_scale = LEADERBOARD_ROW_BADGE_ICON_SCALE,
+                    text_scale = LEADERBOARD_ROW_BADGE_TEXT_SCALE,
+                    icon_gap = LEADERBOARD_ROW_BADGE_ICON_GAP,
+                    count_offset_x = LEADERBOARD_ROW_BADGE_COUNT_OFFSET_X,
+                    z = FLOW_UI_PANEL_Z + 0.008,
+                    text_z = FLOW_UI_PANEL_Z + 0.009
+                })
+                cursor_x = cursor_x + LEADERBOARD_ROW_BADGE_NAME_GAP + (badge_slots * LEADERBOARD_ROW_BADGE_ICON_GAP)
+            end
+            if token_index < #segments and remaining_chars > 0 then
                 cursor_x = cursor_x + LEADERBOARD_DEBUG_NAME_TOKEN_GAP_PX
             end
         end
     end
+end
+
+leaderboard_render_detail_panel = function(self)
+    if not (self and self.ui) then
+        return
+    end
+    leaderboard_hide_nodes(self, self.ui.flow_leaderboard_detail_letters, FLOW_UI_PANEL_Z + 0.007)
+    leaderboard_hide_nodes(self, self.ui.flow_leaderboard_badge_letters, FLOW_UI_PANEL_Z + 0.008)
+    leaderboard_hide_nodes(self, self.ui.flow_leaderboard_badge_icons, FLOW_UI_PANEL_Z + 0.008)
+    local score_state = self.game_flow_state or FLOW_STATE_GAME
+    if score_state ~= FLOW_STATE_SCORE_MP then
+        return
+    end
+    local entry_index = tonumber(self.leaderboard_detail_entry_index or 0) or 0
+    if entry_index <= 0 then
+        return
+    end
+    local entry = (self.leaderboard_entries_mp or {})[entry_index]
+    if type(entry) ~= "table" then
+        return
+    end
+    local cursor = 1
+    local y = LEADERBOARD_DETAIL_TEXT_Y
+    cursor = leaderboard_draw_text_nodes(self, self.ui.flow_leaderboard_detail_letters, "team score " .. tostring(math.floor(tonumber(entry.score_total or 0) or 0)), cursor, LEADERBOARD_DETAIL_TEXT_X, y, {
+        max_chars = 34,
+        tint = vmath.vector4(0.95, 0.86, 0.25, 1.0)
+    })
+    y = y - LEADERBOARD_DETAIL_TEXT_ROW_GAP
+    local players = type(entry.players) == "table" and entry.players or {}
+    if #players <= 0 then
+        local names = type(entry.team_display_names) == "table" and entry.team_display_names or {}
+        for i = 1, #names do
+            players[#players + 1] = { display_name = tostring(names[i] or ""), units_played = {} }
+        end
+    end
+    local badge_cursor = 1
+    local badge_icon_cursor = 1
+    local badge_map = type(entry.winner_badges_by_steam_id) == "table" and entry.winner_badges_by_steam_id or {}
+    for i = 1, math.min(4, #players) do
+        local player = players[i] or {}
+        local display_name = leaderboard_sanitize_name(player.display_name or ("player" .. tostring(i)), 18)
+        local units = type(player.units_played) == "table" and player.units_played or {}
+        local unit_text = ""
+        for ui = 1, #units do
+            local unit_name = leaderboard_sanitize_name(units[ui], 8)
+            if unit_name ~= "" then
+                unit_text = (unit_text == "") and unit_name or (unit_text .. "/" .. unit_name)
+            end
+        end
+        if unit_text == "" then
+            unit_text = "units"
+        end
+        local badge = tostring(badge_map[tostring(player.steam_id or "")] or leaderboard_badge_for_steam_id(self, player.steam_id) or "")
+        local detail_badge_slots = 0
+        if badge ~= "" then
+            local entry_badge_counts = leaderboard_badge_counts_from_value(badge_map[tostring(player.steam_id or "")])
+            local cached_badge_counts = leaderboard_badge_counts_for_steam_id(self, player.steam_id)
+            local badge_counts = {
+                solo = math.max(entry_badge_counts.solo or 0, cached_badge_counts.solo or 0),
+                coop = math.max(entry_badge_counts.coop or 0, cached_badge_counts.coop or 0)
+            }
+            detail_badge_slots = (((badge_counts.solo or 0) > 0) and 1 or 0) + (((badge_counts.coop or 0) > 0) and 1 or 0)
+            badge_icon_cursor, badge_cursor = leaderboard_render_badge_icons(
+                self,
+                badge_counts,
+                badge_icon_cursor,
+                badge_cursor,
+                LEADERBOARD_DETAIL_TEXT_X + (#display_name * LEADERBOARD_DETAIL_TEXT_SPACING) + 18,
+                y
+            )
+        end
+        cursor = leaderboard_draw_text_nodes(self, self.ui.flow_leaderboard_detail_letters, display_name, cursor, LEADERBOARD_DETAIL_TEXT_X, y, {
+            max_chars = 18,
+            tint = vmath.vector4(0.88, 0.94, 1.0, 1.0)
+        })
+        local unit_x = LEADERBOARD_DETAIL_TEXT_X + (#display_name * LEADERBOARD_DETAIL_TEXT_SPACING) + 12
+        if detail_badge_slots > 0 then
+            unit_x = unit_x + 18 + (detail_badge_slots * LEADERBOARD_BADGE_ICON_GAP)
+        end
+        cursor = leaderboard_draw_text_nodes(self, self.ui.flow_leaderboard_detail_letters, unit_text, cursor, unit_x, y, {
+            max_chars = 22,
+            tint = vmath.vector4(0.72, 0.86, 0.95, 1.0)
+        })
+        y = y - LEADERBOARD_DETAIL_TEXT_ROW_GAP
+    end
+end
+
+leaderboard_render_title_labels = function(self)
+    if not (self and self.ui and self.ui.flow_title_leaderboard_label_letters) then
+        return
+    end
+    leaderboard_hide_nodes(self, self.ui.flow_title_leaderboard_label_letters, FLOW_UI_BUTTON_Z + 0.002)
+    local nodes = self.ui.flow_title_leaderboard_label_letters
+    local cursor = 1
+    local tint = vmath.vector4(0.8, 0.95, 1.0, 1.0)
+    cursor = leaderboard_draw_text_nodes(self, nodes, "solo leaderboard", cursor, TITLE_SOLO_LEADERBOARD_BUTTON_X - 132, TITLE_SOLO_LEADERBOARD_BUTTON_Y, {
+        max_chars = TITLE_LEADERBOARD_LABEL_MAX_NODES,
+        spacing = TITLE_LEADERBOARD_LABEL_SPACING,
+        scale = TITLE_LEADERBOARD_LABEL_SCALE,
+        z = FLOW_UI_BUTTON_Z + 0.002,
+        tint = tint
+    })
+    leaderboard_draw_text_nodes(self, nodes, "mp leaderboard", cursor, TITLE_MP_LEADERBOARD_BUTTON_X - 118, TITLE_MP_LEADERBOARD_BUTTON_Y, {
+        max_chars = TITLE_LEADERBOARD_LABEL_MAX_NODES,
+        spacing = TITLE_LEADERBOARD_LABEL_SPACING,
+        scale = TITLE_LEADERBOARD_LABEL_SCALE,
+        z = FLOW_UI_BUTTON_Z + 0.002,
+        tint = tint
+    })
+end
+
+leaderboard_hide_title_labels = function(self)
+    if self and self.ui then
+        leaderboard_hide_nodes(self, self.ui.flow_title_leaderboard_label_letters, FLOW_UI_BUTTON_Z + 0.002)
+    end
+end
+
+leaderboard_render_badge_icons = function(self, counts, icon_cursor, text_cursor, x, y, options)
+    counts = type(counts) == "table" and counts or {}
+    options = type(options) == "table" and options or {}
+    local icon_nodes = options.icon_nodes or (self.ui and self.ui.flow_leaderboard_badge_icons)
+    local text_nodes = options.text_nodes or (self.ui and self.ui.flow_leaderboard_badge_letters)
+    local z = tonumber(options.z or (FLOW_UI_PANEL_Z + 0.008)) or (FLOW_UI_PANEL_Z + 0.008)
+    local text_z = tonumber(options.text_z or (z + 0.001)) or (z + 0.001)
+    local icon_scale = tonumber(options.icon_scale or LEADERBOARD_BADGE_ICON_SCALE) or LEADERBOARD_BADGE_ICON_SCALE
+    local text_scale = tonumber(options.text_scale or LEADERBOARD_BADGE_TEXT_SCALE) or LEADERBOARD_BADGE_TEXT_SCALE
+    local icon_gap = tonumber(options.icon_gap or LEADERBOARD_BADGE_ICON_GAP) or LEADERBOARD_BADGE_ICON_GAP
+    local count_offset_x = tonumber(options.count_offset_x or LEADERBOARD_BADGE_COUNT_OFFSET_X) or LEADERBOARD_BADGE_COUNT_OFFSET_X
+    local base_icon = math.max(1, tonumber(icon_cursor or 1) or 1)
+    local next_icon = base_icon
+    local next_text = math.max(1, tonumber(text_cursor or 1) or 1)
+    local function draw_one(anim_id, count)
+        count = math.max(0, math.floor(tonumber(count or 0) or 0))
+        if count <= 0 then
+            return
+        end
+        local icon_id = icon_nodes and icon_nodes[next_icon] or nil
+        if not icon_id then
+            return
+        end
+        msg.post(msg.url(nil, icon_id, "sprite"), "play_animation", { id = anim_id })
+        set_ui_square_transform(
+            self,
+            icon_id,
+            x + ((next_icon - base_icon) * icon_gap),
+            y,
+            z,
+            vmath.vector4(1, 1, 1, 1),
+            icon_scale,
+            icon_scale
+        )
+        if count > 1 then
+            next_text = leaderboard_draw_text_nodes(
+                self,
+                text_nodes,
+                "x" .. tostring(count),
+                next_text,
+                x + ((next_icon - base_icon) * icon_gap) + count_offset_x,
+                y - 2,
+                {
+                    max_chars = 4,
+                    spacing = LEADERBOARD_BADGE_TEXT_SPACING,
+                    scale = text_scale,
+                    z = text_z,
+                    tint = vmath.vector4(1.0, 0.92, 0.35, 1.0)
+                }
+            )
+        end
+        next_icon = next_icon + 1
+    end
+    draw_one(hash("leaderboard_winner_solo"), counts.solo)
+    draw_one(hash("leaderboard_winner_coop"), counts.coop)
+    return next_icon, next_text
 end
 
 update_mp_build_hud = function(self, visible)
@@ -15104,6 +15691,7 @@ end
 
 score_build_publish_payload = function(self, score_state)
     local breakdown = self.flow_score_breakdown or compute_placeholder_score_breakdown(self)
+    local solo_steam_id, solo_display_name = leaderboard_get_player_identity(self, tostring((self.mp_state and self.mp_state.local_player_id) or "p1"))
     local payload = {
         match_id = string.format(
             "%s_t%d_%s",
@@ -15115,12 +15703,18 @@ score_build_publish_payload = function(self, score_state)
         mission_type = tostring(self.end_mission_type or multiplayer_normalize_mission_type(get_current_mission_type(self))),
         result = tostring(self.end_result or (self.game_won and "win" or "lose")),
         origin = (score_state == FLOW_STATE_SCORE_MP) and "multiplayer" or "solo",
+        steam_id = solo_steam_id,
+        display_name = solo_display_name,
+        level_id = math.max(1, tonumber(self.solo_active_mission_slot or self.current_level_index or 1) or 1),
         team_player_ids = {},
-        team_display_names = {}
+        team_display_names = {},
+        players = {},
+        winner_badges_by_steam_id = leaderboard_load_badges(self)
     }
     if score_state == FLOW_STATE_SCORE_MP and self.mp_state and self.mp_state.enabled then
         local name_seen = {}
         local id_seen = {}
+        payload.players = leaderboard_collect_mp_players(self)
         if type(self.flow_score_team_display_names) == "table" then
             for _, display_name in ipairs(self.flow_score_team_display_names) do
                 local clean = leaderboard_sanitize_name(display_name, LEADERBOARD_DEBUG_NAME_MAX_CHARS_PER_ROW_MP)
@@ -15153,7 +15747,12 @@ score_build_publish_payload = function(self, score_state)
     else
         local solo_id = tostring((self.mp_state and self.mp_state.local_player_id) or "p1")
         payload.team_player_ids[1] = solo_id
-        payload.team_display_names[1] = mp_alpha_label_from_network_id(solo_id)
+        payload.team_display_names[1] = solo_display_name ~= "" and solo_display_name or mp_alpha_label_from_network_id(solo_id)
+        payload.players[1] = {
+            steam_id = solo_steam_id,
+            display_name = payload.team_display_names[1],
+            units_played = {}
+        }
     end
     return payload
 end
@@ -15238,14 +15837,17 @@ score_append_local_leaderboard_entry = function(self, score_state, payload)
         return
     end
     local entries = score_load_local_leaderboard_entries(self, score_state)
-    entries[#entries + 1] = {
+    local new_entry = {
         match_id = tostring(payload.match_id or ""),
         score_total = tonumber(payload.score_total or 0) or 0,
         mission_type = tostring(payload.mission_type or ""),
         result = tostring(payload.result or ""),
         team_display_names = multiplayer_clone_simple_table(payload.team_display_names or {}),
+        players = multiplayer_clone_simple_table(payload.players or {}),
+        winner_badges_by_steam_id = multiplayer_clone_simple_table(payload.winner_badges_by_steam_id or {}),
         created_at_ms = get_wall_clock_ms()
     }
+    entries[#entries + 1] = new_entry
     score_sort_leaderboard_entries(entries)
     while #entries > LEADERBOARD_LOCAL_MAX_ENTRIES do
         table.remove(entries)
@@ -15253,6 +15855,7 @@ score_append_local_leaderboard_entry = function(self, score_state, payload)
     score_persist_local_leaderboard_entries(self, score_state, entries)
     if score_state == FLOW_STATE_SCORE_MP then
         self.leaderboard_entries_mp = entries
+        LEADERBOARD_REMOTE.cache_entry(LEADERBOARD_REMOTE.BOARD_MP, new_entry)
     else
         self.leaderboard_entries_solo = entries
     end
@@ -15275,6 +15878,12 @@ score_try_auto_publish = function(self, score_state)
             and self.mp_state.enabled
             and tostring(self.mp_state.local_player_id or "") == tostring(self.mp_state.host_player_id or "")
         if is_host then
+            local remote_payload = LEADERBOARD_REMOTE.normalize_mp_payload({
+                team_entry_id = payload.match_id,
+                score = payload.score_total,
+                players = payload.players
+            })
+            LEADERBOARD_REMOTE.submit(remote_payload)
             self.flow_submit_done = true
             self.flow_score_publish_status = "published_host"
             print("SCORE | auto publish attempted (multiplayer host).")
@@ -15285,6 +15894,14 @@ score_try_auto_publish = function(self, score_state)
         end
         return
     end
+    local remote_solo_payload = LEADERBOARD_REMOTE.normalize_solo_payload({
+        steam_id = payload.steam_id,
+        display_name = payload.display_name,
+        level_id = payload.level_id,
+        score = payload.result == "win" and payload.score_total or 0,
+        result = payload.result == "win" and "win" or "loss"
+    })
+    LEADERBOARD_REMOTE.submit(remote_solo_payload)
     self.flow_submit_done = true
     self.flow_score_publish_status = "published_solo"
     print("SCORE | auto publish attempted (solo).")
@@ -21013,6 +21630,8 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
     local session_index = 1
     local letter_cursor = 1
     local count_cursor = 1
+    local badge_icon_cursor = 1
+    local badge_text_cursor = 1
     if self.ui.flow_mp_lobby_name_letters then
         for _, letter_id in ipairs(self.ui.flow_mp_lobby_name_letters) do
             set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, vmath.vector4(0, 0, 0, 0), 1, 1)
@@ -21023,6 +21642,8 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
             set_ui_square_transform(self, digit_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, vmath.vector4(0, 0, 0, 0), 1, 1)
         end
     end
+    leaderboard_hide_nodes(self, self.ui.flow_mp_badge_letters, MP_BADGE_Z)
+    leaderboard_hide_nodes(self, self.ui.flow_mp_badge_icons, MP_BADGE_Z)
     for row = 1, 2 do
         for col = 1, 4 do
             local card_x = MP_LOBBY_CARD_COL_X[col]
@@ -21062,6 +21683,21 @@ multiplayer_lobby_render_session_cards = function(self, visible_sessions, card_b
                         end
                         local start_x = card_x - (total_span * 0.5)
                         local name_y = card_y + MP_LOBBY_NAME_BASE_Y_OFFSET
+                        local badge_counts = leaderboard_badge_counts_for_steam_id(self, session.host_steam_id)
+                        if ((badge_counts.solo or 0) > 0) or ((badge_counts.coop or 0) > 0) then
+                            local badge_slots = (((badge_counts.solo or 0) > 0) and 1 or 0) + (((badge_counts.coop or 0) > 0) and 1 or 0)
+                            local badge_x = start_x + (name_span * 0.5) - (((badge_slots - 1) * MP_BADGE_ICON_GAP) * 0.5)
+                            badge_icon_cursor, badge_text_cursor = leaderboard_render_badge_icons(self, badge_counts, badge_icon_cursor, badge_text_cursor, badge_x, name_y + MP_BADGE_BELOW_NAME_OFFSET_Y, {
+                                icon_nodes = self.ui.flow_mp_badge_icons,
+                                text_nodes = self.ui.flow_mp_badge_letters,
+                                icon_scale = MP_BADGE_ICON_SCALE,
+                                text_scale = MP_BADGE_TEXT_SCALE,
+                                icon_gap = MP_BADGE_ICON_GAP,
+                                count_offset_x = MP_BADGE_COUNT_OFFSET_X,
+                                z = MP_BADGE_Z,
+                                text_z = MP_BADGE_Z + 0.001
+                            })
+                        end
                         for ci = 1, name_len do
                             local glyph_id = self.ui.flow_mp_lobby_name_letters[letter_cursor]
                             if not glyph_id then
@@ -21680,11 +22316,14 @@ function enter_score_flow(self)
     if tostring(self.end_session_origin or "") == "multiplayer" or (self.mp_state and self.mp_state.enabled) then
         score_state = FLOW_STATE_SCORE_MP
     end
+    self.leaderboard_return_flow = (score_state == FLOW_STATE_SCORE_MP) and "mp_chooser" or "title"
+    self.leaderboard_detail_entry_index = nil
+    leaderboard_load_badges(self)
     enter_flow_state(self, score_state)
     self.leaderboard_debug_page = 1
     score_try_auto_publish(self, score_state)
     if score_state == FLOW_STATE_SCORE_MP then
-        self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
+        leaderboard_load_entries_for_view(self, FLOW_STATE_SCORE_MP)
     else
         self.leaderboard_entries_solo = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_SOLO)
     end
@@ -21828,6 +22467,20 @@ function update_flow_ui(self, dt)
     self.flow_overlay_phase = (self.flow_overlay_phase or 0) + (dt or 0)
     local state = self.game_flow_state or FLOW_STATE_GAME
     local hidden = vmath.vector4(0, 0, 0, 0)
+    if state ~= FLOW_STATE_SCORE_SOLO and state ~= FLOW_STATE_SCORE_MP then
+        leaderboard_hide_nodes(self, self.ui.flow_leaderboard_detail_letters, FLOW_UI_PANEL_Z + 0.007)
+        leaderboard_hide_nodes(self, self.ui.flow_leaderboard_badge_letters, FLOW_UI_PANEL_Z + 0.008)
+        leaderboard_hide_nodes(self, self.ui.flow_leaderboard_badge_icons, FLOW_UI_PANEL_Z + 0.008)
+        leaderboard_hide_nodes(self, self.ui.flow_leaderboard_row_badge_letters, FLOW_UI_PANEL_Z + 0.008)
+        leaderboard_hide_nodes(self, self.ui.flow_leaderboard_row_badge_icons, FLOW_UI_PANEL_Z + 0.008)
+    end
+    if state ~= FLOW_STATE_TITLE then
+        leaderboard_hide_title_labels(self)
+    end
+    if state ~= FLOW_STATE_MP_SETUP and state ~= FLOW_STATE_MP_LOBBY and state ~= FLOW_STATE_MP_CHOOSER then
+        leaderboard_hide_nodes(self, self.ui.flow_mp_badge_letters, MP_BADGE_Z)
+        leaderboard_hide_nodes(self, self.ui.flow_mp_badge_icons, MP_BADGE_Z)
+    end
     if state ~= FLOW_STATE_SOLO_SETUP then
         solo_progress_ui_hide_nodes(self, hidden)
     end
@@ -21852,6 +22505,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_xenos_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.003, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_derples_word, -9999, -9999, FLOW_UI_PANEL_Z + 0.004, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_buttons_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
+        leaderboard_hide_title_labels(self)
     end
     local show_score_flow_digits = (state == FLOW_STATE_SCORE_SOLO) or (state == FLOW_STATE_SCORE_MP)
     if show_score_flow_digits then
@@ -21936,6 +22590,7 @@ function update_flow_ui(self, dt)
             set_ui_square_transform(self, self.ui.flow_title_tutorial_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
             set_ui_square_transform(self, self.ui.flow_title_solo_button, DEMO_TITLE_BUTTON_X, DEMO_TITLE_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), DEMO_BUTTON_W, DEMO_BUTTON_H)
             set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 280, 70)
+            leaderboard_hide_title_labels(self)
             set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_select_level1_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
             set_ui_square_transform(self, self.ui.flow_demo_select_level2_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -21969,6 +22624,7 @@ function update_flow_ui(self, dt)
         set_ui_square_transform(self, self.ui.flow_title_tutorial_button, TITLE_TUTORIAL_BUTTON_X, TITLE_TUTORIAL_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.95, 0.7, 0.2, 0), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_solo_button, TITLE_SOLO_BUTTON_X, TITLE_SOLO_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.2, 0.75, 0.3, 0), 280, 70)
         set_ui_square_transform(self, self.ui.flow_title_multiplayer_button, TITLE_MULTIPLAYER_BUTTON_X, TITLE_MULTIPLAYER_BUTTON_Y, FLOW_UI_BUTTON_Z, vmath.vector4(0.52, 0.52, 0.58, 0), 280, 70)
+        leaderboard_render_title_labels(self)
         set_ui_square_transform(self, self.ui.flow_title_demo_button_art, -9999, -9999, DEMO_TITLE_BUTTON_ART_Z, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_demo_explainer_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, DEMO_EXPLAINER_SCALE, DEMO_EXPLAINER_SCALE)
         set_ui_square_transform(self, self.ui.flow_demo_select_tutorial_art, -9999, -9999, FLOW_UI_BUTTON_Z + 0.001, hidden, 1, 1)
@@ -22418,8 +23074,12 @@ function update_flow_ui(self, dt)
             for _, letter_id in ipairs(self.ui.flow_mp_setup_name_letters) do
                 set_ui_square_transform(self, letter_id, -9999, -9999, MP_SETUP_UI_Z + 0.004, hidden, 1, 1)
             end
+            leaderboard_hide_nodes(self, self.ui.flow_mp_badge_letters, MP_BADGE_Z)
+            leaderboard_hide_nodes(self, self.ui.flow_mp_badge_icons, MP_BADGE_Z)
             local joined_slot_lookup = mp_setup_get_joined_slot_lookup(self)
             local setup_letter_cursor = 1
+            local setup_badge_icon_cursor = 1
+            local setup_badge_text_cursor = 1
             for seat_index, player_id in ipairs(MP_SETUP_PLAYER_IDS) do
                 local player_count = self.mp_setup and self.mp_setup.player_count or 2
                 if seat_index <= player_count and joined_slot_lookup[player_id] == true then
@@ -22433,6 +23093,22 @@ function update_flow_ui(self, dt)
                         local seat_x = MP_SETUP_SEAT_X[seat_index] + MP_SETUP_SLOT_X_OFFSET
                         local span = (label_len - 1) * MP_SETUP_NAME_LETTER_SPACING
                         local start_x = seat_x - (span * 0.5)
+                        local steam_id_for_badge = leaderboard_get_player_identity and select(1, leaderboard_get_player_identity(self, network_id)) or ""
+                        local badge_counts = leaderboard_badge_counts_for_steam_id(self, steam_id_for_badge)
+                        if ((badge_counts.solo or 0) > 0) or ((badge_counts.coop or 0) > 0) then
+                            local badge_slots = (((badge_counts.solo or 0) > 0) and 1 or 0) + (((badge_counts.coop or 0) > 0) and 1 or 0)
+                            local badge_x = seat_x - (((badge_slots - 1) * MP_BADGE_ICON_GAP) * 0.5)
+                            setup_badge_icon_cursor, setup_badge_text_cursor = leaderboard_render_badge_icons(self, badge_counts, setup_badge_icon_cursor, setup_badge_text_cursor, badge_x, MP_SETUP_NAME_Y + MP_BADGE_BELOW_NAME_OFFSET_Y, {
+                                icon_nodes = self.ui.flow_mp_badge_icons,
+                                text_nodes = self.ui.flow_mp_badge_letters,
+                                icon_scale = MP_BADGE_ICON_SCALE,
+                                text_scale = MP_BADGE_TEXT_SCALE,
+                                icon_gap = MP_BADGE_ICON_GAP,
+                                count_offset_x = MP_BADGE_COUNT_OFFSET_X,
+                                z = MP_BADGE_Z,
+                                text_z = MP_BADGE_Z + 0.001
+                            })
+                        end
                         for ci = 1, label_len do
                             local glyph_id = self.ui.flow_mp_setup_name_letters[setup_letter_cursor]
                             if not glyph_id then
@@ -22535,6 +23211,7 @@ function update_flow_ui(self, dt)
     update_score_flow_team_names(self, false)
     update_flow_title_space_grid_background(self, dt)
     leaderboard_render_rows(self)
+    leaderboard_render_detail_panel(self)
     local panel_tint = LEADERBOARD_DEBUG_LAYOUT_ENABLED and vmath.vector4(0.15, 0.08, 0.24, 0) or vmath.vector4(0.07, 0.13, 0.09, 1)
     set_ui_square_transform(self, self.ui.flow_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z, panel_tint, LEADERBOARD_DEBUG_PANEL_W, LEADERBOARD_DEBUG_PANEL_H)
     set_ui_square_transform(self, self.ui.flow_leaderboard_panel, LEADERBOARD_DEBUG_PANEL_X, LEADERBOARD_DEBUG_PANEL_Y, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 1, 1)
@@ -22888,6 +23565,14 @@ function handle_flow_touch(self, input_x, input_y)
             enter_flow_state(self, FLOW_STATE_MP_CHOOSER)
             return true
         end
+        if is_point_in_screen_rect(input_x, input_y, TITLE_SOLO_LEADERBOARD_BUTTON_X, TITLE_SOLO_LEADERBOARD_BUTTON_Y, TITLE_LEADERBOARD_BUTTON_W, TITLE_LEADERBOARD_BUTTON_H) then
+            leaderboard_enter_from_title(self, FLOW_STATE_SCORE_SOLO)
+            return true
+        end
+        if is_point_in_screen_rect(input_x, input_y, TITLE_MP_LEADERBOARD_BUTTON_X, TITLE_MP_LEADERBOARD_BUTTON_Y, TITLE_LEADERBOARD_BUTTON_W, TITLE_LEADERBOARD_BUTTON_H) then
+            leaderboard_enter_from_title(self, FLOW_STATE_SCORE_MP)
+            return true
+        end
         if LEVEL_EDITOR_ENABLED
             and is_point_in_screen_rect(input_x, input_y, TITLE_DEBUG_BUTTON_X, TITLE_DEBUG_BUTTON_Y, TITLE_DEBUG_BUTTON_W, TITLE_DEBUG_BUTTON_H)
         then
@@ -22964,7 +23649,15 @@ function handle_flow_touch(self, input_x, input_y)
         local page_count = math.max(1, math.ceil(total_rows / LEADERBOARD_DEBUG_ROWS_PER_PAGE))
         self.leaderboard_debug_page = math.max(1, math.min(page_count, tonumber(self.leaderboard_debug_page or 1) or 1))
         if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_BACK_X, LEADERBOARD_DEBUG_BACK_Y, LEADERBOARD_DEBUG_BACK_W, LEADERBOARD_DEBUG_BACK_H) then
-            enter_flow_state(self, FLOW_STATE_TITLE)
+            if row_state == FLOW_STATE_SCORE_MP and self.leaderboard_detail_entry_index then
+                self.leaderboard_detail_entry_index = nil
+                return true
+            end
+            if row_state == FLOW_STATE_SCORE_MP and tostring(self.leaderboard_return_flow or "") == "mp_chooser" then
+                enter_flow_state(self, FLOW_STATE_MP_CHOOSER)
+            else
+                enter_flow_state(self, FLOW_STATE_TITLE)
+            end
             self.game_won = false
             return true
         end
@@ -22977,6 +23670,19 @@ function handle_flow_touch(self, input_x, input_y)
             self.leaderboard_debug_page = math.min(page_count, self.leaderboard_debug_page + 1)
             print(string.format("SCORE | leaderboard page down | page=%d state=%s", self.leaderboard_debug_page, tostring(row_state)))
             return true
+        end
+        if row_state == FLOW_STATE_SCORE_MP then
+            local start_index = ((self.leaderboard_debug_page - 1) * LEADERBOARD_DEBUG_ROWS_PER_PAGE) + 1
+            local end_index = math.min(total_rows, start_index + LEADERBOARD_DEBUG_ROWS_PER_PAGE - 1)
+            for idx = start_index, end_index do
+                local row_slot = idx - start_index
+                local row_y = LEADERBOARD_DEBUG_ROW_Y - (row_slot * LEADERBOARD_DEBUG_ROW_GAP)
+                if is_point_in_screen_rect(input_x, input_y, LEADERBOARD_DEBUG_FRAME_X, row_y, LEADERBOARD_DEBUG_FRAME_W, LEADERBOARD_DEBUG_ROW_GAP) then
+                    self.leaderboard_detail_entry_index = idx
+                    print(string.format("SCORE | leaderboard detail selected | row=%d", idx))
+                    return true
+                end
+            end
         end
         return true
     end

@@ -124,6 +124,18 @@ images {
 images {
   image: "/assets/images/letterbox.png"
 }
+images {
+  image: "/assets/images/Outro_GraphicNovelStyle_win_escape.png"
+}
+images {
+  image: "/assets/images/Outro_GraphicNovelStyle_lose.png"
+}
+images {
+  image: "/assets/images/Outro_GraphicNovelStyle_win_rescue_holdout.png"
+}
+images {
+  image: "/assets/images/Outro_GraphicNovelStyle_win_purge_cleanse.png"
+}
 margin: 2
 extrude_borders: 2
 inner_padding: 2

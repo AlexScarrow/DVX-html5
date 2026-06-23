@@ -1712,6 +1712,7 @@ MP_WS_ADAPTER = require("main.multiplayer_ws_adapter")
 MP_LOBBY_LIFECYCLE = require("main.multiplayer_lobby_lifecycle")
 OUTRO_SLIDESHOW = require("main.outro_slideshow")
 OUTRO_SEQUENCES = require("main.outro_sequences")
+OUTRO_PLATE = require("main.outro_plate")
 LEVEL_EDITOR = require("main.level_editor")
 DEMO_CONFIG = require("main.demo_config")
 local TUTORIAL_STEP_DEFS = require("main.tutorial_step_defs").STEPS
@@ -22426,6 +22427,11 @@ multiplayer_lobby_render_ui = function(self, dt, hidden)
 end
 
 local function stop_outro_slideshow_runtime(self, reason)
+    if self.outro_plate_state then
+        OUTRO_PLATE.stop(self.outro_plate_state, reason or "stopped")
+        self.outro_plate_state = nil
+    end
+    self.outro_plate_pose = nil
     if self.outro_slideshow_state then
         OUTRO_SLIDESHOW.stop(self.outro_slideshow_state, reason or "stopped")
         self.outro_slideshow_state = nil
@@ -22449,6 +22455,30 @@ local function stop_outro_slideshow_runtime(self, reason)
     self.outro_slide_anim_id = nil
 end
 
+render_outro_plate_pose = function(self, pose)
+    if not (self and self.ui and self.ui.flow_outro_slide and pose) then
+        return
+    end
+    local anim_name = tostring(pose.anim or "")
+    if anim_name ~= "" and anim_name ~= tostring(self.outro_slide_anim_id or "") then
+        self.outro_slide_anim_id = anim_name
+        pcall(msg.post, msg.url(nil, self.ui.flow_outro_slide, "sprite"), "play_animation", { id = hash(anim_name) })
+    end
+    local scale_x = math.max(0.0001, tonumber(pose.scale_x or pose.scale or 1) or 1)
+    local scale_y = math.max(0.0001, tonumber(pose.scale_y or pose.scale or 1) or 1)
+    local alpha = math.max(0, math.min(1, tonumber(pose.alpha or 1) or 1))
+    set_ui_square_transform(
+        self,
+        self.ui.flow_outro_slide,
+        tonumber(pose.x or OUTRO_SLIDE_CENTER_X) or OUTRO_SLIDE_CENTER_X,
+        tonumber(pose.y or (SCREEN_HEIGHT * 0.5)) or (SCREEN_HEIGHT * 0.5),
+        FLOW_UI_PANEL_Z + 0.001,
+        vmath.vector4(1, 1, 1, alpha),
+        scale_x,
+        scale_y
+    )
+end
+
 local function ensure_outro_slide_layer_nodes(self, needed)
     needed = math.max(1, tonumber(needed or 1) or 1)
     self.outro_slide_layer_nodes = self.outro_slide_layer_nodes or { self.ui and self.ui.flow_outro_slide or nil }
@@ -22465,6 +22495,30 @@ local function start_outro_slideshow_runtime(self)
     self.outro_fx_instances = {}
     self.outro_slide_layer_nodes = { self.ui and self.ui.flow_outro_slide or nil }
     self.outro_slide_layer_anim_ids = {}
+    if tostring(self.end_outro_sequence_id or "") ~= "title" then
+        local hooks = {
+            on_frame = function(pose, state)
+                self.outro_plate_pose = pose
+            end,
+            on_complete = function(done_reason, state)
+                self.outro_plate_state = nil
+                self.outro_plate_pose = nil
+                stop_outro_slideshow_runtime(self, "completed")
+                local finish_reason = tostring(done_reason or "")
+                if finish_reason == "restart" or finish_reason == "score_flow" or finish_reason == "stopped" then
+                    return
+                end
+                if (self.game_flow_state or FLOW_STATE_GAME) == FLOW_STATE_OUTRO then
+                    enter_score_flow(self)
+                end
+            end
+        }
+        self.outro_plate_state = OUTRO_PLATE.start(self.end_outro_sequence_id, hooks)
+        if not self.outro_plate_state then
+            print(string.format("OUTRO | plate start failed for id=%s, using placeholder timer", tostring(self.end_outro_sequence_id)))
+        end
+        return
+    end
     local sequence = OUTRO_SEQUENCES.get_sequence(self.end_outro_sequence_id)
     if not sequence then
         print(string.format("OUTRO | no sequence for id=%s, using placeholder timer", tostring(self.end_outro_sequence_id)))
@@ -22671,7 +22725,9 @@ local function update_outro_slideshow_runtime(self, dt)
     if (self.game_flow_state or FLOW_STATE_GAME) ~= FLOW_STATE_OUTRO then
         return
     end
-    if self.outro_slideshow_state then
+    if self.outro_plate_state then
+        self.outro_plate_pose = OUTRO_PLATE.update(self.outro_plate_state, dt)
+    elseif self.outro_slideshow_state then
         OUTRO_SLIDESHOW.update(self.outro_slideshow_state, dt)
     else
         self.flow_outro_timer = (self.flow_outro_timer or 0) + dt
@@ -23697,10 +23753,13 @@ function update_flow_ui(self, dt)
     if state == FLOW_STATE_OUTRO then
         local wobble = math.sin((self.flow_overlay_phase or 0) * 2.4) * 12
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.12, 0.12, 0.18, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
-        set_ui_square_transform(self, self.ui.flow_outro_slide, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z + 0.001, vmath.vector4(1, 1, 1, 1), OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
-        if self.outro_slideshow_state then
+        if self.outro_plate_state then
+            render_outro_plate_pose(self, self.outro_plate_pose)
+            set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
+        elseif self.outro_slideshow_state then
             set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
         else
+            set_ui_square_transform(self, self.ui.flow_outro_slide, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z + 0.001, vmath.vector4(1, 1, 1, 1), OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
             set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
         end
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0), 170, 52)
@@ -24173,7 +24232,9 @@ function handle_flow_touch(self, input_x, input_y)
     end
     if state == FLOW_STATE_OUTRO then
         if is_point_in_screen_rect(input_x, input_y, SCREEN_WIDTH - 110, 54, 170, 52) then
-            if self.outro_slideshow_state then
+            if self.outro_plate_state then
+                OUTRO_PLATE.skip(self.outro_plate_state)
+            elseif self.outro_slideshow_state then
                 OUTRO_SLIDESHOW.skip(self.outro_slideshow_state)
             end
             return true
@@ -24419,6 +24480,8 @@ finish_level_load_after_clear = function(self, level_index)
     self.leaderboard_entries_mp = score_load_local_leaderboard_entries(self, FLOW_STATE_SCORE_MP)
     score_load_pending_uploads(self)
     self.outro_slideshow_state = nil
+    self.outro_plate_state = nil
+    self.outro_plate_pose = nil
     self.outro_fx_instances = {}
     self.outro_slide_anim_id = nil
     self.tutorial_mode = loading_tutorial
@@ -37389,6 +37452,8 @@ function init(self)
     self.end_reason = ""
     self.end_session_origin = ""
     self.outro_slideshow_state = nil
+    self.outro_plate_state = nil
+    self.outro_plate_pose = nil
     self.outro_fx_instances = {}
     self.outro_slide_anim_id = nil
     self.nightvision_reveal_unit_id = nil

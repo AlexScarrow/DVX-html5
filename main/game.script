@@ -5695,6 +5695,12 @@ function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id, 
                 end
                 multiplayer_transport_broadcast_event(self, "realtime_turret_projectile", projectile_event)
             end
+        elseif i == TURRET_BURST_RESOLVE_PROJECTILE_INDEX and resolve_shot_id then
+            -- If the GO pool is exhausted, still resolve the authoritative shot.
+            table.insert(self.turret_projectiles, {
+                go_id = nil,
+                resolve_shot_id = resolve_shot_id
+            })
         end
     end
 end

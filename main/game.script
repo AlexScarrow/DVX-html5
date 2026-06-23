@@ -16005,7 +16005,8 @@ update_demo_win_music_loop_sfx = function(self, dt)
     if not (entry and entry.url) then
         return
     end
-    local active = (self.game_flow_state == FLOW_STATE_DEMO_RESULT) and (tostring(self.demo_result or "") == "win")
+    local active = ((self.game_flow_state == FLOW_STATE_DEMO_RESULT) and (tostring(self.demo_result or "") == "win"))
+        or ((self.game_flow_state == FLOW_STATE_OUTRO) and (tostring(self.end_outro_sequence_id or "") ~= "title") and (tostring(self.end_result or "") ~= "lose"))
     local state = self.sfx_state.demo_win_music_state or { gain = 0, target = 0 }
     local target = active and 1 or 0
     if target > 0 and entry.playing ~= true then
@@ -16049,7 +16050,8 @@ update_demo_lose_music_loop_sfx = function(self, dt)
     if not (entry and entry.url) then
         return
     end
-    local active = (self.game_flow_state == FLOW_STATE_DEMO_RESULT) and (tostring(self.demo_result or "") == "lose")
+    local active = ((self.game_flow_state == FLOW_STATE_DEMO_RESULT) and (tostring(self.demo_result or "") == "lose"))
+        or ((self.game_flow_state == FLOW_STATE_OUTRO) and (tostring(self.end_outro_sequence_id or "") ~= "title") and (tostring(self.end_result or "") == "lose"))
     local state = self.sfx_state.demo_lose_music_state or { gain = 0, target = 0 }
     local target = active and 1 or 0
     if target > 0 and entry.playing ~= true then
@@ -22499,13 +22501,14 @@ render_outro_plate_pose = function(self, pose)
     local scale_y = math.max(0.0001, tonumber(pose.scale_y or pose.scale or 1) or 1)
     local overscan_scale = outro_plate_get_window_overscan_scale()
     local alpha = math.max(0, math.min(1, tonumber(pose.alpha or 1) or 1))
+    local tint_mul = math.max(0, tonumber(pose.tint_mul or 1) or 1)
     set_ui_square_transform(
         self,
         self.ui.flow_outro_slide,
         tonumber(pose.x or OUTRO_SLIDE_CENTER_X) or OUTRO_SLIDE_CENTER_X,
         tonumber(pose.y or (SCREEN_HEIGHT * 0.5)) or (SCREEN_HEIGHT * 0.5),
         FLOW_UI_PANEL_Z + 0.001,
-        vmath.vector4(1, 1, 1, alpha),
+        vmath.vector4(tint_mul, tint_mul, tint_mul, alpha),
         scale_x * overscan_scale,
         scale_y * overscan_scale
     )

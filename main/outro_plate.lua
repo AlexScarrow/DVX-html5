@@ -7,56 +7,60 @@ local IMAGE_H = 720
 local DEFAULT_DURATION = 8.0
 local DEFAULT_START_ZOOM = 1.22
 local DEFAULT_END_ZOOM = 1.0
+local DEFAULT_ZOOM_RESOLVE_FRACTION = 0.3
+local DEFAULT_TINT_PULSE_SPEED = 0.9
+local DEFAULT_TINT_PULSE_MIN = 0.82
+local DEFAULT_TINT_PULSE_MAX = 1.28
 
 local PLATES = {
     escape_win = {
         anim = "Outro_GraphicNovelStyle_win_escape",
         focal_x = 0.52,
         focal_y = 0.46,
-        shake_amp_x = 2.0,
-        shake_amp_y = 1.2
+        shake_amp_x = 3.0,
+        shake_amp_y = 1.8
     },
     lose = {
         anim = "Outro_GraphicNovelStyle_lose",
         focal_x = 0.50,
         focal_y = 0.50,
-        shake_amp_x = 1.2,
-        shake_amp_y = 0.8
+        shake_amp_x = 2.0,
+        shake_amp_y = 1.3
     },
     rescue_win = {
         anim = "Outro_GraphicNovelStyle_win_rescue_holdout",
         focal_x = 0.48,
         focal_y = 0.48,
-        shake_amp_x = 1.6,
-        shake_amp_y = 1.0
+        shake_amp_x = 2.5,
+        shake_amp_y = 1.6
     },
     dna_sample_win = {
         anim = "Outro_GraphicNovelStyle_win_rescue_holdout",
         focal_x = 0.48,
         focal_y = 0.48,
-        shake_amp_x = 1.6,
-        shake_amp_y = 1.0
+        shake_amp_x = 2.5,
+        shake_amp_y = 1.6
     },
     holdout_win = {
         anim = "Outro_GraphicNovelStyle_win_rescue_holdout",
         focal_x = 0.48,
         focal_y = 0.48,
-        shake_amp_x = 1.6,
-        shake_amp_y = 1.0
+        shake_amp_x = 2.5,
+        shake_amp_y = 1.6
     },
     purge_win = {
         anim = "Outro_GraphicNovelStyle_win_purge_cleanse",
         focal_x = 0.50,
         focal_y = 0.46,
-        shake_amp_x = 2.4,
-        shake_amp_y = 1.4
+        shake_amp_x = 3.6,
+        shake_amp_y = 2.2
     },
     cleanse_win = {
         anim = "Outro_GraphicNovelStyle_win_purge_cleanse",
         focal_x = 0.50,
         focal_y = 0.46,
-        shake_amp_x = 2.4,
-        shake_amp_y = 1.4
+        shake_amp_x = 3.6,
+        shake_amp_y = 2.2
     }
 }
 
@@ -95,7 +99,8 @@ end
 local function build_pose(state)
     local plate = state.plate
     local p = clamp01((state.elapsed or 0) / math.max(0.001, state.duration or DEFAULT_DURATION))
-    local eased = ease_out_quad(p)
+    local zoom_p = clamp01(p / math.max(0.001, tonumber(plate.zoom_resolve_fraction or DEFAULT_ZOOM_RESOLVE_FRACTION) or DEFAULT_ZOOM_RESOLVE_FRACTION))
+    local eased = ease_out_quad(zoom_p)
     local cover_scale = math.max(SCREEN_W / IMAGE_W, SCREEN_H / IMAGE_H)
     local start_scale = cover_scale * (tonumber(plate.start_zoom or DEFAULT_START_ZOOM) or DEFAULT_START_ZOOM)
     local end_scale = cover_scale * (tonumber(plate.end_zoom or DEFAULT_END_ZOOM) or DEFAULT_END_ZOOM)
@@ -112,6 +117,8 @@ local function build_pose(state)
     local shake_phase = (state.elapsed or 0) * math.pi * 2 * 7.5
     local shake_x = math.sin(shake_phase + (state.phase_x or 0)) * (tonumber(plate.shake_amp_x or 0) or 0) * shake_decay
     local shake_y = math.cos((shake_phase * 0.91) + (state.phase_y or 0)) * (tonumber(plate.shake_amp_y or 0) or 0) * shake_decay
+    local tint_wave = 0.5 + (0.5 * math.sin(((state.elapsed or 0) * math.pi * 2 * DEFAULT_TINT_PULSE_SPEED) + (state.tint_phase or 0)))
+    local tint_mul = lerp(DEFAULT_TINT_PULSE_MIN, DEFAULT_TINT_PULSE_MAX, tint_wave)
     return {
         anim = plate.anim,
         x = x + shake_x,
@@ -121,6 +128,7 @@ local function build_pose(state)
         scale_x = draw_scale,
         scale_y = draw_scale,
         alpha = 1,
+        tint_mul = tint_mul,
         progress = p
     }
 end
@@ -144,7 +152,8 @@ function M.start(sequence_id, hooks)
         elapsed = 0,
         done = false,
         phase_x = math.random() * math.pi * 2,
-        phase_y = math.random() * math.pi * 2
+        phase_y = math.random() * math.pi * 2,
+        tint_phase = math.random() * math.pi * 2
     }
     state.on_complete = state.hooks.on_complete
     local pose = build_pose(state)

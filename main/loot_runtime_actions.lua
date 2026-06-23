@@ -1,6 +1,7 @@
 local M = {}
 
 local TURRET_PACKED_ITEM = "turret_packed"
+local TURRET_PICKUP_HIT_H = 75
 
 local function turret_starting_bursts_from_ctx(ctx)
     return math.max(0, math.floor(tonumber(ctx and ctx.TURRET_STARTING_BURSTS or 50) or 50))
@@ -953,18 +954,17 @@ function M.extend(runtime, ctx)
                     if turret and turret.name == hash("gun_turret") then
                         local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
                         local tx = cx + (turret.offsetX or 0)
-                        local ty = cy + (turret.offsetY or 0)
                         local hit_w = math.max(turret.hitW or 42, 84)
-                        local hit_h = math.max(turret.hitH or 72, 84)
                         local half_w = hit_w * 0.5
-                        local half_h = hit_h * 0.5
+                        local cell_bottom_y = cy - ((ctx.CELL_HEIGHT or 256) * 0.5)
+                        local pickup_top_y = cell_bottom_y + TURRET_PICKUP_HIT_H
                         local inside = world_x >= (tx - half_w)
                             and world_x <= (tx + half_w)
-                            and world_y >= (ty - half_h)
-                            and world_y <= (ty + half_h)
+                            and world_y >= cell_bottom_y
+                            and world_y <= pickup_top_y
                         if inside then
                             local dx = tx - world_x
-                            local dy = ty - world_y
+                            local dy = (cell_bottom_y + (TURRET_PICKUP_HIT_H * 0.5)) - world_y
                             local dist = math.sqrt(dx * dx + dy * dy)
                             if dist < best_dist then
                                 best_dist = dist
@@ -4695,6 +4695,9 @@ function M.extend(runtime, ctx)
             if resolved_cell and resolved_obj and resolved_cell.idNumber == cell_id then
                 turret_obj = resolved_obj
             end
+        end
+        if wx and wy and not turret_obj then
+            return false
         end
         if not turret_obj then
             local objects = { cell.object1, cell.object2, cell.object3 }

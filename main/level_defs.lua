@@ -274,7 +274,7 @@ levels[4] = {
             }
         },
         techie = {
-            starting_backpack_items = { "power","wiring_straight","power" },
+            starting_backpack_items = { "power","wiring_straight","power","power","power" },
             starting_equipped_buffs = {
                 top = "buff_night_vision"
             }

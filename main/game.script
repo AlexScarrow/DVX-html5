@@ -1899,6 +1899,7 @@ SPITTER_PROJECTILE_SIZE = 8
 TURRET_REACTIVE_FIRE_INTERVAL_SECONDS = 0.72
 TURRET_PROJECTILE_SPEED = 1200
 TURRET_BURST_PROJECTILE_COUNT = 6
+TURRET_BURST_RESOLVE_PROJECTILE_INDEX = math.max(1, math.ceil(TURRET_BURST_PROJECTILE_COUNT * 0.5))
 TURRET_BURST_PROJECTILE_DELAY = 0.11
 TURRET_BURST_SPREAD_PIXELS = 6
 TURRET_STARTING_BURSTS = math.max(0, math.floor(tonumber(TURRET_CFG.starting_bursts or 50) or 50))
@@ -5674,7 +5675,7 @@ function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id, 
                 to = vmath.vector3(tx, ty, 0.76),
                 t = 0,
                 delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY,
-                resolve_shot_id = (i == TURRET_BURST_PROJECTILE_COUNT) and resolve_shot_id or nil
+                resolve_shot_id = (i == TURRET_BURST_RESOLVE_PROJECTILE_INDEX) and resolve_shot_id or nil
             })
             if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
                 local projectile_event = {

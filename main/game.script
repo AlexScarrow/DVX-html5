@@ -12948,8 +12948,8 @@ collect_runtime_reference_counts = function(self)
         local named = {
             "panel_art", "panel_shadow", "component_button", "fix_button", "loot_button", "retrieve_button",
             "close_button", "not_enough_ap_icon", "new_turn_button", "launch_button", "aesthetic_toggle_button", "reactive_toggle_button",
-            "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_panel",
-            "flow_outro_slide", "flow_outro_ship", "flow_outro_skip_button", "flow_outro_skip_button_art", "flow_score_submit_button", "flow_score_title_button",
+            "reactive_advance_button", "drag_command_pip", "drag_pip", "flow_overlay", "flow_outro_backdrop", "flow_panel",
+            "flow_outro_slide", "flow_outro_letterbox", "flow_outro_ship", "flow_outro_skip_button", "flow_outro_skip_button_art", "flow_score_submit_button", "flow_score_title_button",
             "flow_title_solo_button", "flow_title_multiplayer_button"
         }
         for _, k in ipairs(named) do
@@ -13092,8 +13092,10 @@ local function initialize_unit_ui(self)
         drag_command_pip = nil,
         drag_pip = nil,
         flow_overlay = nil,
+        flow_outro_backdrop = nil,
         flow_panel = nil,
         flow_outro_slide = nil,
+        flow_outro_letterbox = nil,
         flow_outro_ship = nil,
         flow_outro_skip_button = nil,
         flow_outro_skip_button_art = nil,
@@ -13360,8 +13362,13 @@ local function initialize_unit_ui(self)
     end
     self.ui.drag_pip = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(-9999, -9999, 0.9))
     self.ui.flow_overlay = create_ui_square(0, 0, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 0), SCREEN_WIDTH, SCREEN_HEIGHT)
+    self.ui.flow_outro_backdrop = create_ui_square_alpha(0, 0, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 0), SCREEN_WIDTH, SCREEN_HEIGHT)
     self.ui.flow_panel = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
     self.ui.flow_outro_slide = create_outro_marker_sprite(hash("outro_purge_win_spaceship_fadeBlack"), FLOW_UI_PANEL_Z + 0.001)
+    self.ui.flow_outro_letterbox = create_outro_marker_sprite(hash("letterbox"), FLOW_UI_PANEL_Z + 0.002)
+    if self.ui.flow_outro_letterbox then
+        pcall(go.set, msg.url(nil, self.ui.flow_outro_letterbox, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+    end
     self.ui.flow_outro_ship = create_ui_square(0, 0, FLOW_UI_PANEL_Z, vmath.vector4(0, 0, 0, 0), 280, 120)
     self.ui.flow_outro_skip_button = create_ui_square(0, 0, FLOW_UI_BUTTON_Z, vmath.vector4(0, 0, 0, 0), 170, 52)
     self.ui.flow_debug_outro_skip_hitbox = create_ui_square_alpha(0, 0, FLOW_UI_BUTTON_Z + 0.03, vmath.vector4(0, 0, 0, 0), 170, 52)
@@ -13801,8 +13808,10 @@ local function set_ui_hidden(self)
     set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     set_ui_square_transform(self, self.ui.drag_pip, -9999, -9999, 0.9, hidden, LOOT_UI.drag_pip_size, LOOT_UI.drag_pip_size)
     set_ui_square_transform(self, self.ui.flow_overlay, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
+    set_ui_square_transform(self, self.ui.flow_outro_backdrop, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
     set_ui_square_transform(self, self.ui.flow_panel, -9999, -9999, FLOW_UI_PANEL_Z, hidden, FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
     set_ui_square_transform(self, self.ui.flow_outro_slide, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
+    set_ui_square_transform(self, self.ui.flow_outro_letterbox, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 3, 3)
     set_ui_square_transform(self, self.ui.flow_outro_ship, -9999, -9999, FLOW_UI_PANEL_Z, hidden, 280, 120)
     set_ui_square_transform(self, self.ui.flow_outro_skip_button, -9999, -9999, FLOW_UI_BUTTON_Z, hidden, 170, 52)
     set_ui_square_transform(self, self.ui.flow_debug_outro_skip_hitbox, -9999, -9999, FLOW_UI_BUTTON_Z + 0.03, hidden, 170, 52)
@@ -22455,6 +22464,28 @@ local function stop_outro_slideshow_runtime(self, reason)
     self.outro_slide_anim_id = nil
 end
 
+outro_plate_get_window_overscan_scale = function()
+    if IS_HTML5 then
+        return 1
+    end
+    local ok_size, win_w, win_h = pcall(window.get_size)
+    if not ok_size or not win_w or not win_h or win_w <= 0 or win_h <= 0 then
+        return 1
+    end
+    local window_scale = math.min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+    if window_scale <= 0 then
+        return 1
+    end
+    local gutter_x = math.max(0, (win_w - (SCREEN_WIDTH * window_scale)) * 0.5 / window_scale)
+    local gutter_y = math.max(0, (win_h - (SCREEN_HEIGHT * window_scale)) * 0.5 / window_scale)
+    local safety_px = 16
+    return math.max(
+        1,
+        (SCREEN_WIDTH + (gutter_x * 2) + safety_px) / SCREEN_WIDTH,
+        (SCREEN_HEIGHT + (gutter_y * 2) + safety_px) / SCREEN_HEIGHT
+    )
+end
+
 render_outro_plate_pose = function(self, pose)
     if not (self and self.ui and self.ui.flow_outro_slide and pose) then
         return
@@ -22466,6 +22497,7 @@ render_outro_plate_pose = function(self, pose)
     end
     local scale_x = math.max(0.0001, tonumber(pose.scale_x or pose.scale or 1) or 1)
     local scale_y = math.max(0.0001, tonumber(pose.scale_y or pose.scale or 1) or 1)
+    local overscan_scale = outro_plate_get_window_overscan_scale()
     local alpha = math.max(0, math.min(1, tonumber(pose.alpha or 1) or 1))
     set_ui_square_transform(
         self,
@@ -22474,8 +22506,8 @@ render_outro_plate_pose = function(self, pose)
         tonumber(pose.y or (SCREEN_HEIGHT * 0.5)) or (SCREEN_HEIGHT * 0.5),
         FLOW_UI_PANEL_Z + 0.001,
         vmath.vector4(1, 1, 1, alpha),
-        scale_x,
-        scale_y
+        scale_x * overscan_scale,
+        scale_y * overscan_scale
     )
 end
 
@@ -23084,6 +23116,10 @@ function update_flow_ui(self, dt)
     end
     set_ui_square_transform(self, self.ui.flow_debug_solo_back_hitbox, -9999, -9999, MP_SETUP_UI_Z + 0.03, hidden, MP_SETUP_ACTION_BTN_W, MP_SETUP_ACTION_BTN_H)
     set_ui_square_transform(self, self.ui.flow_debug_outro_skip_hitbox, -9999, -9999, FLOW_UI_BUTTON_Z + 0.03, hidden, 170, 52)
+    if state ~= FLOW_STATE_OUTRO then
+        set_ui_square_transform(self, self.ui.flow_outro_backdrop, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
+        set_ui_square_transform(self, self.ui.flow_outro_letterbox, -9999, -9999, FLOW_UI_PANEL_Z + 0.002, hidden, 3, 3)
+    end
     if state ~= FLOW_STATE_TITLE and state ~= FLOW_STATE_SOLO_SETUP and state ~= FLOW_STATE_MP_SETUP and state ~= FLOW_STATE_MP_LOBBY then
         set_ui_square_transform(self, self.ui.flow_title_panel, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
         set_ui_square_transform(self, self.ui.flow_title_panel_2, -9999, -9999, FLOW_UI_PANEL_Z + 0.001, hidden, 1, 1)
@@ -23752,6 +23788,9 @@ function update_flow_ui(self, dt)
     end
     if state == FLOW_STATE_OUTRO then
         local wobble = math.sin((self.flow_overlay_phase or 0) * 2.4) * 12
+        local outro_overscan_scale = outro_plate_get_window_overscan_scale()
+        set_ui_square_transform(self, self.ui.flow_overlay, -9999, -9999, FLOW_UI_OVERLAY_Z, hidden, SCREEN_WIDTH, SCREEN_HEIGHT)
+        set_ui_square_transform(self, self.ui.flow_outro_backdrop, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_OVERLAY_Z, vmath.vector4(0, 0, 0, 1), SCREEN_WIDTH * outro_overscan_scale, SCREEN_HEIGHT * outro_overscan_scale)
         set_ui_square_transform(self, self.ui.flow_panel, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z, vmath.vector4(0.12, 0.12, 0.18, 1), FLOW_UI_SCREEN_W, FLOW_UI_SCREEN_H)
         if self.outro_plate_state then
             render_outro_plate_pose(self, self.outro_plate_pose)
@@ -23762,6 +23801,7 @@ function update_flow_ui(self, dt)
             set_ui_square_transform(self, self.ui.flow_outro_slide, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z + 0.001, vmath.vector4(1, 1, 1, 1), OUTRO_SLIDE_DEFAULT_W * 0.021, OUTRO_SLIDE_DEFAULT_H * 0.021)
             set_ui_square_transform(self, self.ui.flow_outro_ship, (SCREEN_WIDTH * 0.5) + wobble, SCREEN_HEIGHT * 0.56, FLOW_UI_PANEL_Z, vmath.vector4(0.78, 0.82, 0.95, 0.97), 280, 120)
         end
+        set_ui_square_transform(self, self.ui.flow_outro_letterbox, SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5, FLOW_UI_PANEL_Z + 0.002, vmath.vector4(1, 1, 1, 1), 3, 3)
         set_ui_square_transform(self, self.ui.flow_outro_skip_button, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z, vmath.vector4(0.82, 0.36, 0.2, 0), 170, 52)
         if FLOW_BUTTON_HITBOX_DEBUG_VISIBLE then
             set_ui_square_transform(self, self.ui.flow_debug_outro_skip_hitbox, SCREEN_WIDTH - 110, 54, FLOW_UI_BUTTON_Z + 0.03, vmath.vector4(0.1, 1.0, 0.2, 0), 170, 52)

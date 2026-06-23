@@ -181,6 +181,7 @@ FEATURE_FLAGS = CONFIG.FEATURE_FLAGS or {}
 SOLO_PROGRESSION_CFG = CONFIG.SOLO_PROGRESSION or {}
 SPAWN_PRESSURE_DEFAULTS = CONFIG.SPAWN_PRESSURE_DEFAULTS or {}
 VISUAL_FX_CFG = CONFIG.VISUAL_FX or {}
+TURRET_CFG = CONFIG.TURRETS or {}
 DEBUG_LEVEL_BUTTONS_ENABLED = FEATURE_FLAGS.debug_level_buttons_enabled == true
 UI_COLOR_AP = vmath.vector4(1, 0.85, 0.25, 1)
 UI_COLOR_HP = vmath.vector4(0.95, 0.25, 0.25, 1)
@@ -1900,6 +1901,12 @@ TURRET_PROJECTILE_SPEED = 1200
 TURRET_BURST_PROJECTILE_COUNT = 6
 TURRET_BURST_PROJECTILE_DELAY = 0.11
 TURRET_BURST_SPREAD_PIXELS = 6
+TURRET_STARTING_BURSTS = math.max(0, math.floor(tonumber(TURRET_CFG.starting_bursts or 50) or 50))
+TURRET_AMMO_DISPLAY_DIGITS = 3
+TURRET_AMMO_DISPLAY_OFFSET_X = -10
+TURRET_AMMO_DISPLAY_OFFSET_Y = -15
+TURRET_AMMO_DISPLAY_SPACING = 8
+TURRET_AMMO_DISPLAY_Z = 0.565
 AESTHETIC_MODE_COMPUTER = "computer"
 AESTHETIC_MODE_BOARDGAME = "boardgame"
 AESTHETIC_PROFILES = {
@@ -2819,6 +2826,12 @@ reset_runtime_object_slot_to_empty = function(slot)
     slot.door_damage_tint = nil
     slot.door_shudder_timer = nil
     slot.door_shudder_phase = nil
+    slot.turretArmingTurns = nil
+    slot.turretAmmoBursts = nil
+    slot.turretAmmoDisplayTimer = nil
+    slot.turretAmmoDisplayDuration = nil
+    slot.turretAmmoDisplayFrom = nil
+    slot.turretAmmoDisplayTo = nil
 end
 
 try_brute_damage_edge_door = function(self, alien, from_cell_id, to_cell_id)
@@ -5628,7 +5641,7 @@ function choose_turret_target(self, turret_cell_id, candidates, turret_pos_x, tu
     return nil
 end
 
-function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id)
+function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id, burst_meta)
     if not from_pos or not to_pos then
         return
     end
@@ -5664,16 +5677,82 @@ function spawn_turret_projectile_burst(self, from_pos, to_pos, resolve_shot_id)
                 resolve_shot_id = (i == TURRET_BURST_PROJECTILE_COUNT) and resolve_shot_id or nil
             })
             if self.mp_state and self.mp_state.enabled and realtime_mp_host_can_simulate(self) then
-                multiplayer_transport_broadcast_event(self, "realtime_turret_projectile", {
+                local projectile_event = {
                     from_x = sx,
                     from_y = sy,
                     to_x = tx,
                     to_y = ty,
                     delay = (i - 1) * TURRET_BURST_PROJECTILE_DELAY
-                })
+                }
+                if i == 1 and type(burst_meta) == "table" then
+                    projectile_event.turret_object_id = burst_meta.turret_object_id
+                    projectile_event.ammo_display_from = burst_meta.ammo_display_from
+                    projectile_event.ammo_display_to = burst_meta.ammo_display_to
+                    projectile_event.ammo_bursts = burst_meta.ammo_bursts
+                end
+                multiplayer_transport_broadcast_event(self, "realtime_turret_projectile", projectile_event)
             end
         end
     end
+end
+
+turret_get_remaining_bursts = function(turret_obj)
+    if not turret_obj then
+        return 0
+    end
+    local bursts = tonumber(turret_obj.turretAmmoBursts)
+    if bursts == nil then
+        bursts = TURRET_STARTING_BURSTS
+        turret_obj.turretAmmoBursts = bursts
+    end
+    return math.max(0, math.floor(bursts))
+end
+
+turret_get_display_ammo = function(turret_obj)
+    return math.max(0, turret_get_remaining_bursts(turret_obj) * TURRET_BURST_PROJECTILE_COUNT)
+end
+
+turret_start_ammo_display_tick = function(turret_obj, from_value, to_value)
+    if not turret_obj then
+        return
+    end
+    turret_obj.turretAmmoDisplayFrom = math.max(0, math.floor(tonumber(from_value or 0) or 0))
+    turret_obj.turretAmmoDisplayTo = math.max(0, math.floor(tonumber(to_value or 0) or 0))
+    turret_obj.turretAmmoDisplayTimer = math.max(0.05, ((TURRET_BURST_PROJECTILE_COUNT - 1) * TURRET_BURST_PROJECTILE_DELAY) * 0.5)
+    turret_obj.turretAmmoDisplayDuration = turret_obj.turretAmmoDisplayTimer
+end
+
+turret_consume_burst = function(turret_obj)
+    local bursts = turret_get_remaining_bursts(turret_obj)
+    if bursts <= 0 then
+        turret_obj.turretAmmoBursts = 0
+        return false
+    end
+    turret_obj.turretAmmoBursts = bursts - 1
+    turret_start_ammo_display_tick(
+        turret_obj,
+        bursts * TURRET_BURST_PROJECTILE_COUNT,
+        (bursts - 1) * TURRET_BURST_PROJECTILE_COUNT
+    )
+    return true
+end
+
+turret_find_by_object_id = function(self, object_id)
+    local wanted_id = tonumber(object_id or 0) or 0
+    if wanted_id <= 0 or not self.world_grid then
+        return nil
+    end
+    for _, cell in ipairs(self.world_grid) do
+        if cell and cell.tileID ~= hash("empty") then
+            local objects = { cell.object1, cell.object2, cell.object3 }
+            for _, obj in ipairs(objects) do
+                if obj and obj.name == hash("gun_turret") and tonumber(obj.objectId or 0) == wanted_id then
+                    return obj
+                end
+            end
+        end
+    end
+    return nil
 end
 
 local handle_human_death_loot_drop
@@ -5875,6 +5954,9 @@ handle_human_death_loot_drop = function(self, unit, source_tag)
 end
 
 function process_turret_reactive_fire(self, dt)
+    if self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
+        return
+    end
     self.turret_fire_cooldown_by_object_id = self.turret_fire_cooldown_by_object_id or {}
     self.turret_fired_this_alien_turn_by_object_id = self.turret_fired_this_alien_turn_by_object_id or {}
     for object_id, cooldown in pairs(self.turret_fire_cooldown_by_object_id) do
@@ -5900,6 +5982,7 @@ function process_turret_reactive_fire(self, dt)
                     and turret_obj.isFixed == true
                     and (turret_obj.turretArmingTurns or 0) <= 0
                     and turret_dependency_met(self.world_grid, turret_obj)
+                    and turret_get_remaining_bursts(turret_obj) > 0
                 then
                     local turret_object_id = turret_obj.objectId or turret_cell_id
                     if (not self.turret_fire_cooldown_by_object_id[turret_object_id])
@@ -5944,11 +6027,19 @@ function process_turret_reactive_fire(self, dt)
                             end
                             local target_pos = get_target_world_pos_for_turret(self, target)
                             if target_pos then
+                                if is_authoritative_turret_sim and not turret_consume_burst(turret_obj) then
+                                    return
+                                end
                                 self.turret_pending_shots = self.turret_pending_shots or {}
                                 self.next_turret_shot_id = (self.next_turret_shot_id or 0) + 1
                                 local shot_id = self.next_turret_shot_id
                                 play_turret_gun_sfx(self, turret_pos.x, turret_pos.y)
-                                spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id)
+                                spawn_turret_projectile_burst(self, turret_pos, target_pos, shot_id, {
+                                    turret_object_id = turret_object_id,
+                                    ammo_display_from = turret_obj.turretAmmoDisplayFrom,
+                                    ammo_display_to = turret_obj.turretAmmoDisplayTo,
+                                    ammo_bursts = turret_get_remaining_bursts(turret_obj)
+                                })
                                 local gun_markers = self.turret_gun_objects or {}
                                 local marker_key = string.format("%d:%d", turret_cell_id, turret_slot_idx)
                                 local gun_go = gun_markers[marker_key]
@@ -24437,6 +24528,19 @@ function reset_and_load_level(self, level_index, defer_spawn)
             map_table[key] = nil
         end
     end
+    local function safe_delete_nested_array_map(map_table)
+        if not map_table then
+            return
+        end
+        for key, list_table in pairs(map_table) do
+            if type(list_table) == "table" then
+                for _, go_id in ipairs(list_table) do
+                    safe_delete(go_id)
+                end
+            end
+            map_table[key] = nil
+        end
+    end
     local function safe_delete_array(list_table)
         if not list_table then
             return
@@ -24496,6 +24600,7 @@ function reset_and_load_level(self, level_index, defer_spawn)
     safe_delete_map(self.civilian_hp_bar_fill_visuals)
     safe_delete_map(self.machine_shadow_objects)
     safe_delete_map(self.turret_shadow_objects)
+    safe_delete_nested_array_map(self.turret_ammo_digit_objects)
     safe_delete_map(self.power_node_shadow_objects)
     safe_delete_array(self.escape_pod_power_slot_markers)
     safe_delete_map(self.vent_shadow_objects)
@@ -27360,7 +27465,8 @@ multiplayer_build_world_state_digest = function(self)
                         offsetY = tonumber(obj.offsetY or 0) or 0,
                         hitW = tonumber(obj.hitW or 48) or 48,
                         hitH = tonumber(obj.hitH or 48) or 48,
-                        turretArmingTurns = tonumber(obj.turretArmingTurns or 0) or 0
+                        turretArmingTurns = tonumber(obj.turretArmingTurns or 0) or 0,
+                        turretAmmoBursts = turret_get_remaining_bursts(obj)
                     }
                 elseif obj and obj.name == hash("obstacle") then
                     row.obstacles[tostring(slot_idx)] = {
@@ -27494,6 +27600,14 @@ multiplayer_apply_authoritative_world_digest = function(self, world_digest)
                         local arming_turns = tonumber(turret_state.turretArmingTurns or obj.turretArmingTurns or 0) or 0
                         if tonumber(obj.turretArmingTurns or 0) ~= arming_turns then
                             obj.turretArmingTurns = arming_turns
+                            applied_any = true
+                        end
+                        local ammo_bursts = tonumber(turret_state.turretAmmoBursts or obj.turretAmmoBursts or TURRET_STARTING_BURSTS) or TURRET_STARTING_BURSTS
+                        ammo_bursts = math.max(0, math.floor(ammo_bursts))
+                        if tonumber(obj.turretAmmoBursts or TURRET_STARTING_BURSTS) ~= ammo_bursts then
+                            obj.turretAmmoBursts = ammo_bursts
+                            obj.turretAmmoDisplayTimer = nil
+                            obj.turretAmmoDisplayDuration = nil
                             applied_any = true
                         end
                     end
@@ -27868,13 +27982,14 @@ multiplayer_compute_turn_checksum_buckets = function(self)
                     )
                 elseif obj and obj.name == hash("gun_turret") then
                     turret_rows[#turret_rows + 1] = string.format(
-                        "%d|%d|%d|%d|%d|%d",
+                        "%d|%d|%d|%d|%d|%d|%d",
                         slot_idx,
                         tonumber(obj.objectId or 0) or 0,
                         obj.isFixed == true and 1 or 0,
                         obj.isWelded == true and 1 or 0,
                         tonumber(obj.offsetX or 0) or 0,
-                        tonumber(obj.offsetY or 0) or 0
+                        tonumber(obj.offsetY or 0) or 0,
+                        turret_get_remaining_bursts(obj)
                     )
                 elseif obj and obj.name == hash("obstacle") then
                     obstacle_rows[#obstacle_rows + 1] = string.format(
@@ -28030,13 +28145,14 @@ multiplayer_compute_turn_checksum = function(self)
                     )
                 elseif obj and obj.name == hash("gun_turret") then
                     turret_rows[#turret_rows + 1] = string.format(
-                        "%d|%d|%d|%d|%d|%d",
+                        "%d|%d|%d|%d|%d|%d|%d",
                         slot_idx,
                         tonumber(obj.objectId or 0) or 0,
                         obj.isFixed == true and 1 or 0,
                         obj.isWelded == true and 1 or 0,
                         tonumber(obj.offsetX or 0) or 0,
-                        tonumber(obj.offsetY or 0) or 0
+                        tonumber(obj.offsetY or 0) or 0,
+                        turret_get_remaining_bursts(obj)
                     )
                 elseif obj and obj.name == hash("obstacle") then
                     obstacle_rows[#obstacle_rows + 1] = string.format(
@@ -30647,6 +30763,21 @@ multiplayer_transport_on_event = function(self, event)
         local to_x = tonumber(event.payload and event.payload.to_x or nil)
         local to_y = tonumber(event.payload and event.payload.to_y or nil)
         local delay = tonumber(event.payload and event.payload.delay or 0) or 0
+        local turret_object_id = tonumber(event.payload and event.payload.turret_object_id or 0) or 0
+        if turret_object_id > 0 then
+            local turret_obj = turret_find_by_object_id(self, turret_object_id)
+            if turret_obj then
+                local ammo_bursts = tonumber(event.payload and event.payload.ammo_bursts or nil)
+                if ammo_bursts ~= nil then
+                    turret_obj.turretAmmoBursts = math.max(0, math.floor(ammo_bursts))
+                end
+                local display_from = tonumber(event.payload and event.payload.ammo_display_from or nil)
+                local display_to = tonumber(event.payload and event.payload.ammo_display_to or nil)
+                if display_from and display_to then
+                    turret_start_ammo_display_tick(turret_obj, display_from, display_to)
+                end
+            end
+        end
         if not (from_x and from_y and to_x and to_y) then
             return
         end
@@ -33272,6 +33403,16 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
         self_ref.turret_gun_objects = self_ref.turret_gun_objects or {}
         return self_ref.turret_gun_objects
     end,
+    TURRET_STARTING_BURSTS = TURRET_STARTING_BURSTS,
+    TURRET_BURST_PROJECTILE_COUNT = TURRET_BURST_PROJECTILE_COUNT,
+    TURRET_AMMO_DISPLAY_DIGITS = TURRET_AMMO_DISPLAY_DIGITS,
+    TURRET_AMMO_DISPLAY_OFFSET_X = TURRET_AMMO_DISPLAY_OFFSET_X,
+    TURRET_AMMO_DISPLAY_OFFSET_Y = TURRET_AMMO_DISPLAY_OFFSET_Y,
+    TURRET_AMMO_DISPLAY_SPACING = TURRET_AMMO_DISPLAY_SPACING,
+    TURRET_AMMO_DISPLAY_Z = TURRET_AMMO_DISPLAY_Z,
+    get_turret_display_ammo = function(obj)
+        return turret_get_display_ammo(obj)
+    end,
     play_break_barricade_sfx = function(self_ref, world_x, world_y)
         play_break_barricade_sfx(self_ref, world_x, world_y)
     end,
@@ -33295,6 +33436,7 @@ LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     UI_PANEL_X = UI_PANEL_X,
     UI_PANEL_Y = UI_PANEL_Y,
     BUFF_SLOT_ORDER = BUFF_SLOT_ORDER,
+    TURRET_STARTING_BURSTS = TURRET_STARTING_BURSTS,
     get_human_portrait_unit_id_at = get_human_portrait_unit_id_at,
     UNIT_CLICK_SELECT_RADIUS = UNIT_CLICK_SELECT_RADIUS,
     UNIT_CLASS_MEDIC = UNIT_CLASS_MEDIC,
@@ -35051,11 +35193,18 @@ multiplayer_build_snapshot_state = function(self)
                 object_states[tostring(slot_idx)] = {
                     has_object = (obj and obj.name and obj.name ~= hash("empty")) and true or false,
                     is_door = (obj and obj.name == hash("door")) and true or false,
+                    is_turret = (obj and obj.name == hash("gun_turret")) and true or false,
                     object_id = tonumber(obj and obj.objectId or 0) or 0,
                     isOpen = (obj and obj.isOpen == true) and true or false,
                     isFixed = (obj and obj.isFixed == true) and true or false,
                     isWelded = (obj and obj.isWelded == true) and true or false,
-                    door_hp = tonumber(obj and obj.door_hp or 0) or 0
+                    door_hp = tonumber(obj and obj.door_hp or 0) or 0,
+                    offsetX = tonumber(obj and obj.offsetX or 0) or 0,
+                    offsetY = tonumber(obj and obj.offsetY or 0) or 0,
+                    hitW = tonumber(obj and obj.hitW or 32) or 32,
+                    hitH = tonumber(obj and obj.hitH or 32) or 32,
+                    turretArmingTurns = tonumber(obj and obj.turretArmingTurns or 0) or 0,
+                    turretAmmoBursts = (obj and obj.name == hash("gun_turret")) and turret_get_remaining_bursts(obj) or nil
                 }
             end
             snapshot.world_cells[tostring(cell.idNumber)] = {
@@ -35567,6 +35716,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
                 if type(obj_state) == "table" and obj then
                     local has_object = obj_state.has_object == true
                     local is_door = obj_state.is_door == true
+                    local is_turret = obj_state.is_turret == true
                     if not has_object then
                         if obj.name and obj.name ~= hash("empty") then
                             reset_runtime_object_slot_to_empty(obj)
@@ -35579,6 +35729,20 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
                         obj.isWelded = (obj_state.isWelded == true)
                         local door_hp = tonumber(obj_state.door_hp or 0) or 0
                         obj.door_hp = door_hp > 0 and door_hp or nil
+                    elseif is_turret then
+                        obj.name = hash("gun_turret")
+                        obj.objectId = tonumber(obj_state.object_id or obj.objectId or 0) or 0
+                        obj.isOpen = false
+                        obj.isFixed = (obj_state.isFixed == true)
+                        obj.isWelded = (obj_state.isWelded == true)
+                        obj.offsetX = tonumber(obj_state.offsetX or obj.offsetX or 0) or 0
+                        obj.offsetY = tonumber(obj_state.offsetY or obj.offsetY or 0) or 0
+                        obj.hitW = tonumber(obj_state.hitW or obj.hitW or 48) or 48
+                        obj.hitH = tonumber(obj_state.hitH or obj.hitH or 48) or 48
+                        obj.turretArmingTurns = tonumber(obj_state.turretArmingTurns or obj.turretArmingTurns or 0) or 0
+                        obj.turretAmmoBursts = math.max(0, math.floor(tonumber(obj_state.turretAmmoBursts or obj.turretAmmoBursts or TURRET_STARTING_BURSTS) or TURRET_STARTING_BURSTS))
+                        obj.turretAmmoDisplayTimer = nil
+                        obj.turretAmmoDisplayDuration = nil
                     elseif obj.name and obj.name ~= hash("empty") then
                         obj.isFixed = (obj_state.isFixed == true)
                         obj.isWelded = (obj_state.isWelded == true)
@@ -36694,6 +36858,7 @@ end
         machine_objects = {}
         self.turret_tripod_objects = {}
         self.turret_gun_objects = {}
+        self.turret_ammo_digit_objects = {}
         self.power_node_objects = {}
         self.vent_objects = {}
         self.light_value_objects = {}
@@ -38096,6 +38261,9 @@ function update(self, dt)
     MELEE_RUNTIME.update_phase(self, dt)
     update_spitter_projectiles(self, dt)
     update_turret_projectiles(self, dt)
+    if LOOT_RUNTIME and LOOT_RUNTIME.update_turret_ammo_display_markers then
+        LOOT_RUNTIME.update_turret_ammo_display_markers(self, dt)
+    end
     update_spitter_attack_phase(self, dt)
     if self.alien_turn_ap_debug
         and (not self.alien_turn_ap_debug_flushed)

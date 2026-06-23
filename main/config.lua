@@ -36,6 +36,10 @@ M.SOLO_PROGRESSION = {
     tier_thresholds = { 10000, 30000, 45000 }
 }
 
+M.TURRETS = {
+    starting_bursts = 50
+}
+
 M.DEMO = {
     demo_build = M.FEATURE_FLAGS.demo_build,
     demo_allow_tutorial = M.FEATURE_FLAGS.demo_allow_tutorial,

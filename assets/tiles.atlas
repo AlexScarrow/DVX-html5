@@ -287,6 +287,36 @@ images {
   image: "/assets/images/human_dropShadow.png"
 }
 images {
+  image: "/assets/images/gun_turret_display_0.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_1.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_2.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_3.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_4.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_5.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_6.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_7.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_8.png"
+}
+images {
+  image: "/assets/images/gun_turret_display_9.png"
+}
+images {
   image: "/assets/images/human_dead.png"
 }
 images {

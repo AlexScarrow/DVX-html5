@@ -1,8 +1,40 @@
 local M = {}
 
+local TURRET_PACKED_ITEM = "turret_packed"
+
+local function turret_starting_bursts_from_ctx(ctx)
+    return math.max(0, math.floor(tonumber(ctx and ctx.TURRET_STARTING_BURSTS or 50) or 50))
+end
+
+local function is_packed_turret_item(item_type)
+    return item_type == TURRET_PACKED_ITEM
+        or (type(item_type) == "string" and string.sub(item_type, 1, #TURRET_PACKED_ITEM + 1) == TURRET_PACKED_ITEM .. ":")
+end
+
+local function packed_turret_item_for_bursts(ctx, bursts)
+    local value = tonumber(bursts)
+    if value == nil then
+        value = turret_starting_bursts_from_ctx(ctx)
+    end
+    value = math.max(0, math.floor(value))
+    return string.format("%s:%d", TURRET_PACKED_ITEM, value)
+end
+
+local function packed_turret_bursts(ctx, item_type)
+    if item_type == TURRET_PACKED_ITEM then
+        return turret_starting_bursts_from_ctx(ctx)
+    end
+    if type(item_type) == "string" then
+        local encoded = string.match(item_type, "^" .. TURRET_PACKED_ITEM .. ":(%d+)$")
+        if encoded then
+            return math.max(0, math.floor(tonumber(encoded) or 0))
+        end
+    end
+    return nil
+end
+
 function M.extend(runtime, ctx)
     local WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM = 34
-    local TURRET_PACKED_ITEM = "turret_packed"
     local OBSTACLE_ITEM = "obstacle"
     local OBSTACLE_STACK_CAP = 4
     local OBSTACLE_DROP_FLOOR_Y_OFFSET = -30
@@ -397,7 +429,7 @@ function M.extend(runtime, ctx)
             return hash("dna_sample")
         elseif item_type == PURGE_BOMB_ITEM_TYPE then
             return hash("bomb")
-        elseif item_type == TURRET_PACKED_ITEM then
+        elseif is_packed_turret_item(item_type) then
             return hash("gun_turret_dropped")
         elseif item_type == OBSTACLE_ITEM then
             return hash("obstacle_icon")
@@ -781,10 +813,10 @@ function M.extend(runtime, ctx)
         return nil
     end
 
-    local function fill_backpack_with_packed_turret(unit, cap)
+    local function fill_backpack_with_packed_turret(unit, cap, bursts)
         unit.backpack_items = unit.backpack_items or {}
         for _ = 1, 1 do
-            table.insert(unit.backpack_items, TURRET_PACKED_ITEM)
+            table.insert(unit.backpack_items, packed_turret_item_for_bursts(ctx, bursts))
         end
         unit.backpack_used = #unit.backpack_items
     end
@@ -795,7 +827,7 @@ function M.extend(runtime, ctx)
         end
         local keep = {}
         for _, item in ipairs(unit.backpack_items) do
-            if item ~= TURRET_PACKED_ITEM then
+            if not is_packed_turret_item(item) then
                 table.insert(keep, item)
             end
         end
@@ -4695,6 +4727,10 @@ function M.extend(runtime, ctx)
         if not try_consume_drag_ap(unit, nil, pickup_obstacle_ap_cost) then
             return true
         end
+        local preserved_turret_bursts = tonumber(turret_obj.turretAmmoBursts)
+        if preserved_turret_bursts == nil then
+            preserved_turret_bursts = tonumber(ctx.TURRET_STARTING_BURSTS or 50) or 50
+        end
         turret_obj.name = hash("empty")
         turret_obj.isFixed = false
         turret_obj.isWelded = false
@@ -4712,7 +4748,12 @@ function M.extend(runtime, ctx)
         turret_obj.hitH = 32
         turret_obj.requiredComponent = nil
         turret_obj.turretArmingTurns = nil
-        fill_backpack_with_packed_turret(unit, cap)
+        turret_obj.turretAmmoBursts = nil
+        turret_obj.turretAmmoDisplayTimer = nil
+        turret_obj.turretAmmoDisplayDuration = nil
+        turret_obj.turretAmmoDisplayFrom = nil
+        turret_obj.turretAmmoDisplayTo = nil
+        fill_backpack_with_packed_turret(unit, cap, preserved_turret_bursts)
         runtime.refresh_turret_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
@@ -5496,13 +5537,13 @@ function M.extend(runtime, ctx)
             return false
         end
         local drag_ap_override = nil
-        if source_item == TURRET_PACKED_ITEM then
+        if is_packed_turret_item(source_item) then
             drag_ap_override = get_turret_deploy_ap_cost()
         end
         local function try_consume_current_drag_ap(target_unit)
             return try_consume_drag_ap(source_unit, target_unit, drag_ap_override)
         end
-        if drag.drag_type ~= "command" and source_item == TURRET_PACKED_ITEM then
+        if drag.drag_type ~= "command" and is_packed_turret_item(source_item) then
             local start_x = drag.start_screen_x or drag.screen_x or screen_x
             local start_y = drag.start_screen_y or drag.screen_y or screen_y
             local drag_dx = (screen_x or start_x) - start_x
@@ -5807,7 +5848,7 @@ function M.extend(runtime, ctx)
                         flash_invalid_drag_units(source_unit, target_unit)
                     end
                 else
-                    if source_item == TURRET_PACKED_ITEM then
+                    if is_packed_turret_item(source_item) then
                         suppress_generic_world_drop = true
                     end
                     if source_item == "corpse" and drop_cell_id and source_unit.cell_id and not consumed then
@@ -6050,7 +6091,7 @@ function M.extend(runtime, ctx)
                         end
                     end
                     if not consumed then
-                        if source_item == TURRET_PACKED_ITEM then
+                        if is_packed_turret_item(source_item) then
                             if drop_cell_id then
                                 local drop_cell = self.world_grid and self.world_grid[drop_cell_id]
                                 if not drop_cell or drop_cell.tileID == hash("empty") then
@@ -6076,7 +6117,7 @@ function M.extend(runtime, ctx)
                                         if not remove_source_item() then
                                             -- Fallback safety: remove one packed turret if drag slot changed mid-action.
                                             for i, item in ipairs(source_unit.backpack_items or {}) do
-                                                if item == TURRET_PACKED_ITEM then
+                                                if is_packed_turret_item(item) then
                                                     table.remove(source_unit.backpack_items, i)
                                                     source_unit.backpack_used = #source_unit.backpack_items
                                                     break
@@ -6106,6 +6147,12 @@ function M.extend(runtime, ctx)
                                         slot.hitH = 48
                                         slot.requiredComponent = nil
                                         slot.turretArmingTurns = TURRET_ARMING_TURNS_ON_DEPLOY
+                                        slot.turretAmmoBursts = packed_turret_bursts(ctx, source_item)
+                                            or math.max(0, math.floor(tonumber(ctx.TURRET_STARTING_BURSTS or 50) or 50))
+                                        slot.turretAmmoDisplayTimer = nil
+                                        slot.turretAmmoDisplayDuration = nil
+                                        slot.turretAmmoDisplayFrom = nil
+                                        slot.turretAmmoDisplayTo = nil
                                         runtime.refresh_turret_markers(self)
                                         runtime.refresh_fix_markers(self)
                                         runtime.refresh_world_item_visuals(self)

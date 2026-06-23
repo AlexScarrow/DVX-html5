@@ -28,9 +28,55 @@ function M.extend(runtime, ctx)
     local DNA_BAR_Y_OFFSET_RATIO = -0.32
     local DNA_BAR_Y_OFFSET_PX = 32
     local DNA_BAR_SLOT_SCALE = 0.42
+    local TURRET_AMMO_DIGIT_COUNT = ctx.TURRET_AMMO_DISPLAY_DIGITS or 3
+    local TURRET_AMMO_DIGIT_OFFSET_X = ctx.TURRET_AMMO_DISPLAY_OFFSET_X or 0
+    local TURRET_AMMO_DIGIT_OFFSET_Y = ctx.TURRET_AMMO_DISPLAY_OFFSET_Y or -22
+    local TURRET_AMMO_DIGIT_SPACING = ctx.TURRET_AMMO_DISPLAY_SPACING or 8
+    local TURRET_AMMO_DIGIT_Z = ctx.TURRET_AMMO_DISPLAY_Z or 0.565
+    local TURRET_AMMO_DIGIT_ANIMS = {
+        [0] = hash("gun_turret_display_0"),
+        [1] = hash("gun_turret_display_1"),
+        [2] = hash("gun_turret_display_2"),
+        [3] = hash("gun_turret_display_3"),
+        [4] = hash("gun_turret_display_4"),
+        [5] = hash("gun_turret_display_5"),
+        [6] = hash("gun_turret_display_6"),
+        [7] = hash("gun_turret_display_7"),
+        [8] = hash("gun_turret_display_8"),
+        [9] = hash("gun_turret_display_9")
+    }
 
     local function boardgame_shadows_enabled(self)
         return self and self.aesthetic_mode == "boardgame"
+    end
+
+    local function turret_display_value_for_obj(obj)
+        if not obj then
+            return 0
+        end
+        local timer = tonumber(obj.turretAmmoDisplayTimer or 0) or 0
+        local duration = tonumber(obj.turretAmmoDisplayDuration or 0) or 0
+        if timer > 0 and duration > 0 then
+            local from_value = tonumber(obj.turretAmmoDisplayFrom or 0) or 0
+            local to_value = tonumber(obj.turretAmmoDisplayTo or 0) or 0
+            local progress = math.max(0, math.min(1, 1 - (timer / duration)))
+            return math.floor(from_value + ((to_value - from_value) * progress) + 0.5)
+        end
+        if ctx.get_turret_display_ammo then
+            return ctx.get_turret_display_ammo(obj)
+        end
+        local bursts = tonumber(obj.turretAmmoBursts or ctx.TURRET_STARTING_BURSTS or 0) or 0
+        return math.max(0, math.floor(bursts) * (ctx.TURRET_BURST_PROJECTILE_COUNT or 6))
+    end
+
+    local function set_turret_ammo_digit(marker, digit)
+        if not marker then
+            return
+        end
+        local anim = TURRET_AMMO_DIGIT_ANIMS[math.max(0, math.min(9, digit or 0))]
+        if anim then
+            msg.post(msg.url(nil, marker, "sprite"), "play_animation", { id = anim })
+        end
     end
 
     local function spawn_world_shadow(x, y, z, sx, sy, alpha)
@@ -431,7 +477,16 @@ function M.extend(runtime, ctx)
     runtime.refresh_turret_markers = function(self)
         local turret_tripod_objects = ctx.get_turret_tripod_objects(self)
         local turret_gun_objects = ctx.get_turret_gun_objects(self)
+        self.turret_ammo_digit_objects = self.turret_ammo_digit_objects or {}
         self.turret_shadow_objects = self.turret_shadow_objects or {}
+        for marker_key, digit_list in pairs(self.turret_ammo_digit_objects) do
+            for _, marker in ipairs(digit_list or {}) do
+                if marker then
+                    go.delete(marker)
+                end
+            end
+            self.turret_ammo_digit_objects[marker_key] = nil
+        end
         for marker_key, marker in pairs(self.turret_shadow_objects) do
             if marker then
                 go.delete(marker)
@@ -485,6 +540,58 @@ function M.extend(runtime, ctx)
                             -- Rotation hook: update this z-angle when turret acquires/fires at target.
                             go.set_rotation(vmath.quat_rotation_z(0), gun_id)
                             turret_gun_objects[marker_key] = gun_id
+                        end
+                        if cell.isPowered == true then
+                            local digit_list = {}
+                            local value = math.max(0, math.min(999, turret_display_value_for_obj(obj)))
+                            local hundreds = math.floor(value / 100) % 10
+                            local tens = math.floor(value / 10) % 10
+                            local ones = value % 10
+                            local digits = { hundreds, tens, ones }
+                            local start_x = tx + TURRET_AMMO_DIGIT_OFFSET_X - (TURRET_AMMO_DIGIT_SPACING * ((TURRET_AMMO_DIGIT_COUNT - 1) * 0.5))
+                            for digit_idx = 1, TURRET_AMMO_DIGIT_COUNT do
+                                local digit_go = factory.create(
+                                    "/tile_factory#tile_factory",
+                                    vmath.vector3(start_x + ((digit_idx - 1) * TURRET_AMMO_DIGIT_SPACING), ty + TURRET_AMMO_DIGIT_OFFSET_Y, TURRET_AMMO_DIGIT_Z)
+                                )
+                                if digit_go then
+                                    set_turret_ammo_digit(digit_go, digits[digit_idx] or 0)
+                                    go.set_scale(vmath.vector3(1, 1, 1), digit_go)
+                                    digit_list[digit_idx] = digit_go
+                                end
+                            end
+                            self.turret_ammo_digit_objects[marker_key] = digit_list
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    runtime.update_turret_ammo_display_markers = function(self, dt)
+        if not self.world_grid or not self.turret_ammo_digit_objects then
+            return
+        end
+        for cell_id, cell in ipairs(self.world_grid) do
+            if cell.tileID ~= hash("empty") then
+                local objects = { cell.object1, cell.object2, cell.object3 }
+                for slot_idx, obj in ipairs(objects) do
+                    if obj and obj.name == hash("gun_turret") then
+                        if obj.turretAmmoDisplayTimer then
+                            obj.turretAmmoDisplayTimer = math.max(0, (tonumber(obj.turretAmmoDisplayTimer or 0) or 0) - (dt or 0))
+                        end
+                        local marker_key = string.format("%d:%d", cell_id, slot_idx)
+                        local digit_list = self.turret_ammo_digit_objects[marker_key]
+                        if digit_list then
+                            local value = math.max(0, math.min(999, turret_display_value_for_obj(obj)))
+                            local digits = {
+                                math.floor(value / 100) % 10,
+                                math.floor(value / 10) % 10,
+                                value % 10
+                            }
+                            for digit_idx = 1, TURRET_AMMO_DIGIT_COUNT do
+                                set_turret_ammo_digit(digit_list[digit_idx], digits[digit_idx] or 0)
+                            end
                         end
                     end
                 end

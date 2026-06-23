@@ -13,7 +13,14 @@ function M.create(ctx)
             end
         end
     end
+    local function normalize_item_type(item_type)
+        if type(item_type) == "string" and string.sub(item_type, 1, 14) == "turret_packed:" then
+            return "turret_packed"
+        end
+        return item_type
+    end
     local function get_buff_def_by_item_type(item_type)
+        item_type = normalize_item_type(item_type)
         if not item_type then
             return nil
         end
@@ -49,6 +56,7 @@ function M.create(ctx)
     end
 
     runtime.get_backpack_item_color = function(item_type)
+        item_type = normalize_item_type(item_type)
         local buff_def = get_buff_def_by_item_type(item_type)
         if buff_def then
             return vmath.vector4(0.85, 0.95, 0.3, 1)
@@ -93,6 +101,7 @@ function M.create(ctx)
     end
 
     runtime.get_item_visual_animation = function(item_type)
+        item_type = normalize_item_type(item_type)
         local buff_def = get_buff_def_by_item_type(item_type)
         if buff_def and buff_def.ui_anim then
             return hash(buff_def.ui_anim)
@@ -142,14 +151,17 @@ function M.create(ctx)
     end
 
     runtime.is_buff_item = function(item_type)
+        item_type = normalize_item_type(item_type)
         return get_buff_def_by_item_type(item_type) ~= nil
     end
 
     runtime.get_buff_def = function(item_type)
+        item_type = normalize_item_type(item_type)
         return get_buff_def_by_item_type(item_type)
     end
 
     runtime.get_buff_slot_for_item = function(item_type)
+        item_type = normalize_item_type(item_type)
         local buff_def = get_buff_def_by_item_type(item_type)
         return buff_def and buff_def.slot or nil
     end

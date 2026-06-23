@@ -1994,6 +1994,7 @@ ALIEN_REVEAL_WEIGHT_SPITTER = tonumber(ALIEN_REVEAL_WEIGHTS.spitter or 8) or 8
 ALIEN_REVEAL_WEIGHT_BRUTE = tonumber(ALIEN_REVEAL_WEIGHTS.brute or 4) or 4
 SFX_TEST_FAVOR_SPEEDY_REVEAL = false
 TILE_OPACITY = 1
+OFF_TILE_DESELECT_DIM_FADE_SECONDS = 0.5
 STARTUP_ROOM_TILE_FADE_DURATION_S = 10.0
 CLASS_ROLE_HOOKS = require("main.config").CLASS_ROLE_HOOKS
 ALIEN_TYPE_CONFIG = {
@@ -10515,6 +10516,7 @@ local function get_nightvision_reveal_context(self, dt_step)
     local target_unit_id = nil
     local can_reveal = false
     if selected_unit
+        and selected_unit.is_selected == true
         and (selected_unit.current_health or 0) > 0
         and selected_unit.cell_id
         and unit_has_equipped_buff_kind(selected_unit, "nightvision_goggles")
@@ -24241,6 +24243,33 @@ local function get_selected_unit(self)
     return nil
 end
 
+deselect_human_for_unhandled_board_click = function(self)
+    local selected_unit = get_selected_unit(self)
+    if not selected_unit then
+        return false
+    end
+    clear_locked_manual_target(self)
+    clear_ranged_hit_preview(self)
+    dismiss_ranged_hit_preview(self)
+    deselect_all_units(self)
+    self.human_ui_panel_open = false
+    self.ui_close_on_next_non_unit_click = false
+    self.awaiting_slot_shuffle_click = false
+    self.selected_start_cell = nil
+    self.camera_follow_disabled_by_pan = true
+    self.is_panning = false
+    self.did_drag = false
+    self.touch_pan_blocked_by_ui = false
+    self.pan_velocity_x = 0
+    self.pan_velocity_y = 0
+    mark_selected_unit_panel_dirty(self)
+    self.comms_panel_open = false
+    update_human_visual_state(self)
+    update_human_ap_debug_label(self)
+    update_selected_unit_ui(self)
+    return true
+end
+
 update_camera_follow_selected_unit = function(self)
     if not (CAMERA_FOLLOW_SELECTED_WHILE_MOVING and self and self.squad_units) then
         return false
@@ -25149,6 +25178,46 @@ apply_alien_aesthetic_animations = function(self)
     end
 end
 
+update_unpowered_tile_deselect_dim = function(self, dt)
+    if not (self and self.tile_base_objects and self.world_grid) then
+        return
+    end
+    local target = get_selected_unit(self) and 0 or 1
+    local current = tonumber(self.off_tile_deselect_dim_factor)
+    if current == nil then
+        current = target
+    end
+    local duration = math.max(0.001, tonumber(OFF_TILE_DESELECT_DIM_FADE_SECONDS or 0.5) or 0.5)
+    local step = math.min(1, (dt or 0) / duration)
+    current = current + ((target - current) * step)
+    if math.abs(target - current) < 0.001 then
+        current = target
+    end
+    self.off_tile_deselect_dim_factor = current
+
+    local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
+    for tile_instance_id, tile_go in pairs(self.tile_base_objects) do
+        local tile_powered = false
+        for _, cell in ipairs(self.world_grid) do
+            if cell.tileInstanceId == tile_instance_id and cell.isPowered == true then
+                tile_powered = true
+                break
+            end
+        end
+        local fade_factor = startup_room_tile_fade_get_factor(self, tile_instance_id)
+        local brightness = tile_powered and 1 or (1 - current)
+        brightness = math.max(0, math.min(1, brightness * fade_factor))
+        if tile_go and selected_level and selected_level[tile_instance_id] then
+            pcall(go.set, msg.url(nil, tile_go, "sprite"), "tint", vmath.vector4(brightness, brightness, brightness, TILE_OPACITY))
+        end
+        local light_go = self.tile_light_layers and self.tile_light_layers[tile_instance_id] or nil
+        local light_display_powered = self.tile_light_display_power_state and self.tile_light_display_power_state[tile_instance_id] == true
+        if light_go and not tile_powered and not light_display_powered then
+            pcall(go.set, msg.url(nil, light_go, "sprite"), "tint", vmath.vector4(brightness, brightness, brightness, 1))
+        end
+    end
+end
+
 apply_computer_emissive_accents = function(self, dt)
     local profile = get_aesthetic_profile(self)
     local enabled = profile
@@ -25171,50 +25240,10 @@ apply_computer_emissive_accents = function(self, dt)
         self.workshop_emissive_phase = (self.workshop_emissive_phase or 0) + (dt * math.pi * 2 * 0.42)
     end
 
-    local human_tile_instances = {}
-    local nearby_human_tile_instances = {}
-    if self.world_grid and self.squad_units then
-        for _, unit in pairs(self.squad_units) do
-            if unit and (unit.current_health or 0) > 0 and unit.cell_id then
-                local cell = self.world_grid[unit.cell_id]
-                local tile_id = cell and cell.tileInstanceId or nil
-                if tile_id and tile_id > 0 then
-                    human_tile_instances[tile_id] = true
-                    nearby_human_tile_instances[tile_id] = true
-                end
-            end
-        end
-    end
     local selected_level = self.level_library and self.level_library[self.current_level_index or 1] or nil
     local nightvision_reveal_enabled, nightvision_tile_instance_id, nightvision_reveal_alpha = get_nightvision_reveal_context(self)
-    if selected_level and next(human_tile_instances) ~= nil then
-        for human_tile_id, _ in pairs(human_tile_instances) do
-            local a = selected_level[human_tile_id]
-            if a then
-                local a_left = a.x - 1
-                local a_right = a.x + 1
-                local a_bottom = a.y - 1
-                local a_top = a.y + 1
-                for tile_id, b in ipairs(selected_level) do
-                    if tile_id ~= human_tile_id then
-                        local b_left = b.x - 1
-                        local b_right = b.x + 1
-                        local b_bottom = b.y - 1
-                        local b_top = b.y + 1
-                        local overlap_y = not (b_top < a_bottom or b_bottom > a_top)
-                        local overlap_x = not (b_right < a_left or b_left > a_right)
-                        local horizontal_adjacent = overlap_y and (b_left == (a_right + 1) or b_right == (a_left - 1))
-                        local vertical_adjacent = overlap_x and (b_bottom == (a_top + 1) or b_top == (a_bottom - 1))
-                        if horizontal_adjacent or vertical_adjacent then
-                            nearby_human_tile_instances[tile_id] = true
-                        end
-                    end
-                end
-            end
-        end
-    end
 
-    local function get_instance_tint(instance_key, powered, apply_off_human_proximity_rule)
+    local function get_instance_tint(instance_key, powered)
         local n = tonumber(instance_key) or 0
         if (not powered) and nightvision_reveal_enabled and n == nightvision_tile_instance_id then
             local a = math.max(0, math.min(1, tonumber(nightvision_reveal_alpha or 0) or 0))
@@ -25224,9 +25253,6 @@ apply_computer_emissive_accents = function(self, dt)
                 NIGHTVISION_UNPOWERED_TINT.z * a,
                 a
             )
-        end
-        if apply_off_human_proximity_rule and not powered then
-            return white_tint
         end
         if not powered then
             if self.aesthetic_mode == AESTHETIC_MODE_COMPUTER then
@@ -36700,9 +36726,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
         end
 
         if not is_walkable_cell(self.world_grid, clicked_cell_id) then
-            print("Destination is VOID. Choose a valid destination.")
-            update_human_visual_state(self)
-            return true
+            return false
         end
 
         local path, total_cost = find_path(
@@ -36766,7 +36790,7 @@ local function handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                 begin_human_path_move(self, path, clicked_cell_id, destination_slot_index or destination_slot_requested)
             end
         else
-            print("No path found for " .. unit.display_name .. " to cell: " .. clicked_cell_id)
+            return false
         end
 
         self.ui_close_on_next_non_unit_click = false
@@ -38062,6 +38086,7 @@ function update(self, dt)
         end
     end
     apply_computer_emissive_accents(self, dt)
+    update_unpowered_tile_deselect_dim(self, dt)
 
     update_human_movement(self, dt)
     update_civilian_movement(self, dt)
@@ -38922,7 +38947,13 @@ function on_input(self, action_id, action)
                     end
                     local handled_by_human = handle_human_click_flow(self, clicked_cell_id, world_x, world_y)
                     if not handled_by_human then
-                        process_cell_selection(self, clicked_cell_id)
+                        if deselect_human_for_unhandled_board_click(self) then
+                            return true
+                        end
+                    end
+                else
+                    if deselect_human_for_unhandled_board_click(self) then
+                        return true
                     end
                 end
             end

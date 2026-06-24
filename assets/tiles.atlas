@@ -659,6 +659,12 @@ images {
   image: "/assets/images/impactRing.png"
 }
 images {
+  image: "/assets/images/impactRing_alien_blood.png"
+}
+images {
+  image: "/assets/images/impactRing_human_blood.png"
+}
+images {
   image: "/assets/images/tile_lab_overlay.png"
 }
 images {

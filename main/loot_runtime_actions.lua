@@ -1115,13 +1115,16 @@ function M.extend(runtime, ctx)
         return true
     end
 
-    local function spawn_impact_ring(self, world_x, world_y, tint, duration_s)
+    local function spawn_impact_ring(self, world_x, world_y, tint, duration_s, anim_id, force_alpha_blend, max_scale)
         runtime.ensure_item_runtime_state(self)
         local ring_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(world_x, world_y, 0.9))
         if not ring_id then
             return nil
         end
-        msg.post(msg.url(nil, ring_id, "sprite"), "play_animation", { id = hash("impactRing") })
+        msg.post(msg.url(nil, ring_id, "sprite"), "play_animation", { id = anim_id or hash("impactRing") })
+        if force_alpha_blend == true then
+            pcall(go.set, msg.url(nil, ring_id, "sprite"), "blend_mode", (render and render.BLEND_ALPHA) or 0)
+        end
         go.set_scale(vmath.vector3(0.1, 0.1, 1), ring_id)
         local c = tint or vmath.vector4(0.2, 1.0, 0.25, 1)
         go.set(msg.url(nil, ring_id, "sprite"), "tint", vmath.vector4(c.x, c.y, c.z, 1))
@@ -1129,7 +1132,8 @@ function M.extend(runtime, ctx)
             go_id = ring_id,
             tint = c,
             t = 0,
-            duration = math.max(0.08, tonumber(duration_s or 0.7) or 0.7)
+            duration = math.max(0.08, tonumber(duration_s or 0.7) or 0.7),
+            max_scale = math.max(0.1, tonumber(max_scale or 4.0) or 4.0)
         })
         return ring_id
     end
@@ -1142,8 +1146,8 @@ function M.extend(runtime, ctx)
         spawn_impact_ring(self, cx + (obj.offsetX or 0), cy + (obj.offsetY or 0), tint, 0.7)
     end
 
-    runtime.spawn_impact_ring_at_world = function(self, world_x, world_y, tint, duration_s)
-        return spawn_impact_ring(self, world_x, world_y, tint, duration_s)
+    runtime.spawn_impact_ring_at_world = function(self, world_x, world_y, tint, duration_s, anim_id, force_alpha_blend, max_scale)
+        return spawn_impact_ring(self, world_x, world_y, tint, duration_s, anim_id, force_alpha_blend, max_scale)
     end
 
     runtime.update_impact_rings = function(self, dt)
@@ -1156,7 +1160,8 @@ function M.extend(runtime, ctx)
                 local d = math.max(0.08, tonumber(entry.duration or 0.7) or 0.7)
                 entry.t = math.min(1, (entry.t or 0) + ((dt or 0) / d))
                 local p = entry.t or 0
-                local scale = 0.1 + ((4.0 - 0.1) * p)
+                local target_scale = math.max(0.1, tonumber(entry.max_scale or 4.0) or 4.0)
+                local scale = 0.1 + ((target_scale - 0.1) * p)
                 local alpha = 1 - p
                 local c = entry.tint or vmath.vector4(0.2, 1.0, 0.25, 1)
                 pcall(go.set_scale, vmath.vector3(scale, scale, 1), entry.go_id)
@@ -4778,7 +4783,7 @@ function M.extend(runtime, ctx)
         runtime.refresh_turret_markers(self)
         runtime.refresh_fix_markers(self)
         runtime.refresh_world_item_visuals(self)
-        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, turret_pickup_ap_cost))
+        print(string.format("%s packed a turret into backpack. (AP -%d)", unit.display_name, pickup_obstacle_ap_cost or 0))
         return true
     end
 

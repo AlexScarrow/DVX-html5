@@ -332,7 +332,13 @@ function M.create(ctx)
             return
         end
         particlefx.play(msg.url(nil, fx_id, "particlefx"))
-        timer.delay(0.12, false, function()
+        if ctx and ctx.spawn_impact_ring_at_world then
+            local is_brute = target_alien.type == ctx.ALIEN_TYPE_BRUTE
+            local ring_duration = 0.24
+            local ring_scale = is_brute and 2.0 or 1.0
+            ctx.spawn_impact_ring_at_world(self, pos.x, pos.y, vmath.vector4(1, 1, 1, 1), ring_duration, hash("impactRing_alien_blood"), true, ring_scale)
+        end
+        timer.delay(0.18, false, function()
             if fx_id then
                 particlefx.stop(msg.url(nil, fx_id, "particlefx"), { clear = false })
             end
@@ -361,7 +367,10 @@ function M.create(ctx)
             return
         end
         particlefx.play(msg.url(nil, fx_id, "particlefx"))
-        timer.delay(0.12, false, function()
+        if ctx and ctx.spawn_impact_ring_at_world then
+            ctx.spawn_impact_ring_at_world(self, pos.x, pos.y, vmath.vector4(1, 1, 1, 1), 0.3, hash("impactRing_human_blood"), true, 1.25)
+        end
+        timer.delay(0.18, false, function()
             if fx_id then
                 particlefx.stop(msg.url(nil, fx_id, "particlefx"), { clear = false })
             end
@@ -536,12 +545,6 @@ function M.create(ctx)
                     human.display_name, source_tag, target_alien.id, hit_chance, roll, target_alien.hp_current, melee_bonus
                 ))
                 if target_alien.hp_current <= 0 then
-                    if target_alien.go_id and ctx and ctx.spawn_impact_ring_at_world then
-                        local bpos = go.get_position(target_alien.go_id)
-                        if bpos then
-                            ctx.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
-                        end
-                    end
                     kill_alien(self, target_alien)
                     print(string.format("Alien #%d (BRUTE) is dead.", target_alien.id))
                 end

@@ -5473,20 +5473,6 @@ local function update_spitter_projectiles(self, dt)
                             })
                         end
                         if target.hp_current <= 0 then
-                            if target.type == ALIEN_TYPE_BRUTE and target.go_id then
-                                local bpos = go.get_position(target.go_id)
-                                if bpos and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
-                                    LOOT_RUNTIME.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
-                                end
-                                if bpos then
-                                    multiplayer_emit_combat_fx_event(self, {
-                                        fx_type = "brute_death_ring",
-                                        world_x = bpos.x,
-                                        world_y = bpos.y,
-                                        duration_s = 0.7
-                                    })
-                                end
-                            end
                             print(string.format(
                                 "%s fired at alien #%d and HIT (alien eliminated) [light=%d chance=%d%% roll=%d]",
                                 p.shooter_name or "Human", target.id, p.impact_light or 0, p.impact_chance or 0, p.impact_roll or 0
@@ -5817,20 +5803,6 @@ local function resolve_turret_pending_shot(self, shot_id)
                     })
                 end
                 if target_alien.hp_current <= 0 then
-                    if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.go_id then
-                        local bpos = go.get_position(target_alien.go_id)
-                        if bpos and LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
-                            LOOT_RUNTIME.spawn_impact_ring_at_world(self, bpos.x, bpos.y, vmath.vector4(1.0, 0.55, 0.2, 1), 0.7)
-                        end
-                        if bpos then
-                            multiplayer_emit_combat_fx_event(self, {
-                                fx_type = "brute_death_ring",
-                                world_x = bpos.x,
-                                world_y = bpos.y,
-                                duration_s = 0.7
-                            })
-                        end
-                    end
                     target_alien.is_dead = true
                     target_alien.is_moving = false
                     target_alien.move_path = nil
@@ -33159,8 +33131,10 @@ multiplayer_apply_combat_fx_event = function(self, payload)
             self,
             world_x,
             world_y,
-            vmath.vector4(1.0, 0.55, 0.2, 1),
-            math.max(0.05, tonumber(payload.duration_s or 0.7) or 0.7)
+            vmath.vector4(1, 1, 1, 1),
+            math.max(0.05, tonumber(payload.duration_s or 0.7) or 0.7),
+            hash("impactRing_alien_blood"),
+            true
         )
         return true
     end
@@ -33753,9 +33727,9 @@ MELEE_RUNTIME = require("main.melee_runtime").create({
     reveal_brute_sprite_for_action = function(alien, duration_s)
         reveal_brute_sprite_for_action(alien, duration_s)
     end,
-    spawn_impact_ring_at_world = function(self_ref, world_x, world_y, tint, duration_s)
+    spawn_impact_ring_at_world = function(self_ref, world_x, world_y, tint, duration_s, anim_id, force_alpha_blend, max_scale)
         if LOOT_RUNTIME and LOOT_RUNTIME.spawn_impact_ring_at_world then
-            LOOT_RUNTIME.spawn_impact_ring_at_world(self_ref, world_x, world_y, tint, duration_s)
+            LOOT_RUNTIME.spawn_impact_ring_at_world(self_ref, world_x, world_y, tint, duration_s, anim_id, force_alpha_blend, max_scale)
         end
     end,
     on_human_damaged = function(self_ref, unit, damage)

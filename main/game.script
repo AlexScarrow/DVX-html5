@@ -215,10 +215,10 @@ HUMAN_PORTRAIT_BAR_AP_Y_OFFSET = -4
 HUMAN_PORTRAIT_BAR_HP_Y_OFFSET = -16
 HUMAN_PORTRAIT_BAR_START_X_OFFSET = -8
 HUMAN_PORTRAIT_BAR_OFF_ALPHA = 0.18
-HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS = 10
+HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS = 12
 HUMAN_PORTRAIT_OWNER_NAME_SPACING = 7
-HUMAN_PORTRAIT_OWNER_NAME_SCALE = 0.42
-HUMAN_PORTRAIT_OWNER_NAME_X_OFFSET = 36
+HUMAN_PORTRAIT_OWNER_NAME_SCALE = 0.315
+HUMAN_PORTRAIT_OWNER_NAME_X_OFFSET = 26
 HUMAN_PORTRAIT_OWNER_NAME_Y_OFFSET = 10
 HUMAN_PORTRAIT_OWNER_NAME_Z = HUMAN_PORTRAIT_SELECTED_Z + 0.002
 CAMERA_FOLLOW_SELECTED_WHILE_MOVING = true
@@ -12114,6 +12114,36 @@ update_mp_lag_sim_button_visual = function(self)
     pcall(go.set, msg.url(nil, self.ui.lag_sim_button, "sprite"), "tint", tint)
 end
 
+multiplayer_ready_gate_missing_player_ids = function(self)
+    local missing_ready = {}
+    if not (self and self.mp_state and self.mp_state.enabled) then
+        return missing_ready
+    end
+    local inactive = self.mp_state.inactive_player_ids or {}
+    local ready_by = self.mp_state.ready_by_player_id or {}
+    for _, required_id_raw in ipairs(self.mp_state.required_ready_player_ids or {}) do
+        local required_id = tostring(required_id_raw or "")
+        if required_id ~= "" then
+            local slot_id = multiplayer_get_slot_player_id_for_network(self, required_id)
+            local network_id = tostring(mp_network_id_for_slot(self, slot_id) or "")
+            local slot_units = self.mp_state.seat_assignments and self.mp_state.seat_assignments[slot_id] or nil
+            local has_units = type(slot_units) == "table" and #slot_units > 0
+            local is_inactive = inactive[required_id] == true
+                or inactive[slot_id] == true
+                or (network_id ~= "" and inactive[network_id] == true)
+            if has_units and not is_inactive then
+                local ready_on = ready_by[required_id] == true
+                    or ready_by[slot_id] == true
+                    or (network_id ~= "" and ready_by[network_id] == true)
+                if not ready_on then
+                    missing_ready[#missing_ready + 1] = required_id
+                end
+            end
+        end
+    end
+    return missing_ready
+end
+
 update_multiplayer_new_turn_button_visual = function(self)
     if not (self and self.ui and self.ui.new_turn_button) then
         return
@@ -12132,6 +12162,12 @@ update_multiplayer_new_turn_button_visual = function(self)
     if alien_activity_active or self.new_turn_button_mode == "alien_activity" then
         anim_id = hash("alien_activity_button")
         tint = vmath.vector4(1, 1, 1, 1)
+    elseif self.mp_state
+        and self.mp_state.enabled
+        and self.mp_state.local_player_id == self.mp_state.host_player_id
+        and #(multiplayer_ready_gate_missing_player_ids(self) or {}) > 0
+    then
+        tint = vmath.vector4(1.0, 0.18, 0.18, 0.95)
     elseif self.mp_state and self.mp_state.enabled and self.mp_state.local_player_id ~= self.mp_state.host_player_id then
         anim_id = hash("ready_button")
         local local_network_player_id = tostring(self.mp_state.local_player_id or "")
@@ -24957,10 +24993,25 @@ function update_global_ui_buttons(self)
             for i, btn in ipairs(self.ui.ready_buttons) do
                 local player_id = self.mp_state.required_ready_player_ids[i]
                 if player_id then
-                    local ready_on = self.mp_state.ready_by_player_id[player_id] == true
-                    local color = ready_on and vmath.vector4(0.2, 0.8, 0.3, 0.95) or vmath.vector4(0.75, 0.2, 0.2, 0.95)
-                    local bx = get_multiplayer_ready_button_x(i)
-                    set_ui_square_transform(self, btn, bx, MULTIPLAYER_READY_BUTTON_Y, MULTIPLAYER_READY_BUTTON_Z, color, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
+                    local slot_id = multiplayer_get_slot_player_id_for_network(self, player_id)
+                    local network_id = tostring(mp_network_id_for_slot(self, slot_id) or "")
+                    local inactive = self.mp_state.inactive_player_ids or {}
+                    local slot_units = self.mp_state.seat_assignments and self.mp_state.seat_assignments[slot_id] or nil
+                    local has_units = type(slot_units) == "table" and #slot_units > 0
+                    local active_required = has_units
+                        and inactive[player_id] ~= true
+                        and inactive[slot_id] ~= true
+                        and (network_id == "" or inactive[network_id] ~= true)
+                    if active_required then
+                        local ready_on = self.mp_state.ready_by_player_id[player_id] == true
+                            or self.mp_state.ready_by_player_id[slot_id] == true
+                            or (network_id ~= "" and self.mp_state.ready_by_player_id[network_id] == true)
+                        local color = ready_on and vmath.vector4(0.2, 0.8, 0.3, 0.95) or vmath.vector4(0.75, 0.2, 0.2, 0.95)
+                        local bx = get_multiplayer_ready_button_x(i)
+                        set_ui_square_transform(self, btn, bx, MULTIPLAYER_READY_BUTTON_Y, MULTIPLAYER_READY_BUTTON_Z, color, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
+                    else
+                        set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_READY_BUTTON_Z, hidden, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
+                    end
                 else
                     set_ui_square_transform(self, btn, -9999, -9999, MULTIPLAYER_READY_BUTTON_Z, hidden, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021, MULTIPLAYER_READY_ICON_DRAW_SIZE * 0.021)
                 end
@@ -33301,19 +33352,14 @@ can_advance_next_turn = function(self, emit_log)
         end
         return false
     end
-    local missing_ready = {}
-    for _, player_id in ipairs(self.mp_state.required_ready_player_ids or {}) do
-        if self.mp_state.ready_by_player_id[player_id] ~= true then
-            missing_ready[#missing_ready + 1] = tostring(player_id)
-        end
-    end
+    local missing_ready = multiplayer_ready_gate_missing_player_ids(self)
     if emit_log and #missing_ready > 0 then
         print(string.format(
-            "MP TURN | ready_gate_advisory_only | missing=%s",
+            "MP TURN | ready_gate_blocked | missing=%s",
             table.concat(missing_ready, ",")
         ))
     end
-    return true
+    return #missing_ready <= 0
 end
 
 try_multiplayer_ready_buttons = function(self, screen_x, screen_y)

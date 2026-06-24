@@ -3227,12 +3227,10 @@ function M.extend(runtime, ctx)
                     local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.49))
                     if marker_id then
                         local anim = world_item_animation_for_item(self, item, get_world_item_animation, get_dead_corpse_by_ref)
-                        if world_shadows_enabled then
+                        if world_shadows_enabled and anim then
                             local shadow_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx + 6, wy - 8, 0.47))
                             if shadow_id then
-                                if anim then
-                                    msg.post(msg.url(nil, shadow_id, "sprite"), "play_animation", { id = anim })
-                                end
+                                msg.post(msg.url(nil, shadow_id, "sprite"), "play_animation", { id = anim })
                                 go.set(msg.url(nil, shadow_id, "sprite"), "tint", vmath.vector4(0, 0, 0, 0.45))
                                 local shadow_scale = get_world_item_draw_scale(item.item_type)
                                 go.set_scale(vmath.vector3(shadow_scale, shadow_scale, 1), shadow_id)
@@ -3244,7 +3242,14 @@ function M.extend(runtime, ctx)
                             go.set(msg.url(nil, marker_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 1))
                         else
                             local color = runtime.get_backpack_item_color(item.item_type)
+                            msg.post(msg.url(nil, marker_id, "sprite"), "play_animation", { id = hash("material_unit") })
                             go.set(msg.url(nil, marker_id, "sprite"), "tint", color)
+                            print(string.format(
+                                "WORLD ITEM VISUAL | fallback item_id=%s cell=%s type=%s",
+                                tostring(item.id or "?"),
+                                tostring(item.cell_id or "?"),
+                                tostring(item.item_type or "nil")
+                            ))
                         end
                         local marker_scale = get_world_item_draw_scale(item.item_type)
                         go.set_scale(vmath.vector3(marker_scale, marker_scale, 1), marker_id)

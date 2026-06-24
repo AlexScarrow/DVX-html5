@@ -215,6 +215,12 @@ HUMAN_PORTRAIT_BAR_AP_Y_OFFSET = -4
 HUMAN_PORTRAIT_BAR_HP_Y_OFFSET = -16
 HUMAN_PORTRAIT_BAR_START_X_OFFSET = -8
 HUMAN_PORTRAIT_BAR_OFF_ALPHA = 0.18
+HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS = 10
+HUMAN_PORTRAIT_OWNER_NAME_SPACING = 7
+HUMAN_PORTRAIT_OWNER_NAME_SCALE = 0.42
+HUMAN_PORTRAIT_OWNER_NAME_X_OFFSET = 36
+HUMAN_PORTRAIT_OWNER_NAME_Y_OFFSET = 10
+HUMAN_PORTRAIT_OWNER_NAME_Z = HUMAN_PORTRAIT_SELECTED_Z + 0.002
 CAMERA_FOLLOW_SELECTED_WHILE_MOVING = true
 TILE_ALPHA_PARALLAX_MAX_OFFSET_PX = 20
 FLOW_BUTTON_HITBOX_DEBUG_VISIBLE = false
@@ -596,6 +602,7 @@ ADVISORY_MSG_MOVE_UNIT_CLOSER = "move unit closer"
 ADVISORY_MSG_TRY_AGAIN = "action not confirmed. try again."
 ADVISORY_MSG_DEPLOY_POD_ITEMS_FIRST = "deploy nav data and food supplies first"
 ADVISORY_MSG_NO_SPACE_GUN_TURRET = "no space here for gun turret"
+ADVISORY_MSG_PLAYER_LEFT = "player left game host taking over"
 ADVISORY_ANIM_NO_AMMO = hash("advisory_noAmmo")
 ADVISORY_ANIM_TECHIE_ONLY = hash("advisory_onlyTechieCanDoThis")
 ADVISORY_ANIM_NO_AP = hash("advisory_noActionPointsLeft")
@@ -619,6 +626,7 @@ ADVISORY_ANIM_MP_WAITING_GUEST_SYNC = hash("advisory_mpWaitingGuestSync")
 ADVISORY_ANIM_MP_SESSION_FULL = hash("advisory_mpSessionFull")
 ADVISORY_ANIM_DEPLOY_POD_ITEMS_FIRST = hash("advisory_deployPodItems")
 ADVISORY_ANIM_NO_SPACE_GUN_TURRET = hash("advisory_noSpaceGunTurret")
+ADVISORY_ANIM_PLAYER_LEFT = hash("advisory_playerLeft")
 OUTRO_SLIDE_CENTER_X = SCREEN_WIDTH * 0.5
 OUTRO_SLIDE_CENTER_Y = SCREEN_HEIGHT * 0.56
 OUTRO_SLIDE_DEFAULT_W = 960
@@ -1244,6 +1252,7 @@ MP_TELEMETRY_LOG_INTERVAL_S = 2.0
 MP_TELEMETRY_PING_INTERVAL_S = 1.0
 MP_TELEMETRY_DT_SPIKE_S = 0.05
 MP_CLIENT_LIVENESS_TIMEOUT_S = 2.5
+MP_CLIENT_SNAPSHOT_HARD_TIMEOUT_S = 8.0
 do
     local preview_cfg = sys.get_config and sys.get_config("debug.outro_preview") or nil
     DEBUG_OUTRO_PREVIEW_ENABLED = (preview_cfg == "1" or preview_cfg == "true" or preview_cfg == "on")
@@ -13169,6 +13178,7 @@ local function initialize_unit_ui(self)
         human_portrait_selected_overlays = {},
         human_portrait_ap_blips = {},
         human_portrait_hp_blips = {},
+        human_portrait_owner_letters = {},
         human_portrait_hitbox_debug = {},
         input_map_debug_digits = {}
     }
@@ -13285,6 +13295,10 @@ local function initialize_unit_ui(self)
         end
         self.ui.human_portrait_ap_blips[i] = {}
         self.ui.human_portrait_hp_blips[i] = {}
+        self.ui.human_portrait_owner_letters[i] = {}
+        for ci = 1, HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS do
+            self.ui.human_portrait_owner_letters[i][ci] = create_ui_marker_sprite(hash("letter_a"), HUMAN_PORTRAIT_OWNER_NAME_Z)
+        end
         for pip_idx = 1, HUMAN_PORTRAIT_BAR_BLIP_COUNT do
             self.ui.human_portrait_ap_blips[i][pip_idx] = create_ui_square(
                 0,
@@ -13761,6 +13775,13 @@ local function set_ui_hidden(self)
             end
         end
     end
+    if self.ui.human_portrait_owner_letters then
+        for _, owner_letters in ipairs(self.ui.human_portrait_owner_letters) do
+            if owner_letters then
+                leaderboard_hide_nodes(self, owner_letters, HUMAN_PORTRAIT_OWNER_NAME_Z)
+            end
+        end
+    end
     if self.ui.human_portrait_hitbox_debug then
         for _, hitbox in ipairs(self.ui.human_portrait_hitbox_debug) do
             set_ui_square_transform(self, hitbox, -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
@@ -14153,6 +14174,8 @@ show_advisory = function(self, text, duration_s)
         anim_id = ADVISORY_ANIM_DEPLOY_POD_ITEMS_FIRST
     elseif text == ADVISORY_MSG_NO_SPACE_GUN_TURRET then
         anim_id = ADVISORY_ANIM_NO_SPACE_GUN_TURRET
+    elseif text == ADVISORY_MSG_PLAYER_LEFT then
+        anim_id = ADVISORY_ANIM_PLAYER_LEFT
     end
     if not anim_id then
         self.advisory_anim_id = nil
@@ -18438,6 +18461,8 @@ function start_multiplayer_game_flow(self, session_config)
         self.mp_state.turn_based_snapshot_accum_s = 0
         self.mp_state.turn_based_heartbeat_mismatch_streak = 0
         self.mp_state.turn_based_heartbeat_last_request_turn_id = 0
+        self.mp_state.inactive_player_ids = {}
+        self.mp_state.last_reclaimed_player_id = ""
         self.mp_state.civilian_seed = tonumber(session_config and session_config.civilian_seed or 0) or 0
         multiplayer_apply_wire_dispatch_player_id(self, session_config)
         if self.mp_state.local_player_id == self.mp_state.host_player_id then
@@ -18938,6 +18963,8 @@ multiplayer_apply_in_match_player_departure = function(self, departed_network_pl
         self.mp_state.connected_players[departed_network_id] = nil
         changed = true
     end
+    self.mp_state.inactive_player_ids = self.mp_state.inactive_player_ids or {}
+    self.mp_state.inactive_player_ids[departed_network_id] = true
     if departed_network_slot_id ~= "" and self.mp_state.connected_players[departed_network_slot_id] ~= nil then
         self.mp_state.connected_players[departed_network_slot_id] = nil
         changed = true
@@ -19125,6 +19152,7 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
     local now_s = (tonumber(get_wall_clock_ms() or 0) or 0) / 1000
     local last_seen_lookup = self.mp_state.last_seen_by_network_id or {}
     local changed = false
+    self.mp_state.last_reclaimed_player_id = ""
     for i = 1, 4 do
         local slot_id = "p" .. tostring(i)
         if slot_id ~= host_slot_id then
@@ -19148,6 +19176,16 @@ multiplayer_reconcile_departed_ownership_on_turn_boundary = function(self)
                     age_s
                 ))
                 if not slot_connected then
+                    local reclaimed_id = mapped_network_id ~= "" and mapped_network_id or slot_id
+                    self.mp_state.last_reclaimed_player_id = reclaimed_id
+                    self.mp_state.inactive_player_ids = self.mp_state.inactive_player_ids or {}
+                    self.mp_state.inactive_player_ids[reclaimed_id] = true
+                    self.mp_state.inactive_player_ids[slot_id] = true
+                    self.mp_state.connected_players = self.mp_state.connected_players or {}
+                    self.mp_state.connected_players[slot_id] = nil
+                    if mapped_network_id ~= "" then
+                        self.mp_state.connected_players[mapped_network_id] = nil
+                    end
                     for _, unit_id in ipairs(slot_units) do
                         local exists = false
                         for _, host_unit_id in ipairs(host_units) do
@@ -19477,6 +19515,9 @@ multiplayer_mark_remote_player_alive = function(self, network_player_id)
     local network_id = mp_normalize_network_player_id(network_player_id or "")
     local host_id = mp_normalize_network_player_id(self.mp_state.host_player_id or "")
     if network_id == "" or network_id == host_id then
+        return
+    end
+    if self.mp_state.inactive_player_ids and self.mp_state.inactive_player_ids[network_id] == true then
         return
     end
     self.mp_state.connected_players = self.mp_state.connected_players or {}
@@ -26487,6 +26528,22 @@ get_visible_human_portrait_unit_ids = function(self)
     return visible_ids
 end
 
+multiplayer_get_portrait_owner_display_name = function(self, unit_id)
+    if not (self and self.mp_state and self.mp_state.enabled and unit_id) then
+        return ""
+    end
+    local owner_slot = multiplayer_get_player_for_unit(self.mp_state.seat_assignments, self.mp_state.player_count or 4, unit_id)
+    if not owner_slot or owner_slot == "" then
+        return ""
+    end
+    local owner_network_id = mp_network_id_for_slot(self, owner_slot)
+    local display_name = mp_display_name_for_wire_id(self, owner_network_id)
+    if display_name == "" then
+        display_name = tostring(owner_slot or "")
+    end
+    return display_name
+end
+
 center_camera_on_unit = function(self, unit)
     if not (self and unit) then
         return
@@ -26601,6 +26658,33 @@ update_human_portrait_ui = function(self)
                     )
                 end
             end
+            local owner_letters = self.ui.human_portrait_owner_letters and self.ui.human_portrait_owner_letters[i] or nil
+            if owner_letters then
+                leaderboard_hide_nodes(self, owner_letters, HUMAN_PORTRAIT_OWNER_NAME_Z)
+                local owner_name = multiplayer_get_portrait_owner_display_name(self, unit_id)
+                if owner_name ~= "" then
+                    local label = mp_lobby_sanitize_name(owner_name)
+                    if #label > HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS then
+                        label = string.sub(label, 1, HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS)
+                    end
+                    local label_w = math.max(0, (#label - 1) * HUMAN_PORTRAIT_OWNER_NAME_SPACING)
+                    leaderboard_draw_text_nodes(
+                        self,
+                        owner_letters,
+                        label,
+                        1,
+                        sx + HUMAN_PORTRAIT_OWNER_NAME_X_OFFSET - (label_w * 0.5),
+                        sy + HUMAN_PORTRAIT_OWNER_NAME_Y_OFFSET,
+                        {
+                            max_chars = HUMAN_PORTRAIT_OWNER_NAME_MAX_CHARS,
+                            spacing = HUMAN_PORTRAIT_OWNER_NAME_SPACING,
+                            scale = HUMAN_PORTRAIT_OWNER_NAME_SCALE,
+                            z = HUMAN_PORTRAIT_OWNER_NAME_Z,
+                            tint = vmath.vector4(1, 1, 1, 0.9)
+                        }
+                    )
+                end
+            end
             if self.ui.human_portrait_hitbox_debug then
                 local hx, hy = get_human_portrait_screen_pos(i)
                 local hitbox_tint = HUMAN_PORTRAIT_HITBOX_DEBUG_VISIBLE
@@ -26661,6 +26745,10 @@ update_human_portrait_ui = function(self)
             end
             if self.ui.human_portrait_hitbox_debug then
                 set_ui_square_transform(self, self.ui.human_portrait_hitbox_debug[i], -9999, -9999, HUMAN_PORTRAIT_HITBOX_DEBUG_Z, hidden, HUMAN_PORTRAIT_HIT_W, HUMAN_PORTRAIT_HIT_H)
+            end
+            local owner_letters = self.ui.human_portrait_owner_letters and self.ui.human_portrait_owner_letters[i] or nil
+            if owner_letters then
+                leaderboard_hide_nodes(self, owner_letters, HUMAN_PORTRAIT_OWNER_NAME_Z)
             end
         end
     end
@@ -28391,6 +28479,18 @@ multiplayer_transport_handle_command = function(self, command)
         local sender_network_id = mp_normalize_network_player_id(sender or "")
         local host_network_id = mp_normalize_network_player_id(self.mp_state.host_player_id or "")
         if sender_network_id ~= "" and sender_network_id ~= host_network_id then
+            local sender_slot_id = multiplayer_get_slot_player_id_for_network(self, sender_network_id)
+            if self.mp_state.inactive_player_ids
+                and (self.mp_state.inactive_player_ids[sender_network_id] == true or self.mp_state.inactive_player_ids[sender_slot_id] == true)
+                and cmd_type ~= "lobby_leave_session"
+            then
+                table.insert(events, multiplayer_transport_emit_event(self, "command_rejected", {
+                    command_type = tostring(cmd_type or ""),
+                    reason = "inactive_player",
+                    target_player_id = sender_network_id
+                }))
+                return events
+            end
             multiplayer_mark_remote_player_alive(self, sender_network_id)
         end
     end
@@ -28463,9 +28563,13 @@ multiplayer_transport_handle_command = function(self, command)
             return events
         end
         if multiplayer_reconcile_departed_ownership_on_turn_boundary(self) then
+            local reclaimed_player_id = tostring(self.mp_state.last_reclaimed_player_id or "")
+            if reclaimed_player_id == "" then
+                reclaimed_player_id = "turn_boundary_reclaim"
+            end
             table.insert(events, multiplayer_transport_emit_event(self, "player_departed_in_match", {
                 session_id = tostring(self.mp_state and self.mp_state.session_id or ""),
-                departed_player_id = "turn_boundary_reclaim",
+                departed_player_id = reclaimed_player_id,
                 seat_assignments = multiplayer_clone_seat_assignments(self.mp_state.seat_assignments, self.mp_state.player_count or 4),
                 required_ready_player_ids = multiplayer_clone_simple_table(self.mp_state.required_ready_player_ids or {}),
                 ready_by_player_id = multiplayer_clone_simple_table(self.mp_state.ready_by_player_id or {})
@@ -30948,8 +31052,8 @@ multiplayer_transport_on_event = function(self, event)
         ))
         if self.mp_state.local_player_id ~= self.mp_state.host_player_id then
             self.mp_state.awaiting_snapshot = true
-            self.mp_state.snapshot_blocking = false
-            self.mp_state.awaiting_snapshot_timeout_s = 0
+            self.mp_state.snapshot_blocking = true
+            self.mp_state.awaiting_snapshot_timeout_s = MP_CLIENT_SNAPSHOT_HARD_TIMEOUT_S
             self.mp_state.expected_snapshot_turn_id = tonumber(self.mp_state.turn_id or 1) or 1
             multiplayer_transport_send_command(self, "request_snapshot", {
                 turn_id = self.mp_state.turn_id or 1,
@@ -30982,8 +31086,8 @@ multiplayer_transport_on_event = function(self, event)
                 if retry_turn_id > 0 and self.mp_state.last_snapshot_retry_turn_id ~= retry_turn_id then
                     self.mp_state.last_snapshot_retry_turn_id = retry_turn_id
                     self.mp_state.awaiting_snapshot = true
-                    self.mp_state.snapshot_blocking = false
-                    self.mp_state.awaiting_snapshot_timeout_s = 0
+                    self.mp_state.snapshot_blocking = true
+                    self.mp_state.awaiting_snapshot_timeout_s = MP_CLIENT_SNAPSHOT_HARD_TIMEOUT_S
                     self.mp_state.expected_snapshot_turn_id = retry_turn_id
                     multiplayer_transport_send_command(self, "request_snapshot", {
                         turn_id = retry_turn_id,
@@ -31340,13 +31444,7 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_apply_in_match_player_departure(self, departed_player_id)
         end
         if type(payload.seat_assignments) == "table" then
-            local apply_seat_payload = true
-            if is_turn_boundary_reclaim and local_player_id ~= host_player_id then
-                apply_seat_payload = false
-            end
-            if apply_seat_payload then
-                self.mp_state.seat_assignments = multiplayer_clone_seat_assignments(payload.seat_assignments, self.mp_state.player_count or 4)
-            end
+            self.mp_state.seat_assignments = multiplayer_clone_seat_assignments(payload.seat_assignments, self.mp_state.player_count or 4)
         end
         if type(payload.required_ready_player_ids) == "table" then
             self.mp_state.required_ready_player_ids = multiplayer_clone_simple_table(payload.required_ready_player_ids) or {}
@@ -31362,6 +31460,7 @@ multiplayer_transport_on_event = function(self, event)
             multiplayer_leave_in_progress_match_to_lobby(self, "departed_from_match")
             return
         end
+        show_advisory(self, ADVISORY_MSG_PLAYER_LEFT, 2.8)
         multiplayer_enforce_controlled_unit(self, true)
         update_human_visual_state(self)
         update_selected_unit_ui(self)
@@ -32008,6 +32107,11 @@ multiplayer_transport_on_event = function(self, event)
     if event.type == "command_rejected" then
         local reason = event.payload and event.payload.reason or "unknown"
         local cmd = event.payload and event.payload.command_type or "unknown"
+        local target_player_id = tostring(event.payload and event.payload.target_player_id or "")
+        local local_player_id = tostring(self.mp_state and self.mp_state.local_player_id or "")
+        if target_player_id ~= "" and local_player_id ~= "" and target_player_id ~= local_player_id then
+            return
+        end
         if cmd == "move_unit" and self.squad_units then
             for _, unit in pairs(self.squad_units) do
                 if unit then
@@ -32016,6 +32120,14 @@ multiplayer_transport_on_event = function(self, event)
             end
         end
         print(string.format("MP COMMAND | rejected | type=%s reason=%s", tostring(cmd), tostring(reason)))
+        if reason == "inactive_player"
+            and self.mp_state
+            and self.mp_state.enabled
+            and self.mp_state.local_player_id ~= self.mp_state.host_player_id
+        then
+            multiplayer_leave_in_progress_match_to_lobby(self, "inactive_player")
+            return
+        end
         if cmd == "resource_drag_end"
             and self.mp_state
             and self.mp_state.enabled
@@ -32191,6 +32303,7 @@ multiplayer_transport_on_event = function(self, event)
         if not is_local_host then
             self.mp_state.awaiting_snapshot = true
             self.mp_state.snapshot_blocking = true
+            self.mp_state.awaiting_snapshot_timeout_s = MP_CLIENT_SNAPSHOT_HARD_TIMEOUT_S
             self.mp_state.expected_snapshot_turn_id = tonumber(self.mp_state.turn_id or 1) or 1
             multiplayer_transport_send_command(self, "request_snapshot", {
                 turn_id = self.mp_state.turn_id or 1
@@ -32816,6 +32929,7 @@ init_multiplayer_runtime = function(self)
         seat_assignments = multiplayer_get_default_seat_assignments(default_player_count),
         ready_by_player_id = {},
         connected_players = {},
+        inactive_player_ids = {},
         transport_status = "idle",
         transport_status_detail = {},
         debug_active_player_id = nil,
@@ -37883,9 +37997,13 @@ function update(self, dt)
             if self.mp_state.reclaim_scan_accum_s >= 0.5 then
                 self.mp_state.reclaim_scan_accum_s = 0
                 if multiplayer_reconcile_departed_ownership_on_turn_boundary(self) then
+                    local reclaimed_player_id = tostring(self.mp_state.last_reclaimed_player_id or "")
+                    if reclaimed_player_id == "" then
+                        reclaimed_player_id = "turn_boundary_reclaim"
+                    end
                     multiplayer_transport_broadcast_event(self, "player_departed_in_match", {
                         session_id = tostring(self.mp_state and self.mp_state.session_id or ""),
-                        departed_player_id = "turn_boundary_reclaim",
+                        departed_player_id = reclaimed_player_id,
                         seat_assignments = multiplayer_clone_seat_assignments(self.mp_state.seat_assignments, self.mp_state.player_count or 4),
                         required_ready_player_ids = multiplayer_clone_simple_table(self.mp_state.required_ready_player_ids or {}),
                         ready_by_player_id = multiplayer_clone_simple_table(self.mp_state.ready_by_player_id or {})
@@ -38008,10 +38126,9 @@ function update(self, dt)
             wait_timeout = math.max(0, wait_timeout - dt)
             self.mp_state.awaiting_snapshot_timeout_s = wait_timeout
             if wait_timeout <= 0 then
-                -- Avoid permanent input freeze if a snapshot is delayed/lost.
-                self.mp_state.awaiting_snapshot = false
-                self.mp_state.snapshot_blocking = false
-                print("MP SNAPSHOT | timeout_unblocked")
+                print("MP SNAPSHOT | hard_timeout_leave_match")
+                multiplayer_leave_in_progress_match_to_lobby(self, "snapshot_timeout")
+                return
             end
         end
         local delay = tonumber(self.mp_state.post_turn_snapshot_delay_s or 0) or 0

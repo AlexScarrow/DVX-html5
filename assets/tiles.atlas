@@ -924,6 +924,9 @@ images {
   image: "/assets/images/advisory_noSpaceGunTurret.png"
 }
 images {
+  image: "/assets/images/advisory_playerLeft.png"
+}
+images {
   image: "/assets/images/advisory_mpCreatingSession.png"
 }
 images {

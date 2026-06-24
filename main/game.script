@@ -6070,9 +6070,9 @@ function process_turret_reactive_fire(self, dt)
                                 end
 
                                 local target_cell = self.world_grid[target.cell_id]
-                                local active_light = (target_cell and target_cell.isPowered and math.max(0, math.min(3, target_cell.lightValue or 0))) or 0
-                                local hit_chance = 100
-                                local roll = 1
+                                local active_light = 0
+                                local hit_chance = (target_cell and target_cell.isPowered == true) and 100 or 50
+                                local roll = math.random(1, 100)
                                 self.turret_pending_shots[shot_id] = {
                                     target_kind = target.kind,
                                     target_id = target.id,
@@ -6081,7 +6081,7 @@ function process_turret_reactive_fire(self, dt)
                                     impact_light = active_light,
                                     impact_chance = hit_chance,
                                     impact_roll = roll,
-                                    hit = true,
+                                    hit = roll <= hit_chance,
                                     resolved = false
                                 }
 

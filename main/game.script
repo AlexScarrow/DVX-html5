@@ -24481,6 +24481,7 @@ finish_level_load_after_clear = function(self, level_index)
     self.human_reactive_fire_cooldown_by_unit_id = {}
     self.human_reactive_pending_delay_by_unit_id = {}
     self.loot_pickup_blips = {}
+    self.backpack_slot_pulses = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
     self.world_item_shadow_visuals = {}
@@ -26321,7 +26322,13 @@ function update_selected_unit_ui(self)
         if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
             slot_color = vmath.vector4(slot_color.x, slot_color.y, slot_color.z, 0.25)
         end
-        set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, HUMAN_UI_BASE_Z, slot_color, UI_BACKPACK_SLOT_SIZE, UI_BACKPACK_SLOT_SIZE)
+        local slot_pulse = 1
+        local slot_pulse_timer = self.backpack_slot_pulses and self.backpack_slot_pulses[i] or 0
+        if slot_pulse_timer and slot_pulse_timer > 0 then
+            local pulse_progress = math.max(0, math.min(1, slot_pulse_timer / 0.18))
+            slot_pulse = 1 + (0.22 * math.sin(pulse_progress * math.pi))
+        end
+        set_ui_square_transform(self, self.ui.backpack_slots[i], slot_x, slot_y, HUMAN_UI_BASE_Z, slot_color, UI_BACKPACK_SLOT_SIZE * slot_pulse, UI_BACKPACK_SLOT_SIZE * slot_pulse)
         if icon_anim then
             local icon_color = vmath.vector4(1, 1, 1, 1)
             if self.drag_resource and self.drag_resource.active and self.drag_resource.source_unit_id == unit.id and self.drag_resource.source_slot_index == i then
@@ -26338,7 +26345,7 @@ function update_selected_unit_ui(self)
                 icon_scale_x = (draw_w * 0.021) * draw_scale
                 icon_scale_y = (draw_h * 0.021) * draw_scale
             end
-            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, HUMAN_UI_BACKPACK_ICON_Z, icon_color, icon_scale_x, icon_scale_y)
+            set_ui_square_transform(self, self.ui.backpack_item_icons[i], slot_x, slot_y, HUMAN_UI_BACKPACK_ICON_Z, icon_color, icon_scale_x * slot_pulse, icon_scale_y * slot_pulse)
         else
             set_ui_square_transform(self, self.ui.backpack_item_icons[i], -9999, -9999, HUMAN_UI_BACKPACK_ICON_Z, vmath.vector4(0, 0, 0, 0), UI_BACKPACK_SLOT_SIZE * 0.021, UI_BACKPACK_SLOT_SIZE * 0.021)
         end
@@ -33532,6 +33539,7 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     coords_to_id = coords_to_id,
     coords_to_world_pos = coords_to_world_pos,
     screen_to_world = screen_to_world,
+    is_human_ui_panel_open = is_human_ui_panel_open,
     get_current_mission_type = get_current_mission_type,
     get_dna_mission_status = get_dna_mission_status,
     get_loot_objects = function() return loot_objects end,
@@ -37755,6 +37763,7 @@ function init(self)
     self.alien_turn_waiting_for_advance = false
     self.alien_turn_manual_pause = false
     self.loot_pickup_blips = {}
+    self.backpack_slot_pulses = {}
     self.world_item_instances = {}
     self.world_item_visuals = {}
     self.world_item_shadow_visuals = {}

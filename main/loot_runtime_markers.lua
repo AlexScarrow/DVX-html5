@@ -1443,8 +1443,17 @@ function M.extend(runtime, ctx)
             from_x, from_y = ctx.coords_to_world_pos(from_cell.xCell, from_cell.yCell)
         end
 
-        local slot_x, slot_y = runtime.get_backpack_slot_screen_pos(to_slot_index)
-        local to_x, to_y = ctx.screen_to_world(slot_x, slot_y, self.camera_pos, self.camera_zoom)
+        local target_slot_index = nil
+        local ui_visible = ctx.is_human_ui_panel_open and ctx.is_human_ui_panel_open(self) == true
+        local to_x, to_y = nil, nil
+        if ui_visible and to_slot_index then
+            local slot_x, slot_y = runtime.get_backpack_slot_screen_pos(to_slot_index)
+            to_x, to_y = ctx.screen_to_world(slot_x, slot_y, self.camera_pos, self.camera_zoom)
+            target_slot_index = to_slot_index
+        else
+            to_x, to_y = ctx.screen_to_world(-96, 360, self.camera_pos, self.camera_zoom)
+            to_y = from_y
+        end
 
         local blip_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(from_x, from_y, 0.83))
         if not blip_id then
@@ -1461,16 +1470,30 @@ function M.extend(runtime, ctx)
         end
         go.set_scale(vmath.vector3(0.85, 0.85, 1), blip_id)
 
+        local stagger_index = self.loot_pickup_blips and #self.loot_pickup_blips or 0
         table.insert(self.loot_pickup_blips, {
             go_id = blip_id,
             shadow_id = shadow_id,
             from = vmath.vector3(from_x, from_y, 0.83),
             to = vmath.vector3(to_x, to_y, 0.83),
+            target_slot_index = target_slot_index,
+            delay = math.min(0.18, stagger_index * 0.035),
             t = 0
         })
     end
 
     runtime.update_loot_pickup_blips = function(self, dt)
+        if self.backpack_slot_pulses then
+            local step = tonumber(dt or 0) or 0
+            for slot_index, timer_s in pairs(self.backpack_slot_pulses) do
+                local next_timer = math.max(0, (tonumber(timer_s or 0) or 0) - step)
+                if next_timer > 0 then
+                    self.backpack_slot_pulses[slot_index] = next_timer
+                else
+                    self.backpack_slot_pulses[slot_index] = nil
+                end
+            end
+        end
         if not self.loot_pickup_blips then
             return
         end
@@ -1483,11 +1506,23 @@ function M.extend(runtime, ctx)
                 end
                 table.remove(self.loot_pickup_blips, i)
             else
+                local step = tonumber(dt or 0) or 0
+                if (blip.delay or 0) > 0 then
+                    if step <= blip.delay then
+                        blip.delay = blip.delay - step
+                        go.set_position(blip.from, blip.go_id)
+                        step = 0
+                    else
+                        step = step - blip.delay
+                        blip.delay = 0
+                    end
+                end
                 local dx = blip.to.x - blip.from.x
                 local dy = blip.to.y - blip.from.y
                 local dist = math.sqrt(dx * dx + dy * dy)
-                local travel_time = math.max(0.05, dist / ctx.LOOT_UI.pickup_blip_speed)
-                blip.t = math.min(1, blip.t + (dt / travel_time))
+                local speed = (ctx.LOOT_UI.pickup_blip_speed or 950) * 2
+                local travel_time = math.max(0.05, dist / speed)
+                blip.t = math.min(1, blip.t + (step / travel_time))
                 local px = blip.from.x + (dx * blip.t)
                 local py = blip.from.y + (dy * blip.t)
                 go.set_position(vmath.vector3(px, py, 0.83), blip.go_id)
@@ -1495,6 +1530,10 @@ function M.extend(runtime, ctx)
                     go.delete(blip.go_id)
                     if blip.shadow_id then
                         go.delete(blip.shadow_id)
+                    end
+                    if blip.target_slot_index then
+                        self.backpack_slot_pulses = self.backpack_slot_pulses or {}
+                        self.backpack_slot_pulses[blip.target_slot_index] = 0.18
                     end
                     table.remove(self.loot_pickup_blips, i)
                 end

@@ -457,7 +457,7 @@ function M.extend(runtime, ctx)
     end
 
     local function get_world_item_draw_scale(item_type)
-        local base_scale = 0.85
+        local base_scale = 0.5
         if item_type == DNA_SAMPLE_ITEM_TYPE then
             return base_scale * 0.55
         end
@@ -3142,17 +3142,16 @@ function M.extend(runtime, ctx)
     end
 
     runtime.get_world_item_offset_for_slot = function(slot_index, total_items)
+        local floor_from_center = -((ctx.CELL_HEIGHT or 150) * 0.5) + WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM
         local cols = 4
-        local spacing_x = 16
-        local spacing_y = 14
+        local spacing_x = 28
+        local spacing_y = 22
+        local row_left_shift = -42
         local row = math.floor((slot_index - 1) / cols)
         local col = (slot_index - 1) % cols
-        local row_count = math.min(cols, math.max(1, total_items - (row * cols)))
-        local start_x = -((row_count - 1) * spacing_x * 0.5)
-        local ox = start_x + (col * spacing_x)
-        local floor_from_center = -((ctx.CELL_HEIGHT or 150) * 0.5) + WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM
-        local oy = floor_from_center - (row * spacing_y)
-        return ox, oy
+        local row_count = math.min(cols, math.max(1, (total_items or slot_index) - (row * cols)))
+        local start_x = -((row_count - 1) * spacing_x * 0.5) + row_left_shift
+        return start_x + (col * spacing_x), floor_from_center + (row * spacing_y)
     end
 
     local function get_world_item_render_offset(item, slot_index, total_items)
@@ -3203,11 +3202,11 @@ function M.extend(runtime, ctx)
                     local ox, oy = get_world_item_render_offset(item, i, #items)
                     local wx = cx + ox
                     local wy = cy + oy
-                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.56))
+                    local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.49))
                     if marker_id then
                         local anim = get_world_item_animation(item.item_type)
                         if world_shadows_enabled then
-                            local shadow_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx + 6, wy - 8, 0.5))
+                            local shadow_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx + 6, wy - 8, 0.47))
                             if shadow_id then
                                 if anim then
                                     msg.post(msg.url(nil, shadow_id, "sprite"), "play_animation", { id = anim })
@@ -3273,7 +3272,7 @@ function M.extend(runtime, ctx)
         local cx, cy = ctx.coords_to_world_pos(cell.xCell, cell.yCell)
         local best_item = nil
         local best_dist = math.huge
-        local hit_radius = (ctx.LOOT_UI and ctx.LOOT_UI.world_item_hit_radius) or 22
+        local base_hit_radius = (ctx.LOOT_UI and ctx.LOOT_UI.world_item_hit_radius) or 22
         for i = #items, 1, -1 do
             local item = items[i]
             local ox, oy = get_world_item_render_offset(item, i, #items)
@@ -3282,6 +3281,8 @@ function M.extend(runtime, ctx)
             local dx = ix - world_x
             local dy = iy - world_y
             local dist = math.sqrt(dx * dx + dy * dy)
+            local item_scale = get_world_item_draw_scale(item and item.item_type)
+            local hit_radius = math.max(12, base_hit_radius * (item_scale / 0.85))
             if dist <= hit_radius and dist < best_dist then
                 best_item = item
                 best_dist = dist

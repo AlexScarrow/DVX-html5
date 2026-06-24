@@ -35690,6 +35690,7 @@ multiplayer_apply_realtime_snapshot_state = function(self, snapshot)
     for i = #self.aliens, 1, -1 do
         local alien = self.aliens[i]
         if alien and (not snapshot_aliens_by_id[tonumber(alien.id or 0) or 0]) then
+            delete_brute_ghost_fx(alien)
             if alien.go_id then
                 pcall(go.delete, alien.go_id)
             end
@@ -35770,6 +35771,7 @@ multiplayer_apply_snapshot_state = function(self, snapshot)
 
     if self.aliens then
         for _, alien in ipairs(self.aliens) do
+            delete_brute_ghost_fx(alien)
             if alien and alien.go_id then
                 pcall(go.delete, alien.go_id)
             end

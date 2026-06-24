@@ -5,7 +5,7 @@ M.FEATURE_FLAGS = {
     demo_build = false,
     demo_allow_tutorial = true,
     multiplayer_enabled = true,
-    level_editor_enabled = true,
+    level_editor_enabled = false,
     unlock_all_solo_missions = true,
     debug_level_buttons_enabled = false,
     leaderboard_seed_winner_badges = false,
@@ -46,7 +46,7 @@ M.DEMO = {
     level_slot_to_level_index = {
         [1] = 6,
         [2] = 2,
-        [3] = 8
+        [3] = 20
     }
 }
 

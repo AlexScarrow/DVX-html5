@@ -2,11 +2,15 @@ emitters {
   mode: PLAY_MODE_ONCE
   duration: 1.0
   space: EMISSION_SPACE_WORLD
+  rotation {
+    z: -0.99917513
+    w: 0.04060886
+  }
   tile_source: "/assets/tiles.atlas"
   animation: "alien_blood_drop"
   material: "/builtins/materials/particlefx.material"
   max_particle_count: 128
-  type: EMITTER_TYPE_CIRCLE
+  type: EMITTER_TYPE_2DCONE
   properties {
     key: EMITTER_KEY_SPAWN_RATE
     points {
@@ -28,7 +32,7 @@ emitters {
   properties {
     key: EMITTER_KEY_PARTICLE_LIFE_TIME
     points {
-      y: 0.25
+      y: 0.6
     }
   }
   properties {

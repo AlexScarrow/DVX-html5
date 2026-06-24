@@ -581,6 +581,9 @@ images {
   image: "/assets/images/objective_dna.png"
 }
 images {
+  image: "/assets/images/objective_holdout.png"
+}
+images {
   image: "/assets/images/warning_gas_HP-da9eac34-b415-43b9-9748-de79679476a4.png"
 }
 images {

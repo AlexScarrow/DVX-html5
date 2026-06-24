@@ -141,6 +141,20 @@ local PROFILES = {
         }
     },
     {
+        id = "windows_3440x1440_ultrawide_identity_v1",
+        platform = "Windows",
+        min_width = 3200,
+        max_width = 3599,
+        min_height = 1300,
+        max_height = 1500,
+        min_window_scale = 1.0,
+        preset = IDENTITY,
+        hud = {
+            expanded_min_window_scale = 1.0,
+            portrait_dx = 0
+        }
+    },
+    {
         id = "windows_fallback_identity",
         platform = "Windows",
         min_window_scale = 0.0,

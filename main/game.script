@@ -5465,11 +5465,11 @@ local function update_spitter_projectiles(self, dt)
                         target.hp_current = math.max(0, (target.hp_current or target.hp_max or 1) - 1)
                         if target.type == ALIEN_TYPE_BRUTE and target.hp_current > 0 then
                             play_brute_damage_sfx(self)
-                            target.brute_damage_flash_timer = 0.12
+                            target.brute_damage_flash_timer = 0.24
                             multiplayer_emit_combat_fx_event(self, {
                                 fx_type = "brute_damage_flash",
                                 alien_id = target.id,
-                                duration_s = 0.12
+                                duration_s = 0.24
                             })
                         end
                         if target.hp_current <= 0 then
@@ -5809,11 +5809,11 @@ local function resolve_turret_pending_shot(self, shot_id)
                 end
                 if target_alien.type == ALIEN_TYPE_BRUTE and target_alien.hp_current > 0 then
                     play_brute_damage_sfx(self)
-                    target_alien.brute_damage_flash_timer = 0.12
+                    target_alien.brute_damage_flash_timer = 0.24
                     multiplayer_emit_combat_fx_event(self, {
                         fx_type = "brute_damage_flash",
                         alien_id = target_alien.id,
-                        duration_s = 0.12
+                        duration_s = 0.24
                     })
                 end
                 if target_alien.hp_current <= 0 then
@@ -6407,7 +6407,7 @@ apply_brute_alpha_pulse = function(self, alien, dt)
         if flash_timer > 0 then
             flash_timer = math.max(0, flash_timer - dt)
             alien.brute_damage_flash_timer = flash_timer
-            pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.9, 0.3, 0.75))
+            pcall(go.set, sprite_url, "tint", vmath.vector4(1.0, 0.9, 0.3, 1.0))
             return
         end
         local melee_reveal_timer = alien.brute_melee_reveal_timer or 0
@@ -15609,6 +15609,8 @@ local function get_objective_reminder_anim_id(self)
         return hash("objective_purge")
     elseif mission_type == MISSION_TYPE_DNA_SAMPLE then
         return hash("objective_dna")
+    elseif mission_type == MISSION_TYPE_HOLDOUT then
+        return hash("objective_holdout")
     end
     return hash("objective_escape")
 end
@@ -33099,7 +33101,7 @@ multiplayer_apply_combat_fx_event = function(self, payload)
     elseif fx_type == "brute_damage_flash" then
         local alien = find_alien_by_id(self, tonumber(payload.alien_id or 0))
         if alien and (not alien.is_dead) then
-            alien.brute_damage_flash_timer = math.max(0.05, tonumber(payload.duration_s or 0.12) or 0.12)
+            alien.brute_damage_flash_timer = math.max(0.05, tonumber(payload.duration_s or 0.24) or 0.24)
             return true
         end
         return false

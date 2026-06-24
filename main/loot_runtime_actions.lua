@@ -34,6 +34,21 @@ local function packed_turret_bursts(ctx, item_type)
     return nil
 end
 
+local function corpse_visual_animation_for_ref(self, corpse_ref, corpse_resolver)
+    local corpse_unit = corpse_resolver and corpse_resolver(self, corpse_ref) or nil
+    if corpse_unit and corpse_unit.target_kind == "civilian" then
+        return hash("human_civilian_dead")
+    end
+    return hash("human_dead")
+end
+
+local function world_item_animation_for_item(self, item, base_anim_fn, corpse_resolver)
+    if item and item.item_type == "corpse" then
+        return corpse_visual_animation_for_ref(self, item.meta and item.meta.corpse_unit_id or nil, corpse_resolver)
+    end
+    return base_anim_fn and base_anim_fn(item and item.item_type or nil) or nil
+end
+
 function M.extend(runtime, ctx)
     local WORLD_ITEM_FLOOR_OFFSET_FROM_CELL_BOTTOM = 34
     local OBSTACLE_ITEM = "obstacle"
@@ -430,6 +445,8 @@ function M.extend(runtime, ctx)
             return hash("dna_sample")
         elseif item_type == PURGE_BOMB_ITEM_TYPE then
             return hash("bomb")
+        elseif item_type == "corpse" then
+            return hash("human_dead")
         elseif is_packed_turret_item(item_type) then
             return hash("gun_turret_dropped")
         elseif item_type == OBSTACLE_ITEM then
@@ -3204,7 +3221,7 @@ function M.extend(runtime, ctx)
                     local wy = cy + oy
                     local marker_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx, wy, 0.49))
                     if marker_id then
-                        local anim = get_world_item_animation(item.item_type)
+                        local anim = world_item_animation_for_item(self, item, get_world_item_animation, get_dead_corpse_by_ref)
                         if world_shadows_enabled then
                             local shadow_id = factory.create("/loot_marker_factory#loot_marker_factory", vmath.vector3(wx + 6, wy - 8, 0.47))
                             if shadow_id then
@@ -6704,6 +6721,10 @@ function M.extend(runtime, ctx)
                 ctx.set_ui_square_transform(self, self.ui.drag_command_pip, -9999, -9999, 0.9, vmath.vector4(0, 0, 0, 0), ctx.LOOT_UI.drag_pip_size, ctx.LOOT_UI.drag_pip_size)
             end
             local icon_anim = runtime.get_item_visual_animation and runtime.get_item_visual_animation(drag.item_type) or nil
+            if drag.item_type == "corpse" then
+                local source_unit = self.squad_units and self.squad_units[drag.source_unit_id] or nil
+                icon_anim = corpse_visual_animation_for_ref(self, source_unit and source_unit.carrying_corpse_id or nil, get_dead_corpse_by_ref)
+            end
             if icon_anim then
                 msg.post(sprite_url, "play_animation", { id = icon_anim })
                 go.set(sprite_url, "tint", vmath.vector4(1, 1, 1, 1))

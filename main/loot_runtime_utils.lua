@@ -118,6 +118,8 @@ function M.create(ctx)
             return hash("dna_sample")
         elseif item_type == "bomb" then
             return hash("bomb")
+        elseif item_type == "corpse" then
+            return hash("human_dead")
         elseif item_type == ctx.COMPONENT_UI.component_wiring_straight then
             return hash("wiregap_straight_on")
         elseif item_type == ctx.COMPONENT_UI.component_wiring_corner then

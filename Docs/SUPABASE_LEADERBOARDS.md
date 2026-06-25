@@ -278,15 +278,32 @@ block gameplay.
 
 ## Winner Badges
 
-Winner badges are admin-managed. The shipped game should read badges but never
+Winner badges are server-managed. The shipped game should read badges but never
 write them.
 
-Monthly prize process:
+The recommended monthly process is implemented in
+`Docs/SUPABASE_MONTHLY_SEASON_CLOSE.sql`.
 
-1. You review the leaderboard manually.
-2. You add/update rows in `winner_badges`.
-3. The game fetches public badge rows and shows icons beside display names.
-4. Winners contact you voluntarily outside the game to claim any prize.
+At month close, Supabase should:
+
+1. Archive the current live solo and multiplayer leaderboard rows.
+2. Award one `winner_badges` row for every top solo player.
+3. Award one `winner_badges` row for every Steam ID on the top MP team.
+4. Clear the live score tables so the next month starts empty.
+
+The public badge count view already counts `winner_badges` rows, so adding one
+row per winning period automatically increments the visible badge count. If a
+player wins solo twice, they have two active `board = 'solo'` rows and the game
+shows the solo icon count as `2`.
+
+The monthly close function uses all tied top scores as winners. For MP, if two
+teams tie for top score, every player on both teams receives a co-op winner row.
+This is the least surprising tie rule and avoids silent subjective tie breaks.
+
+The function should be run by Supabase/server-side privileges only. Do not expose
+it to the game client or grant execute permission to `anon`.
+
+Winners still contact you voluntarily outside the game to claim any prize.
 
 ## Manual Setup Checklist
 
@@ -294,7 +311,9 @@ Monthly prize process:
 2. Pick a hosting region appropriate for your player/privacy obligations.
 3. Run the table and view SQL.
 4. Enable and review RLS.
-5. Deploy the Edge Function.
-6. Store the service-role key only as an Edge Function secret.
-7. Put only URL/anon key/function name into client config.
-8. Test with fake SteamIDs before enabling live submissions.
+5. Run `Docs/SUPABASE_MONTHLY_SEASON_CLOSE.sql`.
+6. Deploy the Edge Function.
+7. Store the service-role key only as an Edge Function secret.
+8. Put only URL/anon key/function name into client config.
+9. Test with fake SteamIDs before enabling live submissions.
+10. Enable the optional monthly cron only after dry-run output looks correct.

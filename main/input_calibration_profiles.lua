@@ -148,10 +148,13 @@ local PROFILES = {
         min_height = 1300,
         max_height = 1500,
         min_window_scale = 1.0,
-        preset = IDENTITY,
+        preset = WINDOWS_1440_CANDIDATE,
         hud = {
             expanded_min_window_scale = 1.0,
-            portrait_dx = 0
+            portrait_dx = 0,
+            human_ui_dx = 350,
+            left_cluster_dx = 350,
+            exit_dx = 350
         }
     },
     {

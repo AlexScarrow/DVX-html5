@@ -15869,15 +15869,23 @@ set_sound_loop_state = function(self, key, should_play)
     end
     if should_play and not entry.playing then
         entry.playing = true
-        pcall(msg.post, entry.url, "play_sound")
-        if sound and sound.play then
+        if IS_HTML5 and sound and sound.play then
             pcall(sound.play, entry.url)
+        else
+            pcall(msg.post, entry.url, "play_sound")
+            if sound and sound.play then
+                pcall(sound.play, entry.url)
+            end
         end
     elseif (not should_play) and entry.playing then
         entry.playing = false
-        pcall(msg.post, entry.url, "stop_sound")
-        if sound and sound.stop then
+        if IS_HTML5 and sound and sound.stop then
             pcall(sound.stop, entry.url)
+        else
+            pcall(msg.post, entry.url, "stop_sound")
+            if sound and sound.stop then
+                pcall(sound.stop, entry.url)
+            end
         end
     end
 end
@@ -37830,6 +37838,20 @@ function init(self)
         horizontal_active_count = 0,
         speedy_active_count = 0
     }
+
+    if IS_HTML5 and self.sfx_state.enabled_by_key then
+        -- Browser builds can crackle under multiple looping music streams; keep
+        -- gameplay SFX active and mute only music loops for the web demo.
+        self.sfx_state.enabled_by_key.title = false
+        self.sfx_state.enabled_by_key.demo_win_music = false
+        self.sfx_state.enabled_by_key.demo_lose_music = false
+        self.sfx_state.enabled_by_key.music_bass = false
+        self.sfx_state.enabled_by_key.music_drums = false
+        self.sfx_state.enabled_by_key.music_pad = false
+        self.sfx_state.enabled_by_key.music_melody = false
+        self.sfx_state.enabled_by_key.music_sfx = false
+        self.sfx_state.enabled_by_key.music_victory = false
+    end
 
     -- SPAWN VISUALS (add this line)
     spawn_visuals(self)

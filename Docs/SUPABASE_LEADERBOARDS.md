@@ -95,9 +95,9 @@ create or replace view public.solo_leaderboard_totals as
 select
   p.steam_id,
   p.display_name,
-  coalesce(sum(s.score), 0)::integer as score
+  sum(s.score)::integer as score
 from public.players p
-left join public.solo_level_scores s on s.steam_id = p.steam_id
+join public.solo_level_scores s on s.steam_id = p.steam_id
 group by p.steam_id, p.display_name
 order by score desc, p.display_name asc;
 

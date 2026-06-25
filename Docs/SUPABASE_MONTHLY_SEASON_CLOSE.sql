@@ -42,6 +42,19 @@ create table if not exists public.mp_leaderboard_archive (
   primary key (period, team_entry_id)
 );
 
+-- Keep the current-season Solo board empty after a monthly reset. Players are
+-- retained for identity/badge history, but only players with live solo score
+-- rows should appear on the public Solo leaderboard.
+create or replace view public.solo_leaderboard_totals as
+select
+  p.steam_id,
+  p.display_name,
+  sum(s.score)::integer as score
+from public.players p
+join public.solo_level_scores s on s.steam_id = p.steam_id
+group by p.steam_id, p.display_name
+order by score desc, p.display_name asc;
+
 alter table public.leaderboard_season_closes enable row level security;
 alter table public.solo_leaderboard_archive enable row level security;
 alter table public.mp_leaderboard_archive enable row level security;

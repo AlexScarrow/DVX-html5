@@ -1,13 +1,203 @@
 # DVX Leaderboards + Supabase — Current State & AI Handover
 
-**Last updated:** 2026-06-21  
-**Working path:** `/Users/alexscarrow/Desktop/DVX/DVX-html5`  
-**Branch:** `feature/holdout-mission`  
-**Current focus:** Replace local-only leaderboards with Supabase-backed Solo and Multiplayer leaderboards, while keeping local fallback/queueing.
+**Last updated:** 2026-06-25
+**Working path:** `/Users/alexscarrow/Desktop/DVX/DVX-html5`
+**Branch:** `feature/holdout-mission`
+**Current focus:** Supabase-backed leaderboards are implemented. Current/next work is release polish around leaderboard prize-claim UX, multiplayer testing, and small UI fixes.
 
 Also read:
 - `AGENTS.md` — small diffs, host-authoritative MP, avoid desync risk, beware `main/game.script` Lua chunk local pressure.
 - `Docs/MP_LOBBY_LIFECYCLE_SPEC.md` — MP lifecycle background; lobby work is maintenance-only unless regressions appear.
+- `Docs/SUPABASE_LEADERBOARDS.md` — current Supabase leaderboard contract and setup checklist.
+- `Docs/SUPABASE_MONTHLY_SEASON_CLOSE.sql` — repeatable SQL source for monthly winner/archive/reset automation.
+
+---
+
+## 2026-06-25 Handover Update
+
+This file previously described the upcoming Supabase leaderboard feature. That feature has now largely been implemented and banked. Treat the older sections below as design history/spec context; this section is the current state.
+
+### Banked Recent Commits
+
+Important recent commits on this branch:
+
+| Commit | Summary |
+|--------|---------|
+| `7bf25e0` | Bank monthly leaderboard prizes. |
+| `af1e703` | Bank multiplayer ready gate tweaks. |
+| `7e12fb7` | mplayer fixes yet to be tested |
+| `60b5c59` | Bank brute FX client cleanup. |
+| `e01050c` | Bank remaining visual and demo tweaks. |
+| `895f08c` | Bank blood impact ring effects. |
+| `7072b36` | Bank turret target power accuracy. |
+| `5243c30` | Bank corpse item visual fix. |
+| `c06175b` | Bank crate pickup animation tweaks. |
+| `2bf697c` | Bank dropped item stacking tweaks. |
+| `85ccc31` | Bank holdout objective and brute visibility tweaks. |
+| `beb7cc8` | Bank GO buffer safety fix. |
+
+`feature/holdout-mission` is likely ahead of origin if recent banks have not been pushed.
+
+### Supabase Leaderboards Implemented
+
+The game now has Supabase-backed Solo and Multiplayer leaderboard support with local fallback/cache/queueing through `main/leaderboard_remote.lua`.
+
+Client-side reads:
+
+- Solo: `/rest/v1/solo_leaderboard_totals?select=steam_id,display_name,score...`
+- MP: `/rest/v1/mp_leaderboard_top?select=team_entry_id,score,created_at,players...`
+- Winner badges: `/rest/v1/winner_badges_public?select=steam_id,solo_count,coop_count`
+
+Submission behavior:
+
+- Solo mission completion records/uploads the latest result for the completed level.
+- Solo win stores score; solo loss stores `0`, replacing previous score for that level.
+- Solo leaderboard is fetched only from title-screen Solo Leaderboard.
+- MP host submits team rows; clients do not duplicate-submit.
+- MP post-mission flow routes to MP leaderboard, then back to MP chooser.
+
+Privacy/data minimization:
+
+- The intended public leaderboard data remains SteamID, Steam display name, score, and MP units played.
+- Do not add email, shipping, prize, chat, IP, or other contact details to leaderboard tables.
+- Prize fulfilment should be separate, voluntary, and outside the leaderboard schema.
+
+### Supabase Monthly Winner Automation
+
+Supabase setup was completed/tested in the project dashboard on 2026-06-25.
+
+Installed/stored in Supabase Postgres:
+
+- `public.close_leaderboard_month(p_period text, p_dry_run boolean)`
+- `public.leaderboard_season_closes`
+- `public.solo_leaderboard_archive`
+- `public.mp_leaderboard_archive`
+- `pg_cron` job `dvx-monthly-leaderboard-close`
+
+Automation:
+
+- Cron schedule is active: `5 0 1 * *`.
+- This runs at `00:05 UTC` on the 1st of each month.
+- It closes the previous month by calling `close_leaderboard_month(..., false)`.
+- It archives live leaderboard rows, awards winner badge rows, and clears live solo/MP score tables.
+
+Manual test already performed:
+
+- Dry run for `2026-06` succeeded.
+- Real close for `2026-06` was run.
+- Solo archive had 6 rows; top solo winner score was `53423`.
+- MP archive had 6 rows; top MP team score was `3698`.
+- Winner badge counts updated in `winner_badges_public`.
+- Live MP leaderboard was cleared.
+- Solo totals view originally showed retained players with `0` scores because `players` rows remain while `solo_level_scores` was cleared.
+- The source SQL has since been updated so `solo_leaderboard_totals` only returns players with live `solo_level_scores` rows; after applying that view update in Supabase, a fresh month should show an empty Solo leaderboard until new solo results are submitted.
+
+Tie rule:
+
+- All tied top solo players receive a solo winner badge row.
+- All Steam IDs on tied top MP teams receive a co-op winner badge row.
+
+Important:
+
+- The game client should never call `close_leaderboard_month`.
+- `close_leaderboard_month` execute is granted to `service_role`, not `anon`.
+- Keep `Docs/SUPABASE_MONTHLY_SEASON_CLOSE.sql` as the source-of-truth script for recreating/modifying the server-side setup.
+
+### Winner Badges and Prize Claim UX
+
+Winner badge display exists:
+
+- Solo and co-op badge icons appear beside leaderboard names.
+- In lobby/MP setup, badges appear beneath display names.
+- Multiple wins render as icon plus count.
+- Badge counts come from Supabase `winner_badges_public` and local fallback cache.
+
+Prize concept:
+
+- Player gets a modest optional prize after reaching `5x` solo or `5x` co-op winner badges.
+- Leaderboard panel art has been updated with prize explainer text and a `CLAIM PRIZE!` button.
+- The current button action is only a dummy debug action.
+
+Current dummy claim behavior:
+
+- `assets/images/leaderboard_panel.png` includes the visible text/button.
+- `main/game.script` defines `LEADERBOARD_CLAIM_PRIZE_BUTTON_*` constants.
+- Clicking the hotspot on Solo or MP leaderboard prints:
+  - `PRIZE CLAIM | prize applied for`
+
+Future release task:
+
+- Replace the dummy print with a real URL/contact flow closer to release date.
+- Likely flow: a website/contact page explains that winners must prove control of the winning Steam account, then voluntarily provide prize/shipping details outside Supabase leaderboard data.
+- Do not store prize fulfilment details in Supabase leaderboard tables.
+
+### Recent Multiplayer Fixes Still Needing Wider Testing
+
+Several multiplayer robustness/UI fixes are banked but still need full 2-4 player Steam testing:
+
+- Host reclaims humans from stale/disconnected/desynced players.
+- Host marks stale players inactive and rejects late commands from inactive players.
+- Stale/desynced clients are pushed back toward chooser/lobby instead of remaining in a phantom mission.
+- `advisory_playerLeft.png` shows a player-left/host-control advisory.
+- Host `NEW TURN` is now ready-gated:
+  - active guests must click ready before host can advance,
+  - departed/inactive guests do not block the gate,
+  - host button tints red while waiting.
+- Portrait UI shows Steam display names above HP/AP pips in MP.
+- Portrait display names are max 12 characters, 0.315 scale, shifted left from the initial placement.
+- Brute ghost/smoke FX are explicitly deleted on snapshot reconciliation.
+- Pickup fallback visuals are hardened to avoid invisible/black crate fallback where item visual data is missing.
+
+### Other Recently Banked Gameplay/Visual Work
+
+Recent banked work also includes:
+
+- Boardgame alien movement now mirrors human counter/token movement more closely.
+- Alien boardgame proxy shadow uses `human_proxyShadow_boardgame.png`.
+- Turret ammo count/persistent packed turret ammo.
+- Turret burst hit feedback timing improved.
+- Tile dimming when no human selected.
+- Simplified single-image outro plate system.
+- Outro letterbox/backdrop/zoom/pulse tuning.
+- Collection `max_instances` raised and turret projectile fallback hardened.
+- Ultrawide identity input profile added.
+- Holdout objective explainer added.
+- Dropped item stacking/scale/z-layer tweaks.
+- Crate pickup animation to backpack slots with pulse/stagger.
+- Corpse drag/world visuals use dead human sprites.
+- Turret hit chance is now power-based: guaranteed hit if target tile is powered, otherwise 50%.
+- Alien/human blood impact rings and particle timing were tuned.
+
+### Current Working Tree Notes
+
+At the time of this update, the only expected untracked files are local runtime caches:
+
+- `dvx_leaderboard_remote_cache_mp_v1`
+- `dvx_leaderboard_remote_cache_solo_v1`
+- `dvx_leaderboard_solo_progress_sync_v1`
+- `dvx_leaderboard_winner_badges_v1`
+
+Do not commit these. They can contain local player/leaderboard identifiers and test state.
+
+### Recommended Next Tasks
+
+1. Full multiplayer test pass with 2-4 Steam clients:
+   - ready gate,
+   - stale/left player handling,
+   - portrait names,
+   - player-left advisory,
+   - MP leaderboard flow after mission/outro.
+2. Verify leaderboard panel prize hotspot position after any further panel art edits.
+3. Closer to release, replace dummy `PRIZE CLAIM | prize applied for` behavior with a real web/contact URL flow.
+4. Before public release, clean test Supabase rows/badges such as `local_*`, `test_steam_*`, and edge-test entries.
+5. Before public release, prepare privacy/prize terms page:
+   - leaderboard data scope,
+   - public display of Steam names/scores,
+   - monthly reset timing/timezone,
+   - tie handling,
+   - prize eligibility and verification,
+   - voluntary contact/shipping details,
+   - deletion/access request path.
 
 ---
 
@@ -403,4 +593,4 @@ Keep each step bankable and testable.
 
 ## One-Sentence Handoff
 
-The next feature is Supabase-backed Solo and Multiplayer leaderboards: Solo uses latest result per level summed across levels 1-20 and is fetched only from a title-screen button, while Multiplayer host-submits team win entries after missions and routes players to an MP leaderboard with a right-side detail panel for full contributor names/humans played.
+Supabase-backed Solo/MP leaderboards and monthly winner badge automation are implemented and banked; the next likely work is multiplayer test/fix polish plus, later near release, replacing the leaderboard `CLAIM PRIZE!` dummy hotspot with a real website/contact URL flow.

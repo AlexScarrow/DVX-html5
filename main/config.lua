@@ -2,11 +2,11 @@ local M = {}
 
 -- Central build/dev switches. Runtime sys.get_config overrides may still win in game.script.
 M.FEATURE_FLAGS = {
-    demo_build = true,
+    demo_build = false,
     demo_allow_tutorial = true,
     multiplayer_enabled = true,
     level_editor_enabled = false,
-    unlock_all_solo_missions = true,
+    unlock_all_solo_missions = false,
     debug_level_buttons_enabled = false,
     leaderboard_seed_winner_badges = false,
     mp_lag_sim_ui_enabled = false,

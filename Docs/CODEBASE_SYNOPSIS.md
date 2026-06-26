@@ -326,6 +326,21 @@ Good first comment targets:
 - HTML5 audio mute block: explain why web music loops are disabled.
 - Realtime scaffold: mark experimental/deferred.
 
+## Performance Review Candidates
+
+These are not confirmed bugs. They are places where the code may be doing more
+work than needed, and they are worth checking with profiling or focused logging
+before changing behavior.
+
+- Per-frame UI refresh: `update` touches many HUD, portrait, flow, marker, and panel transforms. Some of these may only need to refresh when state changes.
+- Multiplayer heartbeat and digest work: MP builds checksums, digests, snapshots, and signatures frequently. This is safety-critical, so optimize only after measuring and preserving desync protection.
+- Large `LOOT_RUNTIME` marker/action updates: item, factory, workshop, turret, corpse, and marker updates may scan broad runtime tables.
+- Pathfinding and alien path cache: path searches are cached, but alien movement and vent/path fallback logic should be profiled on busy maps.
+- Visual effects cleanup: smoke, blood rings, particles, shadows, and temporary sprites may benefit from pooled or batched cleanup if they spike.
+- Flow screen rendering: title, setup, score, leaderboard, and demo screens are mostly drawn by `game.script`; check whether hidden screens still perform unnecessary work.
+- Audio loop and spatial sound updates: desktop audio is fine, but web builds already needed music-loop muting. Future web audio work should measure decode/mixing cost.
+- Realtime scaffold: if revived later, it should be profiled separately because it changes how often aliens, civilians, spawns, and player actions update.
+
 ## Suggested Maintenance Plan
 
 1. Keep `main` as the release-candidate branch and do audit work on maintenance branches.

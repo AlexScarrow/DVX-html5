@@ -1,12 +1,23 @@
 --[[
     DERPLES VS XENOS - Main Game Script
-    This script manages the core game systems including:
-    - Cell and Tile data structures
-    - WorldGrid management (15x15 cells)
-    - Level design and "baking down" process
-    - Pathfinding for characters
-    - Input handling for cell selection
-    - Camera scrolling and zooming
+
+    This is the main coordinator for the game. It is intentionally large at the
+    moment: it starts the level, creates the board, listens for input, updates
+    units, draws most of the user interface, and connects newer helper modules
+    such as loot, scoring, multiplayer, leaderboards, and outro screens.
+
+    A useful way to navigate this file:
+    - Constants and setup values are at the top.
+    - Board, path, door, and level-baking helpers come next.
+    - Alien, civilian, mission, visual, user-interface, score, and audio helpers
+      follow through the middle of the file.
+    - Multiplayer command, event, and snapshot handling lives in a large block
+      later in the file. Treat that area carefully because it keeps networked
+      games in sync.
+    - init(), update(), on_input(), on_message(), and final() are near the end.
+
+    Prefer adding new self-contained code to modules when practical. This file
+    has previously been sensitive to Lua's limit on local variables.
 ]]
 
 -- =============================================================================
@@ -10073,6 +10084,11 @@ get_fixed_viewport_rect = function()
     return view_x, view_y, view_w, view_h, scale
 end
 
+-- Mouse/touch positions are not reported the same way on every target. Browser
+-- builds usually give positions inside the 1280x720 game canvas. Desktop builds
+-- may give positions relative to the window, especially when maximized or on
+-- unusual monitor sizes. This function converts those inputs into the game's
+-- normal 1280x720 screen space so buttons and board clicks line up.
 map_window_input_to_logical = function(x, y, screen_x, screen_y)
     if not x or not y then
         return nil, nil, false
@@ -15849,6 +15865,10 @@ function enter_flow_state(self, next_state)
     end
 end
 
+-- Starts or stops one looping sound. Browser builds use only one sound call here
+-- because starting the same loop in two ways caused crackly audio on the web
+-- demo. Desktop builds keep the older path because native audio was already
+-- behaving correctly during testing.
 set_sound_loop_state = function(self, key, should_play)
     if not self or not self.sfx_state then
         return
@@ -25996,6 +26016,10 @@ function try_select_level_button(self, screen_x, screen_y)
     return false
 end
 
+-- LOOT_RUNTIME is built in stages. The first module creates the base loot and
+-- backpack helpers. Later modules add marker drawing and gameplay actions onto
+-- the same table. If something looks missing from LOOT_RUNTIME, check all three
+-- setup points before assuming it is unused.
 LOOT_RUNTIME = require("main.loot_runtime_utils").create({
     LOOT_UI = LOOT_UI,
     COMMAND_UI = COMMAND_UI,
@@ -27172,6 +27196,10 @@ end
 
 local multiplayer_sync_trace
 
+-- The next large section sends and receives multiplayer gameplay messages.
+-- These messages are how the host tells guests what really happened. Be very
+-- careful when editing this area: changing message names, order, or who is
+-- allowed to change game state can make multiplayer games disagree.
 multiplayer_transport_emit_event = function(self, event_type, payload)
     local sender_id = self.mp_state and self.mp_state.host_player_id or "p1"
     if self.mp_state then
@@ -33683,6 +33711,7 @@ function try_zoom_out_button(self, screen_x, screen_y)
     return false
 end
 
+-- This second stage adds the visual marker helpers to LOOT_RUNTIME.
 LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
     LOOT_UI = LOOT_UI,
     COMPONENT_UI = COMPONENT_UI,
@@ -33724,6 +33753,8 @@ LOOT_RUNTIME = require("main.loot_runtime_markers").extend(LOOT_RUNTIME, {
             and self_ref.mp_state.local_player_id == self_ref.mp_state.host_player_id
     end
 })
+-- This third stage adds the gameplay actions: pickup, drag/drop, factories,
+-- workshops, turrets, medbay behavior, and related interactions.
 LOOT_RUNTIME = require("main.loot_runtime_actions").extend(LOOT_RUNTIME, {
     LOOT_UI = LOOT_UI,
     COMMAND_UI = COMMAND_UI,
@@ -37573,6 +37604,9 @@ function init(self)
     self.input_map_cursor_debug = nil
     apply_runtime_hud_layout(self)
     self.camera_zoom = (self.camera_min_zoom + self.camera_max_zoom) * 0.5
+    -- Realtime mode is an old experimental mode. It can make alien activity run
+    -- continuously and may block normal human actions, so release defaults keep
+    -- it off. Do not enable it for multiplayer without a focused test pass.
     self.realtime_rules_enabled = REALTIME_MODE_CFG.enabled == true
     self.realtime_mp_enabled = REALTIME_MODE_CFG.multiplayer_enabled == true
     self.realtime_ap_regen_per_second = tonumber(REALTIME_MODE_CFG.ap_regen_per_second or 1.0) or 1.0
@@ -37840,8 +37874,9 @@ function init(self)
     }
 
     if IS_HTML5 and self.sfx_state.enabled_by_key then
-        -- Browser builds can crackle under multiple looping music streams; keep
-        -- gameplay SFX active and mute only music loops for the web demo.
+        -- Browser builds can crackle under multiple looping music streams.
+        -- For the web demo, keep action sound effects on but turn music loops
+        -- off. Desktop builds still use the normal music setup.
         self.sfx_state.enabled_by_key.title = false
         self.sfx_state.enabled_by_key.demo_win_music = false
         self.sfx_state.enabled_by_key.demo_lose_music = false
